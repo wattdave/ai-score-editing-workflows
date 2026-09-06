@@ -19,6 +19,9 @@
 		return CreateDictionary(
 			'fileName', score.FileName & '',
 			'title', score.Title,
+			'composer', score.Composer,
+			'lyricist', score.Lyricist,
+			'copyright', score.Copyright,
 			'staffCount', score.StaffCount,
 			'barCount', score.SystemStaff.BarCount);
 	}"
