@@ -264,7 +264,13 @@ async def _backup(client: SibeliusClient, name: str) -> dict[str, Any]:
     import shutil
     from datetime import datetime
 
-    version = await _bridge(client, "AddVersion", [name, "automatic backup before write"])
+    try:
+        version = await _bridge(client, "AddVersion", [name, "automatic backup before write"])
+    except BridgeError as exc:
+        # In-file versioning is best-effort; the filesystem copy below is the
+        # real backup. Sibelius sometimes refuses AddVersion (returns null).
+        version = {"skipped": str(exc)}
+        print(f"warning: in-file version skipped: {exc}", file=sys.stderr)
     saved = await _bridge(client, "Save")
     source = Path(saved["fileName"])
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
