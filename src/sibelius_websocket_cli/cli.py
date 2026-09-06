@@ -81,6 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     direction = transpose.add_mutually_exclusive_group(required=True)
     direction.add_argument("--up", action="store_true")
     direction.add_argument("--down", action="store_true")
+    transpose.add_argument("--octaves", type=int, default=0, help="extra octaves in the same direction")
     transpose.add_argument("--from-bar", type=int, help="default: 1")
     transpose.add_argument("--to-bar", type=int, help="default: last bar")
     transpose.add_argument("--top-staff", type=int, help="default: 1")
@@ -89,6 +90,20 @@ def build_parser() -> argparse.ArgumentParser:
     set_key.add_argument("--bar", type=int, default=1)
     set_key.add_argument("--key", required=True, help='key name, e.g. D or Bb')
     set_key.add_argument("--minor", action="store_true")
+    copyp = sub.add_parser("copy-passage", help="copy a passage to another staff/bar (backs up first)")
+    copyp.add_argument("--from-bar", type=int, required=True)
+    copyp.add_argument("--to-bar", type=int, required=True)
+    copyp.add_argument("--top-staff", type=int, required=True)
+    copyp.add_argument("--bottom-staff", type=int, help="default: same as --top-staff")
+    copyp.add_argument("--dest-staff", type=int, required=True)
+    copyp.add_argument("--dest-bar", type=int, required=True)
+    copyp.add_argument("--dest-pos", type=int, default=0, help="1/256th-quarter offset in dest bar")
+    set_note = sub.add_parser("set-note", help="repitch one note in a chord/NoteRest (backs up first)")
+    set_note.add_argument("--staff", type=int, required=True)
+    set_note.add_argument("--bar", type=int, required=True)
+    set_note.add_argument("--index", type=int, required=True)
+    set_note.add_argument("--old-pitch", type=int, required=True, help="MIDI pitch to replace")
+    set_note.add_argument("--new-pitch", type=int, required=True, help="replacement MIDI pitch")
     export = sub.add_parser("export", help="export the active (or a given) score to another format")
     export.add_argument("--format", choices=sorted(EXPORT_FORMATS), default="musicxml")
     export.add_argument("--out", help="output path (default: next to the source file)")
@@ -266,9 +281,9 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
     info = await _bridge(client, "GetBridgeVersion")
-    if not (isinstance(info, dict) and info.get("version") == 4):
+    if not (isinstance(info, dict) and info.get("version") == 5):
         raise BridgeError(
-            f"bridge v4 required, got {info!r} — run install-plugin and restart Sibelius"
+            f"bridge v5 required, got {info!r} — run install-plugin and restart Sibelius"
         )
 
 
@@ -368,6 +383,7 @@ async def _run_transpose(args: argparse.Namespace) -> int:
         degree, interval_type = compute_transposition(
             args.from_note, args.to_note, bool(args.up)
         )
+        degree += 7 * args.octaves * (1 if args.up else -1)
         backup = await _backup(client, "before transpose")
         print(f"backed up: {backup['copy']}", file=sys.stderr)
         result = await _bridge(
@@ -381,6 +397,23 @@ async def _run_transpose(args: argparse.Namespace) -> int:
 
 async def _run_set_key(args: argparse.Namespace) -> int:
     return await _run_write(args, "SetKeySignature", [args.bar, args.key, not args.minor])
+
+
+async def _run_copy_passage(args: argparse.Namespace) -> int:
+    bottom = args.bottom_staff or args.top_staff
+    return await _run_write(
+        args,
+        "CopyPassage",
+        [args.from_bar, args.to_bar, args.top_staff, bottom,
+         args.dest_staff, args.dest_bar, args.dest_pos],
+    )
+
+
+async def _run_set_note(args: argparse.Namespace) -> int:
+    return await _run_write(
+        args, "SetNotePitch",
+        [args.staff, args.bar, args.index, args.old_pitch, args.new_pitch],
+    )
 
 
 async def _run_export(args: argparse.Namespace) -> int:
@@ -491,6 +524,8 @@ def main(argv: list[str] | None = None) -> int:
         "set-key": _run_set_key,
         "backup": _run_backup,
         "export": _run_export,
+        "copy-passage": _run_copy_passage,
+        "set-note": _run_set_note,
     }[args.subcommand]
     try:
         return int(run_sync(runner(args)))

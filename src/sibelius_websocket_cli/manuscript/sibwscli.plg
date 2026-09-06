@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 4);
+		return CreateDictionary('version', 5);
 	}"
 
 	Echo "(value) {
@@ -378,6 +378,70 @@
 			return CreateDictionary('error', 'AddVersion failed (has the score ever been saved?)');
 		}
 		return CreateDictionary('name', name, 'versionCount', versions.NumChildren);
+	}"
+
+	CopyPassage "(fromBar, toBar, topStaff, bottomStaff, destStaff, destBar, destPosition) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (fromBar < 1 or toBar > score.SystemStaff.BarCount or fromBar > toBar) {
+			return CreateDictionary('error', 'source bar range out of range');
+		}
+		if (topStaff < 1 or bottomStaff > score.StaffCount or topStaff > bottomStaff) {
+			return CreateDictionary('error', 'source staff range out of range');
+		}
+		if (destStaff < 1 or destStaff > score.StaffCount) {
+			return CreateDictionary('error', 'destStaff out of range');
+		}
+		if (destBar < 1 or destBar > score.SystemStaff.BarCount) {
+			return CreateDictionary('error', 'destBar out of range');
+		}
+		selection = score.Selection;
+		selection.SelectPassage(fromBar, toBar, topStaff, bottomStaff);
+		selection.Copy();
+		ok = selection.PasteToPosition(destStaff, destBar, destPosition);
+		selection.Clear();
+		if (ok != True) {
+			return CreateDictionary('error', 'PasteToPosition failed');
+		}
+		return CreateDictionary(
+			'fromBar', fromBar, 'toBar', toBar,
+			'topStaff', topStaff, 'bottomStaff', bottomStaff,
+			'destStaff', destStaff, 'destBar', destBar, 'destPosition', destPosition);
+	}"
+
+	SetNotePitch "(staffNum, barNumber, index, oldPitch, newPitch) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		obj = GetObjectAt(staffNum, barNumber, index);
+		if (obj = null) {
+			return CreateDictionary('error', 'no object at that address');
+		}
+		if (obj.Type != 'NoteRest') {
+			return CreateDictionary('error', 'object at address is a ' & obj.Type & ', not a NoteRest');
+		}
+		oldNote = null;
+		for each note in obj {
+			if (note.Pitch = oldPitch) {
+				oldNote = note;
+			}
+		}
+		if (oldNote = null) {
+			return CreateDictionary('error', 'no note with pitch ' & oldPitch & ' at that address');
+		}
+		wasTied = oldNote.Tied;
+		oldName = oldNote.Name;
+		newNote = obj.AddNote(newPitch, wasTied);
+		if (newNote = null) {
+			return CreateDictionary('error', 'AddNote failed for pitch ' & newPitch);
+		}
+		obj.RemoveNote(oldNote);
+		return CreateDictionary(
+			'oldPitch', oldPitch, 'oldName', oldName,
+			'newPitch', newNote.Pitch, 'newName', newNote.Name, 'tied', wasTied);
 	}"
 
 	OpenScore "(fileName) {
