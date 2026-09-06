@@ -47,9 +47,14 @@ text, addressed by staff/bar/index), `read-lyrics [--staff N]` (0 = all).
 
 Writes (auto-backup): `set-lyric --staff --bar --index --text`,
 `transpose --from-note C --to-note D --up|--down [--from-bar --to-bar
---top-staff --bottom-staff]` (whole score by default; downward transposition
-has never been exercised live — verify extra carefully),
-`set-key --bar --key [--minor]`, `backup [--name]`.
+--top-staff --bottom-staff] [--octaves N]` (whole score by default; both
+directions live-verified), `set-key --bar --key [--minor]`,
+`copy-passage --from-bar --to-bar --top-staff [--bottom-staff] --dest-staff
+--dest-bar` (faithful copy incl. ties/articulations — and lyrics, which the
+user may want stripped with `DeleteObject` afterwards),
+`set-note --staff --bar --index --old-pitch --new-pitch` (repitch one note,
+MIDI numbers), `export [--format musicxml|mxl|pdf|midi|png] [--out] [--file
+some.sib]`, `backup [--name]`.
 
 Escape hatches: `do undo`, raw command IDs via `invoke` (fire-and-forget:
 success responses are meaningless — see docs/commands.md for all 627), any
@@ -63,6 +68,12 @@ suspected errors to the user with bar numbers → on approval, `set-lyric`
 per fix using the addresses from the read → `read-lyrics` again to verify.
 Addresses are only valid against the read they came from; re-read after
 every write.
+
+**Copy a passage to another staff (e.g. "apply SA pickup to TB, down an
+octave"):** read the destination first (know what gets overwritten) →
+`copy-passage` → `transpose` scoped to the destination staff/bars with
+`--from-note X --to-note X --octaves N` for pure octaves → read back →
+mention that pasted lyrics came along and offer to remove them.
 
 **Transpose to a key:** current key from `score-info` `keySignatures`
 (empty = C major / no signature) → confirm direction with the user if
