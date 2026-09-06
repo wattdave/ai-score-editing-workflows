@@ -77,7 +77,7 @@ bogus command ID, and confirmed by the official docs: "the `invokeCommands`
 message always returns success"). Exit code 1 (`result: false`) may never
 occur in practice for command messages.
 
-### 1.3 Plug-in invocation (official; not yet exercised)
+### 1.3 Plug-in invocation (verified)
 
 ```json
 {"message": "invokePlugin", "name": "pluginX", "method": "Method", "args": [42, {"k": "v"}]}
@@ -89,8 +89,9 @@ the connect message's `plugins` array) is mandatory; `method` defaults to
 `Run`; `args` supports strings, booleans, numbers, nested arrays, and
 dictionaries. `result` reports whether the plug-in/method was found and
 called; the return value carries the method's return (empty string if none,
-JSON `null` if untranslatable). The guide is inconsistent about the field name
-(`return_value` in the example vs `returnValue` in prose) — verify live.
+JSON `null` if untranslatable). The field is **`returnValue`** (verified live —
+the guide's example wrongly shows `return_value`; the client accepts both).
+Nested arrays and dictionaries round-trip intact in both directions.
 
 This is the path to *reading* score state: a ManuScript plug-in (see
 `docs/manuscript-object-tree.md` for the object API) can return data, unlike
@@ -160,15 +161,15 @@ Global options: `--host` (default `localhost`), `--port` (default `1898`),
    and `command` subcommands; tests with a fake WebSocket server.
 2. **M2 — exploration tools**: `raw`, `invoke`, `repl`; discover and document
    useful ManuScript command IDs in `docs/commands.md`.
-3. **M3 — plug-in bridge and ergonomics**: `invokePlugin` support (client
-   method, `plugins` list in connect, CLI subcommand); a small ManuScript
-   plug-in that returns score state, enabling read operations; named
-   high-level operations built on discovered command IDs.
+3. **M3 — plug-in bridge** (done): `invokePlugin` support (client method,
+   `plugins` list in connect, tokens bound to their declared plug-in list,
+   `plugin`/`score-info`/`install-plugin` subcommands); bundled `sibwscli.plg`
+   bridge returning score state.
+4. **M4 — ergonomics**: richer bridge methods (read notes, selection, etc.)
+   and named high-level operations built on discovered command IDs.
 
 ## 4. Open questions
 
-- The `invokePluginResponse` return-value field name (`return_value` vs
-  `returnValue` — the guide contradicts itself).
 - Whether any response ever carries `result: false` (bogus command IDs are
   silently acknowledged with `result: true`).
 - Whether any message can *read* score state directly — per the official docs,

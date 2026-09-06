@@ -40,12 +40,14 @@ class SibeliusClient:
         client_name: str = protocol.DEFAULT_CLIENT_NAME,
         token_store: TokenStore | None = None,
         approval_timeout: float = APPROVAL_TIMEOUT,
+        plugins: list[str] | None = None,
     ) -> None:
         self.host = host
         self.port = port
         self.client_name = client_name
         self.token_store = token_store or TokenStore()
         self.approval_timeout = approval_timeout
+        self.plugins = plugins or []
         self._connection: websockets.asyncio.client.ClientConnection | None = None
 
     @property
@@ -66,10 +68,17 @@ class SibeliusClient:
             ConnectionFailed: if the socket cannot be opened or the
                 handshake does not complete.
         """
-        token = self.token_store.load(self.host, self.port)
-        if token is not None:
+        entry = self.token_store.load(self.host, self.port)
+        # A token reconnect cannot change the declared plug-in list, so a
+        # cached token whose session didn't declare our plug-ins is useless.
+        if entry is not None and entry.covers(self.plugins):
             self._connection = await self._open_socket()
-            await self._send(protocol.connect_message(self.client_name, token))
+            # Include plugins anyway: ignored on a token reconnect, but if
+            # Sibelius treats a stale token as a fresh connect, this list
+            # is what the new session gets.
+            await self._send(
+                protocol.connect_message(self.client_name, entry.token, self.plugins)
+            )
             # A token connect gets no reply; probe with an empty batch.
             await self._send(protocol.invoke_commands_message([]))
             try:
@@ -91,14 +100,14 @@ class SibeliusClient:
                             websockets.exceptions.ConnectionClosed):
                         await self.close()
                     else:
-                        self.token_store.save(self.host, self.port, new_token)
+                        self.token_store.save(self.host, self.port, new_token, self.plugins)
                         return
                 else:
                     logger.info("Unexpected liveness reply %s; falling back to approval", reply)
                     await self.close()
 
         self._connection = await self._open_socket()
-        await self._send(protocol.connect_message(self.client_name))
+        await self._send(protocol.connect_message(self.client_name, plugins=self.plugins))
         logger.warning(
             "Waiting for connection approval in Sibelius (client name: %s)...",
             self.client_name,
@@ -109,7 +118,7 @@ class SibeliusClient:
         except (TimeoutError, websockets.exceptions.ConnectionClosed, protocol.ProtocolError) as exc:
             await self.close()
             raise ConnectionFailed(f"Handshake with Sibelius at {self.uri} failed: {exc}") from exc
-        self.token_store.save(self.host, self.port, new_token)
+        self.token_store.save(self.host, self.port, new_token, self.plugins)
 
     async def close(self) -> None:
         if self._connection is not None:
@@ -125,6 +134,15 @@ class SibeliusClient:
 
     async def invoke_commands(self, commands: list[str]) -> dict[str, Any]:
         await self._send(protocol.invoke_commands_message(commands))
+        return await self._recv()
+
+    async def invoke_plugin(
+        self,
+        name: str,
+        method: str | None = None,
+        args: list[Any] | None = None,
+    ) -> dict[str, Any]:
+        await self._send(protocol.invoke_plugin_message(name, method, args))
         return await self._recv()
 
     async def send_raw(self, message: dict[str, Any]) -> dict[str, Any]:

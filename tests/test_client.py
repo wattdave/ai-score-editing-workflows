@@ -20,6 +20,8 @@ class FakeSibelius:
 
     def __init__(self) -> None:
         self.approved_tokens: set[str] = set()
+        self.token_plugins: dict[str, list[str]] = {}
+        self.installed_plugins: set[str] = {"sibwscli"}
         self.connect_dialogs_shown = 0
         self.port: int = 0
         self._server: websockets.asyncio.server.Server | None = None
@@ -36,6 +38,7 @@ class FakeSibelius:
 
     async def _handle(self, ws: websockets.asyncio.server.ServerConnection) -> None:
         connected = False
+        session_plugins: list[str] = []
         async for raw in ws:
             msg = json.loads(raw)
             kind = msg.get("message")
@@ -43,10 +46,13 @@ class FakeSibelius:
                 token = msg.get("sessionToken")
                 if token in self.approved_tokens:
                     connected = True  # silent: no reply at all
+                    session_plugins = self.token_plugins.get(token, [])
                 else:
                     self.connect_dialogs_shown += 1
                     new_token = FAKE_TOKEN
                     self.approved_tokens.add(new_token)
+                    session_plugins = msg.get("plugins", [])
+                    self.token_plugins[new_token] = session_plugins
                     connected = True
                     await ws.send(json.dumps({
                         "message": "connectResponse",
@@ -60,6 +66,13 @@ class FakeSibelius:
                 await ws.send(json.dumps({"message": "commandResponse", "result": ok}))
             elif kind == "invokeCommands":
                 await ws.send(json.dumps({"message": "invokeCommandsResponse", "result": True}))
+            elif kind == "invokePlugin":
+                ok = msg.get("name") in session_plugins and msg.get("name") in self.installed_plugins
+                await ws.send(json.dumps({
+                    "message": "invokePluginResponse",
+                    "result": ok,
+                    "return_value": {"echo": msg.get("args")} if ok else "",
+                }))
             else:
                 await ws.send(json.dumps({
                     "message": "messageProcessingError",
@@ -83,7 +96,8 @@ async def test_fresh_connect_stores_token_and_commands_work(store: TokenStore) -
             response = await client.send_command("Edit.Undo")
             assert response["result"] is True
         assert fake.connect_dialogs_shown == 1
-        assert store.load("localhost", fake.port) == FAKE_TOKEN
+        entry = store.load("localhost", fake.port)
+        assert entry is not None and entry.token == FAKE_TOKEN
 
 
 async def test_token_reconnect_skips_approval_dialog(store: TokenStore) -> None:
@@ -101,7 +115,8 @@ async def test_stale_token_falls_back_to_approval(store: TokenStore) -> None:
         async with make_client(fake, store) as client:
             assert await client.ping() is True
         assert fake.connect_dialogs_shown == 1
-        assert store.load("localhost", fake.port) == FAKE_TOKEN
+        entry = store.load("localhost", fake.port)
+        assert entry is not None and entry.token == FAKE_TOKEN
 
 
 async def test_failed_command_reports_result_false(store: TokenStore) -> None:
@@ -122,8 +137,9 @@ def test_token_store_roundtrip(tmp_path: Path) -> None:
     assert store.load("localhost", 1898) is None
     store.save("localhost", 1898, "{t1}")
     store.save("otherhost", 9999, "{t2}")
-    assert store.load("localhost", 1898) == "{t1}"
-    assert store.load("otherhost", 9999) == "{t2}"
+    e1, e2 = store.load("localhost", 1898), store.load("otherhost", 9999)
+    assert e1 is not None and e1.token == "{t1}"
+    assert e2 is not None and e2.token == "{t2}"
     assert (tmp_path / "token.json").stat().st_mode & 0o777 == 0o600
     assert store.forget("localhost", 1898) is True
     assert store.load("localhost", 1898) is None
@@ -142,3 +158,57 @@ async def test_invoke_commands_batch(store: TokenStore) -> None:
         async with make_client(fake, store) as client:
             response = await client.invoke_commands(["a", "b"])
             assert response["result"] is True
+
+
+async def test_invoke_plugin_with_declared_plugin(store: TokenStore) -> None:
+    async with FakeSibelius() as fake:
+        client = SibeliusClient(
+            host="localhost", port=fake.port, token_store=store,
+            approval_timeout=5, plugins=["sibwscli"],
+        )
+        async with client:
+            response = await client.invoke_plugin("sibwscli", "Echo", [42])
+            assert response["result"] is True
+            assert response["return_value"] == {"echo": [42]}
+        entry = store.load("localhost", fake.port)
+        assert entry is not None and entry.plugins == ["sibwscli"]
+
+
+async def test_token_without_plugin_coverage_forces_fresh_connect(store: TokenStore) -> None:
+    async with FakeSibelius() as fake:
+        plain = SibeliusClient(host="localhost", port=fake.port, token_store=store, approval_timeout=5)
+        async with plain:
+            pass
+        assert fake.connect_dialogs_shown == 1
+        with_plugin = SibeliusClient(
+            host="localhost", port=fake.port, token_store=store,
+            approval_timeout=5, plugins=["sibwscli"],
+        )
+        async with with_plugin:
+            response = await with_plugin.invoke_plugin("sibwscli", "Echo", [])
+            assert response["result"] is True
+        # the cached token did not cover the plug-in, so a second dialog is expected
+        assert fake.connect_dialogs_shown == 2
+
+
+async def test_invoke_plugin_not_installed_reports_result_false(store: TokenStore) -> None:
+    async with FakeSibelius() as fake:
+        client = SibeliusClient(
+            host="localhost", port=fake.port, token_store=store,
+            approval_timeout=5, plugins=["missing_plugin"],
+        )
+        async with client:
+            response = await client.invoke_plugin("missing_plugin")
+            assert response["result"] is False
+
+
+def test_token_store_migrates_plain_string_entries(tmp_path: Path) -> None:
+    path = tmp_path / "token.json"
+    path.write_text(json.dumps({"localhost:1898": "{old-style}"}))
+    store = TokenStore(path)
+    entry = store.load("localhost", 1898)
+    assert entry is not None
+    assert entry.token == "{old-style}"
+    assert entry.plugins == []
+    assert entry.covers([]) is True
+    assert entry.covers(["sibwscli"]) is False
