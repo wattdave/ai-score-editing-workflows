@@ -70,10 +70,13 @@ Addresses are only valid against the read they came from; re-read after
 every write.
 
 **Copy a passage to another staff (e.g. "apply SA pickup to TB, down an
-octave"):** read the destination first (know what gets overwritten) →
-`copy-passage` → `transpose` scoped to the destination staff/bars with
-`--from-note X --to-note X --octaves N` for pure octaves → read back →
-mention that pasted lyrics came along and offer to remove them.
+octave"):** read the destination first (know what gets overwritten) and check
+whether the source passage carries lyrics/text the destination staff doesn't
+use elsewhere — if so, ASK the user before copying whether to bring them
+along (paste copies everything). Then `copy-passage` → `transpose` scoped to
+the destination staff/bars with `--from-note X --to-note X --octaves N` for
+pure octaves → strip unwanted pasted items with DeleteObject (delete
+higher indexes first; each deletion shifts later addresses) → read back.
 
 **Transpose to a key:** current key from `score-info` `keySignatures`
 (empty = C major / no signature) → confirm direction with the user if
