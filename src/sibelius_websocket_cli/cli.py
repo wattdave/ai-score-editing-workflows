@@ -120,6 +120,12 @@ def build_parser() -> argparse.ArgumentParser:
     flip.add_argument("--staff", type=int, required=True)
     flip.add_argument("--bar", type=int, required=True)
     flip.add_argument("--index", type=int, required=True)
+    nudge = sub.add_parser("nudge", help="shift an object graphically (1/32 spaces; backs up first)")
+    nudge.add_argument("--staff", type=int, required=True)
+    nudge.add_argument("--bar", type=int, required=True)
+    nudge.add_argument("--index", type=int, required=True)
+    nudge.add_argument("--dx", type=int, default=0, help="right positive")
+    nudge.add_argument("--dy", type=int, default=0, help="up positive")
     export = sub.add_parser("export", help="export the active (or a given) score to another format")
     export.add_argument("--format", choices=sorted(EXPORT_FORMATS), default="musicxml")
     export.add_argument("--out", help="output path (default: next to the source file)")
@@ -297,9 +303,9 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
     info = await _bridge(client, "GetBridgeVersion")
-    if not (isinstance(info, dict) and info.get("version") == 6):
+    if not (isinstance(info, dict) and info.get("version") == 7):
         raise BridgeError(
-            f"bridge v6 required, got {info!r} — run install-plugin and restart Sibelius"
+            f"bridge v7 required, got {info!r} — run install-plugin and restart Sibelius"
         )
 
 
@@ -446,6 +452,10 @@ async def _run_flip_stem(args: argparse.Namespace) -> int:
     return await _run_write(args, "FlipStem", [args.staff, args.bar, args.index])
 
 
+async def _run_nudge(args: argparse.Namespace) -> int:
+    return await _run_write(args, "NudgeObject", [args.staff, args.bar, args.index, args.dx, args.dy])
+
+
 async def _run_export(args: argparse.Namespace) -> int:
     saveas_type, extension = EXPORT_FORMATS[args.format]
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
@@ -467,13 +477,16 @@ async def _run_export(args: argparse.Namespace) -> int:
             else Path(info["fileName"]).with_suffix(extension)
         )
         result = await _bridge(client, "ExportScore", [str(out), saveas_type])
-    if not out.exists():
+    # Sibelius appends page suffixes for image formats (foo_0001.png).
+    produced = [out] if out.exists() else sorted(out.parent.glob(f"{out.stem}_*{out.suffix}"))
+    if not produced:
         print(
             f"error: Sibelius reported the export but {out} does not exist",
             file=sys.stderr,
         )
         return EXIT_COMMAND_FAILED
-    result["size"] = out.stat().st_size
+    result["files"] = [str(f) for f in produced]
+    result["size"] = sum(f.stat().st_size for f in produced)
     print(json.dumps(result, indent=2))
     return EXIT_OK
 
@@ -559,6 +572,7 @@ def main(argv: list[str] | None = None) -> int:
         "delete-object": _run_delete_object,
         "delete-voice": _run_delete_voice,
         "flip-stem": _run_flip_stem,
+        "nudge": _run_nudge,
     }[args.subcommand]
     try:
         return int(run_sync(runner(args)))
