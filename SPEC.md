@@ -41,9 +41,16 @@ v0.1.0's `connect_to_sibelius` fails against a healthy Sibelius).
 
 Approval is **per-token, not per-`clientName`** (verified: reconnecting with
 the same client name but no token re-prompts the user). Persisting the token is
-therefore the only way to avoid a dialog on every invocation. Token lifetime
-across Sibelius restarts is unverified. Handle rejection/expiry by falling back
-to a tokenless connect (one dialog).
+therefore the only way to avoid a dialog on every invocation. Per the official
+docs (`docs/sibelius-connect.md`), a token **is valid only as long as Sibelius
+runs** — expect one approval dialog per Sibelius launch. Handle rejection or
+expiry by falling back to a tokenless connect.
+
+The connect message also takes an optional `"plugins"` array — the file names
+(without extension) of every ManuScript plug-in the client intends to call via
+`invokePlugin`. The plug-in list is fixed for the session and **cannot be
+changed when reconnecting with a token**; changing it requires a tokenless
+connect. Connections are only accepted from the same host.
 
 ### 1.2 Commands
 
@@ -59,10 +66,37 @@ Two verified request shapes:
 
 `invokeCommands` batches multiple command IDs in one round trip (an empty list
 is accepted and returns `result: true` — useful as a keepalive/ping).
-Sibelius Connect reportedly exposes 900+ ManuScript command IDs; discovering
-the full list is an open task (no `getcommands`-style message exists).
 
-### 1.3 Errors
+The valid command IDs are the snake_case ManuScript command IDs (e.g. `undo`,
+`add_bar_at_end`) documented in the ManuScript Language Guide chapter 5 — all
+627 are extracted verbatim to `docs/commands.md`. The same IDs are what
+ManuScript's `Sibelius.Execute()` takes.
+
+**`result: true` only acknowledges receipt, not execution** (verified with a
+bogus command ID, and confirmed by the official docs: "the `invokeCommands`
+message always returns success"). Exit code 1 (`result: false`) may never
+occur in practice for command messages.
+
+### 1.3 Plug-in invocation (official; not yet exercised)
+
+```json
+{"message": "invokePlugin", "name": "pluginX", "method": "Method", "args": [42, {"k": "v"}]}
+→ {"message": "invokePluginResponse", "result": true, "return_value": "..."}
+```
+
+`name` (plug-in file name without extension, which must have been declared in
+the connect message's `plugins` array) is mandatory; `method` defaults to
+`Run`; `args` supports strings, booleans, numbers, nested arrays, and
+dictionaries. `result` reports whether the plug-in/method was found and
+called; the return value carries the method's return (empty string if none,
+JSON `null` if untranslatable). The guide is inconsistent about the field name
+(`return_value` in the example vs `returnValue` in prose) — verify live.
+
+This is the path to *reading* score state: a ManuScript plug-in (see
+`docs/manuscript-object-tree.md` for the object API) can return data, unlike
+fire-and-forget command IDs.
+
+### 1.4 Errors
 
 Unknown message types return:
 
@@ -70,9 +104,8 @@ Unknown message types return:
 {"message": "messageProcessingError", "errorDetails": "unrecognized message"}
 ```
 
-Command failures are expected to surface as `result: false` in the
-`commandResponse`/`invokeCommandsResponse` (unverified — confirm with a bogus
-command name).
+Command messages never report failure (see 1.2). `invokePluginResponse.result`
+is the only documented per-call failure signal.
 
 ## 2. CLI design
 
@@ -127,13 +160,17 @@ Global options: `--host` (default `localhost`), `--port` (default `1898`),
    and `command` subcommands; tests with a fake WebSocket server.
 2. **M2 — exploration tools**: `raw`, `invoke`, `repl`; discover and document
    useful ManuScript command IDs in `docs/commands.md`.
-3. **M3 — ergonomics**: named high-level operations (undo, barlines, etc.)
-   built on discovered commands; verify error/`result:false` semantics.
+3. **M3 — plug-in bridge and ergonomics**: `invokePlugin` support (client
+   method, `plugins` list in connect, CLI subcommand); a small ManuScript
+   plug-in that returns score state, enabling read operations; named
+   high-level operations built on discovered command IDs.
 
 ## 4. Open questions
 
-- Session-token lifetime across Sibelius restarts.
-- How to enumerate the available command IDs (no discovery message found).
-- Shape of a failed command response (`result: false`? extra detail fields?).
-- Whether any message can *read* score state (Sibelius Connect appears
-  write/trigger-only; reading may require a ManuScript plugin bridge).
+- The `invokePluginResponse` return-value field name (`return_value` vs
+  `returnValue` — the guide contradicts itself).
+- Whether any response ever carries `result: false` (bogus command IDs are
+  silently acknowledged with `result: true`).
+- Whether any message can *read* score state directly — per the official docs,
+  reading requires an `invokePlugin` round trip to a ManuScript plug-in that
+  returns the data (M3).
