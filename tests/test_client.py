@@ -212,3 +212,16 @@ def test_token_store_migrates_plain_string_entries(tmp_path: Path) -> None:
     assert entry.plugins == []
     assert entry.covers([]) is True
     assert entry.covers(["sibwscli"]) is False
+
+
+def test_interval_math() -> None:
+    from sibelius_websocket_cli.intervals import compute_transposition
+
+    assert compute_transposition("C", "D", up=True) == (1, 5)      # major 2nd up
+    assert compute_transposition("C", "G", up=True) == (4, 5)      # perfect 5th up
+    assert compute_transposition("E", "F", up=True) == (1, 4)      # minor 2nd up
+    assert compute_transposition("C", "F#", up=True) == (3, 6)     # aug 4th up
+    assert compute_transposition("A", "C", up=True) == (2, 4)      # minor 3rd up
+    assert compute_transposition("C", "D", up=False) == (-6, 4)    # minor 7th down
+    assert compute_transposition("Eb", "D", up=False) == (-1, 4)   # minor 2nd down
+    assert compute_transposition("C", "C", up=True) == (0, 5)      # unison

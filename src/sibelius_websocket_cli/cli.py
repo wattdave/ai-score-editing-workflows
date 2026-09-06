@@ -12,6 +12,7 @@ from typing import Any
 
 from sibelius_websocket_cli import protocol
 from sibelius_websocket_cli.client import ConnectionFailed, SibeliusClient, run_sync
+from sibelius_websocket_cli.intervals import compute_transposition
 from sibelius_websocket_cli.token_store import TokenStore
 
 EXIT_OK = 0
@@ -252,9 +253,9 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
     info = await _bridge(client, "GetBridgeVersion")
-    if not (isinstance(info, dict) and info.get("version") == 2):
+    if not (isinstance(info, dict) and info.get("version") == 3):
         raise BridgeError(
-            f"bridge v2 required, got {info!r} — run install-plugin and restart Sibelius"
+            f"bridge v3 required, got {info!r} — run install-plugin and restart Sibelius"
         )
 
 
@@ -345,12 +346,15 @@ async def _run_transpose(args: argparse.Namespace) -> int:
         to_bar = args.to_bar or info["barCount"]
         top = args.top_staff or 1
         bottom = args.bottom_staff or info["staffCount"]
+        degree, interval_type = compute_transposition(
+            args.from_note, args.to_note, bool(args.up)
+        )
         backup = await _backup(client, "before transpose")
         print(f"backed up: {backup['copy']}", file=sys.stderr)
         result = await _bridge(
             client,
             "TransposePassage",
-            [from_bar, to_bar, top, bottom, args.from_note, args.to_note, bool(args.up)],
+            [from_bar, to_bar, top, bottom, degree, interval_type],
         )
     print(json.dumps(result, indent=2))
     return EXIT_OK
