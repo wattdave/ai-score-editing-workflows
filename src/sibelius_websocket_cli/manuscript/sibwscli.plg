@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 5);
+		return CreateDictionary('version', 6);
 	}"
 
 	Echo "(value) {
@@ -442,6 +442,45 @@
 		return CreateDictionary(
 			'oldPitch', oldPitch, 'oldName', oldName,
 			'newPitch', newNote.Pitch, 'newName', newNote.Name, 'tied', wasTied);
+	}"
+
+	DeleteVoiceInPassage "(fromBar, toBar, staffNum, voice) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (fromBar < 1 or toBar > score.SystemStaff.BarCount or fromBar > toBar) {
+			return CreateDictionary('error', 'bar range out of range');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		if (voice < 1 or voice > 4) {
+			return CreateDictionary('error', 'voice must be 1-4');
+		}
+		selection = score.Selection;
+		selection.SelectPassage(fromBar, toBar, staffNum, staffNum);
+		Sibelius.Execute('filter_voice' & voice & '_only');
+		Sibelius.Execute('delete');
+		selection.Clear();
+		return CreateDictionary(
+			'fromBar', fromBar, 'toBar', toBar, 'staff', staffNum, 'deletedVoice', voice);
+	}"
+
+	FlipStem "(staffNum, barNumber, index) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		obj = GetObjectAt(staffNum, barNumber, index);
+		if (obj = null) {
+			return CreateDictionary('error', 'no object at that address');
+		}
+		if (obj.Type != 'NoteRest') {
+			return CreateDictionary('error', 'object at address is a ' & obj.Type & ', not a NoteRest');
+		}
+		obj.FlipStem();
+		return CreateDictionary('flipped', True, 'staff', staffNum, 'bar', barNumber, 'index', index);
 	}"
 
 	OpenScore "(fileName) {
