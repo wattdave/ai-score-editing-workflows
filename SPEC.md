@@ -132,6 +132,11 @@ sibelius-websocket-cli command <CommandName>     # send one command, print JSON 
 sibelius-websocket-cli invoke <id> [<id> ...]    # batch via invokeCommands
 sibelius-websocket-cli repl                      # interactive: read message names/JSON, print replies
 sibelius-websocket-cli raw '<json>'              # send arbitrary JSON (protocol exploration)
+sibelius-websocket-cli plugin <name> [method] [--args JSON]   # invokePlugin
+sibelius-websocket-cli score-info | staves | selection        # bridge reads
+sibelius-websocket-cli read --staff N --from A --to B         # read bar contents
+sibelius-websocket-cli do <operation>           # curated named command IDs
+sibelius-websocket-cli install-plugin           # install bundled sibwscli.plg
 sibelius-websocket-cli forget-token              # delete cached session token
 ```
 
@@ -165,8 +170,10 @@ Global options: `--host` (default `localhost`), `--port` (default `1898`),
    `plugins` list in connect, tokens bound to their declared plug-in list,
    `plugin`/`score-info`/`install-plugin` subcommands); bundled `sibwscli.plg`
    bridge returning score state.
-4. **M4 — ergonomics**: richer bridge methods (read notes, selection, etc.)
-   and named high-level operations built on discovered command IDs.
+4. **M4 — ergonomics** (done): bridge methods GetStaves, GetSelectionInfo,
+   ReadBars (notes with pitch/name/tie, durations, positions, per bar);
+   `staves`/`selection`/`read` subcommands; `do <operation>` named operations
+   mapped to curated command IDs.
 
 ## 4. Open questions
 
