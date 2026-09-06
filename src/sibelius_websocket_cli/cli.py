@@ -104,6 +104,22 @@ def build_parser() -> argparse.ArgumentParser:
     set_note.add_argument("--index", type=int, required=True)
     set_note.add_argument("--old-pitch", type=int, required=True, help="MIDI pitch to replace")
     set_note.add_argument("--new-pitch", type=int, required=True, help="replacement MIDI pitch")
+    del_obj = sub.add_parser("delete-object", help="delete the object at an address (backs up first)")
+    del_obj.add_argument("--staff", type=int, required=True)
+    del_obj.add_argument("--bar", type=int, required=True)
+    del_obj.add_argument("--index", type=int, required=True)
+    del_voice = sub.add_parser(
+        "delete-voice",
+        help="remove one voice's contents (incl. rests) from a staff passage (backs up first)",
+    )
+    del_voice.add_argument("--staff", type=int, required=True)
+    del_voice.add_argument("--from-bar", type=int, required=True)
+    del_voice.add_argument("--to-bar", type=int, required=True)
+    del_voice.add_argument("--voice", type=int, required=True, choices=[1, 2, 3, 4])
+    flip = sub.add_parser("flip-stem", help="flip the stem of a NoteRest (backs up first)")
+    flip.add_argument("--staff", type=int, required=True)
+    flip.add_argument("--bar", type=int, required=True)
+    flip.add_argument("--index", type=int, required=True)
     export = sub.add_parser("export", help="export the active (or a given) score to another format")
     export.add_argument("--format", choices=sorted(EXPORT_FORMATS), default="musicxml")
     export.add_argument("--out", help="output path (default: next to the source file)")
@@ -281,9 +297,9 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
     info = await _bridge(client, "GetBridgeVersion")
-    if not (isinstance(info, dict) and info.get("version") == 5):
+    if not (isinstance(info, dict) and info.get("version") == 6):
         raise BridgeError(
-            f"bridge v5 required, got {info!r} — run install-plugin and restart Sibelius"
+            f"bridge v6 required, got {info!r} — run install-plugin and restart Sibelius"
         )
 
 
@@ -416,6 +432,20 @@ async def _run_set_note(args: argparse.Namespace) -> int:
     )
 
 
+async def _run_delete_object(args: argparse.Namespace) -> int:
+    return await _run_write(args, "DeleteObject", [args.staff, args.bar, args.index])
+
+
+async def _run_delete_voice(args: argparse.Namespace) -> int:
+    return await _run_write(
+        args, "DeleteVoiceInPassage", [args.from_bar, args.to_bar, args.staff, args.voice]
+    )
+
+
+async def _run_flip_stem(args: argparse.Namespace) -> int:
+    return await _run_write(args, "FlipStem", [args.staff, args.bar, args.index])
+
+
 async def _run_export(args: argparse.Namespace) -> int:
     saveas_type, extension = EXPORT_FORMATS[args.format]
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
@@ -526,6 +556,9 @@ def main(argv: list[str] | None = None) -> int:
         "export": _run_export,
         "copy-passage": _run_copy_passage,
         "set-note": _run_set_note,
+        "delete-object": _run_delete_object,
+        "delete-voice": _run_delete_voice,
+        "flip-stem": _run_flip_stem,
     }[args.subcommand]
     try:
         return int(run_sync(runner(args)))
