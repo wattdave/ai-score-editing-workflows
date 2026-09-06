@@ -66,6 +66,30 @@ def build_parser() -> argparse.ArgumentParser:
     read.add_argument("--staff", type=int, default=1, help="staff number, from 1")
     read.add_argument("--from", dest="from_bar", type=int, default=1, help="first bar, from 1")
     read.add_argument("--to", dest="to_bar", type=int, help="last bar (default: same as --from)")
+    sub.add_parser("bridge-version", help="report the installed bridge plug-in version")
+    read_lyrics = sub.add_parser("read-lyrics", help="list all lyrics with addresses")
+    read_lyrics.add_argument("--staff", type=int, default=0, help="staff number (0 = all)")
+    set_lyric = sub.add_parser("set-lyric", help="rewrite one lyric syllable (backs up first)")
+    set_lyric.add_argument("--staff", type=int, required=True)
+    set_lyric.add_argument("--bar", type=int, required=True)
+    set_lyric.add_argument("--index", type=int, required=True)
+    set_lyric.add_argument("--text", required=True)
+    transpose = sub.add_parser("transpose", help="transpose a passage or the whole score (backs up first)")
+    transpose.add_argument("--from-note", required=True, help="current tonic, e.g. C or Eb")
+    transpose.add_argument("--to-note", required=True, help="target tonic, e.g. D or F#")
+    direction = transpose.add_mutually_exclusive_group(required=True)
+    direction.add_argument("--up", action="store_true")
+    direction.add_argument("--down", action="store_true")
+    transpose.add_argument("--from-bar", type=int, help="default: 1")
+    transpose.add_argument("--to-bar", type=int, help="default: last bar")
+    transpose.add_argument("--top-staff", type=int, help="default: 1")
+    transpose.add_argument("--bottom-staff", type=int, help="default: last staff")
+    set_key = sub.add_parser("set-key", help="add a key signature (backs up first)")
+    set_key.add_argument("--bar", type=int, default=1)
+    set_key.add_argument("--key", required=True, help='key name, e.g. D or Bb')
+    set_key.add_argument("--minor", action="store_true")
+    backup = sub.add_parser("backup", help="in-file version + save + timestamped file copy")
+    backup.add_argument("--name", default="sibelius-websocket-cli backup")
     do = sub.add_parser("do", help="run a named operation (curated command IDs)")
     do.add_argument(
         "operation",
@@ -206,6 +230,61 @@ async def _run_score_info(args: argparse.Namespace) -> int:
     return await _run_bridge_call(args, "GetScoreInfo")
 
 
+class BridgeError(Exception):
+    def __init__(self, payload: Any) -> None:
+        super().__init__(json.dumps(payload))
+        self.payload = payload
+
+
+async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | None = None) -> Any:
+    """Call a bridge method; raise BridgeError on transport or bridge failure."""
+    response = await client.invoke_plugin(BRIDGE_PLUGIN, method, call_args)
+    if not protocol.is_success(response):
+        raise BridgeError(
+            "bridge plug-in not reachable — run 'sibelius-websocket-cli "
+            f"install-plugin' and restart Sibelius. Response: {json.dumps(response)}"
+        )
+    value = protocol.plugin_return_value(response)
+    if isinstance(value, dict) and "error" in value:
+        raise BridgeError(value["error"])
+    return value
+
+
+async def _check_bridge_version(client: SibeliusClient) -> None:
+    info = await _bridge(client, "GetBridgeVersion")
+    if not (isinstance(info, dict) and info.get("version") == 2):
+        raise BridgeError(
+            f"bridge v2 required, got {info!r} — run install-plugin and restart Sibelius"
+        )
+
+
+async def _backup(client: SibeliusClient, name: str) -> dict[str, Any]:
+    """In-file version + save + timestamped filesystem copy. Returns details."""
+    import shutil
+    from datetime import datetime
+
+    version = await _bridge(client, "AddVersion", [name, "automatic backup before write"])
+    saved = await _bridge(client, "Save")
+    source = Path(saved["fileName"])
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    copy = source.with_name(f"{source.stem}.backup-{stamp}{source.suffix}")
+    shutil.copy2(source, copy)
+    return {"version": version, "savedTo": str(source), "copy": str(copy)}
+
+
+async def _run_write(
+    args: argparse.Namespace, method: str, call_args: list[Any]
+) -> int:
+    """Backup, then run a bridge write method and print its result."""
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _check_bridge_version(client)
+        backup = await _backup(client, f"before {args.subcommand}")
+        print(f"backed up: {backup['copy']}", file=sys.stderr)
+        result = await _bridge(client, method, call_args)
+    print(json.dumps(result, indent=2))
+    return EXIT_OK
+
+
 async def _run_bridge_call(
     args: argparse.Namespace, method: str, call_args: list[Any] | None = None
 ) -> int:
@@ -244,6 +323,49 @@ async def _run_do(args: argparse.Namespace) -> int:
     async with _client(args) as client:
         response = await client.invoke_commands([command_id])
     return _emit(args, response, f"sent {args.operation} ({command_id})")
+
+
+async def _run_bridge_version(args: argparse.Namespace) -> int:
+    return await _run_bridge_call(args, "GetBridgeVersion")
+
+
+async def _run_read_lyrics(args: argparse.Namespace) -> int:
+    return await _run_bridge_call(args, "ReadLyrics", [args.staff])
+
+
+async def _run_set_lyric(args: argparse.Namespace) -> int:
+    return await _run_write(args, "SetLyricText", [args.staff, args.bar, args.index, args.text])
+
+
+async def _run_transpose(args: argparse.Namespace) -> int:
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _check_bridge_version(client)
+        info = await _bridge(client, "GetScoreInfo")
+        from_bar = args.from_bar or 1
+        to_bar = args.to_bar or info["barCount"]
+        top = args.top_staff or 1
+        bottom = args.bottom_staff or info["staffCount"]
+        backup = await _backup(client, "before transpose")
+        print(f"backed up: {backup['copy']}", file=sys.stderr)
+        result = await _bridge(
+            client,
+            "TransposePassage",
+            [from_bar, to_bar, top, bottom, args.from_note, args.to_note, bool(args.up)],
+        )
+    print(json.dumps(result, indent=2))
+    return EXIT_OK
+
+
+async def _run_set_key(args: argparse.Namespace) -> int:
+    return await _run_write(args, "SetKeySignature", [args.bar, args.key, not args.minor])
+
+
+async def _run_backup(args: argparse.Namespace) -> int:
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _check_bridge_version(client)
+        result = await _backup(client, args.name)
+    print(json.dumps(result, indent=2))
+    return EXIT_OK
 
 
 def _run_install_plugin(args: argparse.Namespace) -> int:
@@ -307,9 +429,18 @@ def main(argv: list[str] | None = None) -> int:
         "selection": _run_selection,
         "read": _run_read,
         "do": _run_do,
+        "bridge-version": _run_bridge_version,
+        "read-lyrics": _run_read_lyrics,
+        "set-lyric": _run_set_lyric,
+        "transpose": _run_transpose,
+        "set-key": _run_set_key,
+        "backup": _run_backup,
     }[args.subcommand]
     try:
         return int(run_sync(runner(args)))
+    except BridgeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
     except ConnectionFailed as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_CONNECTION_FAILED
