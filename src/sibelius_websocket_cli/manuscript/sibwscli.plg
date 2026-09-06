@@ -22,4 +22,76 @@
 			'staffCount', score.StaffCount,
 			'barCount', score.SystemStaff.BarCount);
 	}"
+
+	GetStaves "() {
+		if (Sibelius.ScoreCount = 0) {
+			return CreateDictionary('error', 'no score open');
+		}
+		score = Sibelius.ActiveScore;
+		staves = CreateSparseArray();
+		for i = 1 to score.StaffCount + 1 {
+			staff = score.NthStaff(i);
+			staves.Push(CreateDictionary(
+				'staffNum', i,
+				'instrumentName', staff.InstrumentName,
+				'fullInstrumentName', staff.FullInstrumentName,
+				'barCount', staff.BarCount));
+		}
+		return staves;
+	}"
+
+	GetSelectionInfo "() {
+		if (Sibelius.ScoreCount = 0) {
+			return CreateDictionary('error', 'no score open');
+		}
+		selection = Sibelius.ActiveScore.Selection;
+		if (selection.IsPassage) {
+			return CreateDictionary(
+				'isPassage', True,
+				'topStaff', selection.TopStaff,
+				'bottomStaff', selection.BottomStaff,
+				'firstBar', selection.FirstBarNumber,
+				'lastBar', selection.LastBarNumber);
+		}
+		return CreateDictionary('isPassage', False);
+	}"
+
+	ReadBars "(staffNum, fromBar, toBar) {
+		if (Sibelius.ScoreCount = 0) {
+			return CreateDictionary('error', 'no score open');
+		}
+		score = Sibelius.ActiveScore;
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		if (fromBar < 1 or toBar > staff.BarCount or fromBar > toBar) {
+			return CreateDictionary('error', 'bar range out of range');
+		}
+		bars = CreateSparseArray();
+		for barNum = fromBar to toBar + 1 {
+			bar = staff.NthBar(barNum);
+			objects = CreateSparseArray();
+			for each obj in bar {
+				if (obj.Type = 'NoteRest') {
+					notes = CreateSparseArray();
+					for each note in obj {
+						notes.Push(CreateDictionary(
+							'pitch', note.Pitch,
+							'name', note.Name,
+							'tied', note.Tied));
+					}
+					objects.Push(CreateDictionary(
+						'type', obj.Type,
+						'position', obj.Position,
+						'duration', obj.Duration,
+						'notes', notes));
+				} else {
+					objects.Push(CreateDictionary('type', obj.Type, 'position', obj.Position));
+				}
+			}
+			bars.Push(CreateDictionary('barNumber', barNum, 'objects', objects));
+		}
+		return bars;
+	}"
 }

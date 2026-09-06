@@ -60,6 +60,19 @@ def build_parser() -> argparse.ArgumentParser:
         "score-info",
         help="read info about the open score (requires the bundled sibwscli plug-in)",
     )
+    sub.add_parser("staves", help="list staves of the open score (requires bridge plug-in)")
+    sub.add_parser("selection", help="describe the current selection (requires bridge plug-in)")
+    read = sub.add_parser("read", help="read bar contents (requires bridge plug-in)")
+    read.add_argument("--staff", type=int, default=1, help="staff number, from 1")
+    read.add_argument("--from", dest="from_bar", type=int, default=1, help="first bar, from 1")
+    read.add_argument("--to", dest="to_bar", type=int, help="last bar (default: same as --from)")
+    do = sub.add_parser("do", help="run a named operation (curated command IDs)")
+    do.add_argument(
+        "operation",
+        choices=sorted(NAMED_OPERATIONS),
+        metavar="operation",
+        help=f"one of: {', '.join(sorted(NAMED_OPERATIONS))}",
+    )
     install = sub.add_parser(
         "install-plugin",
         help="copy the bundled sibwscli.plg bridge into the Sibelius plug-in folder",
@@ -147,6 +160,22 @@ async def _run_repl(args: argparse.Namespace) -> int:
 
 BRIDGE_PLUGIN = "sibwscli"
 
+# Curated friendly names -> ManuScript command IDs (see docs/commands.md).
+# Note these are fire-and-forget: Sibelius acknowledges receipt but never
+# reports whether the command did anything (SPEC.md 1.2).
+NAMED_OPERATIONS = {
+    "undo": "undo",
+    "redo": "redo",
+    "save": "save",
+    "select-all": "select_all",
+    "select-none": "select_none",
+    "delete": "delete",
+    "add-bar": "add_bar_at_end",
+    "play": "play_from_selection",
+    "play-stop": "play/stop",
+    "transpose-dialog": "transpose",
+}
+
 
 async def _run_plugin(args: argparse.Namespace) -> int:
     plugin_args = None
@@ -174,8 +203,14 @@ async def _run_plugin(args: argparse.Namespace) -> int:
 
 
 async def _run_score_info(args: argparse.Namespace) -> int:
+    return await _run_bridge_call(args, "GetScoreInfo")
+
+
+async def _run_bridge_call(
+    args: argparse.Namespace, method: str, call_args: list[Any] | None = None
+) -> int:
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        response = await client.invoke_plugin(BRIDGE_PLUGIN, "GetScoreInfo")
+        response = await client.invoke_plugin(BRIDGE_PLUGIN, method, call_args)
     if not protocol.is_success(response):
         print(
             "error: bridge plug-in not reachable — run "
@@ -186,7 +221,29 @@ async def _run_score_info(args: argparse.Namespace) -> int:
         return EXIT_COMMAND_FAILED
     value = protocol.plugin_return_value(response)
     print(json.dumps(response) if args.json else json.dumps(value, indent=2))
+    if isinstance(value, dict) and "error" in value:
+        return EXIT_COMMAND_FAILED
     return EXIT_OK
+
+
+async def _run_staves(args: argparse.Namespace) -> int:
+    return await _run_bridge_call(args, "GetStaves")
+
+
+async def _run_selection(args: argparse.Namespace) -> int:
+    return await _run_bridge_call(args, "GetSelectionInfo")
+
+
+async def _run_read(args: argparse.Namespace) -> int:
+    to_bar = args.to_bar if args.to_bar is not None else args.from_bar
+    return await _run_bridge_call(args, "ReadBars", [args.staff, args.from_bar, to_bar])
+
+
+async def _run_do(args: argparse.Namespace) -> int:
+    command_id = NAMED_OPERATIONS[args.operation]
+    async with _client(args) as client:
+        response = await client.invoke_commands([command_id])
+    return _emit(args, response, f"sent {args.operation} ({command_id})")
 
 
 def _run_install_plugin(args: argparse.Namespace) -> int:
@@ -246,6 +303,10 @@ def main(argv: list[str] | None = None) -> int:
         "repl": _run_repl,
         "plugin": _run_plugin,
         "score-info": _run_score_info,
+        "staves": _run_staves,
+        "selection": _run_selection,
+        "read": _run_read,
+        "do": _run_do,
     }[args.subcommand]
     try:
         return int(run_sync(runner(args)))
