@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 6);
+		return CreateDictionary('version', 7);
 	}"
 
 	Echo "(value) {
@@ -481,6 +481,24 @@
 		}
 		obj.FlipStem();
 		return CreateDictionary('flipped', True, 'staff', staffNum, 'bar', barNumber, 'index', index);
+	}"
+
+	NudgeObject "(staffNum, barNumber, index, dx, dy) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		obj = GetObjectAt(staffNum, barNumber, index);
+		if (obj = null) {
+			return CreateDictionary('error', 'no object at that address');
+		}
+		oldDx = obj.Dx;
+		oldDy = obj.Dy;
+		obj.Dx = oldDx + dx;
+		obj.Dy = oldDy + dy;
+		return CreateDictionary(
+			'type', obj.Type, 'oldDx', oldDx, 'newDx', obj.Dx,
+			'oldDy', oldDy, 'newDy', obj.Dy);
 	}"
 
 	OpenScore "(fileName) {
