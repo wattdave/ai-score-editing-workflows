@@ -17,7 +17,7 @@
 		}
 		score = Sibelius.ActiveScore;
 		return CreateDictionary(
-			'fileName', score.FileName,
+			'fileName', score.FileName & '',
 			'title', score.Title,
 			'staffCount', score.StaffCount,
 			'barCount', score.SystemStaff.BarCount);
