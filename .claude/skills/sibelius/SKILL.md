@@ -84,6 +84,16 @@ ambiguous → `transpose --from-note <cur> --to-note <target> --up|--down` →
 read back a bar to check pitches → ask the user to confirm the key signature
 on screen.
 
+**Visual/layout fixes (collisions, stems, spacing):** the read commands can't
+see engraving, but you can: `export --format png --out /tmp/check.png` (pages
+land as check_0001.png etc.), Read the image, judge, adjust, re-export, look
+again. Layout tools: `invoke select_all reset_note_spacing select_none` or
+`increase_spacing` for global spacing; `nudge --staff --bar --index --dx --dy`
+(1/32 spaces) for targeted moves of any addressed object (e.g. colliding
+lyrics — nudging one syllable often just moves the collision; free space on
+both sides); `flip-stem` for stem direction. Iterate in small steps and
+re-render between each.
+
 ## Trust the local docs, not the Avid guide
 
 The ManuScript Language Guide has proven wrong in specifics (documented
