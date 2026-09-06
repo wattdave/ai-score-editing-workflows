@@ -4,18 +4,43 @@
 	}"
 
 	Run "() {
-		Sibelius.MessageBox('This plug-in is the read bridge for sibelius-websocket-cli. It is meant to be called over Sibelius Connect (invokePlugin), not from the menu.');
+		Sibelius.MessageBox('This plug-in is the bridge for sibelius-websocket-cli. It is meant to be called over Sibelius Connect (invokePlugin), not from the menu.');
+	}"
+
+	GetBridgeVersion "() {
+		return CreateDictionary('version', 2);
 	}"
 
 	Echo "(value) {
 		return value;
 	}"
 
-	GetScoreInfo "() {
+	RequireScore "() {
 		if (Sibelius.ScoreCount = 0) {
+			return null;
+		}
+		return Sibelius.ActiveScore;
+	}"
+
+	GetScoreInfo "() {
+		score = RequireScore();
+		if (score = null) {
 			return CreateDictionary('error', 'no score open');
 		}
-		score = Sibelius.ActiveScore;
+		keySignatures = CreateSparseArray();
+		timeSignatures = CreateSparseArray();
+		systemStaff = score.SystemStaff;
+		for barNum = 1 to systemStaff.BarCount + 1 {
+			bar = systemStaff.NthBar(barNum);
+			for each KeySignature ks in bar {
+				keySignatures.Push(CreateDictionary(
+					'bar', barNum, 'name', ks.AsText, 'sharps', ks.Sharps, 'major', ks.Major));
+			}
+			for each TimeSignature ts in bar {
+				timeSignatures.Push(CreateDictionary(
+					'bar', barNum, 'numerator', ts.Numerator, 'denominator', ts.Denominator));
+			}
+		}
 		return CreateDictionary(
 			'fileName', score.FileName & '',
 			'title', score.Title,
@@ -23,14 +48,16 @@
 			'lyricist', score.Lyricist,
 			'copyright', score.Copyright,
 			'staffCount', score.StaffCount,
-			'barCount', score.SystemStaff.BarCount);
+			'barCount', systemStaff.BarCount,
+			'keySignatures', keySignatures,
+			'timeSignatures', timeSignatures);
 	}"
 
 	GetStaves "() {
-		if (Sibelius.ScoreCount = 0) {
+		score = RequireScore();
+		if (score = null) {
 			return CreateDictionary('error', 'no score open');
 		}
-		score = Sibelius.ActiveScore;
 		staves = CreateSparseArray();
 		for i = 1 to score.StaffCount + 1 {
 			staff = score.NthStaff(i);
@@ -44,10 +71,11 @@
 	}"
 
 	GetSelectionInfo "() {
-		if (Sibelius.ScoreCount = 0) {
+		score = RequireScore();
+		if (score = null) {
 			return CreateDictionary('error', 'no score open');
 		}
-		selection = Sibelius.ActiveScore.Selection;
+		selection = score.Selection;
 		if (selection.IsPassage) {
 			return CreateDictionary(
 				'isPassage', True,
@@ -59,11 +87,59 @@
 		return CreateDictionary('isPassage', False);
 	}"
 
+	DescribeObject "(obj, index) {
+		if (obj.Type = 'NoteRest') {
+			notes = CreateSparseArray();
+			for each note in obj {
+				notes.Push(CreateDictionary(
+					'pitch', note.Pitch,
+					'name', note.Name,
+					'tied', note.Tied));
+			}
+			return CreateDictionary(
+				'index', index,
+				'type', obj.Type,
+				'position', obj.Position,
+				'voice', obj.VoiceNumber,
+				'duration', obj.Duration,
+				'notes', notes);
+		}
+		if (obj.Type = 'LyricItem') {
+			syllableType = 'end';
+			if (obj.SyllableType = MiddleOfWord) {
+				syllableType = 'middle';
+			}
+			return CreateDictionary(
+				'index', index,
+				'type', obj.Type,
+				'position', obj.Position,
+				'voice', obj.VoiceNumber,
+				'text', obj.Text,
+				'syllableType', syllableType);
+		}
+		if (obj.Type = 'KeySignature') {
+			return CreateDictionary(
+				'index', index, 'type', obj.Type, 'position', obj.Position,
+				'name', obj.AsText, 'sharps', obj.Sharps, 'major', obj.Major);
+		}
+		if (obj.Type = 'TimeSignature') {
+			return CreateDictionary(
+				'index', index, 'type', obj.Type, 'position', obj.Position,
+				'numerator', obj.Numerator, 'denominator', obj.Denominator);
+		}
+		if (obj.Type = 'Clef') {
+			return CreateDictionary(
+				'index', index, 'type', obj.Type, 'position', obj.Position,
+				'styleId', obj.StyleId);
+		}
+		return CreateDictionary('index', index, 'type', obj.Type, 'position', obj.Position);
+	}"
+
 	ReadBars "(staffNum, fromBar, toBar) {
-		if (Sibelius.ScoreCount = 0) {
+		score = RequireScore();
+		if (score = null) {
 			return CreateDictionary('error', 'no score open');
 		}
-		score = Sibelius.ActiveScore;
 		if (staffNum < 1 or staffNum > score.StaffCount) {
 			return CreateDictionary('error', 'staffNum out of range');
 		}
@@ -75,26 +151,248 @@
 		for barNum = fromBar to toBar + 1 {
 			bar = staff.NthBar(barNum);
 			objects = CreateSparseArray();
+			index = 0;
 			for each obj in bar {
-				if (obj.Type = 'NoteRest') {
-					notes = CreateSparseArray();
-					for each note in obj {
-						notes.Push(CreateDictionary(
-							'pitch', note.Pitch,
-							'name', note.Name,
-							'tied', note.Tied));
-					}
-					objects.Push(CreateDictionary(
-						'type', obj.Type,
-						'position', obj.Position,
-						'duration', obj.Duration,
-						'notes', notes));
-				} else {
-					objects.Push(CreateDictionary('type', obj.Type, 'position', obj.Position));
-				}
+				objects.Push(DescribeObject(obj, index));
+				index = index + 1;
 			}
 			bars.Push(CreateDictionary('barNumber', barNum, 'objects', objects));
 		}
 		return bars;
+	}"
+
+	ReadLyrics "(staffNum) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 0 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		firstStaff = staffNum;
+		lastStaff = staffNum;
+		if (staffNum = 0) {
+			firstStaff = 1;
+			lastStaff = score.StaffCount;
+		}
+		lyrics = CreateSparseArray();
+		for s = firstStaff to lastStaff + 1 {
+			staff = score.NthStaff(s);
+			for barNum = 1 to staff.BarCount + 1 {
+				bar = staff.NthBar(barNum);
+				index = 0;
+				for each obj in bar {
+					if (obj.Type = 'LyricItem') {
+						syllableType = 'end';
+						if (obj.SyllableType = MiddleOfWord) {
+							syllableType = 'middle';
+						}
+						lyrics.Push(CreateDictionary(
+							'staff', s,
+							'bar', barNum,
+							'index', index,
+							'position', obj.Position,
+							'text', obj.Text,
+							'syllableType', syllableType));
+					}
+					index = index + 1;
+				}
+			}
+		}
+		return lyrics;
+	}"
+
+	GetObjectAt "(staffNum, barNumber, index) {
+		score = Sibelius.ActiveScore;
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return null;
+		}
+		staff = score.NthStaff(staffNum);
+		if (barNumber < 1 or barNumber > staff.BarCount) {
+			return null;
+		}
+		bar = staff.NthBar(barNumber);
+		i = 0;
+		for each obj in bar {
+			if (i = index) {
+				return obj;
+			}
+			i = i + 1;
+		}
+		return null;
+	}"
+
+	SetLyricText "(staffNum, barNumber, index, newText) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		obj = GetObjectAt(staffNum, barNumber, index);
+		if (obj = null) {
+			return CreateDictionary('error', 'no object at that address');
+		}
+		if (obj.Type != 'LyricItem') {
+			return CreateDictionary('error', 'object at address is a ' & obj.Type & ', not a LyricItem');
+		}
+		oldText = obj.Text;
+		obj.Text = newText;
+		return CreateDictionary('oldText', oldText, 'newText', obj.Text);
+	}"
+
+	TransposePassage "(fromBar, toBar, topStaff, bottomStaff, fromNote, toNote, upward) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (fromBar < 1 or toBar > score.SystemStaff.BarCount or fromBar > toBar) {
+			return CreateDictionary('error', 'bar range out of range');
+		}
+		if (topStaff < 1 or bottomStaff > score.StaffCount or topStaff > bottomStaff) {
+			return CreateDictionary('error', 'staff range out of range');
+		}
+		degree = utils.CalculateDegree(fromNote, toNote, upward);
+		interval = utils.CalculateInterval(fromNote, toNote, upward);
+		selection = score.Selection;
+		selection.SelectPassage(fromBar, toBar, topStaff, bottomStaff);
+		selection.Transpose(degree, interval, True, True);
+		selection.Clear();
+		return CreateDictionary(
+			'fromNote', fromNote, 'toNote', toNote, 'upward', upward,
+			'degree', degree, 'interval', interval,
+			'fromBar', fromBar, 'toBar', toBar,
+			'topStaff', topStaff, 'bottomStaff', bottomStaff);
+	}"
+
+	SetKeySignature "(barNumber, keyName, major) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		systemStaff = score.SystemStaff;
+		if (barNumber < 1 or barNumber > systemStaff.BarCount) {
+			return CreateDictionary('error', 'barNumber out of range');
+		}
+		bar = systemStaff.NthBar(barNumber);
+		ks = bar.AddKeySignatureFromText(0, keyName, major);
+		if (ks = null) {
+			return CreateDictionary('error', 'AddKeySignatureFromText failed for ' & keyName);
+		}
+		return CreateDictionary('bar', barNumber, 'name', ks.AsText, 'sharps', ks.Sharps, 'major', ks.Major);
+	}"
+
+	SetTimeSignature "(barNumber, top, bottom) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		systemStaff = score.SystemStaff;
+		if (barNumber < 1 or barNumber > systemStaff.BarCount) {
+			return CreateDictionary('error', 'barNumber out of range');
+		}
+		bar = systemStaff.NthBar(barNumber);
+		err = bar.AddTimeSignature(top, bottom, True, True);
+		if (err != '') {
+			return CreateDictionary('error', err);
+		}
+		return CreateDictionary('bar', barNumber, 'numerator', top, 'denominator', bottom);
+	}"
+
+	AddNotes "(staffNum, barNumber, position, duration, pitches, voice) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		if (barNumber < 1 or barNumber > staff.BarCount) {
+			return CreateDictionary('error', 'barNumber out of range');
+		}
+		if (pitches.Length < 1) {
+			return CreateDictionary('error', 'pitches is empty');
+		}
+		bar = staff.NthBar(barNumber);
+		added = CreateSparseArray();
+		firstNote = bar.AddNote(position, pitches[0], duration, False, voice);
+		if (firstNote = null) {
+			return CreateDictionary('error', 'AddNote failed');
+		}
+		added.Push(CreateDictionary('pitch', firstNote.Pitch, 'name', firstNote.Name));
+		noteRest = firstNote.ParentNoteRest;
+		for i = 1 to pitches.Length {
+			note = noteRest.AddNote(pitches[i]);
+			if (note != null) {
+				added.Push(CreateDictionary('pitch', note.Pitch, 'name', note.Name));
+			}
+		}
+		return CreateDictionary(
+			'staff', staffNum, 'bar', barNumber, 'position', position,
+			'duration', duration, 'voice', voice, 'notes', added);
+	}"
+
+	AddLyric "(staffNum, barNumber, position, duration, text, syllableType) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		if (barNumber < 1 or barNumber > staff.BarCount) {
+			return CreateDictionary('error', 'barNumber out of range');
+		}
+		st = EndOfWord;
+		if (syllableType = 'middle') {
+			st = MiddleOfWord;
+		}
+		bar = staff.NthBar(barNumber);
+		lyric = bar.AddLyric(position, duration, text, st);
+		if (lyric = null) {
+			return CreateDictionary('error', 'AddLyric failed');
+		}
+		return CreateDictionary(
+			'staff', staffNum, 'bar', barNumber, 'position', lyric.Position, 'text', lyric.Text);
+	}"
+
+	DeleteObject "(staffNum, barNumber, index) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		obj = GetObjectAt(staffNum, barNumber, index);
+		if (obj = null) {
+			return CreateDictionary('error', 'no object at that address');
+		}
+		deleted = DescribeObject(obj, index);
+		obj.Delete();
+		return CreateDictionary('deleted', deleted);
+	}"
+
+	AddVersion "(name, comment) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		versions = score.GetVersions();
+		version = versions.AddVersion(name, comment);
+		if (version = null) {
+			return CreateDictionary('error', 'AddVersion failed (has the score ever been saved?)');
+		}
+		return CreateDictionary('name', name, 'versionCount', versions.NumChildren);
+	}"
+
+	Save "() {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		fileName = score.FileName & '';
+		if (fileName = '') {
+			return CreateDictionary('error', 'score has never been saved; save it in Sibelius first');
+		}
+		score.Save(fileName);
+		return CreateDictionary('fileName', fileName);
 	}"
 }

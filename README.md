@@ -50,6 +50,18 @@ uv run sibelius-websocket-cli read --staff 1 --from 1 --to 4
                                                   # durations, positions
 ```
 
+Writing (each write backs up first: in-file version + save + timestamped
+`.sib` copy next to the original):
+
+```bash
+uv run sibelius-websocket-cli read-lyrics                 # all lyrics, addressed
+uv run sibelius-websocket-cli set-lyric --staff 1 --bar 3 --index 2 --text "ry-"
+uv run sibelius-websocket-cli transpose --from-note C --to-note D --up
+uv run sibelius-websocket-cli set-key --key D             # key signature only
+uv run sibelius-websocket-cli backup                      # backup on demand
+uv run sibelius-websocket-cli bridge-version              # check installed bridge
+```
+
 Driving Sibelius with command IDs (fire-and-forget — Sibelius acknowledges
 receipt but never reports whether a command did anything):
 
