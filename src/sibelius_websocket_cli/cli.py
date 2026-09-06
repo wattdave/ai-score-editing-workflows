@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import sys
+from pathlib import Path
 from typing import Any
 
 from sibelius_websocket_cli import protocol
@@ -46,6 +47,26 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser(
         "repl",
         help="interactive: bare words are sent as commands, JSON objects as raw messages",
+    )
+    plugin = sub.add_parser("plugin", help="call a ManuScript plug-in via invokePlugin")
+    plugin.add_argument("name", help="plug-in file name without extension")
+    plugin.add_argument("method", nargs="?", help="method to call (default: Run)")
+    plugin.add_argument(
+        "--args",
+        dest="plugin_args",
+        help='JSON array of arguments, e.g. \'[42, "text"]\'',
+    )
+    sub.add_parser(
+        "score-info",
+        help="read info about the open score (requires the bundled sibwscli plug-in)",
+    )
+    install = sub.add_parser(
+        "install-plugin",
+        help="copy the bundled sibwscli.plg bridge into the Sibelius plug-in folder",
+    )
+    install.add_argument(
+        "--plugin-dir",
+        help="override the Sibelius user plug-in directory",
     )
     sub.add_parser("forget-token", help="delete the cached session token for host:port")
     return parser
@@ -124,12 +145,82 @@ async def _run_repl(args: argparse.Namespace) -> int:
             print(json.dumps(response, indent=2))
 
 
-def _client(args: argparse.Namespace) -> SibeliusClient:
+BRIDGE_PLUGIN = "sibwscli"
+
+
+async def _run_plugin(args: argparse.Namespace) -> int:
+    plugin_args = None
+    if args.plugin_args is not None:
+        try:
+            plugin_args = json.loads(args.plugin_args)
+        except json.JSONDecodeError as exc:
+            print(f"error: --args is not valid JSON: {exc}", file=sys.stderr)
+            return EXIT_COMMAND_FAILED
+        if not isinstance(plugin_args, list):
+            print("error: --args must be a JSON array", file=sys.stderr)
+            return EXIT_COMMAND_FAILED
+    async with _client(args, plugins=[args.name]) as client:
+        response = await client.invoke_plugin(args.name, args.method, plugin_args)
+    if not protocol.is_success(response):
+        print(
+            f"error: plug-in call failed (is '{args.name}' installed and was it "
+            f"declared at connect time?): {json.dumps(response)}",
+            file=sys.stderr,
+        )
+        return EXIT_COMMAND_FAILED
+    value = protocol.plugin_return_value(response)
+    print(json.dumps(response) if args.json else json.dumps(value, indent=2))
+    return EXIT_OK
+
+
+async def _run_score_info(args: argparse.Namespace) -> int:
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        response = await client.invoke_plugin(BRIDGE_PLUGIN, "GetScoreInfo")
+    if not protocol.is_success(response):
+        print(
+            "error: bridge plug-in not reachable — run "
+            "'sibelius-websocket-cli install-plugin' and restart Sibelius. "
+            f"Response: {json.dumps(response)}",
+            file=sys.stderr,
+        )
+        return EXIT_COMMAND_FAILED
+    value = protocol.plugin_return_value(response)
+    print(json.dumps(response) if args.json else json.dumps(value, indent=2))
+    return EXIT_OK
+
+
+def _run_install_plugin(args: argparse.Namespace) -> int:
+    import shutil
+
+    source = Path(__file__).parent / "manuscript" / f"{BRIDGE_PLUGIN}.plg"
+    if args.plugin_dir:
+        plugin_root = Path(args.plugin_dir)
+    else:
+        supports = sorted(Path.home().glob("Library/Application Support/Avid/Sibelius*"))
+        if not supports:
+            print(
+                "error: no Sibelius support folder found under "
+                "~/Library/Application Support/Avid — pass --plugin-dir",
+                file=sys.stderr,
+            )
+            return EXIT_COMMAND_FAILED
+        plugin_root = supports[-1] / "Plugins"
+    dest_dir = plugin_root / "Websocket CLI"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / source.name
+    shutil.copyfile(source, dest)
+    print(f"Installed {dest}")
+    print("Restart Sibelius (or re-scan plug-ins) for it to load.")
+    return EXIT_OK
+
+
+def _client(args: argparse.Namespace, plugins: list[str] | None = None) -> SibeliusClient:
     return SibeliusClient(
         host=args.host,
         port=args.port,
         client_name=args.client_name,
         approval_timeout=args.timeout,
+        plugins=plugins,
     )
 
 
@@ -144,6 +235,8 @@ def main(argv: list[str] | None = None) -> int:
         removed = TokenStore().forget(args.host, args.port)
         print("Token removed" if removed else "No token stored")
         return EXIT_OK
+    if args.subcommand == "install-plugin":
+        return _run_install_plugin(args)
 
     runner = {
         "ping": _run_ping,
@@ -151,6 +244,8 @@ def main(argv: list[str] | None = None) -> int:
         "invoke": _run_invoke,
         "raw": _run_raw,
         "repl": _run_repl,
+        "plugin": _run_plugin,
+        "score-info": _run_score_info,
     }[args.subcommand]
     try:
         return int(run_sync(runner(args)))

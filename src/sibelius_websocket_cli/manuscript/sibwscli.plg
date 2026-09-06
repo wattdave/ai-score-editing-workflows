@@ -1,0 +1,25 @@
+{
+	Initialize "() {
+		AddToPluginsMenu('Sibelius Websocket CLI Bridge','Run');
+	}"
+
+	Run "() {
+		Sibelius.MessageBox('This plug-in is the read bridge for sibelius-websocket-cli. It is meant to be called over Sibelius Connect (invokePlugin), not from the menu.');
+	}"
+
+	Echo "(value) {
+		return value;
+	}"
+
+	GetScoreInfo "() {
+		if (Sibelius.ScoreCount = 0) {
+			return CreateDictionary('error', 'no score open');
+		}
+		score = Sibelius.ActiveScore;
+		return CreateDictionary(
+			'fileName', score.FileName,
+			'title', score.Title,
+			'staffCount', score.StaffCount,
+			'barCount', score.SystemStaff.BarCount);
+	}"
+}
