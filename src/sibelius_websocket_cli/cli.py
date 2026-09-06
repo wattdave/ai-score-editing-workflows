@@ -89,6 +89,10 @@ def build_parser() -> argparse.ArgumentParser:
     set_key.add_argument("--bar", type=int, default=1)
     set_key.add_argument("--key", required=True, help='key name, e.g. D or Bb')
     set_key.add_argument("--minor", action="store_true")
+    export = sub.add_parser("export", help="export the active (or a given) score to another format")
+    export.add_argument("--format", choices=sorted(EXPORT_FORMATS), default="musicxml")
+    export.add_argument("--out", help="output path (default: next to the source file)")
+    export.add_argument("--file", dest="sib_file", help=".sib file to open first (default: active score)")
     backup = sub.add_parser("backup", help="in-file version + save + timestamped file copy")
     backup.add_argument("--name", default="sibelius-websocket-cli backup")
     do = sub.add_parser("do", help="run a named operation (curated command IDs)")
@@ -185,6 +189,15 @@ async def _run_repl(args: argparse.Namespace) -> int:
 
 BRIDGE_PLUGIN = "sibwscli"
 
+# CLI format name -> (ManuScript SaveAs type, file extension)
+EXPORT_FORMATS = {
+    "musicxml": ("MUSICXML", ".musicxml"),
+    "mxl": ("MXL", ".mxl"),
+    "pdf": ("PDF", ".pdf"),
+    "midi": ("Midi", ".mid"),
+    "png": ("PNG", ".png"),
+}
+
 # Curated friendly names -> ManuScript command IDs (see docs/commands.md).
 # Note these are fire-and-forget: Sibelius acknowledges receipt but never
 # reports whether the command did anything (SPEC.md 1.2).
@@ -253,9 +266,9 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
     info = await _bridge(client, "GetBridgeVersion")
-    if not (isinstance(info, dict) and info.get("version") == 3):
+    if not (isinstance(info, dict) and info.get("version") == 4):
         raise BridgeError(
-            f"bridge v3 required, got {info!r} — run install-plugin and restart Sibelius"
+            f"bridge v4 required, got {info!r} — run install-plugin and restart Sibelius"
         )
 
 
@@ -370,6 +383,38 @@ async def _run_set_key(args: argparse.Namespace) -> int:
     return await _run_write(args, "SetKeySignature", [args.bar, args.key, not args.minor])
 
 
+async def _run_export(args: argparse.Namespace) -> int:
+    saveas_type, extension = EXPORT_FORMATS[args.format]
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _check_bridge_version(client)
+        if args.sib_file:
+            source = Path(args.sib_file).expanduser().resolve()
+            if not source.exists():
+                print(f"error: {source} does not exist", file=sys.stderr)
+                return EXIT_COMMAND_FAILED
+            opened = await _bridge(client, "OpenScore", [str(source)])
+            print(f"opened: {opened['fileName']}", file=sys.stderr)
+        info = await _bridge(client, "GetScoreInfo")
+        if not info["fileName"] and not args.out:
+            print("error: active score has never been saved; pass --out", file=sys.stderr)
+            return EXIT_COMMAND_FAILED
+        out = (
+            Path(args.out).expanduser().resolve()
+            if args.out
+            else Path(info["fileName"]).with_suffix(extension)
+        )
+        result = await _bridge(client, "ExportScore", [str(out), saveas_type])
+    if not out.exists():
+        print(
+            f"error: Sibelius reported the export but {out} does not exist",
+            file=sys.stderr,
+        )
+        return EXIT_COMMAND_FAILED
+    result["size"] = out.stat().st_size
+    print(json.dumps(result, indent=2))
+    return EXIT_OK
+
+
 async def _run_backup(args: argparse.Namespace) -> int:
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         await _check_bridge_version(client)
@@ -445,6 +490,7 @@ def main(argv: list[str] | None = None) -> int:
         "transpose": _run_transpose,
         "set-key": _run_set_key,
         "backup": _run_backup,
+        "export": _run_export,
     }[args.subcommand]
     try:
         return int(run_sync(runner(args)))

@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 3);
+		return CreateDictionary('version', 4);
 	}"
 
 	Echo "(value) {
@@ -378,6 +378,25 @@
 			return CreateDictionary('error', 'AddVersion failed (has the score ever been saved?)');
 		}
 		return CreateDictionary('name', name, 'versionCount', versions.NumChildren);
+	}"
+
+	OpenScore "(fileName) {
+		ok = Sibelius.Open(fileName, True);
+		if (ok != True) {
+			return CreateDictionary('error', 'could not open ' & fileName);
+		}
+		score = Sibelius.ActiveScore;
+		return CreateDictionary('fileName', score.FileName & '');
+	}"
+
+	ExportScore "(fileName, format) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		score.SaveAs(fileName, format);
+		return CreateDictionary('exportedTo', fileName, 'format', format,
+			'stillOpen', score.FileName & '');
 	}"
 
 	Save "() {
