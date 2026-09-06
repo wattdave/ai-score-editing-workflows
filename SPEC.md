@@ -93,6 +93,10 @@ JSON `null` if untranslatable). The field is **`returnValue`** (verified live â€
 the guide's example wrongly shows `return_value`; the client accepts both).
 Nested arrays and dictionaries round-trip intact in both directions.
 
+Gotcha: some ManuScript property values are not directly JSON-translatable and
+arrive as `null` (observed with `Score.FileName` on a saved score). Coerce
+such values to strings in the plug-in (`value & ''`) before returning them.
+
 This is the path to *reading* score state: a ManuScript plug-in (see
 `docs/manuscript-object-tree.md` for the object API) can return data, unlike
 fire-and-forget command IDs.
