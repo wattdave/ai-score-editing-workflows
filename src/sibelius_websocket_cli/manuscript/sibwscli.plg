@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 2);
+		return CreateDictionary('version', 3);
 	}"
 
 	Echo "(value) {
@@ -239,7 +239,7 @@
 		return CreateDictionary('oldText', oldText, 'newText', obj.Text);
 	}"
 
-	TransposePassage "(fromBar, toBar, topStaff, bottomStaff, fromNote, toNote, upward) {
+	TransposePassage "(fromBar, toBar, topStaff, bottomStaff, degree, intervalType) {
 		score = RequireScore();
 		if (score = null) {
 			return CreateDictionary('error', 'no score open');
@@ -250,15 +250,12 @@
 		if (topStaff < 1 or bottomStaff > score.StaffCount or topStaff > bottomStaff) {
 			return CreateDictionary('error', 'staff range out of range');
 		}
-		degree = utils.CalculateDegree(fromNote, toNote, upward);
-		interval = utils.CalculateInterval(fromNote, toNote, upward);
 		selection = score.Selection;
 		selection.SelectPassage(fromBar, toBar, topStaff, bottomStaff);
-		selection.Transpose(degree, interval, True, True);
+		selection.Transpose(degree, intervalType, True, True);
 		selection.Clear();
 		return CreateDictionary(
-			'fromNote', fromNote, 'toNote', toNote, 'upward', upward,
-			'degree', degree, 'interval', interval,
+			'degree', degree, 'intervalType', intervalType,
 			'fromBar', fromBar, 'toBar', toBar,
 			'topStaff', topStaff, 'bottomStaff', bottomStaff);
 	}"
