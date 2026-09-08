@@ -92,6 +92,16 @@ traffic logging).
 Exit codes: `0` success, `1` the call failed (plug-in not found, bridge error),
 `2` could not connect to Sibelius.
 
+## Multi-Agent Skills (Claude, Antigravity, Cursor)
+
+The repository provides a complete Sibelius runbook skill. Keep skill definitions across
+harnesses in sync:
+
+```bash
+python scripts/sync_skills.py          # sync .claude/skills, .agents/skills, and .cursor/rules
+python scripts/sync_skills.py --check  # check for drift without modifying files
+```
+
 ## Documentation
 
 - [`SPEC.md`](SPEC.md) — the empirically verified Sibelius Connect wire
