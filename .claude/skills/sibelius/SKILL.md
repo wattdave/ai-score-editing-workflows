@@ -43,7 +43,10 @@ reads/writes, to the bundled `sibwscli` ManuScript bridge plug-in.
 
 Reads: `score-info` (title/file/key/time sigs), `staves`, `selection`,
 `read --staff N --from A --to B` (notes with MIDI pitch/name/tie, lyrics with
-text, addressed by staff/bar/index), `read-lyrics [--staff N]` (0 = all).
+text, addressed by staff/bar/index), `read-lyrics [--staff N] [--words]` (0 = all;
+`--words` formats into hyphenated words grouped by staff and bar),
+`check-lyrics [--staff N]` (lints lyrics for collisions, missing vowels,
+cross-voice typos/divergence, and untexted passages).
 
 Writes (auto-backup): `set-lyric --staff --bar --index --text`,
 `transpose --from-note C --to-note D --up|--down [--from-bar --to-bar
@@ -62,12 +65,12 @@ bridge method via `plugin sibwscli <Method> --args '<json>'`.
 
 ## Task patterns
 
-**Lyric spell-check:** `read-lyrics` → assemble syllables into words
-(`syllableType: middle` = word continues, `end` = word ends) → report
-suspected errors to the user with bar numbers → on approval, `set-lyric`
-per fix using the addresses from the read → `read-lyrics` again to verify.
-Addresses are only valid against the read they came from; re-read after
-every write.
+**Lyric proofreading / spell-check:**
+1. Run `check-lyrics` to automatically detect collisions, missing vowels, cross-voice divergence, and untexted vocal passages across the score.
+2. Run `read-lyrics --words` to inspect the complete words grouped by staff and bar in a clean, human-readable format.
+3. For specific fixes, run `read-lyrics --staff N` to get exact syllable addresses (`staff`, `bar`, `index`, `position`, `text`).
+4. On approval, `set-lyric --staff S --bar B --index I --text "..."` per fix.
+5. Re-run `check-lyrics` or `read-lyrics --words` to verify. Addresses are only valid against the read they came from; re-read after every write.
 
 **Copy a passage to another staff (e.g. "apply SA pickup to TB, down an
 octave"):** read the destination first (know what gets overwritten) and check
