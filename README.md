@@ -86,8 +86,10 @@ uv run sibelius-websocket-cli forget-token        # drop the cached token
 ```
 
 Global options: `--host`, `--port`, `--client-name`, `--timeout` (seconds to
-wait for the approval dialog), `--json` (raw JSON responses), `-v` (wire
-traffic logging).
+wait for the approval dialog), `--launch` / `--no-launch` (automatically start Sibelius
+if not running, default: true), `--launch-timeout` (seconds to wait for Sibelius to start, default: 30),
+`--sibelius-path` (custom application executable path), `--json` (raw JSON responses),
+`-v` (wire traffic logging).
 
 Exit codes: `0` success, `1` the call failed (plug-in not found, bridge error),
 `2` could not connect to Sibelius.
@@ -121,5 +123,6 @@ uv run pytest        # tests run against a fake Sibelius Connect server
 ```
 
 Sources: `src/sibelius_websocket_cli/` — `protocol.py` (message builders),
-`client.py` (async client with token/approval handling), `token_store.py`,
-`cli.py`, and the bundled bridge plug-in under `manuscript/`.
+`client.py` (async client with token/approval handling), `launcher.py` (Sibelius
+process detection and launch), `token_store.py`, `cli.py`, and the bundled bridge plug-in
+under `manuscript/`.

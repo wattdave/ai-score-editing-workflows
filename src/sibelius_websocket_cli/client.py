@@ -11,11 +11,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
+from pathlib import Path
 from typing import Any
 
 import websockets
 
-from sibelius_websocket_cli import protocol
+from sibelius_websocket_cli import launcher, protocol
 from sibelius_websocket_cli.token_store import TokenStore
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,9 @@ class SibeliusClient:
         token_store: TokenStore | None = None,
         approval_timeout: float = APPROVAL_TIMEOUT,
         plugins: list[str] | None = None,
+        launch_if_needed: bool = False,
+        launch_timeout: float = 30.0,
+        app_path: str | Path | None = None,
     ) -> None:
         self.host = host
         self.port = port
@@ -48,6 +53,9 @@ class SibeliusClient:
         self.token_store = token_store or TokenStore()
         self.approval_timeout = approval_timeout
         self.plugins = plugins or []
+        self.launch_if_needed = launch_if_needed
+        self.launch_timeout = launch_timeout
+        self.app_path = app_path
         self._connection: websockets.asyncio.client.ClientConnection | None = None
 
     @property
@@ -68,11 +76,22 @@ class SibeliusClient:
             ConnectionFailed: if the socket cannot be opened or the
                 handshake does not complete.
         """
+        if self.launch_if_needed and launcher.is_local_host(self.host):
+            if not launcher.is_sibelius_running():
+                print("Sibelius is not running. Starting Sibelius...", file=sys.stderr)
+                launcher.launch_sibelius(self.app_path)
+                print(
+                    f"Waiting for Sibelius to start (timeout {self.launch_timeout:.1f}s)...",
+                    file=sys.stderr,
+                )
+                self._connection = await self._open_socket(timeout=self.launch_timeout)
+
         entry = self.token_store.load(self.host, self.port)
         # A token reconnect cannot change the declared plug-in list, so a
         # cached token whose session didn't declare our plug-ins is useless.
         if entry is not None and entry.covers(self.plugins):
-            self._connection = await self._open_socket()
+            if self._connection is None:
+                self._connection = await self._open_socket()
             # Include plugins anyway: ignored on a token reconnect, but if
             # Sibelius treats a stale token as a fresh connect, this list
             # is what the new session gets.
@@ -106,7 +125,8 @@ class SibeliusClient:
                     logger.info("Unexpected liveness reply %s; falling back to approval", reply)
                     await self.close()
 
-        self._connection = await self._open_socket()
+        if self._connection is None:
+            self._connection = await self._open_socket()
         await self._send(protocol.connect_message(self.client_name, plugins=self.plugins))
         logger.warning(
             "Waiting for connection approval in Sibelius (client name: %s)...",
@@ -160,14 +180,30 @@ class SibeliusClient:
 
     # ── internals ─────────────────────────────────────────────────────
 
-    async def _open_socket(self) -> websockets.asyncio.client.ClientConnection:
-        try:
-            return await websockets.connect(self.uri)
-        except (OSError, websockets.exceptions.WebSocketException) as exc:
-            raise ConnectionFailed(
-                f"Could not open {self.uri} — is Sibelius running with "
-                f"Sibelius Connect enabled? ({exc})"
-            ) from exc
+    async def _open_socket(self, timeout: float = 0.0) -> websockets.asyncio.client.ClientConnection:
+        if timeout <= 0.0:
+            try:
+                return await websockets.connect(self.uri)
+            except (OSError, websockets.exceptions.WebSocketException) as exc:
+                raise ConnectionFailed(
+                    f"Could not open {self.uri} — is Sibelius running with "
+                    f"Sibelius Connect enabled? ({exc})"
+                ) from exc
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        last_exc: Exception | None = None
+        while loop.time() < deadline:
+            try:
+                return await websockets.connect(self.uri)
+            except (OSError, websockets.exceptions.WebSocketException) as exc:
+                last_exc = exc
+                await asyncio.sleep(0.5)
+
+        raise ConnectionFailed(
+            f"Sibelius was started, but could not connect to {self.uri} within "
+            f"{timeout:.1f}s ({last_exc}) — is Sibelius Connect enabled in Preferences -> Input Devices?"
+        )
 
     async def _send(self, message: dict[str, Any]) -> None:
         assert self._connection is not None, "not connected"

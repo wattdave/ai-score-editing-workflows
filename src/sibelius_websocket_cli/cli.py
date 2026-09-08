@@ -34,6 +34,22 @@ def build_parser() -> argparse.ArgumentParser:
         default=120.0,
         help="seconds to wait for connection approval in Sibelius",
     )
+    parser.add_argument(
+        "--launch",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="start Sibelius if not already running (default: True)",
+    )
+    parser.add_argument(
+        "--launch-timeout",
+        type=float,
+        default=30.0,
+        help="seconds to wait for Sibelius to start and open port (default: 30)",
+    )
+    parser.add_argument(
+        "--sibelius-path",
+        help="custom path to Sibelius application or executable",
+    )
     parser.add_argument("--json", action="store_true", help="print raw JSON responses")
     parser.add_argument("-v", "--verbose", action="store_true", help="log the wire traffic")
 
@@ -531,6 +547,9 @@ def _client(args: argparse.Namespace, plugins: list[str] | None = None) -> Sibel
         client_name=args.client_name,
         approval_timeout=args.timeout,
         plugins=plugins,
+        launch_if_needed=args.launch,
+        launch_timeout=args.launch_timeout,
+        app_path=args.sibelius_path,
     )
 
 
