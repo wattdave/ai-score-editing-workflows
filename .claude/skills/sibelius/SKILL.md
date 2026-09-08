@@ -45,7 +45,7 @@ Reads: `score-info` (title/file/key/time sigs), `staves`, `selection`,
 `read --staff N --from A --to B` (notes with MIDI pitch/name/tie, lyrics with
 text, addressed by staff/bar/index), `read-lyrics [--staff N] [--words]` (0 = all;
 `--words` formats into hyphenated words grouped by staff and bar),
-`check-lyrics [--staff N]` (lints lyrics for collisions, missing vowels,
+`check-lyrics [--staff N]` (lints lyrics for horizontal/vertical collisions, missing vowels,
 cross-voice typos/divergence, and untexted passages).
 
 Writes (auto-backup): `set-lyric --staff --bar --index --text`,
@@ -66,11 +66,12 @@ bridge method via `plugin sibwscli <Method> --args '<json>'`.
 ## Task patterns
 
 **Lyric proofreading / spell-check:**
-1. Run `check-lyrics` to automatically detect collisions, missing vowels, cross-voice divergence, and untexted vocal passages across the score.
-2. Run `read-lyrics --words` to inspect the complete words grouped by staff and bar in a clean, human-readable format.
-3. For specific fixes, run `read-lyrics --staff N` to get exact syllable addresses (`staff`, `bar`, `index`, `position`, `text`).
-4. On approval, `set-lyric --staff S --bar B --index I --text "..."` per fix.
-5. Re-run `check-lyrics` or `read-lyrics --words` to verify. Addresses are only valid against the read they came from; re-read after every write.
+1. Run `check-lyrics` to automatically detect horizontal/vertical collisions, missing vowels, cross-voice divergence, and untexted vocal passages across the score.
+2. If `note_lyric_collision` warnings appear, or for visual engraving checks, run `export --format png --out /tmp/check.png` to inspect the actual layout and verify clearances.
+3. Run `read-lyrics --words` to inspect the complete words grouped by staff and bar in a clean, human-readable format.
+4. For specific text fixes, run `read-lyrics --staff N` to get exact syllable addresses (`staff`, `bar`, `index`, `position`, `text`). On approval, `set-lyric --staff S --bar B --index I --text "..."` per fix.
+5. For layout/collision fixes, use `nudge --staff S --bar B --index I --dy -32` (or similar) to adjust baselines.
+6. Re-run `check-lyrics` or `read-lyrics --words` to verify. Addresses are only valid against the read they came from; re-read after every write.
 
 **Copy a passage to another staff (e.g. "apply SA pickup to TB, down an
 octave"):** read the destination first (know what gets overwritten) and check

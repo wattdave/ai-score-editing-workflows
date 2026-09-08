@@ -1,12 +1,17 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code), Antigravity, and other coding agents when working with code in this repository.
 
 ## Project
 
-A CLI tool for driving Sibelius (the music notation app) via Sibelius Connect, its built-in WebSocket server (Sibelius 2024.3+, port 1898). Currently a bare uv-managed Python scaffold — the entry point is a hello-world stub.
+A CLI tool for driving Sibelius (the music notation app) via Sibelius Connect, its built-in WebSocket server (Sibelius 2024.3+, port 1898), paired with a companion ManuScript bridge plug-in (`sibwscli.plg`).
 
-**Read `SPEC.md` before implementing** — it documents the empirically verified wire protocol (one-step handshake, silent token reconnect, `command`/`invokeCommands` messages), the planned module layout, CLI surface, and open questions. Notably, Sibelius Connect is *not* the Dorico Remote Control protocol despite sharing the connect shape.
+Key capabilities:
+- **Transport & Lifecycle**: WebSocket handshake with silent token reuse, auto-launching Sibelius if not running.
+- **Score Inspection**: Reads score metadata, staves, passages, notes with pitches/ties, lyrics, and selections.
+- **Lyric Proofreading & Editing**: Automated lyric linting (`check-lyrics`) for horizontal collisions, vertical note-lyric collisions (with clef & ledger line awareness), missing vowels, cross-voice divergence, and untexted passages; word formatting (`read-lyrics --words`); and targeted writing (`set-lyric`).
+- **Engraving & Modification**: In-file versioning + auto-backup, layout nudging (`nudge`), stem flipping (`flip-stem`), passage copying, transposition, and format export (MusicXML, MIDI, PDF, PNG).
+- **Agent Skill Harmonization**: Single source of truth for agent skills in `.claude/skills/` synchronized to Antigravity and Cursor via `scripts/sync_skills.py`.
 
 ## Commands
 
@@ -15,11 +20,19 @@ Managed with [uv](https://docs.astral.sh/uv/); requires Python >= 3.13 (pinned i
 ```bash
 uv sync                          # install/update the environment
 uv run sibelius-websocket-cli    # run the CLI
+uv run pytest                    # run the test suite
+python3 scripts/sync_skills.py   # sync skills across agent harnesses
+python3 scripts/sync_skills.py --check # verify all harnesses are in sync
 ```
-
-No test suite or linter is configured yet. If adding tests, use `uv run pytest` after adding pytest as a dev dependency (`uv add --dev pytest`).
 
 ## Structure
 
-- Package: `src/sibelius_websocket_cli/` (src layout, built with `uv_build`)
-- Console script `sibelius-websocket-cli` maps to `sibelius_websocket_cli:main` in `src/sibelius_websocket_cli/__init__.py`
+- Package: `src/sibelius_websocket_cli/`
+  - `client.py`: WebSocket client and connection management
+  - `launcher.py`: Sibelius process detection and launching
+  - `lyrics.py`: lyric parsing, word aggregation, and proofreading lint rules
+  - `cli.py`: command-line parser and bridge dispatching
+  - `manuscript/sibwscli.plg`: ManuScript bridge plug-in installed into Sibelius
+- Tests: `tests/` (`test_client.py`, `test_launcher.py`, `test_lyrics.py`, `test_skills_sync.py`)
+- Skills: `.claude/skills/sibelius/SKILL.md` (synced to `.agents/skills/` and `.cursor/rules/`)
+
