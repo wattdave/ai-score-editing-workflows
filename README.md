@@ -54,7 +54,9 @@ Writing (each write backs up first: in-file version + save + timestamped
 `.sib` copy next to the original):
 
 ```bash
-uv run sibelius-websocket-cli read-lyrics                 # all lyrics, addressed
+uv run sibelius-websocket-cli check-lyrics                # lint lyrics for typos, collisions, untexted bars
+uv run sibelius-websocket-cli read-lyrics --words         # lyrics grouped by staff and bar into words
+uv run sibelius-websocket-cli read-lyrics                 # all raw lyrics with addresses
 uv run sibelius-websocket-cli set-lyric --staff 1 --bar 3 --index 2 --text "ry-"
 uv run sibelius-websocket-cli transpose --from-note C --to-note D --up
 uv run sibelius-websocket-cli set-key --key D             # key signature only
