@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from sibelius_websocket_cli import protocol
+from sibelius_websocket_cli import lyrics, protocol
 from sibelius_websocket_cli.client import ConnectionFailed, SibeliusClient, run_sync
 from sibelius_websocket_cli.intervals import compute_transposition
 from sibelius_websocket_cli.token_store import TokenStore
@@ -86,6 +86,16 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("bridge-version", help="report the installed bridge plug-in version")
     read_lyrics = sub.add_parser("read-lyrics", help="list all lyrics with addresses")
     read_lyrics.add_argument("--staff", type=int, default=0, help="staff number (0 = all)")
+    read_lyrics.add_argument(
+        "--words",
+        action="store_true",
+        help="format syllables into words grouped by staff and bar",
+    )
+    check_lyrics = sub.add_parser(
+        "check-lyrics",
+        help="lint score lyrics for typos, cross-voice divergence, collisions, and missing text",
+    )
+    check_lyrics.add_argument("--staff", type=int, default=0, help="staff number (0 = all)")
     set_lyric = sub.add_parser("set-lyric", help="rewrite one lyric syllable (backs up first)")
     set_lyric.add_argument("--staff", type=int, required=True)
     set_lyric.add_argument("--bar", type=int, required=True)
@@ -403,7 +413,63 @@ async def _run_bridge_version(args: argparse.Namespace) -> int:
 
 
 async def _run_read_lyrics(args: argparse.Namespace) -> int:
+    if args.words:
+        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            raw_lyrics = await _bridge(client, "ReadLyrics", [args.staff])
+            if args.json:
+                print(json.dumps(raw_lyrics))
+                return EXIT_OK
+            staves_info = await _bridge(client, "GetStaves")
+            names = {
+                s.get("staffNum", s.get("staffNumber", i + 1)): (
+                    s.get("fullInstrumentName")
+                    or s.get("instrumentName")
+                    or s.get("name")
+                    or f"Staff {s.get('staffNum', i + 1)}"
+                )
+                for i, s in enumerate(staves_info)
+            }
+            print(lyrics.format_lyrics_by_bar(raw_lyrics, names))
+            return EXIT_OK
     return await _run_bridge_call(args, "ReadLyrics", [args.staff])
+
+
+async def _run_check_lyrics(args: argparse.Namespace) -> int:
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        info = await _bridge(client, "GetScoreInfo")
+        staves_info = await _bridge(client, "GetStaves")
+        names = {
+            s.get("staffNum", s.get("staffNumber", i + 1)): (
+                s.get("fullInstrumentName")
+                or s.get("instrumentName")
+                or s.get("name")
+                or f"Staff {s.get('staffNum', i + 1)}"
+            )
+            for i, s in enumerate(staves_info)
+        }
+        raw_lyrics = await _bridge(client, "ReadLyrics", [args.staff])
+
+        bar_count = info.get("barCount", 0)
+        staff_bars: dict[int, list[dict[str, Any]]] = {}
+        target_staves = (
+            [args.staff]
+            if args.staff > 0
+            else sorted({s.get("staff", 1) for s in raw_lyrics})
+        )
+        for s_num in target_staves:
+            if bar_count > 0:
+                bars = await _bridge(client, "ReadBars", [s_num, 1, bar_count])
+                staff_bars[s_num] = bars
+
+        issues = lyrics.lint_lyrics(raw_lyrics, names, staff_bars)
+
+    if args.json:
+        print(json.dumps(issues, indent=2))
+    else:
+        print(lyrics.format_lint_report(issues))
+
+    has_errors = any(issue.get("severity") == "error" for issue in issues)
+    return EXIT_COMMAND_FAILED if has_errors else EXIT_OK
 
 
 async def _run_set_lyric(args: argparse.Namespace) -> int:
@@ -581,6 +647,7 @@ def main(argv: list[str] | None = None) -> int:
         "do": _run_do,
         "bridge-version": _run_bridge_version,
         "read-lyrics": _run_read_lyrics,
+        "check-lyrics": _run_check_lyrics,
         "set-lyric": _run_set_lyric,
         "transpose": _run_transpose,
         "set-key": _run_set_key,
