@@ -225,3 +225,76 @@ def test_interval_math() -> None:
     assert compute_transposition("C", "D", up=False) == (-6, 4)    # minor 7th down
     assert compute_transposition("Eb", "D", up=False) == (-1, 4)   # minor 2nd down
     assert compute_transposition("C", "C", up=True) == (0, 5)      # unison
+
+
+async def test_client_launch_bypassed_if_already_running(store: TokenStore) -> None:
+    from unittest.mock import patch
+
+    async with FakeSibelius() as fake:
+        with patch("sibelius_websocket_cli.launcher.is_sibelius_running", return_value=True), \
+             patch("sibelius_websocket_cli.launcher.launch_sibelius") as mock_launch:
+            client = SibeliusClient(
+                host="localhost",
+                port=fake.port,
+                token_store=store,
+                approval_timeout=5,
+                launch_if_needed=True,
+            )
+            async with client:
+                assert await client.ping() is True
+            mock_launch.assert_not_called()
+
+
+async def test_client_launches_if_not_running(store: TokenStore) -> None:
+    from unittest.mock import patch
+
+    async with FakeSibelius() as fake:
+        with patch("sibelius_websocket_cli.launcher.is_sibelius_running", return_value=False), \
+             patch("sibelius_websocket_cli.launcher.launch_sibelius") as mock_launch:
+            client = SibeliusClient(
+                host="localhost",
+                port=fake.port,
+                token_store=store,
+                approval_timeout=5,
+                launch_if_needed=True,
+                launch_timeout=2.0,
+            )
+            async with client:
+                assert await client.ping() is True
+            mock_launch.assert_called_once_with(None)
+
+
+async def test_client_launch_timeout_raises_connection_failed(store: TokenStore) -> None:
+    from unittest.mock import patch
+
+    with patch("sibelius_websocket_cli.launcher.is_sibelius_running", return_value=False), \
+         patch("sibelius_websocket_cli.launcher.launch_sibelius"):
+        client = SibeliusClient(
+            host="localhost",
+            port=1,
+            token_store=store,
+            approval_timeout=5,
+            launch_if_needed=True,
+            launch_timeout=0.2,
+        )
+        with pytest.raises(ConnectionFailed, match="Sibelius was started, but could not connect"):
+            await client.connect()
+
+
+async def test_client_launch_bypassed_for_remote_host(store: TokenStore) -> None:
+    from unittest.mock import patch
+
+    with patch("sibelius_websocket_cli.launcher.is_sibelius_running", return_value=False), \
+         patch("sibelius_websocket_cli.launcher.launch_sibelius") as mock_launch:
+        client = SibeliusClient(
+            host="192.168.1.100",
+            port=1,
+            token_store=store,
+            approval_timeout=5,
+            launch_if_needed=True,
+            launch_timeout=0.2,
+        )
+        with pytest.raises(ConnectionFailed):
+            await client.connect()
+        mock_launch.assert_not_called()
+

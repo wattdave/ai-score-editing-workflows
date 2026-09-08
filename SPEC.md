@@ -121,6 +121,7 @@ src/sibelius_websocket_cli/
   __init__.py      # main() entry point (console script)
   cli.py           # argparse/typer command definitions
   client.py        # SibeliusClient: connect/handshake/send, sync wrapper over asyncio
+  launcher.py      # detection and launch of Sibelius application
   protocol.py      # message constants, request builders, response parsing
   token_store.py   # session-token persistence
 ```
@@ -145,8 +146,10 @@ sibelius-websocket-cli forget-token              # delete cached session token
 ```
 
 Global options: `--host` (default `localhost`), `--port` (default `1898`),
-`--client-name` (default `sibelius-websocket-cli`), `--timeout`, `--json`
-(machine-readable output).
+`--client-name` (default `sibelius-websocket-cli`), `--timeout`,
+`--launch` / `--no-launch` (default: auto-launch if not running),
+`--launch-timeout` (default `30.0`), `--sibelius-path`,
+`--json` (machine-readable output).
 
 ### 2.3 Session-token handling
 
