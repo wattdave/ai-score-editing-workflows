@@ -2,7 +2,7 @@
 """Sync skill definitions across coding agent harnesses (Claude Code, Antigravity, Cursor).
 
 - Claude Code:  .claude/skills/<name>/SKILL.md
-- Antigravity:  .agents/skills/<name>/SKILL.md (or symlink)
+- Antigravity:  .agents/skills/<name>/SKILL.md (symlink)
 - Cursor:       .cursor/rules/<name>.mdc
 - Cross-agent:  AGENTS.md -> CLAUDE.md
 """
@@ -15,12 +15,7 @@ import re
 import sys
 from pathlib import Path
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
-CLAUDE_SKILLS_DIR = ROOT_DIR / ".claude" / "skills"
-AGENTS_SKILLS_DIR = ROOT_DIR / ".agents" / "skills"
-CURSOR_RULES_DIR = ROOT_DIR / ".cursor" / "rules"
-CLAUDE_MD = ROOT_DIR / "CLAUDE.md"
-AGENTS_MD = ROOT_DIR / "AGENTS.md"
+DEFAULT_ROOT_DIR = Path(__file__).resolve().parent.parent
 
 FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n(.*)$", re.DOTALL)
 
@@ -63,88 +58,115 @@ alwaysApply: false
 """
 
 
-def sync_agents_md(check_only: bool) -> bool:
-    """Ensure AGENTS.md symlink exists pointing to CLAUDE.md."""
-    if not CLAUDE_MD.exists():
-        return True
-    if AGENTS_MD.is_symlink():
-        target = os.readlink(AGENTS_MD)
-        if target in {"CLAUDE.md", str(CLAUDE_MD)}:
-            return True
+def check_sync(root_dir: Path | None = None) -> tuple[bool, list[str]]:
+    """Check whether skill files and links are synchronized across harnesses.
 
-    if check_only:
-        print("Out of sync: AGENTS.md -> CLAUDE.md missing or not a symlink")
-        return False
+    Returns (is_in_sync, issues).
+    """
+    root = (root_dir or DEFAULT_ROOT_DIR).resolve()
+    claude_skills = root / ".claude" / "skills"
+    agents_skills = root / ".agents" / "skills"
+    cursor_rules = root / ".cursor" / "rules"
+    claude_md = root / "CLAUDE.md"
+    agents_md = root / "AGENTS.md"
 
-    if AGENTS_MD.exists() or AGENTS_MD.is_symlink():
-        AGENTS_MD.unlink()
-    AGENTS_MD.symlink_to("CLAUDE.md")
-    print("Linked: AGENTS.md -> CLAUDE.md")
-    return True
+    issues: list[str] = []
+
+    # 1. Check AGENTS.md symlink
+    if claude_md.exists():
+        if not agents_md.exists() and not agents_md.is_symlink():
+            issues.append("AGENTS.md missing (should be a symlink to CLAUDE.md)")
+        elif not agents_md.is_symlink():
+            issues.append("AGENTS.md exists but is not a symlink to CLAUDE.md")
+        else:
+            target = os.readlink(agents_md)
+            if target not in {"CLAUDE.md", str(claude_md)}:
+                issues.append(f"AGENTS.md points to {target!r}, expected 'CLAUDE.md'")
+
+    if not claude_skills.exists():
+        issues.append(f"Missing Claude skills directory: {claude_skills}")
+        return False, issues
+
+    skill_names: set[str] = set()
+
+    # 2. Check each skill defined in .claude/skills
+    for skill_dir in sorted(claude_skills.iterdir()):
+        if not skill_dir.is_dir():
+            continue
+        skill_file = skill_dir / "SKILL.md"
+        if not skill_file.exists():
+            continue
+
+        skill_name = skill_dir.name
+        skill_names.add(skill_name)
+
+        # Check Antigravity link
+        ag_link = agents_skills / skill_name
+        expected_target = f"../../.claude/skills/{skill_name}"
+        if not ag_link.is_symlink():
+            issues.append(f"Antigravity skill {ag_link} is missing or not a symlink")
+        else:
+            target = os.readlink(ag_link)
+            if target != expected_target:
+                issues.append(
+                    f"Antigravity skill {ag_link} points to {target!r}, expected {expected_target!r}"
+                )
+
+        # Check Cursor rule
+        mdc_file = cursor_rules / f"{skill_name}.mdc"
+        if not mdc_file.exists():
+            issues.append(f"Cursor rule {mdc_file.relative_to(root)} is missing")
+        else:
+            content = skill_file.read_text(encoding="utf-8")
+            meta, body = parse_frontmatter(content)
+            expected_mdc = generate_cursor_mdc(meta, body)
+            actual_mdc = mdc_file.read_text(encoding="utf-8")
+            if actual_mdc != expected_mdc:
+                issues.append(
+                    f"Cursor rule {mdc_file.relative_to(root)} does not match {skill_file.relative_to(root)}"
+                )
+
+    # 3. Check for orphan cursor rules
+    if cursor_rules.exists():
+        for mdc in cursor_rules.glob("*.mdc"):
+            if mdc.stem not in skill_names:
+                issues.append(f"Orphan Cursor rule without Claude skill: {mdc.relative_to(root)}")
+
+    # 4. Check for orphan antigravity skills
+    if agents_skills.exists():
+        for item in agents_skills.iterdir():
+            if item.name not in skill_names:
+                issues.append(
+                    f"Orphan Antigravity skill without Claude skill: {item.relative_to(root)}"
+                )
+
+    return len(issues) == 0, issues
 
 
-def sync_antigravity_skills(skill_name: str, check_only: bool) -> bool:
-    """Ensure .agents/skills/<name> is symlinked to .claude/skills/<name>."""
-    AGENTS_SKILLS_DIR.mkdir(parents=True, exist_ok=True)
-    target_link = AGENTS_SKILLS_DIR / skill_name
-    expected_rel_target = f"../../.claude/skills/{skill_name}"
+def sync_all(root_dir: Path | None = None) -> None:
+    """Synchronize skill files across Claude, Antigravity, and Cursor."""
+    root = (root_dir or DEFAULT_ROOT_DIR).resolve()
+    claude_skills = root / ".claude" / "skills"
+    agents_skills = root / ".agents" / "skills"
+    cursor_rules = root / ".cursor" / "rules"
+    claude_md = root / "CLAUDE.md"
+    agents_md = root / "AGENTS.md"
 
-    if target_link.is_symlink():
-        target = os.readlink(target_link)
-        if target == expected_rel_target:
-            return True
-
-    if check_only:
-        print(f"Out of sync: {target_link} does not point to {expected_rel_target}")
-        return False
-
-    if target_link.exists() or target_link.is_symlink():
-        target_link.unlink()
-    target_link.symlink_to(expected_rel_target)
-    print(f"Linked Antigravity skill: {target_link.relative_to(ROOT_DIR)} -> {expected_rel_target}")
-    return True
-
-
-def sync_cursor_rule(skill_name: str, skill_file: Path, check_only: bool) -> bool:
-    """Ensure .cursor/rules/<name>.mdc matches SKILL.md content."""
-    CURSOR_RULES_DIR.mkdir(parents=True, exist_ok=True)
-    target_file = CURSOR_RULES_DIR / f"{skill_name}.mdc"
-
-    content = skill_file.read_text(encoding="utf-8")
-    metadata, body = parse_frontmatter(content)
-    mdc_content = generate_cursor_mdc(metadata, body)
-
-    if target_file.exists():
-        existing = target_file.read_text(encoding="utf-8")
-        if existing == mdc_content:
-            return True
-
-    if check_only:
-        print(f"Out of sync: {target_file.relative_to(ROOT_DIR)} differs from {skill_file.relative_to(ROOT_DIR)}")
-        return False
-
-    target_file.write_text(mdc_content, encoding="utf-8")
-    print(f"Updated Cursor rule: {target_file.relative_to(ROOT_DIR)}")
-    return True
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Sync skills between Claude, Antigravity, and Cursor.")
-    parser.add_argument("--check", action="store_true", help="check if harnesses are in sync without modifying files")
-    args = parser.parse_args()
-
-    if not CLAUDE_SKILLS_DIR.exists():
-        print(f"Error: {CLAUDE_SKILLS_DIR} not found", file=sys.stderr)
-        return 1
-
-    all_in_sync = True
+    if not claude_skills.exists():
+        raise FileNotFoundError(f"{claude_skills} does not exist")
 
     # 1. Sync AGENTS.md
-    if not sync_agents_md(args.check):
-        all_in_sync = False
+    if claude_md.exists():
+        if agents_md.exists() or agents_md.is_symlink():
+            agents_md.unlink()
+        agents_md.symlink_to("CLAUDE.md")
+        print("Linked: AGENTS.md -> CLAUDE.md")
 
-    # 2. Sync each skill in .claude/skills
-    for skill_dir in sorted(CLAUDE_SKILLS_DIR.iterdir()):
+    agents_skills.mkdir(parents=True, exist_ok=True)
+    cursor_rules.mkdir(parents=True, exist_ok=True)
+
+    # 2. Sync each skill
+    for skill_dir in sorted(claude_skills.iterdir()):
         if not skill_dir.is_dir():
             continue
         skill_file = skill_dir / "SKILL.md"
@@ -153,23 +175,43 @@ def main() -> int:
 
         skill_name = skill_dir.name
 
-        # Antigravity sync
-        if not sync_antigravity_skills(skill_name, args.check):
-            all_in_sync = False
+        # Antigravity symlink
+        ag_link = agents_skills / skill_name
+        rel_target = f"../../.claude/skills/{skill_name}"
+        if ag_link.exists() or ag_link.is_symlink():
+            ag_link.unlink()
+        ag_link.symlink_to(rel_target)
+        print(f"Linked Antigravity skill: {ag_link.relative_to(root)} -> {rel_target}")
 
-        # Cursor sync
-        if not sync_cursor_rule(skill_name, skill_file, args.check):
-            all_in_sync = False
+        # Cursor rule
+        mdc_file = cursor_rules / f"{skill_name}.mdc"
+        content = skill_file.read_text(encoding="utf-8")
+        meta, body = parse_frontmatter(content)
+        mdc_content = generate_cursor_mdc(meta, body)
+        mdc_file.write_text(mdc_content, encoding="utf-8")
+        print(f"Updated Cursor rule: {mdc_file.relative_to(root)}")
+
+    print("Sync complete.")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Sync skills between Claude, Antigravity, and Cursor.")
+    parser.add_argument("--check", action="store_true", help="check if harnesses are in sync without modifying files")
+    args = parser.parse_args(argv)
 
     if args.check:
-        if all_in_sync:
+        in_sync, issues = check_sync()
+        if in_sync:
             print("All harness skill files and links are in sync.")
             return 0
         else:
-            print("Some harness skill files or links are out of sync. Run without --check to fix.", file=sys.stderr)
+            print("Harness skill files are out of sync:", file=sys.stderr)
+            for issue in issues:
+                print(f"  - {issue}", file=sys.stderr)
+            print("Run 'python scripts/sync_skills.py' to synchronize.", file=sys.stderr)
             return 1
 
-    print("Sync complete.")
+    sync_all()
     return 0
 
 
