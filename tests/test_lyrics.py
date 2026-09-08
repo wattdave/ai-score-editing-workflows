@@ -116,3 +116,30 @@ def test_lint_untexted_passage():
     untexted = [i for i in issues if i["type"] == "untexted_passage"]
     assert len(untexted) == 1
     assert "bars 2–3" in untexted[0]["message"]
+
+
+def test_lint_note_lyric_collision():
+    lyrics = [
+        {"staff": 1, "bar": 12, "position": 0, "text": "ra", "syllableType": "middle"},
+        {"staff": 1, "bar": 12, "position": 256, "text": "zna", "syllableType": "middle"},
+        {"staff": 1, "bar": 12, "position": 512, "text": "ze", "syllableType": "end"},
+    ]
+    staff_bars = {
+        1: [
+            {
+                "barNumber": 12,
+                "objects": [
+                    {"type": "NoteRest", "position": 0, "notes": [{"name": "G", "pitch": 67}]},
+                    {"type": "NoteRest", "position": 256, "notes": [{"name": "C", "pitch": 60}]},
+                    {"type": "NoteRest", "position": 512, "notes": [{"name": "G", "pitch": 55}]},
+                ],
+            }
+        ]
+    }
+    issues = lint_lyrics(lyrics, staff_names={1: "Soprano"}, staff_bars=staff_bars)
+    collisions = [i for i in issues if i["type"] == "note_lyric_collision"]
+    assert len(collisions) == 1
+    assert collisions[0]["bar"] == 12
+    assert "C4" in collisions[0]["message"]
+    assert "G3" in collisions[0]["message"]
+

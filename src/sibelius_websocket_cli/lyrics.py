@@ -246,6 +246,101 @@ def lint_lyrics(
                     ),
                 })
 
+    # 5. Check for vertical note/lyric collisions on vocal staves
+    if staff_bars:
+        for staff, bars_data in staff_bars.items():
+            s_name = names.get(staff, f"Staff {staff}")
+            all_pitches: list[int] = []
+            for b_info in bars_data:
+                for obj in b_info.get("objects", []):
+                    if obj.get("type") == "NoteRest" and obj.get("notes"):
+                        for n in obj["notes"]:
+                            p = n.get("pitch")
+                            if isinstance(p, int):
+                                all_pitches.append(p)
+
+            if not all_pitches:
+                continue
+
+            median_pitch = sorted(all_pitches)[len(all_pitches) // 2]
+            s_name_lower = s_name.lower().strip()
+            is_tenor = s_name_lower in {"t.", "t", "tenor", "tenore"} or (
+                "tenor" in s_name_lower and "alto" not in s_name_lower and "a." not in s_name_lower
+            )
+            is_bass = (
+                "bass" in s_name_lower
+                or s_name_lower in {"b.", "b", "basso", "bassoon"}
+                or median_pitch <= 50
+            )
+
+            # In Treble clef, notes <= 60 (C4 and below) sit below the staff.
+            # Tenors in choral notation use octave treble clef (sounding pitch is 12 semitones lower than written).
+            # When a bar has a large pitch plunge (span >= 8 semitones down to sub-staff notes <= 60),
+            # or extreme low notes (<= 55 on treble / <= 38 on bass), the lyric baseline anchored
+            # by higher notes fails to clear the low noteheads and ledger lines.
+            low_cutoff = 40 if is_bass else 60
+            extreme_cutoff = 38 if is_bass else 55
+            high_cutoff = 45 if is_bass else 64
+
+            for b_info in bars_data:
+                bar_num = b_info.get("barNumber", 0)
+                bar_syls = by_staff_bar.get((staff, bar_num), [])
+                if not bar_syls:
+                    continue
+
+                syls_by_pos = {s.get("position", 0): s.get("text", "") for s in bar_syls}
+
+                bar_notes = [
+                    (obj.get("position", 0), obj["notes"])
+                    for obj in b_info.get("objects", [])
+                    if obj.get("type") == "NoteRest" and obj.get("notes")
+                ]
+                if not bar_notes:
+                    continue
+
+                all_written_pitches = [
+                    (n.get("pitch", 100) + 12 if is_tenor else n.get("pitch", 100))
+                    for _, notes in bar_notes
+                    for n in notes
+                ]
+                min_bar_p = min(all_written_pitches)
+                max_bar_p = max(all_written_pitches)
+                span = max_bar_p - min_bar_p
+
+                is_plunge = min_bar_p <= low_cutoff and max_bar_p >= high_cutoff and span >= 8
+                is_extreme = min_bar_p <= extreme_cutoff
+
+                if not (is_plunge or is_extreme):
+                    continue
+
+                colliding_notes: list[tuple[str, int, str]] = []
+                for pos, notes in bar_notes:
+                    lowest = min(notes, key=lambda n: n.get("pitch", 100))
+                    raw_p = lowest.get("pitch", 100)
+                    w_p = raw_p + 12 if is_tenor else raw_p
+                    threshold = low_cutoff if is_plunge else extreme_cutoff
+                    if w_p <= threshold and pos in syls_by_pos:
+                        n_name = lowest.get("name", "")
+                        octave = w_p // 12 - 1
+                        note_label = f"{n_name}{octave}" if n_name else f"pitch {w_p}"
+                        syl_text = syls_by_pos[pos]
+                        colliding_notes.append((note_label, w_p, syl_text))
+
+                if colliding_notes:
+                    note_names_str = ", ".join(cn[0] for cn in colliding_notes)
+                    syl_texts_str = ", ".join(repr(cn[2]) for cn in colliding_notes)
+                    issues.append({
+                        "type": "note_lyric_collision",
+                        "severity": "warning",
+                        "bar": bar_num,
+                        "staff": staff,
+                        "message": (
+                            f"Staff {staff} ({s_name}): {len(colliding_notes)} low note(s) "
+                            f"({note_names_str}) descend to ledger lines below staff "
+                            f"carrying lyrics ({syl_texts_str}) — potential vertical collision"
+                        ),
+                    })
+
     # Deduplicate issues by message
     unique_issues: list[dict[str, Any]] = []
     seen: set[str] = set()
