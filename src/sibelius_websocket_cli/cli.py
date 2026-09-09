@@ -20,6 +20,28 @@ EXIT_COMMAND_FAILED = 1
 EXIT_CONNECTION_FAILED = 2
 
 
+def parse_bar_range(
+    bar: int | None = None,
+    bars: str | None = None,
+    from_bar: int | None = None,
+    to_bar: int | None = None,
+) -> tuple[int | None, int | None]:
+    """Parse bar range options into (from_bar, to_bar)."""
+    if bars:
+        cleaned = bars.replace("..", "-").strip()
+        if "-" in cleaned:
+            parts = cleaned.split("-", 1)
+            f = int(parts[0].strip()) if parts[0].strip() else None
+            t = int(parts[1].strip()) if parts[1].strip() else None
+            return (f, t)
+        else:
+            b = int(cleaned)
+            return (b, b)
+    if bar is not None:
+        return (bar, bar)
+    return (from_bar, to_bar)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="sibelius-websocket-cli",
@@ -55,6 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = parser.add_subparsers(dest="subcommand", required=True)
     sub.add_parser("ping", help="check that Sibelius responds")
+    sub.add_parser("save", help="save the active score in Sibelius")
     cmd = sub.add_parser("command", help="send a single command and print the response")
     cmd.add_argument("command_name")
     invoke = sub.add_parser("invoke", help="send a batch of command IDs via invokeCommands")
@@ -86,21 +109,37 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("bridge-version", help="report the installed bridge plug-in version")
     read_lyrics = sub.add_parser("read-lyrics", help="list all lyrics with addresses")
     read_lyrics.add_argument("--staff", type=int, default=0, help="staff number (0 = all)")
+    read_lyrics.add_argument("--from", dest="from_bar", type=int, help="first bar (from 1)")
+    read_lyrics.add_argument("--to", dest="to_bar", type=int, help="last bar")
+    read_lyrics.add_argument("--bar", type=int, help="specific bar number")
+    read_lyrics.add_argument("--bars", type=str, help="bar range, e.g. '1-3' or '5'")
+    read_lyrics.add_argument("--verse", type=int, help="filter to a specific verse/line number (1-based)")
     read_lyrics.add_argument(
         "--words",
         action="store_true",
-        help="format syllables into words grouped by staff and bar",
+        help="format syllables into words grouped by staff and verse/bar",
+    )
+    read_lyrics.add_argument(
+        "--by-bar",
+        action="store_true",
+        help="when used with --words, format strictly bar-by-bar rather than grouped by verse",
     )
     check_lyrics = sub.add_parser(
         "check-lyrics",
         help="lint score lyrics for typos, cross-voice divergence, collisions, and missing text",
     )
     check_lyrics.add_argument("--staff", type=int, default=0, help="staff number (0 = all)")
+    check_lyrics.add_argument("--from", dest="from_bar", type=int, help="first bar (from 1)")
+    check_lyrics.add_argument("--to", dest="to_bar", type=int, help="last bar")
+    check_lyrics.add_argument("--bar", type=int, help="specific bar number")
+    check_lyrics.add_argument("--bars", type=str, help="bar range, e.g. '1-3' or '5'")
+    check_lyrics.add_argument("--verse", type=int, help="filter to a specific verse/line number (1-based)")
     set_lyric = sub.add_parser("set-lyric", help="rewrite one lyric syllable (backs up first)")
     set_lyric.add_argument("--staff", type=int, required=True)
     set_lyric.add_argument("--bar", type=int, required=True)
     set_lyric.add_argument("--index", type=int, required=True)
     set_lyric.add_argument("--text", required=True)
+    set_lyric.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     transpose = sub.add_parser("transpose", help="transpose a passage or the whole score (backs up first)")
     transpose.add_argument("--from-note", required=True, help="current tonic, e.g. C or Eb")
     transpose.add_argument("--to-note", required=True, help="target tonic, e.g. D or F#")
@@ -112,10 +151,12 @@ def build_parser() -> argparse.ArgumentParser:
     transpose.add_argument("--to-bar", type=int, help="default: last bar")
     transpose.add_argument("--top-staff", type=int, help="default: 1")
     transpose.add_argument("--bottom-staff", type=int, help="default: last staff")
+    transpose.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     set_key = sub.add_parser("set-key", help="add a key signature (backs up first)")
     set_key.add_argument("--bar", type=int, default=1)
     set_key.add_argument("--key", required=True, help='key name, e.g. D or Bb')
     set_key.add_argument("--minor", action="store_true")
+    set_key.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     copyp = sub.add_parser("copy-passage", help="copy a passage to another staff/bar (backs up first)")
     copyp.add_argument("--from-bar", type=int, required=True)
     copyp.add_argument("--to-bar", type=int, required=True)
@@ -124,16 +165,19 @@ def build_parser() -> argparse.ArgumentParser:
     copyp.add_argument("--dest-staff", type=int, required=True)
     copyp.add_argument("--dest-bar", type=int, required=True)
     copyp.add_argument("--dest-pos", type=int, default=0, help="1/256th-quarter offset in dest bar")
+    copyp.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     set_note = sub.add_parser("set-note", help="repitch one note in a chord/NoteRest (backs up first)")
     set_note.add_argument("--staff", type=int, required=True)
     set_note.add_argument("--bar", type=int, required=True)
     set_note.add_argument("--index", type=int, required=True)
     set_note.add_argument("--old-pitch", type=int, required=True, help="MIDI pitch to replace")
     set_note.add_argument("--new-pitch", type=int, required=True, help="replacement MIDI pitch")
+    set_note.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     del_obj = sub.add_parser("delete-object", help="delete the object at an address (backs up first)")
     del_obj.add_argument("--staff", type=int, required=True)
     del_obj.add_argument("--bar", type=int, required=True)
     del_obj.add_argument("--index", type=int, required=True)
+    del_obj.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     del_voice = sub.add_parser(
         "delete-voice",
         help="remove one voice's contents (incl. rests) from a staff passage (backs up first)",
@@ -142,16 +186,25 @@ def build_parser() -> argparse.ArgumentParser:
     del_voice.add_argument("--from-bar", type=int, required=True)
     del_voice.add_argument("--to-bar", type=int, required=True)
     del_voice.add_argument("--voice", type=int, required=True, choices=[1, 2, 3, 4])
+    del_voice.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     flip = sub.add_parser("flip-stem", help="flip the stem of a NoteRest (backs up first)")
     flip.add_argument("--staff", type=int, required=True)
     flip.add_argument("--bar", type=int, required=True)
     flip.add_argument("--index", type=int, required=True)
+    flip.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     nudge = sub.add_parser("nudge", help="shift an object graphically (1/32 spaces; backs up first)")
     nudge.add_argument("--staff", type=int, required=True)
     nudge.add_argument("--bar", type=int, required=True)
     nudge.add_argument("--index", type=int, required=True)
     nudge.add_argument("--dx", type=int, default=0, help="right positive")
     nudge.add_argument("--dy", type=int, default=0, help="up positive")
+    nudge.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    reset_d = sub.add_parser(
+        "reset-design",
+        help="reset design/formatting overrides (e.g. font styles) on score objects",
+    )
+    reset_d.add_argument("--lyrics", action="store_true", help="filter to lyrics only")
+    reset_d.add_argument("--save", action="store_true", help="save active score in Sibelius after resetting design")
     export = sub.add_parser("export", help="export the active (or a given) score to another format")
     export.add_argument("--format", choices=sorted(EXPORT_FORMATS), default="musicxml")
     export.add_argument("--out", help="output path (default: next to the source file)")
@@ -327,11 +380,15 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
     return value
 
 
+MIN_BRIDGE_VERSION = 7
+CURRENT_BRIDGE_VERSION = 8
+
+
 async def _check_bridge_version(client: SibeliusClient) -> None:
     info = await _bridge(client, "GetBridgeVersion")
-    if not (isinstance(info, dict) and info.get("version") == 7):
+    if not (isinstance(info, dict) and info.get("version", 0) >= MIN_BRIDGE_VERSION):
         raise BridgeError(
-            f"bridge v7 required, got {info!r} — run install-plugin and restart Sibelius"
+            f"bridge v{MIN_BRIDGE_VERSION}+ required, got {info!r} — run install-plugin and restart Sibelius"
         )
 
 
@@ -364,8 +421,42 @@ async def _run_write(
         backup = await _backup(client, f"before {args.subcommand}")
         print(f"backed up: {backup['copy']}", file=sys.stderr)
         result = await _bridge(client, method, call_args)
+        if getattr(args, "save", False):
+            saved = await _bridge(client, "Save")
+            print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
     print(json.dumps(result, indent=2))
     return EXIT_OK
+
+
+async def _run_save(args: argparse.Namespace) -> int:
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _check_bridge_version(client)
+        saved = await _bridge(client, "Save")
+    print(json.dumps(saved) if args.json else f"saved: {saved.get('fileName', '')}")
+    return EXIT_OK
+
+
+async def _run_reset_design(args: argparse.Namespace) -> int:
+    commands = ["select_all"]
+    if getattr(args, "lyrics", False):
+        commands.append("filter_lyrics")
+    commands.append("reset_design")
+    commands.append("select_none")
+
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _check_bridge_version(client)
+        response = await client.invoke_commands(commands)
+        if not protocol.is_success(response):
+            print(f"error resetting design: {json.dumps(response)}", file=sys.stderr)
+            return EXIT_COMMAND_FAILED
+        if getattr(args, "save", False):
+            saved = await _bridge(client, "Save")
+            print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
+    return _emit(
+        args,
+        response,
+        f"reset design ({'lyrics' if getattr(args, 'lyrics', False) else 'all'})",
+    )
 
 
 async def _run_bridge_call(
@@ -413,11 +504,22 @@ async def _run_bridge_version(args: argparse.Namespace) -> int:
 
 
 async def _run_read_lyrics(args: argparse.Namespace) -> int:
-    if args.words:
-        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-            raw_lyrics = await _bridge(client, "ReadLyrics", [args.staff])
+    from_b, to_b = parse_bar_range(
+        bar=getattr(args, "bar", None),
+        bars=getattr(args, "bars", None),
+        from_bar=getattr(args, "from_bar", None),
+        to_bar=getattr(args, "to_bar", None),
+    )
+    verse = getattr(args, "verse", None)
+    by_bar = getattr(args, "by_bar", False)
+
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        raw_lyrics = await _bridge(client, "ReadLyrics", [args.staff])
+        filtered = lyrics.filter_lyrics(raw_lyrics, from_bar=from_b, to_bar=to_b, verse=verse)
+
+        if args.words:
             if args.json:
-                print(json.dumps(raw_lyrics))
+                print(json.dumps(filtered))
                 return EXIT_OK
             staves_info = await _bridge(client, "GetStaves")
             names = {
@@ -429,12 +531,22 @@ async def _run_read_lyrics(args: argparse.Namespace) -> int:
                 )
                 for i, s in enumerate(staves_info)
             }
-            print(lyrics.format_lyrics_by_bar(raw_lyrics, names))
+            print(lyrics.format_lyrics(filtered, names, by_bar=by_bar, verse=verse))
             return EXIT_OK
-    return await _run_bridge_call(args, "ReadLyrics", [args.staff])
+
+    print(json.dumps(filtered) if args.json else json.dumps(filtered, indent=2))
+    return EXIT_OK
 
 
 async def _run_check_lyrics(args: argparse.Namespace) -> int:
+    from_b, to_b = parse_bar_range(
+        bar=getattr(args, "bar", None),
+        bars=getattr(args, "bars", None),
+        from_bar=getattr(args, "from_bar", None),
+        to_bar=getattr(args, "to_bar", None),
+    )
+    verse = getattr(args, "verse", None)
+
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         info = await _bridge(client, "GetScoreInfo")
         staves_info = await _bridge(client, "GetStaves")
@@ -448,20 +560,26 @@ async def _run_check_lyrics(args: argparse.Namespace) -> int:
             for i, s in enumerate(staves_info)
         }
         raw_lyrics = await _bridge(client, "ReadLyrics", [args.staff])
+        filtered_lyrics = lyrics.filter_lyrics(
+            raw_lyrics, from_bar=from_b, to_bar=to_b, verse=verse
+        )
 
         bar_count = info.get("barCount", 0)
+        start_b = from_b or 1
+        end_b = to_b or bar_count
+
         staff_bars: dict[int, list[dict[str, Any]]] = {}
         target_staves = (
             [args.staff]
             if args.staff > 0
-            else sorted({s.get("staff", 1) for s in raw_lyrics})
+            else sorted({s.get("staff", 1) for s in filtered_lyrics})
         )
         for s_num in target_staves:
-            if bar_count > 0:
-                bars = await _bridge(client, "ReadBars", [s_num, 1, bar_count])
+            if bar_count > 0 and end_b >= start_b:
+                bars = await _bridge(client, "ReadBars", [s_num, start_b, end_b])
                 staff_bars[s_num] = bars
 
-        issues = lyrics.lint_lyrics(raw_lyrics, names, staff_bars)
+        issues = lyrics.lint_lyrics(filtered_lyrics, names, staff_bars)
 
     if args.json:
         print(json.dumps(issues, indent=2))
@@ -495,6 +613,9 @@ async def _run_transpose(args: argparse.Namespace) -> int:
             "TransposePassage",
             [from_bar, to_bar, top, bottom, degree, interval_type],
         )
+        if getattr(args, "save", False):
+            saved = await _bridge(client, "Save")
+            print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
     print(json.dumps(result, indent=2))
     return EXIT_OK
 
@@ -657,6 +778,8 @@ def main(argv: list[str] | None = None) -> int:
         "set-note": _run_set_note,
         "delete-object": _run_delete_object,
         "delete-voice": _run_delete_voice,
+        "save": _run_save,
+        "reset-design": _run_reset_design,
         "flip-stem": _run_flip_stem,
         "nudge": _run_nudge,
     }[args.subcommand]

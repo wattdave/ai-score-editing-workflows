@@ -2,7 +2,9 @@
 
 from sibelius_websocket_cli.lyrics import (
     assemble_bar_words,
+    filter_lyrics,
     format_lint_report,
+    format_lyrics,
     format_lyrics_by_bar,
     lint_lyrics,
 )
@@ -142,4 +144,65 @@ def test_lint_note_lyric_collision():
     assert collisions[0]["bar"] == 12
     assert "C4" in collisions[0]["message"]
     assert "G3" in collisions[0]["message"]
+
+
+def test_filter_lyrics_bar_range_and_verse():
+    lyrics = [
+        {"staff": 1, "bar": 1, "position": 0, "text": "1.Cuan", "line": 1},
+        {"staff": 1, "bar": 1, "position": 0, "text": "2.Ve", "line": 2},
+        {"staff": 1, "bar": 2, "position": 0, "text": "te", "line": 1},
+        {"staff": 1, "bar": 2, "position": 0, "text": "to,", "line": 2},
+        {"staff": 1, "bar": 3, "position": 0, "text": "ra,", "line": 1},
+    ]
+    b12 = filter_lyrics(lyrics, from_bar=1, to_bar=2)
+    assert len(b12) == 4
+    assert {s["bar"] for s in b12} == {1, 2}
+
+    v2 = filter_lyrics(lyrics, verse=2)
+    assert len(v2) == 2
+    assert all(s["line"] == 2 for s in v2)
+
+
+def test_format_lyrics_multi_verse():
+    lyrics = [
+        {"staff": 1, "bar": 1, "position": 0, "text": "1.Cuan", "syllableType": "middle", "line": 1},
+        {"staff": 1, "bar": 1, "position": 256, "text": "do", "syllableType": "end", "line": 1},
+        {"staff": 1, "bar": 1, "position": 0, "text": "2.Ve", "syllableType": "middle", "line": 2},
+        {"staff": 1, "bar": 1, "position": 256, "text": "ni", "syllableType": "end", "line": 2},
+    ]
+    formatted = format_lyrics(lyrics, {1: "Solo"})
+    assert "[Verse 1]" in formatted
+    assert "[Verse 2]" in formatted
+    assert "1.Cuan-do" in formatted
+    assert "2.Ve-ni" in formatted
+
+    v1_only = format_lyrics(lyrics, {1: "Solo"}, verse=1)
+    assert "[Verse 2]" not in v1_only
+    assert "1.Cuan-do" in v1_only
+
+
+def test_lint_multi_verse_no_false_positive():
+    lyrics = [
+        {"staff": 1, "bar": 1, "position": 0, "text": "v1a", "syllableType": "end", "line": 1},
+        {"staff": 1, "bar": 1, "position": 0, "text": "v2a", "syllableType": "end", "line": 2},
+        {"staff": 1, "bar": 1, "position": 256, "text": "v1b", "syllableType": "end", "line": 1},
+        {"staff": 1, "bar": 1, "position": 256, "text": "v2b", "syllableType": "end", "line": 2},
+    ]
+    issues = lint_lyrics(lyrics)
+    assert not any(i["type"] == "position_collision" for i in issues)
+
+
+def test_lint_multi_verse_real_collision():
+    lyrics = [
+        {"staff": 1, "bar": 1, "position": 0, "text": "v1a", "syllableType": "end", "line": 1},
+        {"staff": 1, "bar": 1, "position": 0, "text": "v2a", "syllableType": "end", "line": 2},
+        {"staff": 1, "bar": 1, "position": 256, "text": "v1b1", "syllableType": "end", "line": 1},
+        {"staff": 1, "bar": 1, "position": 256, "text": "v1b2", "syllableType": "end", "line": 1},
+        {"staff": 1, "bar": 1, "position": 256, "text": "v2b", "syllableType": "end", "line": 2},
+    ]
+    issues = lint_lyrics(lyrics)
+    collisions = [i for i in issues if i["type"] == "position_collision"]
+    assert len(collisions) == 1
+    assert "Line 1" in collisions[0]["message"]
+
 

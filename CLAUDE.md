@@ -9,8 +9,8 @@ A CLI tool for driving Sibelius (the music notation app) via Sibelius Connect, i
 Key capabilities:
 - **Transport & Lifecycle**: WebSocket handshake with silent token reuse, auto-launching Sibelius if not running.
 - **Score Inspection**: Reads score metadata, staves, passages, notes with pitches/ties, lyrics, and selections.
-- **Lyric Proofreading & Editing**: Automated lyric linting (`check-lyrics`) for horizontal collisions, vertical note-lyric collisions (with clef & ledger line awareness), missing vowels, cross-voice divergence, and untexted passages; word formatting (`read-lyrics --words`); and targeted writing (`set-lyric`).
-- **Engraving & Modification**: In-file versioning + auto-backup, layout nudging (`nudge`), stem flipping (`flip-stem`), passage copying, transposition, and format export (MusicXML, MIDI, PDF, PNG).
+- **Lyric Proofreading & Editing**: Automated lyric linting (`check-lyrics`) for horizontal collisions, vertical note-lyric collisions (with clef & ledger line awareness), missing vowels, cross-voice divergence, and untexted passages with multi-verse awareness and bar range filtering (`--bars`); stanza formatting (`read-lyrics --words [--verse N]`); and targeted writing (`set-lyric`).
+- **Engraving & Modification**: In-file versioning + auto-backup, layout nudging (`nudge`), stem flipping (`flip-stem`), passage copying, transposition, direct score saving (`save`, `--save`), design/format reset (`reset-design`), and format export (MusicXML, MIDI, PDF, PNG).
 - **Agent Skill Harmonization**: Single source of truth for agent skills in `.claude/skills/` synchronized to Antigravity and Cursor via `scripts/sync_skills.py`.
 
 ## Commands
