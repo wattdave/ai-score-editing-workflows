@@ -44,20 +44,24 @@ reads/writes, to the bundled `sibwscli` ManuScript bridge plug-in.
 
 Reads: `score-info` (title/file/key/time sigs), `staves`, `selection`,
 `read --staff N --from A --to B` (notes with MIDI pitch/name/tie, lyrics with
-text, addressed by staff/bar/index), `read-lyrics [--staff N] [--words]` (0 = all;
-`--words` formats into hyphenated words grouped by staff and bar),
-`check-lyrics [--staff N]` (lints lyrics for horizontal/vertical collisions, missing vowels,
-cross-voice typos/divergence, and untexted passages).
+text, addressed by staff/bar/index), `read-lyrics [--staff N] [--bars A-B] [--words] [--verse N]` (0 = all;
+`--words` formats into hyphenated words grouped by staff and verse/bar),
+`check-lyrics [--staff N] [--bars A-B] [--verse N]` (lints lyrics for horizontal/vertical collisions, missing vowels,
+cross-voice typos/divergence, and untexted passages with multi-verse awareness).
 
-Writes (auto-backup): `set-lyric --staff --bar --index --text`,
+Writes (auto-backup): `save` (save active score in Sibelius),
+`reset-design [--lyrics] [--save]` (clear formatting/font overrides),
+`set-lyric --staff --bar --index --text [--save]`,
 `transpose --from-note C --to-note D --up|--down [--from-bar --to-bar
---top-staff --bottom-staff] [--octaves N]` (whole score by default; both
-directions live-verified), `set-key --bar --key [--minor]`,
+--top-staff --bottom-staff] [--octaves N] [--save]` (whole score by default; both
+directions live-verified), `set-key --bar --key [--minor] [--save]`,
 `copy-passage --from-bar --to-bar --top-staff [--bottom-staff] --dest-staff
---dest-bar` (faithful copy incl. ties/articulations — and lyrics, which the
+--dest-bar [--save]` (faithful copy incl. ties/articulations — and lyrics, which the
 user may want stripped with `DeleteObject` afterwards),
-`set-note --staff --bar --index --old-pitch --new-pitch` (repitch one note,
-MIDI numbers), `export [--format musicxml|mxl|pdf|midi|png] [--out] [--file
+`set-note --staff --bar --index --old-pitch --new-pitch [--save]` (repitch one note,
+MIDI numbers), `flip-stem --staff --bar --index [--save]`,
+`nudge --staff --bar --index --dx --dy [--save]`,
+`export [--format musicxml|mxl|pdf|midi|png] [--out] [--file
 some.sib]`, `backup [--name]`.
 
 Escape hatches: `do undo`, raw command IDs via `invoke` (fire-and-forget:
@@ -67,12 +71,14 @@ bridge method via `plugin sibwscli <Method> --args '<json>'`.
 ## Task patterns
 
 **Lyric proofreading / spell-check:**
-1. Run `check-lyrics` to automatically detect horizontal/vertical collisions, missing vowels, cross-voice divergence, and untexted vocal passages across the score.
+1. Run `check-lyrics [--bars A-B]` to automatically detect horizontal/vertical collisions, missing vowels, cross-voice divergence, and untexted vocal passages across the score (with multi-verse awareness).
 2. If `note_lyric_collision` warnings appear, or for visual engraving checks, run `export --format png --out /tmp/check.png` to inspect the actual layout and verify clearances.
-3. Run `read-lyrics --words` to inspect the complete words grouped by staff and bar in a clean, human-readable format.
-4. For specific text fixes, run `read-lyrics --staff N` to get exact syllable addresses (`staff`, `bar`, `index`, `position`, `text`). On approval, `set-lyric --staff S --bar B --index I --text "..."` per fix.
-5. For layout/collision fixes, use `nudge --staff S --bar B --index I --dy -32` (or similar) to adjust baselines.
-6. Re-run `check-lyrics` or `read-lyrics --words` to verify. Addresses are only valid against the read they came from; re-read after every write.
+3. Run `read-lyrics --words [--verse N] [--bars A-B]` to inspect the complete words grouped by staff and verse in a clean, human-readable format.
+4. For font or formatting resets, run `reset-design --lyrics [--save]` to strip legacy manual overrides.
+5. For specific text fixes, run `read-lyrics --staff N [--bars A-B]` to get exact syllable addresses (`staff`, `bar`, `index`, `position`, `text`). On approval, `set-lyric --staff S --bar B --index I --text "..." [--save]` per fix.
+6. For layout/collision fixes, use `nudge --staff S --bar B --index I --dy -32 [--save]` to adjust baselines.
+7. Save changes with `save` (or pass `--save` on mutating commands).
+8. Re-run `check-lyrics` or `read-lyrics --words` to verify. Addresses are only valid against the read they came from; re-read after every write.
 
 **Copy a passage to another staff (e.g. "apply SA pickup to TB, down an
 octave"):** read the destination first (know what gets overwritten) and check

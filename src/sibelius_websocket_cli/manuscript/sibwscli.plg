@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 7);
+		return CreateDictionary('version', 8);
 	}"
 
 	Echo "(value) {
@@ -109,13 +109,19 @@
 			if (obj.SyllableType = MiddleOfWord) {
 				syllableType = 'middle';
 			}
+			lineNum = 1;
+			if (obj.LineNumber != null and obj.LineNumber > 0) {
+				lineNum = obj.LineNumber;
+			}
 			return CreateDictionary(
 				'index', index,
 				'type', obj.Type,
 				'position', obj.Position,
 				'voice', obj.VoiceNumber,
 				'text', obj.Text,
-				'syllableType', syllableType);
+				'syllableType', syllableType,
+				'styleId', '' & obj.StyleId,
+				'line', lineNum);
 		}
 		if (obj.Type = 'KeySignature') {
 			return CreateDictionary(
@@ -161,7 +167,7 @@
 		return bars;
 	}"
 
-	ReadLyrics "(staffNum) {
+	ReadLyrics "(staffNum, fromBar, toBar) {
 		score = RequireScore();
 		if (score = null) {
 			return CreateDictionary('error', 'no score open');
@@ -178,7 +184,15 @@
 		lyrics = CreateSparseArray();
 		for s = firstStaff to lastStaff + 1 {
 			staff = score.NthStaff(s);
-			for barNum = 1 to staff.BarCount + 1 {
+			startBar = 1;
+			endBar = staff.BarCount;
+			if (fromBar != null and fromBar > 1) {
+				startBar = fromBar;
+			}
+			if (toBar != null and toBar > 0 and toBar < endBar) {
+				endBar = toBar;
+			}
+			for barNum = startBar to endBar + 1 {
 				bar = staff.NthBar(barNum);
 				index = 0;
 				for each obj in bar {
@@ -187,13 +201,19 @@
 						if (obj.SyllableType = MiddleOfWord) {
 							syllableType = 'middle';
 						}
+						lineNum = 1;
+						if (obj.LineNumber != null and obj.LineNumber > 0) {
+							lineNum = obj.LineNumber;
+						}
 						lyrics.Push(CreateDictionary(
 							'staff', s,
 							'bar', barNum,
 							'index', index,
 							'position', obj.Position,
 							'text', obj.Text,
-							'syllableType', syllableType));
+							'syllableType', syllableType,
+							'styleId', '' & obj.StyleId,
+							'line', lineNum));
 					}
 					index = index + 1;
 				}

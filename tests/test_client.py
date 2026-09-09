@@ -298,3 +298,56 @@ async def test_client_launch_bypassed_for_remote_host(store: TokenStore) -> None
             await client.connect()
         mock_launch.assert_not_called()
 
+
+def test_parse_bar_range():
+    from sibelius_websocket_cli.cli import parse_bar_range
+
+    assert parse_bar_range(bars="1-4") == (1, 4)
+    assert parse_bar_range(bars="3..6") == (3, 6)
+    assert parse_bar_range(bars="5") == (5, 5)
+    assert parse_bar_range(bar=3) == (3, 3)
+    assert parse_bar_range(from_bar=2, to_bar=8) == (2, 8)
+    assert parse_bar_range() == (None, None)
+
+
+def test_parser_new_subcommands_and_flags():
+    from sibelius_websocket_cli.cli import build_parser
+
+    parser = build_parser()
+
+    # save
+    args = parser.parse_args(["save"])
+    assert args.subcommand == "save"
+
+    # reset-design
+    args = parser.parse_args(["reset-design", "--lyrics", "--save"])
+    assert args.subcommand == "reset-design"
+    assert args.lyrics is True
+    assert args.save is True
+
+    # read-lyrics with --bars and --verse
+    args = parser.parse_args(["read-lyrics", "--bars", "1-3", "--verse", "2", "--words", "--by-bar"])
+    assert args.subcommand == "read-lyrics"
+    assert args.bars == "1-3"
+    assert args.verse == 2
+    assert args.words is True
+    assert args.by_bar is True
+
+    # check-lyrics with --bars
+    args = parser.parse_args(["check-lyrics", "--bars", "4-5"])
+    assert args.subcommand == "check-lyrics"
+    assert args.bars == "4-5"
+
+    # set-lyric with --save
+    args = parser.parse_args(["set-lyric", "--staff", "1", "--bar", "1", "--index", "0", "--text", "la", "--save"])
+    assert args.save is True
+
+    # flip-stem with --save
+    args = parser.parse_args(["flip-stem", "--staff", "1", "--bar", "1", "--index", "0", "--save"])
+    assert args.save is True
+
+    # nudge with --save
+    args = parser.parse_args(["nudge", "--staff", "1", "--bar", "1", "--index", "0", "--dx", "1", "--save"])
+    assert args.save is True
+
+
