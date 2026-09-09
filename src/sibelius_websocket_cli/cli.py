@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from sibelius_websocket_cli import lyrics, protocol
+from sibelius_websocket_cli import abc_notation, lyrics, music, protocol
 from sibelius_websocket_cli.client import ConnectionFailed, SibeliusClient, run_sync
 from sibelius_websocket_cli.intervals import compute_transposition
 from sibelius_websocket_cli.token_store import TokenStore
@@ -106,6 +106,15 @@ def build_parser() -> argparse.ArgumentParser:
     read.add_argument("--staff", type=int, default=1, help="staff number, from 1")
     read.add_argument("--from", dest="from_bar", type=int, default=1, help="first bar, from 1")
     read.add_argument("--to", dest="to_bar", type=int, help="last bar (default: same as --from)")
+    read.add_argument("--bar", type=int, help="specific bar number")
+    read.add_argument("--bars", type=str, help="bar range, e.g. '1-3' or '5'")
+    read.add_argument("--abc", action="store_true", help="format output as ABC notation with aligned lyrics")
+    read_abc = sub.add_parser("read-abc", help="format bar contents as standard ABC notation")
+    read_abc.add_argument("--staff", type=int, default=1, help="staff number, from 1")
+    read_abc.add_argument("--from", dest="from_bar", type=int, default=1, help="first bar, from 1")
+    read_abc.add_argument("--to", dest="to_bar", type=int, help="last bar (default: same as --from)")
+    read_abc.add_argument("--bar", type=int, help="specific bar number")
+    read_abc.add_argument("--bars", type=str, help="bar range, e.g. '1-3' or '5'")
     sub.add_parser("bridge-version", help="report the installed bridge plug-in version")
     read_lyrics = sub.add_parser("read-lyrics", help="list all lyrics with addresses")
     read_lyrics.add_argument("--staff", type=int, default=0, help="staff number (0 = all)")
@@ -205,6 +214,60 @@ def build_parser() -> argparse.ArgumentParser:
     )
     reset_d.add_argument("--lyrics", action="store_true", help="filter to lyrics only")
     reset_d.add_argument("--save", action="store_true", help="save active score in Sibelius after resetting design")
+    add_staff = sub.add_parser(
+        "add-staff",
+        aliases=["create-staff"],
+        help="add an instrument staff to the score (backs up first)",
+    )
+    add_staff.add_argument(
+        "--instrument",
+        "--style",
+        dest="instrument",
+        help="instrument alias or style ID, e.g. 'soprano', 'piano', 'violin'",
+    )
+    add_staff.add_argument(
+        "--position",
+        choices=["bottom", "top", "auto"],
+        default="bottom",
+        help="where to place the new staff (default: bottom)",
+    )
+    add_staff.add_argument("--full-name", help="custom full instrument name")
+    add_staff.add_argument("--short-name", help="custom short instrument name")
+    add_staff.add_argument("--above-staff", type=int, help="add an extra staff above this staff")
+    add_staff.add_argument("--below-staff", type=int, help="add an extra staff below this staff")
+    add_staff.add_argument("--ossia", action="store_true", help="make the added staff an ossia staff")
+    add_staff.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    add_bars = sub.add_parser(
+        "add-bars",
+        help="add empty bars to the end of the score (backs up first)",
+    )
+    add_bars.add_argument("--count", type=int, default=1, help="number of bars to add (default: 1)")
+    add_bars.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    add_notes = sub.add_parser(
+        "add-notes",
+        aliases=["add-note"],
+        help="insert notes, chords, or sequences into a staff/bar (backs up first)",
+    )
+    add_notes.add_argument("--staff", type=int, required=True, help="staff number (from 1)")
+    add_notes.add_argument("--bar", type=int, required=True, help="bar number (from 1)")
+    add_notes.add_argument("--pos", "--position", dest="pos", type=int, default=0, help="position in bar (ticks, default: 0)")
+    add_notes.add_argument("--pitch", "--pitches", dest="pitches", help="pitch name(s) or MIDI number(s), e.g. 'C4' or '60' or 'C4,E4,G4'")
+    add_notes.add_argument("--duration", "--dur", dest="duration", default="quarter", help="duration name or ticks, e.g. 'quarter', 'half.', '256'")
+    add_notes.add_argument("--notes", "--sequence", dest="notes", help="shorthand sequence, e.g. 'C4:quarter D4:quarter E4:half'")
+    add_notes.add_argument("--voice", type=int, default=1, choices=[1, 2, 3, 4], help="voice number (1-4, default: 1)")
+    add_notes.add_argument("--tied", action="store_true", help="tie note to next")
+    add_notes.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    add_abc = sub.add_parser(
+        "add-abc",
+        help="insert music and lyrics from an ABC notation snippet (backs up first)",
+    )
+    add_abc.add_argument("--staff", type=int, required=True, help="staff number (from 1)")
+    add_abc.add_argument("--bar", type=int, default=1, help="starting bar number (default: 1)")
+    add_abc.add_argument("--pos", "--position", dest="pos", type=int, default=0, help="starting position in bar (ticks, default: 0)")
+    add_abc.add_argument("abc", nargs="?", help="ABC notation string with notes and optional w: lyrics")
+    add_abc.add_argument("--abc", dest="abc_opt", help="ABC notation string (alternative to positional argument)")
+    add_abc.add_argument("--voice", type=int, default=1, choices=[1, 2, 3, 4], help="voice number (1-4, default: 1)")
+    add_abc.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     export = sub.add_parser("export", help="export the active (or a given) score to another format")
     export.add_argument("--format", choices=sorted(EXPORT_FORMATS), default="musicxml")
     export.add_argument("--out", help="output path (default: next to the source file)")
@@ -381,7 +444,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 8
+CURRENT_BRIDGE_VERSION = 9
 
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
@@ -488,8 +551,56 @@ async def _run_selection(args: argparse.Namespace) -> int:
 
 
 async def _run_read(args: argparse.Namespace) -> int:
-    to_bar = args.to_bar if args.to_bar is not None else args.from_bar
-    return await _run_bridge_call(args, "ReadBars", [args.staff, args.from_bar, to_bar])
+    from_b, to_b = parse_bar_range(
+        bar=getattr(args, "bar", None),
+        bars=getattr(args, "bars", None),
+        from_bar=getattr(args, "from_bar", None),
+        to_bar=getattr(args, "to_bar", None),
+    )
+    start_bar = from_b if from_b is not None else 1
+    end_bar = to_b if to_b is not None else start_bar
+
+    if getattr(args, "abc", False) or getattr(args, "subcommand", "") == "read-abc":
+        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            await _check_bridge_version(client)
+            info = await _bridge(client, "GetScoreInfo")
+            staves_info = await _bridge(client, "GetStaves")
+            bars = await _bridge(client, "ReadBars", [args.staff, start_bar, end_bar])
+            raw_lyrics = await _bridge(client, "ReadLyrics", [args.staff])
+            filtered_lyrics = lyrics.filter_lyrics(raw_lyrics, from_bar=start_bar, to_bar=end_bar)
+
+            key_name = "C"
+            for ks in info.get("keySignatures", []):
+                if ks.get("bar", 1) <= start_bar:
+                    key_name = ks.get("name", "C")
+
+            time_sig = None
+            for ts in info.get("timeSignatures", []):
+                if ts.get("bar", 1) <= start_bar:
+                    time_sig = (ts.get("numerator", 4), ts.get("denominator", 4))
+
+            instr_name = None
+            for s in staves_info:
+                if s.get("staffNum") == args.staff:
+                    instr_name = s.get("fullInstrumentName") or s.get("instrumentName")
+
+            abc_str = abc_notation.score_to_abc(
+                bars,
+                lyrics=filtered_lyrics,
+                time_sig=time_sig,
+                key=key_name,
+                staff_num=args.staff,
+                instrument_name=instr_name,
+            )
+            print(abc_str)
+            return EXIT_OK
+
+    return await _run_bridge_call(args, "ReadBars", [args.staff, start_bar, end_bar])
+
+
+async def _run_read_abc(args: argparse.Namespace) -> int:
+    setattr(args, "abc", True)
+    return await _run_read(args)
 
 
 async def _run_do(args: argparse.Namespace) -> int:
@@ -659,6 +770,130 @@ async def _run_nudge(args: argparse.Namespace) -> int:
     return await _run_write(args, "NudgeObject", [args.staff, args.bar, args.index, args.dx, args.dy])
 
 
+async def _run_add_staff(args: argparse.Namespace) -> int:
+    if getattr(args, "above_staff", None):
+        return await _run_write(
+            args,
+            "AddStaffToInstrument",
+            [args.above_staff, True, bool(getattr(args, "ossia", False))],
+        )
+    if getattr(args, "below_staff", None):
+        return await _run_write(
+            args,
+            "AddStaffToInstrument",
+            [args.below_staff, False, bool(getattr(args, "ossia", False))],
+        )
+    if not getattr(args, "instrument", None):
+        print(
+            "error: --instrument is required (unless --above-staff or --below-staff is given)",
+            file=sys.stderr,
+        )
+        return EXIT_COMMAND_FAILED
+    style_id = music.resolve_instrument_style(args.instrument)
+    return await _run_write(
+        args,
+        "CreateStaff",
+        [style_id, args.position, args.full_name or "", args.short_name or ""],
+    )
+
+
+async def _run_add_bars(args: argparse.Namespace) -> int:
+    count = getattr(args, "count", 1)
+    return await _run_write(args, "AddBars", [count])
+
+
+async def _run_add_notes(args: argparse.Namespace) -> int:
+    if getattr(args, "notes", None):
+        seq = music.parse_note_sequence(args.notes)
+        return await _run_write(
+            args,
+            "AddNoteSequence",
+            [args.staff, args.bar, getattr(args, "pos", 0), seq, args.voice],
+        )
+    if not getattr(args, "pitches", None):
+        print("error: either --pitch/--pitches or --notes is required", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    pitches = [music.parse_pitch(p.strip()) for p in args.pitches.split(",") if p.strip()]
+    duration = music.parse_duration(args.duration)
+    return await _run_write(
+        args,
+        "AddNotes",
+        [
+            args.staff,
+            args.bar,
+            getattr(args, "pos", 0),
+            duration,
+            pitches,
+            args.voice,
+            bool(getattr(args, "tied", False)),
+        ],
+    )
+
+
+async def _run_add_abc(args: argparse.Namespace) -> int:
+    abc_text = args.abc or getattr(args, "abc_opt", None)
+    if not abc_text:
+        print("error: ABC notation string is required (positional or --abc)", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _check_bridge_version(client)
+        info = await _bridge(client, "GetScoreInfo")
+        default_key = "C"
+        for ks in info.get("keySignatures", []):
+            if ks.get("bar", 1) <= args.bar:
+                default_key = ks.get("name", "C")
+
+        parsed = abc_notation.parse_abc_snippet(abc_text, default_key=default_key)
+
+        sequence = []
+        for n in parsed["notes"]:
+            actual_bar = args.bar + (n["bar"] - 1)
+            actual_pos = n["position"]
+            if n["bar"] == 1:
+                actual_pos += getattr(args, "pos", 0)
+            sequence.append({
+                "bar": actual_bar,
+                "position": actual_pos,
+                "duration": n["duration"],
+                "pitches": n["pitches"],
+                "tied": n["tied"],
+            })
+
+        backup = await _backup(client, f"before {args.subcommand}")
+        print(f"backed up: {backup['copy']}", file=sys.stderr)
+
+        note_result = await _bridge(
+            client,
+            "AddNoteSequence",
+            [args.staff, args.bar, getattr(args, "pos", 0), sequence, args.voice],
+        )
+
+        added_lyrics = []
+        for lyr in parsed["lyrics"]:
+            actual_bar = args.bar + (lyr["bar"] - 1)
+            actual_pos = lyr["position"]
+            if lyr["bar"] == 1:
+                actual_pos += getattr(args, "pos", 0)
+            lyr_res = await _bridge(
+                client,
+                "AddLyric",
+                [args.staff, actual_bar, actual_pos, lyr["duration"], lyr["text"], lyr["syllableType"]],
+            )
+            added_lyrics.append(lyr_res)
+
+        if getattr(args, "save", False):
+            saved = await _bridge(client, "Save")
+            print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
+
+    result = {
+        "notes": note_result,
+        "lyricsCount": len(added_lyrics),
+    }
+    print(json.dumps(result, indent=2))
+    return EXIT_OK
+
+
 async def _run_export(args: argparse.Namespace) -> int:
     saveas_type, extension = EXPORT_FORMATS[args.format]
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
@@ -782,6 +1017,13 @@ def main(argv: list[str] | None = None) -> int:
         "reset-design": _run_reset_design,
         "flip-stem": _run_flip_stem,
         "nudge": _run_nudge,
+        "read-abc": _run_read_abc,
+        "add-staff": _run_add_staff,
+        "create-staff": _run_add_staff,
+        "add-bars": _run_add_bars,
+        "add-notes": _run_add_notes,
+        "add-note": _run_add_notes,
+        "add-abc": _run_add_abc,
     }[args.subcommand]
     try:
         return int(run_sync(runner(args)))

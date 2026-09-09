@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 8);
+		return CreateDictionary('version', 9);
 	}"
 
 	Echo "(value) {
@@ -314,7 +314,107 @@
 		return CreateDictionary('bar', barNumber, 'numerator', top, 'denominator', bottom);
 	}"
 
-	AddNotes "(staffNum, barNumber, position, duration, pitches, voice) {
+	CreateStaff "(styleId, position, fullName, shortName) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (styleId = null or styleId = '') {
+			return CreateDictionary('error', 'styleId is required');
+		}
+		changeNames = False;
+		fn = '';
+		sn = '';
+		if (fullName != null and fullName != '') {
+			changeNames = True;
+			fn = fullName;
+		}
+		if (shortName != null and shortName != '') {
+			changeNames = True;
+			sn = shortName;
+		}
+		pos = 'bottom';
+		if (position != null and position != '') {
+			pos = position;
+		}
+		stave = null;
+		if (pos = 'top') {
+			if (changeNames) {
+				stave = score.CreateInstrumentAtTopReturnStave(styleId, True, fn, sn);
+			} else {
+				stave = score.CreateInstrumentAtTopReturnStave(styleId);
+			}
+		}
+		if (pos = 'auto') {
+			if (changeNames) {
+				stave = score.CreateInstrumentReturnStave(styleId, True, fn, sn);
+			} else {
+				stave = score.CreateInstrumentReturnStave(styleId);
+			}
+		}
+		if (pos = 'bottom') {
+			if (changeNames) {
+				stave = score.CreateInstrumentAtBottomReturnStave(styleId, True, fn, sn);
+			} else {
+				stave = score.CreateInstrumentAtBottomReturnStave(styleId);
+			}
+		}
+		if (stave = null) {
+			return CreateDictionary('error', 'CreateInstrument failed for style ID: ' & styleId);
+		}
+		return CreateDictionary(
+			'staffNum', stave.StaffNum,
+			'instrumentName', stave.InstrumentName,
+			'fullInstrumentName', stave.FullInstrumentName,
+			'shortInstrumentName', stave.ShortInstrumentName,
+			'barCount', stave.BarCount,
+			'totalStaves', score.StaffCount);
+	}"
+
+	AddStaffToInstrument "(staffNum, above, ossia) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		isOssia = False;
+		if (ossia != null and ossia = True) {
+			isOssia = True;
+		}
+		stave = null;
+		if (above != null and above = True) {
+			stave = staff.AddStaffAbove(isOssia);
+		} else {
+			stave = staff.AddStaffBelow(isOssia);
+		}
+		if (stave = null) {
+			return CreateDictionary('error', 'AddStaff failed');
+		}
+		return CreateDictionary(
+			'staffNum', stave.StaffNum,
+			'instrumentName', stave.InstrumentName,
+			'barCount', stave.BarCount,
+			'totalStaves', score.StaffCount);
+	}"
+
+	AddBars "(count) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (count = null or count < 1) {
+			return CreateDictionary('error', 'count must be at least 1');
+		}
+		score.AddBars(count);
+		return CreateDictionary(
+			'addedBars', count,
+			'totalBars', score.SystemStaff.BarCount);
+	}"
+
+	AddNotes "(staffNum, barNumber, position, duration, pitches, voice, tied) {
 		score = RequireScore();
 		if (score = null) {
 			return CreateDictionary('error', 'no score open');
@@ -326,26 +426,105 @@
 		if (barNumber < 1 or barNumber > staff.BarCount) {
 			return CreateDictionary('error', 'barNumber out of range');
 		}
-		if (pitches.Length < 1) {
+		if (pitches = null or pitches.Length < 1) {
 			return CreateDictionary('error', 'pitches is empty');
+		}
+		v = 1;
+		if (voice != null and voice >= 1 and voice <= 4) {
+			v = voice;
+		}
+		isTied = False;
+		if (tied != null and tied = True) {
+			isTied = True;
 		}
 		bar = staff.NthBar(barNumber);
 		added = CreateSparseArray();
-		firstNote = bar.AddNote(position, pitches[0], duration, False, voice);
+		firstNote = bar.AddNote(position, pitches[0], duration, isTied, v);
 		if (firstNote = null) {
 			return CreateDictionary('error', 'AddNote failed');
 		}
-		added.Push(CreateDictionary('pitch', firstNote.Pitch, 'name', firstNote.Name));
+		added.Push(CreateDictionary('pitch', firstNote.Pitch, 'name', firstNote.Name, 'tied', firstNote.Tied));
 		noteRest = firstNote.ParentNoteRest;
-		for i = 1 to pitches.Length {
-			note = noteRest.AddNote(pitches[i]);
-			if (note != null) {
-				added.Push(CreateDictionary('pitch', note.Pitch, 'name', note.Name));
+		if (pitches.Length > 1) {
+			for i = 1 to pitches.Length {
+				note = noteRest.AddNote(pitches[i], isTied);
+				if (note != null) {
+					added.Push(CreateDictionary('pitch', note.Pitch, 'name', note.Name, 'tied', note.Tied));
+				}
 			}
 		}
 		return CreateDictionary(
 			'staff', staffNum, 'bar', barNumber, 'position', position,
-			'duration', duration, 'voice', voice, 'notes', added);
+			'duration', duration, 'voice', v, 'notes', added);
+	}"
+
+	AddNoteSequence "(staffNum, barNumber, startPosition, sequence, voice) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		if (barNumber < 1 or barNumber > staff.BarCount) {
+			return CreateDictionary('error', 'barNumber out of range');
+		}
+		if (sequence = null or sequence.Length < 1) {
+			return CreateDictionary('error', 'sequence is empty');
+		}
+		v = 1;
+		if (voice != null and voice >= 1 and voice <= 4) {
+			v = voice;
+		}
+		currBarNum = barNumber;
+		currPos = 0;
+		if (startPosition != null and startPosition >= 0) {
+			currPos = startPosition;
+		}
+		addedCount = 0;
+		for i = 0 to sequence.Length {
+			item = sequence[i];
+			dur = item['duration'];
+			itemPitches = item['pitches'];
+			itemTied = False;
+			if (item['tied'] != null and item['tied'] = True) {
+				itemTied = True;
+			}
+			if (item['bar'] != null) {
+				currBarNum = item['bar'];
+			}
+			if (item['position'] != null) {
+				currPos = item['position'];
+			}
+			if (currBarNum > staff.BarCount) {
+				i = sequence.Length + 1;
+			} else {
+				bar = staff.NthBar(currBarNum);
+				if (currPos >= bar.Length) {
+					currBarNum = currBarNum + 1;
+					currPos = 0;
+				}
+				if (currBarNum <= staff.BarCount) {
+					bar = staff.NthBar(currBarNum);
+					if (itemPitches != null and itemPitches.Length > 0) {
+						firstNote = bar.AddNote(currPos, itemPitches[0], dur, itemTied, v);
+						if (firstNote != null) {
+							addedCount = addedCount + 1;
+							noteRest = firstNote.ParentNoteRest;
+							if (itemPitches.Length > 1) {
+								for p = 1 to itemPitches.Length {
+									noteRest.AddNote(itemPitches[p], itemTied);
+								}
+							}
+						}
+					}
+					currPos = currPos + dur;
+				}
+			}
+		}
+		return CreateDictionary(
+			'staff', staffNum, 'startBar', barNumber, 'addedNotes', addedCount);
 	}"
 
 	AddLyric "(staffNum, barNumber, position, duration, text, syllableType) {
