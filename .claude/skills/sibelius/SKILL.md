@@ -42,13 +42,17 @@ reads/writes, to the bundled `sibwscli` ManuScript bridge plug-in.
 ## Command cheat sheet
 
 Reads: `score-info` (title/file/key/time sigs), `staves`, `selection`,
-`read --staff N --from A --to B` (notes with MIDI pitch/name/tie, lyrics with
-text, addressed by staff/bar/index), `read-lyrics [--staff N] [--bars A-B] [--words] [--verse N]` (0 = all;
+`read [--staff N] [--from A] [--to B] [--bars A-B] [--abc]` (notes with MIDI pitch/name/tie, lyrics with
+text, addressed by staff/bar/index; with `--abc` or `read-abc`, formats into compact, token-efficient ABC notation with aligned lyrics),
+`read-lyrics [--staff N] [--bars A-B] [--words] [--verse N]` (0 = all;
 `--words` formats into hyphenated words grouped by staff and verse/bar),
 `check-lyrics [--staff N] [--bars A-B] [--verse N]` (lints lyrics for horizontal/vertical collisions, missing vowels,
 cross-voice typos/divergence, and untexted passages with multi-verse awareness).
 
-Writes (auto-backup): `save` (save active score in Sibelius),
+Writes (auto-backup):
+- Score structure: `add-staff --instrument <name|styleId> [--position bottom|top|auto] [--full-name ...] [--save]`, `add-bars [--count N] [--save]`.
+- Music entry: `add-notes --staff N --bar B [--pos ticks] (--pitches <list> --dur <duration> | --notes <sequence>) [--voice 1-4] [--tied] [--save]`, `add-abc --staff N [--bar B] [--pos ticks] "<abc snippet>" [--save]` (inserts notes, rhythms, ties, and `w:` lyrics).
+- Score editing: `save` (save active score in Sibelius),
 `reset-design [--lyrics] [--save]` (clear formatting/font overrides),
 `set-lyric --staff --bar --index --text [--save]`,
 `transpose --from-note C --to-note D --up|--down [--from-bar --to-bar

@@ -68,10 +68,14 @@ class FakeSibelius:
                 await ws.send(json.dumps({"message": "invokeCommandsResponse", "result": True}))
             elif kind == "invokePlugin":
                 ok = msg.get("name") in session_plugins and msg.get("name") in self.installed_plugins
+                method = msg.get("method")
+                ret = {"echo": msg.get("args")}
+                if method == "GetBridgeVersion":
+                    ret = {"version": 9}
                 await ws.send(json.dumps({
                     "message": "invokePluginResponse",
                     "result": ok,
-                    "return_value": {"echo": msg.get("args")} if ok else "",
+                    "return_value": ret if ok else "",
                 }))
             else:
                 await ws.send(json.dumps({
@@ -349,5 +353,56 @@ def test_parser_new_subcommands_and_flags():
     # nudge with --save
     args = parser.parse_args(["nudge", "--staff", "1", "--bar", "1", "--index", "0", "--dx", "1", "--save"])
     assert args.save is True
+
+    # add-staff
+    args = parser.parse_args(["add-staff", "--instrument", "soprano", "--position", "bottom", "--save"])
+    assert args.subcommand == "add-staff"
+    assert args.instrument == "soprano"
+    assert args.position == "bottom"
+    assert args.save is True
+
+    # create-staff (alias)
+    args = parser.parse_args(["create-staff", "--instrument", "piano", "--position", "auto"])
+    assert args.subcommand == "create-staff"
+    assert args.instrument == "piano"
+    assert args.position == "auto"
+
+    # add-bars
+    args = parser.parse_args(["add-bars", "--count", "4", "--save"])
+    assert args.subcommand == "add-bars"
+    assert args.count == 4
+    assert args.save is True
+
+    # add-notes / add-note
+    args = parser.parse_args(["add-notes", "--staff", "1", "--bar", "2", "--pos", "256", "--pitch", "C4,E4,G4", "--dur", "half", "--save"])
+    assert args.subcommand == "add-notes"
+    assert args.staff == 1
+    assert args.bar == 2
+    assert args.pos == 256
+    assert args.pitches == "C4,E4,G4"
+    assert args.duration == "half"
+    assert args.save is True
+
+    args = parser.parse_args(["add-note", "--staff", "2", "--bar", "1", "--notes", "C4:quarter D4:quarter"])
+    assert args.subcommand == "add-note"
+    assert args.notes == "C4:quarter D4:quarter"
+
+    # add-abc
+    args = parser.parse_args(["add-abc", "--staff", "1", "--bar", "1", "C D E F | G4", "--save"])
+    assert args.subcommand == "add-abc"
+    assert args.staff == 1
+    assert args.bar == 1
+    assert args.abc == "C D E F | G4"
+    assert args.save is True
+
+    # read with --abc
+    args = parser.parse_args(["read", "--staff", "1", "--from", "1", "--to", "4", "--abc"])
+    assert args.subcommand == "read"
+    assert args.abc is True
+
+    # read-abc
+    args = parser.parse_args(["read-abc", "--staff", "1", "--bars", "1-4"])
+    assert args.subcommand == "read-abc"
+    assert args.bars == "1-4"
 
 
