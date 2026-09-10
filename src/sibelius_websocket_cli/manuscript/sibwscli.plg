@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 12);
+		return CreateDictionary('version', 14);
 	}"
 
 	Echo "(value) {
@@ -50,7 +50,10 @@
 			'staffCount', score.StaffCount,
 			'barCount', systemStaff.BarCount,
 			'keySignatures', keySignatures,
-			'timeSignatures', timeSignatures);
+			'timeSignatures', timeSignatures,
+			'mainTextFontName', score.MainTextFontName & '',
+			'mainMusicFontName', score.MainMusicFontName & '',
+			'musicTextFontName', score.MusicTextFontName & '');
 	}"
 
 	GetStaves "() {

@@ -489,7 +489,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 12
+CURRENT_BRIDGE_VERSION = 14
 
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
@@ -741,12 +741,18 @@ async def _run_check_lyrics(args: argparse.Namespace) -> int:
                 bars = await _bridge(client, "ReadBars", [s_num, start_b, end_b])
                 staff_bars[s_num] = bars
 
-        issues = lyrics.lint_lyrics(filtered_lyrics, names, staff_bars)
+        score_default_font = info.get("mainTextFontName")
+        typography = lyrics.analyze_lyric_typography(
+            filtered_lyrics, score_default_font=score_default_font, staff_names=names
+        )
+        issues = lyrics.lint_lyrics(
+            filtered_lyrics, names, staff_bars, score_default_font=score_default_font
+        )
 
     if args.json:
         print(json.dumps(issues, indent=2))
     else:
-        print(lyrics.format_lint_report(issues))
+        print(lyrics.format_lint_report(issues, typography=typography))
 
     has_errors = any(issue.get("severity") == "error" for issue in issues)
     return EXIT_COMMAND_FAILED if has_errors else EXIT_OK
@@ -763,19 +769,45 @@ async def _run_set_lyric(args: argparse.Namespace) -> int:
         try:
             async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
                 await _check_bridge_version(client)
-                raw = await _bridge(client, "ReadLyrics", [args.staff, args.bar, args.bar])
+                score_info = await _bridge(client, "GetScoreInfo")
+                score_default_font = score_info.get("mainTextFontName") if isinstance(score_info, dict) else None
+
+                # Read lyrics on this staff to find the predominant font across the part
+                staff_lyrics = await _bridge(client, "ReadLyrics", [args.staff, 0, 0])
+                typography = lyrics.analyze_lyric_typography(
+                    staff_lyrics, score_default_font=score_default_font
+                )
+                pred_font = typography.get("predominant_font") or score_default_font
+                pred_size = typography.get("predominant_size")
+
                 existing = next(
-                    (s for s in raw if s.get("bar") == args.bar and s.get("index") == args.index),
+                    (s for s in staff_lyrics if s.get("bar") == args.bar and s.get("index") == args.index),
                     None,
                 )
+                chosen_font = None
+                chosen_size = None
+
                 if existing:
-                    font, size = lyrics.extract_font_and_size(existing)
-                    if font:
-                        font_family = font
-                        if font == "BigCaslon-Medium":
-                            font_family = "Big Caslon"
-                        size_tag = f"\\s{size}\\" if size else ""
-                        text = f"\\f{font_family}\\{size_tag}{text}"
+                    existing_font, existing_size = lyrics.extract_font_and_size(existing)
+                    if existing_font and (not pred_font or existing_font == pred_font):
+                        chosen_font = existing_font
+                        chosen_size = existing_size
+                    elif pred_font:
+                        chosen_font = pred_font
+                        chosen_size = pred_size or existing_size
+                elif pred_font:
+                    chosen_font = pred_font
+                    chosen_size = pred_size
+
+                if not chosen_font and score_default_font:
+                    chosen_font = score_default_font
+
+                if chosen_font:
+                    font_family = chosen_font
+                    if font_family == "BigCaslon-Medium":
+                        font_family = "Big Caslon"
+                    size_tag = f"\\s{chosen_size}\\" if chosen_size else ""
+                    text = f"\\f{font_family}\\{size_tag}{text}"
         except Exception:
             pass
 

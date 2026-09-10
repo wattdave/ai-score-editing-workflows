@@ -71,7 +71,7 @@ class FakeSibelius:
                 method = msg.get("method")
                 ret = {"echo": msg.get("args")}
                 if method == "GetBridgeVersion":
-                    ret = {"version": 12}
+                    ret = {"version": 13}
                 await ws.send(json.dumps({
                     "message": "invokePluginResponse",
                     "result": ok,
@@ -447,6 +447,84 @@ def test_parser_new_subcommands_and_flags():
     assert args.index == 0
     assert args.style == "verse1"
     assert args.save is True
+
+
+async def test_run_set_lyric_adopts_predominant_font() -> None:
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from sibelius_websocket_cli.cli import _run_set_lyric, build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["set-lyric", "--staff", "1", "--bar", "2", "--index", "0", "--text", "hermosa"])
+
+    staff_lyrics = [
+        {"staff": 1, "bar": 1, "index": 0, "text": "\\fQuicksand\\s88\\One"},
+        {"staff": 1, "bar": 1, "index": 1, "text": "\\fQuicksand\\s88\\Two"},
+        {"staff": 1, "bar": 2, "index": 0, "text": "ermosa"},
+    ]
+
+    mock_client_ctx = MagicMock()
+    mock_client = AsyncMock()
+    mock_client_ctx.__aenter__.return_value = mock_client
+
+    with patch("sibelius_websocket_cli.cli._client", return_value=mock_client_ctx), \
+         patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()), \
+         patch("sibelius_websocket_cli.cli._bridge", new=AsyncMock(return_value=staff_lyrics)), \
+         patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=0)) as mock_write:
+
+        res = await _run_set_lyric(args)
+        assert res == 0
+        mock_write.assert_called_once_with(
+            args, "SetLyricText", [1, 2, 0, "\\fQuicksand\\\\s88\\hermosa"]
+        )
+
+
+async def test_run_set_lyric_adopts_predominant_font_when_existing_is_outlier() -> None:
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from sibelius_websocket_cli.cli import _run_set_lyric, build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["set-lyric", "--staff", "1", "--bar", "2", "--index", "0", "--text", "hermosa"])
+
+    staff_lyrics = [
+        {"staff": 1, "bar": 1, "index": 0, "text": "\\fQuicksand\\s88\\One"},
+        {"staff": 1, "bar": 1, "index": 1, "text": "\\fQuicksand\\s88\\Two"},
+        {"staff": 1, "bar": 1, "index": 2, "text": "\\fQuicksand\\s88\\Three"},
+        {"staff": 1, "bar": 2, "index": 0, "text": "\\fPlantin\\s88\\ermosa"},
+    ]
+
+    mock_client_ctx = MagicMock()
+    mock_client = AsyncMock()
+    mock_client_ctx.__aenter__.return_value = mock_client
+
+    with patch("sibelius_websocket_cli.cli._client", return_value=mock_client_ctx), \
+         patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()), \
+         patch("sibelius_websocket_cli.cli._bridge", new=AsyncMock(return_value=staff_lyrics)), \
+         patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=0)) as mock_write:
+
+        res = await _run_set_lyric(args)
+        assert res == 0
+        mock_write.assert_called_once_with(
+            args, "SetLyricText", [1, 2, 0, "\\fQuicksand\\\\s88\\hermosa"]
+        )
+
+
+async def test_run_set_lyric_explicit_font_overrides_predominant() -> None:
+    from unittest.mock import AsyncMock, patch
+    from sibelius_websocket_cli.cli import _run_set_lyric, build_parser
+
+    parser = build_parser()
+    args = parser.parse_args([
+        "set-lyric", "--staff", "1", "--bar", "2", "--index", "0", "--text", "hermosa",
+        "--font", "Garamond", "--font-size", "96",
+    ])
+
+    with patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=0)) as mock_write:
+        res = await _run_set_lyric(args)
+        assert res == 0
+        mock_write.assert_called_once_with(
+            args, "SetLyricText", [1, 2, 0, "\\fGaramond\\\\s96\\hermosa"]
+        )
+
 
 
 

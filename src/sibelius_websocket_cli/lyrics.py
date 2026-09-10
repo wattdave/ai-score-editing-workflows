@@ -206,7 +206,7 @@ def extract_font_and_size(syl: dict[str, Any]) -> tuple[str | None, int | None]:
     """Extract font name and point size (in 1/32 space units) from syllable metadata or styled text tags."""
     font = syl.get("initialFontName")
     size = syl.get("initialFontSize")
-    text = syl.get("text", "")
+    text = syl.get("textWithFormatting") or syl.get("text", "")
     if isinstance(text, str):
         f_match = re.search(r"\\f([^\\]+)\\", text)
         if f_match:
@@ -217,6 +217,110 @@ def extract_font_and_size(syl: dict[str, Any]) -> tuple[str | None, int | None]:
     f_clean = str(font).strip() if font and str(font).strip() and str(font).strip() != "null" else None
     s_val = int(size) if isinstance(size, int) and size > 0 else None
     return (f_clean, s_val)
+
+
+def analyze_lyric_typography(
+    lyrics: list[dict[str, Any]],
+    score_default_font: str | None = None,
+    staff_names: dict[int, str] | None = None,
+) -> dict[str, Any]:
+    """Analyze font families and sizes across lyrics, detecting predominant fonts and divergences from score defaults."""
+    names = staff_names or {}
+    font_records: list[tuple[dict[str, Any], str | None, int | None]] = []
+    font_counts: dict[str, int] = {}
+    size_counts: dict[int, int] = {}
+
+    for s in lyrics:
+        font, size = extract_font_and_size(s)
+        font_records.append((s, font, size))
+        if font:
+            font_counts[font] = font_counts.get(font, 0) + 1
+        if size:
+            size_counts[size] = size_counts.get(size, 0) + 1
+
+    total_syllables = len(lyrics)
+
+    predominant_font = max(font_counts.items(), key=lambda x: x[1])[0] if font_counts else None
+    predominant_font_count = font_counts.get(predominant_font, 0) if predominant_font else 0
+    predominant_font_pct = (predominant_font_count / total_syllables * 100.0) if total_syllables > 0 else 0.0
+
+    predominant_size = max(size_counts.items(), key=lambda x: x[1])[0] if size_counts else None
+    predominant_size_count = size_counts.get(predominant_size, 0) if predominant_size else 0
+    predominant_size_pct = (predominant_size_count / total_syllables * 100.0) if total_syllables > 0 else 0.0
+
+    clean_default = (
+        str(score_default_font).strip()
+        if score_default_font and str(score_default_font).strip() and str(score_default_font).strip() != "null"
+        else None
+    )
+
+    if not predominant_font and clean_default:
+        predominant_font = clean_default
+        predominant_font_count = total_syllables
+        predominant_font_pct = 100.0 if total_syllables > 0 else 0.0
+
+
+    has_divergence = False
+    divergence_msg = None
+    if clean_default and predominant_font and clean_default.lower() != predominant_font.lower():
+        has_divergence = True
+        divergence_msg = (
+            f"Score embedded default font is '{clean_default}', but existing lyrics predominantly "
+            f"use font '{predominant_font}' ({predominant_font_count}/{total_syllables} syllables, {predominant_font_pct:.0f}%). "
+            f"Adopt '{predominant_font}' for lyric corrections to minimize visual clash."
+        )
+
+    inconsistent_syllables: list[dict[str, Any]] = []
+    for s, font, size in font_records:
+        staff = s.get("staff", 1)
+        bar = s.get("bar", 1)
+        text = s.get("text", "")
+        s_name = names.get(staff, f"Staff {staff}")
+
+        if predominant_font and font and font != predominant_font:
+            inconsistent_syllables.append({
+                "type": "font_inconsistency",
+                "severity": "warning",
+                "bar": bar,
+                "staff": staff,
+                "text": text,
+                "font": font,
+                "expected_font": predominant_font,
+                "message": (
+                    f"Staff {staff} ({s_name}): Syllable {text!r} uses font '{font}', "
+                    f"differing from predominant font '{predominant_font}'"
+                ),
+            })
+        if predominant_size and size and size != predominant_size:
+            inconsistent_syllables.append({
+                "type": "font_size_inconsistency",
+                "severity": "warning",
+                "bar": bar,
+                "staff": staff,
+                "text": text,
+                "size": size,
+                "expected_size": predominant_size,
+                "message": (
+                    f"Staff {staff} ({s_name}): Syllable {text!r} uses font size {size} SUs, "
+                    f"differing from predominant size {predominant_size} SUs"
+                ),
+            })
+
+    return {
+        "total_syllables": total_syllables,
+        "score_default_font": clean_default,
+        "predominant_font": predominant_font,
+        "predominant_font_count": predominant_font_count,
+        "predominant_font_pct": predominant_font_pct,
+        "predominant_size": predominant_size,
+        "predominant_size_count": predominant_size_count,
+        "predominant_size_pct": predominant_size_pct,
+        "font_counts": font_counts,
+        "size_counts": size_counts,
+        "has_divergence_from_score_default": has_divergence,
+        "divergence_message": divergence_msg,
+        "inconsistent_syllables": inconsistent_syllables,
+    }
 
 
 def find_verse_style_jumps(
@@ -284,57 +388,30 @@ def find_verse_style_jumps(
 def find_typographical_inconsistencies(
     lyrics: list[dict[str, Any]],
     staff_names: dict[int, str] | None = None,
+    score_default_font: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Detect mismatched font families or sizes across score lyrics."""
+    """Detect mismatched font families or sizes across score lyrics and divergence from score defaults."""
+    analysis = analyze_lyric_typography(lyrics, score_default_font=score_default_font, staff_names=staff_names)
     issues: list[dict[str, Any]] = []
-    names = staff_names or {}
 
-    font_records: list[tuple[dict[str, Any], str | None, int | None]] = []
-    font_counts: dict[str, int] = {}
-    size_counts: dict[int, int] = {}
+    if analysis["has_divergence_from_score_default"] and analysis["divergence_message"]:
+        issues.append({
+            "type": "font_score_divergence",
+            "severity": "warning",
+            "bar": 1,
+            "message": analysis["divergence_message"],
+            "score_default_font": analysis["score_default_font"],
+            "predominant_font": analysis["predominant_font"],
+        })
 
-    for s in lyrics:
-        font, size = extract_font_and_size(s)
-        font_records.append((s, font, size))
-        if font:
-            font_counts[font] = font_counts.get(font, 0) + 1
-        if size:
-            size_counts[size] = size_counts.get(size, 0) + 1
-
-    if not font_counts and not size_counts:
-        return []
-
-    majority_font = max(font_counts.items(), key=lambda x: x[1])[0] if font_counts else None
-    majority_size = max(size_counts.items(), key=lambda x: x[1])[0] if size_counts else None
-
-    for s, font, size in font_records:
-        staff = s.get("staff", 1)
-        bar = s.get("bar", 1)
-        text = s.get("text", "")
-        s_name = names.get(staff, f"Staff {staff}")
-
-        if majority_font and font and font != majority_font:
-            issues.append({
-                "type": "font_inconsistency",
-                "severity": "warning",
-                "bar": bar,
-                "staff": staff,
-                "message": (
-                    f"Staff {staff} ({s_name}): Syllable {text!r} uses font '{font}', "
-                    f"differing from majority font '{majority_font}'"
-                ),
-            })
-        if majority_size and size and size != majority_size:
-            issues.append({
-                "type": "font_size_inconsistency",
-                "severity": "warning",
-                "bar": bar,
-                "staff": staff,
-                "message": (
-                    f"Staff {staff} ({s_name}): Syllable {text!r} uses font size {size} SUs, "
-                    f"differing from majority size {majority_size} SUs"
-                ),
-            })
+    for item in analysis["inconsistent_syllables"]:
+        issues.append({
+            "type": item["type"],
+            "severity": item["severity"],
+            "bar": item["bar"],
+            "staff": item["staff"],
+            "message": item["message"],
+        })
 
     return issues
 
@@ -343,6 +420,7 @@ def lint_lyrics(
     lyrics: list[dict[str, Any]],
     staff_names: dict[int, str] | None = None,
     staff_bars: dict[int, list[dict[str, Any]]] | None = None,
+    score_default_font: str | None = None,
 ) -> list[dict[str, Any]]:
     """Inspect lyrics for collisions, cross-voice typos, malformed syllables, and missing lyrics."""
     issues: list[dict[str, Any]] = []
@@ -616,7 +694,11 @@ def lint_lyrics(
     issues.extend(find_verse_style_jumps(annotated_lyrics, names))
 
     # 7. Check for typographical inconsistencies (font family & point size)
-    issues.extend(find_typographical_inconsistencies(annotated_lyrics, names))
+    issues.extend(
+        find_typographical_inconsistencies(
+            annotated_lyrics, names, score_default_font=score_default_font
+        )
+    )
 
     # Deduplicate issues by message
     unique_issues: list[dict[str, Any]] = []
@@ -630,12 +712,55 @@ def lint_lyrics(
     return sorted(unique_issues, key=lambda x: (x.get("bar", 0), x.get("type", "")))
 
 
-def format_lint_report(issues: list[dict[str, Any]]) -> str:
-    """Render lint issues as human-readable text."""
-    if not issues:
-        return "No lyric issues found. Score lyrics look clean!"
+def format_lint_report(
+    issues: list[dict[str, Any]],
+    typography: dict[str, Any] | None = None,
+) -> str:
+    """Render lint issues as human-readable text, including an up-front typography summary."""
+    lines: list[str] = []
 
-    lines: list[str] = [f"Found {len(issues)} lyric issue(s):\n"]
+    if typography and (typography.get("predominant_font") or typography.get("score_default_font")):
+        lines.append("=== Lyric Typography Analysis ===")
+        if typography.get("score_default_font"):
+            lines.append(f"  Score Default Font: {typography['score_default_font']}")
+        if typography.get("predominant_font"):
+            cnt = typography.get("predominant_font_count", 0)
+            tot = typography.get("total_syllables", 0)
+            pct = typography.get("predominant_font_pct", 0.0)
+            lines.append(
+                f"  Predominant Font:   {typography['predominant_font']} ({cnt}/{tot} syllables, {pct:.0f}%)"
+            )
+        if typography.get("predominant_size"):
+            lines.append(f"  Predominant Size:   {typography['predominant_size']} SUs")
+
+        if len(typography.get("font_counts", {})) > 1:
+            dist = ", ".join(
+                f"{f}: {c}"
+                for f, c in sorted(typography["font_counts"].items(), key=lambda x: -x[1])
+            )
+            lines.append(f"  Font Breakdown:     {dist}")
+
+        if typography.get("has_divergence_from_score_default"):
+            lines.append(
+                f"  Status:             Divergence detected — existing lyrics use '{typography['predominant_font']}' "
+                f"while score default is '{typography['score_default_font']}'."
+            )
+            lines.append(
+                f"  Guidance:           Adopt '{typography['predominant_font']}' for lyric patches to minimize visual differences."
+            )
+        elif typography.get("inconsistent_syllables"):
+            lines.append(
+                f"  Status:             {len(typography['inconsistent_syllables'])} syllable(s) differ from predominant typography."
+            )
+        else:
+            lines.append("  Status:             Consistent typography across lyrics.")
+        lines.append("=================================\n")
+
+    if not issues:
+        lines.append("No lyric issues found. Score lyrics look clean!")
+        return "\n".join(lines)
+
+    lines.append(f"Found {len(issues)} lyric issue(s):\n")
     for issue in issues:
         tag = issue.get("type", "issue").upper().replace("_", " ")
         bar = issue.get("bar", "?")

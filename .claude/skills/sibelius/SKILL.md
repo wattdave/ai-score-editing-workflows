@@ -74,11 +74,13 @@ bridge method via `plugin sibwscli <Method> --args '<json>'`.
 ## Task patterns
 
 **Lyric proofreading / spell-check:**
-1. Run `check-lyrics [--bars A-B]` to automatically detect horizontal/vertical collisions, missing vowels, cross-voice divergence, and untexted vocal passages across the score (with multi-verse awareness).
+1. Run `check-lyrics [--bars A-B]` to perform an up-front typography & proofreading analysis. It inspects the score's embedded default font against existing lyric typing, detects the predominant lyric font and size, reports any divergence between score defaults and actual typing, and flags collisions, missing vowels, and cross-voice divergence.
 2. If `note_lyric_collision` warnings appear, or for visual engraving checks, run `export --format png --out /tmp/check.png` to inspect the actual layout and verify clearances.
 3. Run `read-lyrics --words [--verse N] [--bars A-B]` to inspect the complete words grouped by staff and verse in a clean, human-readable format.
-4. For font or formatting resets, run `reset-design --lyrics [--save]` to strip legacy manual overrides.
-5. For specific text fixes, run `read-lyrics --staff N [--bars A-B]` to get exact syllable addresses (`staff`, `bar`, `index`, `position`, `text`). On approval, `set-lyric --staff S --bar B --index I --text "..." [--save]` per fix.
+4. Check font alignment:
+   - If `check-lyrics` shows a divergence between the score default font and the predominant lyric font (or outlier syllables), `set-lyric` automatically adopts the predominant existing lyric font and size to minimize visual disruption and prevent patchwork clashing.
+   - If the user wants to eliminate manual font overrides across the entire score and standardize on the score default, run `reset-design --lyrics [--save]`.
+5. For specific text fixes, run `read-lyrics --staff N [--bars A-B]` to get exact syllable addresses (`staff`, `bar`, `index`, `position`, `text`). On approval, `set-lyric --staff S --bar B --index I --text "..." [--save]` per fix (automatically adopts the predominant lyric font unless overridden with `--font` or `--raw`).
 6. For layout/collision fixes, use `nudge --staff S --bar B --index I --dy -32 [--save]` to adjust baselines.
 7. Save changes with `save` (or pass `--save` on mutating commands).
 8. Re-run `check-lyrics` or `read-lyrics --words` to verify. Addresses are only valid against the read they came from; re-read after every write.
@@ -120,7 +122,7 @@ Whenever exporting and visually inspecting score pages, always evaluate the foll
 
 - Formatting tokens use backslash syntax: `\f<FontFamily>\` (e.g. `\fBig Caslon\`) and `\s<32ndsOfSpace>\` (e.g. `\s88\`).
 - In Python code or CLI strings, `\f` is ASCII formfeed (`\x0c`). Always escape backslashes (`"\\fBig Caslon\\s88\\"` or `"\x5cfBig Caslon\x5c\x5cs88\x5c"`) to prevent corrupted byte encoding over WebSocket JSON.
-- `set-lyric` automatically preserves existing font family and size tags unless overridden via `--font`, `--font-size`, or `--raw`.
+- `set-lyric` automatically adopts the predominant lyric font family and size (or preserves existing consistent font tags) unless explicitly overridden via `--font`, `--font-size`, or `--raw`.
 
 ## Trust the local docs, not the Avid guide
 
