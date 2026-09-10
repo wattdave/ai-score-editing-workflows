@@ -730,8 +730,11 @@ def format_lint_report(
             lines.append(
                 f"  Predominant Font:   {typography['predominant_font']} ({cnt}/{tot} syllables, {pct:.0f}%)"
             )
-        if typography.get("predominant_size"):
-            lines.append(f"  Predominant Size:   {typography['predominant_size']} SUs")
+        pred_size_val = typography.get("predominant_size")
+        if pred_size_val:
+            lines.append(f"  Predominant Size:   {pred_size_val} SUs")
+        else:
+            lines.append("  Predominant Size:   Standard text style default (approx. 11pt / 88 SUs)")
 
         if len(typography.get("font_counts", {})) > 1:
             dist = ", ".join(
