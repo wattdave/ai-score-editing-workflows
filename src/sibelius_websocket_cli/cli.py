@@ -761,8 +761,8 @@ async def _run_check_lyrics(args: argparse.Namespace) -> int:
 async def _run_set_lyric(args: argparse.Namespace) -> int:
     text = args.text
     if getattr(args, "font", None):
-        size_tag = f"\\s{args.font_size}\\" if getattr(args, "font_size", None) else ""
-        text = f"\\f{args.font}\\{size_tag}{text}"
+        size = getattr(args, "font_size", None) or 110
+        text = f"\\f{args.font}\\\\s{size}\\{text}"
     elif getattr(args, "font_size", None):
         text = f"\\s{args.font_size}\\{text}"
     elif not getattr(args, "raw", False) and not text.startswith("\\f"):
@@ -777,8 +777,8 @@ async def _run_set_lyric(args: argparse.Namespace) -> int:
                 typography = lyrics.analyze_lyric_typography(
                     staff_lyrics, score_default_font=score_default_font
                 )
-                pred_font = typography.get("predominant_font") or score_default_font
-                pred_size = typography.get("predominant_size")
+                pred_font = typography.get("predominant_font") or score_default_font or "Times New Roman"
+                pred_size = typography.get("predominant_size") or 110
 
                 existing = next(
                     (s for s in staff_lyrics if s.get("bar") == args.bar and s.get("index") == args.index),
@@ -799,15 +799,12 @@ async def _run_set_lyric(args: argparse.Namespace) -> int:
                     chosen_font = pred_font
                     chosen_size = pred_size
 
-                if not chosen_font and score_default_font:
-                    chosen_font = score_default_font
+                effective_font = chosen_font or pred_font
+                if effective_font == "BigCaslon-Medium":
+                    effective_font = "Big Caslon"
+                effective_size = chosen_size or pred_size or 110
 
-                if chosen_font:
-                    font_family = chosen_font
-                    if font_family == "BigCaslon-Medium":
-                        font_family = "Big Caslon"
-                    size_tag = f"\\s{chosen_size}\\" if chosen_size else ""
-                    text = f"\\f{font_family}\\{size_tag}{text}"
+                text = f"\\f{effective_font}\\\\s{effective_size}\\{text}"
         except Exception:
             pass
 

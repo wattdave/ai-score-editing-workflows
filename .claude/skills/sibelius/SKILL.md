@@ -79,7 +79,7 @@ bridge method via `plugin sibwscli <Method> --args '<json>'`.
 3. Run `read-lyrics --words [--verse N] [--bars A-B]` to inspect the complete words grouped by staff and verse in a clean, human-readable format.
 4. Check font alignment:
    - If `check-lyrics` shows a divergence between the score default font and the predominant lyric font (or outlier syllables), `set-lyric` automatically adopts the predominant existing lyric font and size to minimize visual disruption and prevent patchwork clashing.
-   - If the user wants to eliminate manual font overrides across the entire score and standardize on the score default, run `reset-design --lyrics [--save]`.
+   - **CAUTION on `reset-design`:** In Sibelius, `reset_design` strips formatting overrides and reverts text objects to their underlying House Style definition. If the score template's text style defines `Lyrics line 1` as a sans-serif font (e.g. Quicksand) while lyrics were typed in a serif font (e.g. Times New Roman), running `reset-design` will wipe out all serif styling across the score. Never execute `reset-design` during automated proofreading unless explicitly instructed by the user to adopt the raw house style.
 5. For specific text fixes, run `read-lyrics --staff N [--bars A-B]` to get exact syllable addresses (`staff`, `bar`, `index`, `position`, `text`). On approval, `set-lyric --staff S --bar B --index I --text "..." [--save]` per fix (automatically adopts the predominant lyric font unless overridden with `--font` or `--raw`).
 6. For layout/collision fixes, use `nudge --staff S --bar B --index I --dy -32 [--save]` to adjust baselines.
 7. Save changes with `save` (or pass `--save` on mutating commands).
@@ -114,15 +114,16 @@ re-render between each.
 
 Whenever exporting and visually inspecting score pages, always evaluate the following 4 engraving criteria:
 1. **Baseline continuity**: Ensure lyric baselines remain level within each system and across phrase boundaries. Look for unprompted `verse1` $\leftrightarrow$ `verse2` style hopping where a voice steps up or down mid-phrase. When a refrain/chorus is sung in unison, all voices should share `verse1` (`line 1`). Use `set-lyric-style --staff S --bar B --index I --style verse1` to unify lines.
-2. **Typographical uniformity**: Verify font family and point size remain uniform across all lyrics. Syllables must not revert to default application sans-serif fonts when the score uses serif. When writing styled strings in ManuScript, preserve or specify `\f<FontName>\s<Units>\` (e.g. `\fBig Caslon\s88\`).
+2. **Typographical uniformity**: Verify font family and point size remain uniform across all lyrics. Syllables must not revert to default application sans-serif fonts when the score uses serif. When writing styled strings in ManuScript, preserve or specify `\f<FontName>\\s<TenthsOfPoint>\` (e.g. `\fTimes New Roman\\s110\`).
 3. **Phrase-aware system breaks**: Place system and page breaks at musical phrase endings and rests, not across tied notes or mid-pickup. Placing a break across a tied note forces an extender line (`—`) to start the new system, which displaces subsequent pickup syllables down to a lower tier.
 4. **Extender line clearance**: Check tied notes across barlines to verify that lyric extender lines do not collide with or displace subsequent pickup lyrics.
 
 ### ManuScript Styled-String Formatting Rules
 
-- Formatting tokens use backslash syntax: `\f<FontFamily>\` (e.g. `\fBig Caslon\`) and `\s<32ndsOfSpace>\` (e.g. `\s88\`).
-- In Python code or CLI strings, `\f` is ASCII formfeed (`\x0c`). Always escape backslashes (`"\\fBig Caslon\\s88\\"` or `"\x5cfBig Caslon\x5c\x5cs88\x5c"`) to prevent corrupted byte encoding over WebSocket JSON.
-- `set-lyric` automatically adopts the predominant lyric font family and size (or preserves existing consistent font tags) unless explicitly overridden via `--font`, `--font-size`, or `--raw`.
+- Formatting tokens use backslash syntax: `\f<FontFamily>\` (e.g. `\fTimes New Roman\`) and `\s<TenthsOfPoint>\` (e.g. `\s110\` = 11.0 pt, `\s80\` = 8.0 pt; the argument is in tenths of a point, NOT 1/32 space units).
+- Each formatting token is enclosed in backslashes. When combining multiple commands, concatenate them with double backslashes between them: `\f<FontName>\\s<TenthsOfPoint>\` (e.g. `\fTimes New Roman\\s110\text`). A single backslash (e.g. `\fFont\s110\text`) causes Sibelius to parse `s110\text` as literal unformatted text.
+- In Python code or CLI strings, `\f` is ASCII formfeed (`\x0c`). Always escape backslashes (`"\\fTimes New Roman\\\\s110\\"` or `"\x5cfTimes New Roman\x5c\x5cs110\x5c"`) to prevent corrupted byte encoding over WebSocket JSON.
+- `set-lyric` automatically adopts the predominant lyric font family and size (defaulting to the score default font and standard 11.0 pt / `\s110\` when syllables are unstyled) unless explicitly overridden via `--font`, `--font-size`, or `--raw`.
 
 ## Trust the local docs, not the Avid guide
 

@@ -526,6 +526,39 @@ async def test_run_set_lyric_explicit_font_overrides_predominant() -> None:
         )
 
 
+async def test_run_set_lyric_adopts_score_default_font_and_size_when_unstyled() -> None:
+    from unittest.mock import AsyncMock, MagicMock, patch
+    from sibelius_websocket_cli.cli import _run_set_lyric, build_parser
 
+    parser = build_parser()
+    args = parser.parse_args(["set-lyric", "--staff", "1", "--bar", "2", "--index", "0", "--text", "hermosa"])
 
+    score_info = {"mainTextFontName": "Times New Roman"}
+    staff_lyrics = [
+        {"staff": 1, "bar": 1, "index": 0, "text": "One"},
+        {"staff": 1, "bar": 1, "index": 1, "text": "Two"},
+        {"staff": 1, "bar": 2, "index": 0, "text": "ermosa"},
+    ]
 
+    mock_client_ctx = MagicMock()
+    mock_client = AsyncMock()
+    mock_client_ctx.__aenter__.return_value = mock_client
+
+    async def bridge_side_effect(client: Any, method: str, args: list[Any] | None = None) -> Any:
+        if method == "GetScoreInfo":
+            return score_info
+        if method == "ReadLyrics":
+            return staff_lyrics
+        return None
+
+    with patch("sibelius_websocket_cli.cli._client", return_value=mock_client_ctx), \
+         patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()), \
+         patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge_side_effect), \
+         patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=0)) as mock_write:
+
+        res = await _run_set_lyric(args)
+        assert res == 0
+        # When unstyled, adopts score default font (Times New Roman) and standard 11pt size (110 tenths of a pt)
+        mock_write.assert_called_once_with(
+            args, "SetLyricText", [1, 2, 0, "\\fTimes New Roman\\\\s110\\hermosa"]
+        )
