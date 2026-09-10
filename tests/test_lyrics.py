@@ -1,6 +1,7 @@
 """Unit tests for the lyrics processing and linting module."""
 
 from sibelius_websocket_cli.lyrics import (
+    analyze_lyric_typography,
     assemble_bar_words,
     extract_font_and_size,
     filter_lyrics,
@@ -270,6 +271,83 @@ def test_extract_font_and_size():
     font, size = extract_font_and_size(syl2)
     assert font == "BigCaslon-Medium"
     assert size == 88
+
+    # Syllable with textWithFormatting overriding plain text
+    syl3 = {
+        "text": "World",
+        "textWithFormatting": "\\fQuicksand\\s88\\World",
+    }
+    font, size = extract_font_and_size(syl3)
+    assert font == "Quicksand"
+    assert size == 88
+
+
+def test_analyze_lyric_typography_uniform():
+    lyrics = [
+        {"staff": 1, "bar": 1, "position": 0, "text": "\\fQuicksand\\s88\\One"},
+        {"staff": 1, "bar": 1, "position": 256, "text": "\\fQuicksand\\s88\\Two"},
+    ]
+    typo = analyze_lyric_typography(lyrics, score_default_font="Quicksand")
+    assert typo["total_syllables"] == 2
+    assert typo["predominant_font"] == "Quicksand"
+    assert typo["predominant_size"] == 88
+    assert typo["predominant_font_count"] == 2
+    assert typo["predominant_font_pct"] == 100.0
+    assert typo["has_divergence_from_score_default"] is False
+    assert typo["inconsistent_syllables"] == []
+
+
+def test_analyze_lyric_typography_divergence_from_score_default():
+    lyrics = [
+        {"staff": 1, "bar": 1, "position": 0, "text": "\\fQuicksand\\s88\\One"},
+        {"staff": 1, "bar": 1, "position": 256, "text": "\\fQuicksand\\s88\\Two"},
+        {"staff": 1, "bar": 1, "position": 512, "text": "\\fQuicksand\\s88\\Three"},
+        {"staff": 1, "bar": 2, "position": 0, "text": "\\fPlantin\\s88\\Four"},
+    ]
+    typo = analyze_lyric_typography(lyrics, score_default_font="Plantin")
+    assert typo["predominant_font"] == "Quicksand"
+    assert typo["predominant_font_count"] == 3
+    assert typo["has_divergence_from_score_default"] is True
+    assert "Quicksand" in typo["divergence_message"]
+    assert "Plantin" in typo["divergence_message"]
+    assert len(typo["inconsistent_syllables"]) == 1
+    assert typo["inconsistent_syllables"][0]["font"] == "Plantin"
+
+
+def test_find_typographical_inconsistencies_with_score_default():
+    lyrics = [
+        {"staff": 1, "bar": 1, "position": 0, "text": "\\fQuicksand\\s88\\One"},
+        {"staff": 1, "bar": 1, "position": 256, "text": "\\fQuicksand\\s88\\Two"},
+    ]
+    issues = find_typographical_inconsistencies(
+        lyrics, staff_names={1: "Soprano"}, score_default_font="Plantin"
+    )
+    assert len(issues) == 1
+    assert issues[0]["type"] == "font_score_divergence"
+    assert "Plantin" in issues[0]["message"]
+    assert "Quicksand" in issues[0]["message"]
+
+
+def test_format_lint_report_with_typography():
+    typo = {
+        "score_default_font": "Plantin",
+        "predominant_font": "Quicksand",
+        "predominant_font_count": 45,
+        "total_syllables": 48,
+        "predominant_font_pct": 93.75,
+        "predominant_size": 88,
+        "font_counts": {"Quicksand": 45, "Plantin": 3},
+        "has_divergence_from_score_default": True,
+    }
+    report = format_lint_report([], typography=typo)
+    assert "=== Lyric Typography Analysis ===" in report
+    assert "Score Default Font: Plantin" in report
+    assert "Predominant Font:   Quicksand (45/48 syllables, 94%)" in report
+    assert "Predominant Size:   88 SUs" in report
+    assert "Divergence detected" in report
+    assert "Adopt 'Quicksand'" in report
+    assert "No lyric issues found" in report
+
 
 
 
