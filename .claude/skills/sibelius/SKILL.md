@@ -50,7 +50,7 @@ text, addressed by staff/bar/index; with `--abc` or `read-abc`, formats into com
 cross-voice typos/divergence, and untexted passages with multi-verse awareness).
 
 Writes (auto-backup):
-- Score structure: `add-staff --instrument <name|styleId> [--position bottom|top|auto] [--full-name ...] [--save]`, `add-bars [--count N] [--save]`.
+- Score structure: `add-staff --instrument <name|styleId> [--position bottom|top|auto] [--full-name ...] [--save]`, `add-bars [--count N] [--save]`, `set-staff-name --staff N [--full <name>] [--short <name>] [--save]`, `set-score-info [--title <text>] [--composer <text>] [--lyricist <text>] [--save]`, `set-break --bar N --type system|page|none [--save]`.
 - Music entry: `add-notes --staff N --bar B [--pos ticks] (--pitches <list> --dur <duration> | --notes <sequence>) [--voice 1-4] [--tied] [--save]`, `add-abc --staff N [--bar B] [--pos ticks] "<abc snippet>" [--save]` (inserts notes, rhythms, ties, and `w:` lyrics).
 - Score editing: `save` (save active score in Sibelius),
 `reset-design [--lyrics] [--save]` (clear formatting/font overrides),
@@ -108,6 +108,20 @@ lyrics — nudging one syllable often just moves the collision; free space on
 both sides); `flip-stem` for stem direction. Iterate in small steps and
 re-render between each.
 
+### Engraving & Typography Visual Checklist (4-Point Review)
+
+Whenever exporting and visually inspecting score pages, always evaluate the following 4 engraving criteria:
+1. **Baseline continuity**: Ensure lyric baselines remain level within each system and across phrase boundaries. Look for unprompted `verse1` $\leftrightarrow$ `verse2` style hopping where a voice steps up or down mid-phrase. When a refrain/chorus is sung in unison, all voices should share `verse1` (`line 1`). Use `set-lyric-style --staff S --bar B --index I --style verse1` to unify lines.
+2. **Typographical uniformity**: Verify font family and point size remain uniform across all lyrics. Syllables must not revert to default application sans-serif fonts when the score uses serif. When writing styled strings in ManuScript, preserve or specify `\f<FontName>\s<Units>\` (e.g. `\fBig Caslon\s88\`).
+3. **Phrase-aware system breaks**: Place system and page breaks at musical phrase endings and rests, not across tied notes or mid-pickup. Placing a break across a tied note forces an extender line (`—`) to start the new system, which displaces subsequent pickup syllables down to a lower tier.
+4. **Extender line clearance**: Check tied notes across barlines to verify that lyric extender lines do not collide with or displace subsequent pickup lyrics.
+
+### ManuScript Styled-String Formatting Rules
+
+- Formatting tokens use backslash syntax: `\f<FontFamily>\` (e.g. `\fBig Caslon\`) and `\s<32ndsOfSpace>\` (e.g. `\s88\`).
+- In Python code or CLI strings, `\f` is ASCII formfeed (`\x0c`). Always escape backslashes (`"\\fBig Caslon\\s88\\"` or `"\x5cfBig Caslon\x5c\x5cs88\x5c"`) to prevent corrupted byte encoding over WebSocket JSON.
+- `set-lyric` automatically preserves existing font family and size tags unless overridden via `--font`, `--font-size`, or `--raw`.
+
 ## Trust the local docs, not the Avid guide
 
 The ManuScript Language Guide has proven wrong in specifics (documented
@@ -115,3 +129,4 @@ The ManuScript Language Guide has proven wrong in specifics (documented
 Ground any new bridge work in `docs/manuscript-object-tree.md`,
 `docs/manuscript-constants.md`, `docs/commands.md`, and `SPEC.md`, and
 live-probe on a scratch copy of the score before touching real music.
+

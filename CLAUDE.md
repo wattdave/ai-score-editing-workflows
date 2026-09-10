@@ -36,3 +36,9 @@ python3 scripts/sync_skills.py --check # verify all harnesses are in sync
 - Tests: `tests/` (`test_client.py`, `test_launcher.py`, `test_lyrics.py`, `test_skills_sync.py`)
 - Skills: `.claude/skills/sibelius/SKILL.md` (synced to `.agents/skills/` and `.cursor/rules/`)
 
+## Script Execution Rules
+
+- **Always use quoted heredocs (`<< 'EOF'`):** Never execute inline scripts via `-c '...'` or nested command-line string arguments (such as `python3 -c '...'` or `osascript -e '...'`).
+- Multi-line scripts must ALWAYS use quoted heredocs (`python3 << 'EOF'`, `osascript << 'EOF'`) or be written to a temporary scratch file. Quoting the delimiter (`'EOF'`) ensures single and double quotes inside the script are never mangled by the shell.
+
+
