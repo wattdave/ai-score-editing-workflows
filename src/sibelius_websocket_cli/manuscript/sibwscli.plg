@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 9);
+		return CreateDictionary('version', 12);
 	}"
 
 	Echo "(value) {
@@ -109,10 +109,6 @@
 			if (obj.SyllableType = MiddleOfWord) {
 				syllableType = 'middle';
 			}
-			lineNum = 1;
-			if (obj.LineNumber != null and obj.LineNumber > 0) {
-				lineNum = obj.LineNumber;
-			}
 			return CreateDictionary(
 				'index', index,
 				'type', obj.Type,
@@ -121,7 +117,7 @@
 				'text', obj.Text,
 				'syllableType', syllableType,
 				'styleId', '' & obj.StyleId,
-				'line', lineNum);
+				'styleAsText', '' & obj.StyleAsText);
 		}
 		if (obj.Type = 'KeySignature') {
 			return CreateDictionary(
@@ -201,19 +197,16 @@
 						if (obj.SyllableType = MiddleOfWord) {
 							syllableType = 'middle';
 						}
-						lineNum = 1;
-						if (obj.LineNumber != null and obj.LineNumber > 0) {
-							lineNum = obj.LineNumber;
-						}
 						lyrics.Push(CreateDictionary(
 							'staff', s,
 							'bar', barNum,
 							'index', index,
 							'position', obj.Position,
+							'voice', obj.VoiceNumber,
 							'text', obj.Text,
 							'syllableType', syllableType,
 							'styleId', '' & obj.StyleId,
-							'line', lineNum));
+							'styleAsText', '' & obj.StyleAsText));
 					}
 					index = index + 1;
 				}
@@ -731,4 +724,118 @@
 		score.Save(fileName);
 		return CreateDictionary('fileName', fileName);
 	}"
+
+	SetStaffName "(staffNum, fullName, shortName) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		if (fullName != null and fullName != '') {
+			staff.FullInstrumentName = '' & fullName;
+			staff.FullStaffName = '' & fullName;
+		}
+		if (shortName != null and shortName != '') {
+			staff.ShortInstrumentName = '' & shortName;
+			staff.ShortStaffName = '' & shortName;
+		}
+		return CreateDictionary(
+			'staffNum', staffNum,
+			'fullInstrumentName', staff.FullInstrumentName,
+			'shortInstrumentName', staff.ShortInstrumentName);
+	}"
+
+	SetScoreInfo "(title, composer, lyricist) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (title != null and title != '') {
+			score.Title = '' & title;
+		}
+		if (composer != null and composer != '') {
+			score.Composer = '' & composer;
+		}
+		if (lyricist != null and lyricist != '') {
+			score.Lyricist = '' & lyricist;
+		}
+		return CreateDictionary(
+			'title', score.Title,
+			'composer', score.Composer,
+			'lyricist', score.Lyricist);
+	}"
+
+	SetBarBreak "(barNum, breakType) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		systemStaff = score.SystemStaff;
+		if (barNum < 1 or barNum > systemStaff.BarCount) {
+			return CreateDictionary('error', 'barNum out of range');
+		}
+		bar = systemStaff.NthBar(barNum);
+		bType = MiddleOfSystem;
+		if (breakType = 'system' or breakType = 'EndOfSystemOrPage' or breakType = 6) {
+			bType = EndOfSystemOrPage;
+		}
+		if (breakType = 'page' or breakType = 'EndOfPage' or breakType = 4) {
+			bType = EndOfPage;
+		}
+		bar.BreakType = bType;
+		return CreateDictionary(
+			'bar', barNum,
+			'breakType', '' & bar.BreakType);
+	}"
+
+	SetLyricStyle "(staffNum, barNumber, index, styleId) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		obj = GetObjectAt(staffNum, barNumber, index);
+		if (obj = null) {
+			return CreateDictionary('error', 'no object at that address');
+		}
+		if (obj.Type != 'LyricItem') {
+			return CreateDictionary('error', 'object at address is a ' & obj.Type & ', not a LyricItem');
+		}
+		oldStyleId = '' & obj.StyleId;
+		targetStyleId = '' & styleId;
+		if (styleId = 'verse1' or styleId = 'line1' or styleId = 1) {
+			targetStyleId = 'text.staff.space.hypen.lyrics.verse1';
+		}
+		if (styleId = 'verse2' or styleId = 'line2' or styleId = 2) {
+			targetStyleId = 'text.staff.space.hypen.lyrics.verse2';
+		}
+		if (styleId = 'verse3' or styleId = 'line3' or styleId = 3) {
+			targetStyleId = 'text.staff.space.hypen.lyrics.verse3';
+		}
+		if (styleId = 'verse4' or styleId = 'line4' or styleId = 4) {
+			targetStyleId = 'text.staff.space.hypen.lyrics.verse4';
+		}
+		if (styleId = 'verse5' or styleId = 'line5' or styleId = 5) {
+			targetStyleId = 'text.staff.space.hypen.lyrics.verse5';
+		}
+		if (styleId = 'chorus') {
+			targetStyleId = 'text.staff.space.hypen.lyrics.chorus';
+		}
+		if (styleId = 'above') {
+			targetStyleId = 'text.staff.space.hypen.lyrics.above';
+		}
+		obj.StyleId = targetStyleId;
+		return CreateDictionary(
+			'staff', staffNum,
+			'bar', barNumber,
+			'index', index,
+			'oldStyleId', oldStyleId,
+			'newStyleId', '' & obj.StyleId);
+	}"
 }
+

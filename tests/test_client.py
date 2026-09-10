@@ -71,7 +71,7 @@ class FakeSibelius:
                 method = msg.get("method")
                 ret = {"echo": msg.get("args")}
                 if method == "GetBridgeVersion":
-                    ret = {"version": 9}
+                    ret = {"version": 12}
                 await ws.send(json.dumps({
                     "message": "invokePluginResponse",
                     "result": ok,
@@ -404,5 +404,50 @@ def test_parser_new_subcommands_and_flags():
     args = parser.parse_args(["read-abc", "--staff", "1", "--bars", "1-4"])
     assert args.subcommand == "read-abc"
     assert args.bars == "1-4"
+
+    # set-staff-name
+    args = parser.parse_args(["set-staff-name", "--staff", "1", "--full", "Soprano", "--short", "S.", "--save"])
+    assert args.subcommand == "set-staff-name"
+    assert args.staff == 1
+    assert args.full == "Soprano"
+    assert args.short == "S."
+    assert args.save is True
+
+    # set-score-info
+    args = parser.parse_args(["set-score-info", "--title", "Hallelujah", "--composer", "William Walker", "--save"])
+    assert args.subcommand == "set-score-info"
+    assert args.title == "Hallelujah"
+    assert args.composer == "William Walker"
+    assert args.save is True
+
+    # set-break
+    args = parser.parse_args(["set-break", "--bar", "5", "--type", "system", "--save"])
+    assert args.subcommand == "set-break"
+    assert args.bar == 5
+    assert args.type == "system"
+    assert args.save is True
+
+    # set-lyric font options
+    args = parser.parse_args([
+        "set-lyric", "--staff", "1", "--bar", "12", "--index", "6", "--text", "When",
+        "--font", "Big Caslon", "--font-size", "88", "--save",
+    ])
+    assert args.subcommand == "set-lyric"
+    assert args.font == "Big Caslon"
+    assert args.font_size == 88
+    assert args.save is True
+
+    # set-lyric-style
+    args = parser.parse_args([
+        "set-lyric-style", "--staff", "2", "--bar", "20", "--index", "0", "--style", "verse1", "--save",
+    ])
+    assert args.subcommand == "set-lyric-style"
+    assert args.staff == 2
+    assert args.bar == 20
+    assert args.index == 0
+    assert args.style == "verse1"
+    assert args.save is True
+
+
 
 

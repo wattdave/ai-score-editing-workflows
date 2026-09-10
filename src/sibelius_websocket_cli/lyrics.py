@@ -19,7 +19,7 @@ def get_syllable_line(syl: dict[str, Any], default: int = 1) -> int:
             pass
     style_id = syl.get("styleId") or syl.get("style", "")
     if isinstance(style_id, str):
-        match = re.search(r"line(\d+)", style_id, re.IGNORECASE)
+        match = re.search(r"(?:line|verse)(\d+)", style_id, re.IGNORECASE)
         if match:
             return int(match.group(1))
     return default
@@ -44,7 +44,7 @@ def infer_syllable_lines(lyrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for staff, staff_syls in by_staff.items():
         explicit = any(
             ("line" in s and s["line"] is not None)
-            or bool(re.search(r"line(\d+)", str(s.get("styleId", "")), re.I))
+            or bool(re.search(r"(?:line|verse)(\d+)", str(s.get("styleId", "")), re.I))
             for s in staff_syls
         )
 
@@ -200,6 +200,143 @@ def _edit_distance(s1: str, s2: str) -> int:
             current_row.append(min(insertions, deletions, substitutions))
         previous_row = current_row
     return previous_row[-1]
+
+
+def extract_font_and_size(syl: dict[str, Any]) -> tuple[str | None, int | None]:
+    """Extract font name and point size (in 1/32 space units) from syllable metadata or styled text tags."""
+    font = syl.get("initialFontName")
+    size = syl.get("initialFontSize")
+    text = syl.get("text", "")
+    if isinstance(text, str):
+        f_match = re.search(r"\\f([^\\]+)\\", text)
+        if f_match:
+            font = f_match.group(1).strip()
+        s_match = re.search(r"\\s(\d+)\\", text)
+        if s_match:
+            size = int(s_match.group(1))
+    f_clean = str(font).strip() if font and str(font).strip() and str(font).strip() != "null" else None
+    s_val = int(size) if isinstance(size, int) and size > 0 else None
+    return (f_clean, s_val)
+
+
+def find_verse_style_jumps(
+    lyrics: list[dict[str, Any]],
+    staff_names: dict[int, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Detect unprompted mid-phrase jumps between lyric lines/verses on a single vocal voice."""
+    issues: list[dict[str, Any]] = []
+    names = staff_names or {}
+
+    annotated = infer_syllable_lines(lyrics)
+    by_staff_voice: dict[tuple[int, int], list[dict[str, Any]]] = {}
+    for s in annotated:
+        key = (s.get("staff", 1), s.get("voice", 1))
+        by_staff_voice.setdefault(key, []).append(s)
+
+    for (staff, voice), syls in by_staff_voice.items():
+        s_name = names.get(staff, f"Staff {staff}")
+        sorted_syls = sorted(
+            syls,
+            key=lambda s: (s.get("bar", 1), s.get("position", 0), s.get("index", 0)),
+        )
+        if len(sorted_syls) < 2:
+            continue
+
+        pos_counts: dict[tuple[int, int], set[int]] = {}
+        for s in sorted_syls:
+            pos_counts.setdefault((s.get("bar", 1), s.get("position", 0)), set()).add(s.get("line", 1))
+
+        for i in range(len(sorted_syls) - 1):
+            cur = sorted_syls[i]
+            nxt = sorted_syls[i + 1]
+
+            cur_pos_key = (cur.get("bar", 1), cur.get("position", 0))
+            nxt_pos_key = (nxt.get("bar", 1), nxt.get("position", 0))
+
+            if len(pos_counts.get(cur_pos_key, set())) > 1 or len(pos_counts.get(nxt_pos_key, set())) > 1:
+                continue
+
+            cur_line = cur.get("line", 1)
+            nxt_line = nxt.get("line", 1)
+
+            if cur_line != nxt_line:
+                bar_diff = nxt.get("bar", 1) - cur.get("bar", 1)
+                if 0 <= bar_diff <= 1:
+                    cur_text = cur.get("text", "")
+                    nxt_text = nxt.get("text", "")
+                    nxt_bar = nxt.get("bar", 1)
+                    issues.append({
+                        "type": "verse_style_jump",
+                        "severity": "warning",
+                        "bar": nxt_bar,
+                        "staff": staff,
+                        "voice": voice,
+                        "message": (
+                            f"Staff {staff} ({s_name}): Lyric baseline step between Bar {cur.get('bar', 1)} "
+                            f"and Bar {nxt_bar}: syllable {nxt_text!r} is on Line {nxt_line}, but preceding "
+                            f"syllable {cur_text!r} is on Line {cur_line}"
+                        ),
+                    })
+
+    return issues
+
+
+def find_typographical_inconsistencies(
+    lyrics: list[dict[str, Any]],
+    staff_names: dict[int, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Detect mismatched font families or sizes across score lyrics."""
+    issues: list[dict[str, Any]] = []
+    names = staff_names or {}
+
+    font_records: list[tuple[dict[str, Any], str | None, int | None]] = []
+    font_counts: dict[str, int] = {}
+    size_counts: dict[int, int] = {}
+
+    for s in lyrics:
+        font, size = extract_font_and_size(s)
+        font_records.append((s, font, size))
+        if font:
+            font_counts[font] = font_counts.get(font, 0) + 1
+        if size:
+            size_counts[size] = size_counts.get(size, 0) + 1
+
+    if not font_counts and not size_counts:
+        return []
+
+    majority_font = max(font_counts.items(), key=lambda x: x[1])[0] if font_counts else None
+    majority_size = max(size_counts.items(), key=lambda x: x[1])[0] if size_counts else None
+
+    for s, font, size in font_records:
+        staff = s.get("staff", 1)
+        bar = s.get("bar", 1)
+        text = s.get("text", "")
+        s_name = names.get(staff, f"Staff {staff}")
+
+        if majority_font and font and font != majority_font:
+            issues.append({
+                "type": "font_inconsistency",
+                "severity": "warning",
+                "bar": bar,
+                "staff": staff,
+                "message": (
+                    f"Staff {staff} ({s_name}): Syllable {text!r} uses font '{font}', "
+                    f"differing from majority font '{majority_font}'"
+                ),
+            })
+        if majority_size and size and size != majority_size:
+            issues.append({
+                "type": "font_size_inconsistency",
+                "severity": "warning",
+                "bar": bar,
+                "staff": staff,
+                "message": (
+                    f"Staff {staff} ({s_name}): Syllable {text!r} uses font size {size} SUs, "
+                    f"differing from majority size {majority_size} SUs"
+                ),
+            })
+
+    return issues
 
 
 def lint_lyrics(
@@ -474,6 +611,12 @@ def lint_lyrics(
                             f"carrying lyrics ({syl_texts_str}) — potential vertical collision"
                         ),
                     })
+
+    # 6. Check for unprompted verse/line baseline jumps
+    issues.extend(find_verse_style_jumps(annotated_lyrics, names))
+
+    # 7. Check for typographical inconsistencies (font family & point size)
+    issues.extend(find_typographical_inconsistencies(annotated_lyrics, names))
 
     # Deduplicate issues by message
     unique_issues: list[dict[str, Any]] = []

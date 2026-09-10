@@ -2,7 +2,10 @@
 
 from sibelius_websocket_cli.lyrics import (
     assemble_bar_words,
+    extract_font_and_size,
     filter_lyrics,
+    find_typographical_inconsistencies,
+    find_verse_style_jumps,
     format_lint_report,
     format_lyrics,
     format_lyrics_by_bar,
@@ -204,5 +207,69 @@ def test_lint_multi_verse_real_collision():
     collisions = [i for i in issues if i["type"] == "position_collision"]
     assert len(collisions) == 1
     assert "Line 1" in collisions[0]["message"]
+
+
+def test_find_verse_style_jumps_detected():
+    # Syllables jump from line 2 to line 1 mid-phrase
+    lyrics = [
+        {"staff": 1, "voice": 1, "bar": 20, "position": 0, "text": "I'll", "styleId": "text.staff.space.hypen.lyrics.verse2"},
+        {"staff": 1, "voice": 1, "bar": 20, "position": 512, "text": "sing", "styleId": "text.staff.space.hypen.lyrics.verse2"},
+        {"staff": 1, "voice": 1, "bar": 21, "position": 768, "text": "jah!", "styleId": "text.staff.space.hypen.lyrics.verse2"},
+        {"staff": 1, "voice": 1, "bar": 21, "position": 1280, "text": "And", "styleId": "text.staff.space.hypen.lyrics.verse1"},
+        {"staff": 1, "voice": 1, "bar": 22, "position": 0, "text": "you'll", "styleId": "text.staff.space.hypen.lyrics.verse1"},
+    ]
+    issues = find_verse_style_jumps(lyrics, {1: "Soprano"})
+    assert len(issues) == 1
+    assert issues[0]["type"] == "verse_style_jump"
+    assert issues[0]["bar"] == 21
+    assert "Line 2" in issues[0]["message"]
+    assert "Line 1" in issues[0]["message"]
+
+
+def test_find_verse_style_jumps_no_false_positive_on_stacked_verses():
+    # Stacking verse 1 and verse 2 at the same positions should not trigger jumps
+    lyrics = [
+        {"staff": 1, "voice": 1, "bar": 1, "position": 0, "text": "v1", "styleId": "text.staff.space.hypen.lyrics.verse1"},
+        {"staff": 1, "voice": 1, "bar": 1, "position": 0, "text": "v2", "styleId": "text.staff.space.hypen.lyrics.verse2"},
+        {"staff": 1, "voice": 1, "bar": 1, "position": 512, "text": "w1", "styleId": "text.staff.space.hypen.lyrics.verse1"},
+        {"staff": 1, "voice": 1, "bar": 1, "position": 512, "text": "w2", "styleId": "text.staff.space.hypen.lyrics.verse2"},
+    ]
+    issues = find_verse_style_jumps(lyrics)
+    assert issues == []
+
+
+def test_find_typographical_inconsistencies():
+    # Majority font is Big Caslon size 88, but one syllable is Helvetica size 74
+    lyrics = [
+        {"staff": 1, "bar": 1, "position": 0, "text": "\\fBig Caslon\\s88\\Word1"},
+        {"staff": 1, "bar": 1, "position": 256, "text": "\\fBig Caslon\\s88\\Word2"},
+        {"staff": 1, "bar": 1, "position": 512, "text": "\\fBig Caslon\\s88\\Word3"},
+        {"staff": 1, "bar": 2, "position": 0, "text": "\\fHelvetica\\s74\\Word4"},
+    ]
+    issues = find_typographical_inconsistencies(lyrics, {1: "Soprano"})
+    types = {i["type"] for i in issues}
+    assert "font_inconsistency" in types
+    assert "font_size_inconsistency" in types
+    font_issue = next(i for i in issues if i["type"] == "font_inconsistency")
+    assert "Helvetica" in font_issue["message"]
+    assert "Big Caslon" in font_issue["message"]
+    size_issue = next(i for i in issues if i["type"] == "font_size_inconsistency")
+    assert "74" in size_issue["message"]
+    assert "88" in size_issue["message"]
+
+
+def test_extract_font_and_size():
+    # Syllable with embedded tags
+    syl1 = {"text": "\\fTimes New Roman\\s96\\Hello"}
+    font, size = extract_font_and_size(syl1)
+    assert font == "Times New Roman"
+    assert size == 96
+
+    # Syllable with metadata dictionary fields
+    syl2 = {"text": "World", "initialFontName": "BigCaslon-Medium", "initialFontSize": 88}
+    font, size = extract_font_and_size(syl2)
+    assert font == "BigCaslon-Medium"
+    assert size == 88
+
 
 

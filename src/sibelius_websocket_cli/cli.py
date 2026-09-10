@@ -148,7 +148,24 @@ def build_parser() -> argparse.ArgumentParser:
     set_lyric.add_argument("--bar", type=int, required=True)
     set_lyric.add_argument("--index", type=int, required=True)
     set_lyric.add_argument("--text", required=True)
+    set_lyric.add_argument("--font", help="override font family, e.g. 'Big Caslon'")
+    set_lyric.add_argument("--font-size", type=int, help="override font size in 1/32 space units (e.g. 88)")
+    set_lyric.add_argument("--raw", action="store_true", help="do not preserve existing font/size tags")
     set_lyric.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    set_lyric_style = sub.add_parser(
+        "set-lyric-style", help="change a lyric item's verse/style line (backs up first)"
+    )
+    set_lyric_style.add_argument("--staff", type=int, required=True)
+    set_lyric_style.add_argument("--bar", type=int, required=True)
+    set_lyric_style.add_argument("--index", type=int, required=True)
+    set_lyric_style.add_argument(
+        "--style",
+        required=True,
+        help="style identifier or alias: verse1, verse2, verse3, chorus, above, etc.",
+    )
+    set_lyric_style.add_argument(
+        "--save", action="store_true", help="save active score in Sibelius after change"
+    )
     transpose = sub.add_parser("transpose", help="transpose a passage or the whole score (backs up first)")
     transpose.add_argument("--from-note", required=True, help="current tonic, e.g. C or Eb")
     transpose.add_argument("--to-note", required=True, help="target tonic, e.g. D or F#")
@@ -268,6 +285,34 @@ def build_parser() -> argparse.ArgumentParser:
     add_abc.add_argument("--abc", dest="abc_opt", help="ABC notation string (alternative to positional argument)")
     add_abc.add_argument("--voice", type=int, default=1, choices=[1, 2, 3, 4], help="voice number (1-4, default: 1)")
     add_abc.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    set_staff_name = sub.add_parser(
+        "set-staff-name",
+        help="set full and short instrument names for a staff (backs up first)",
+    )
+    set_staff_name.add_argument("--staff", type=int, required=True, help="staff number (from 1)")
+    set_staff_name.add_argument("--full", help="full instrument name (e.g. 'Soprano')")
+    set_staff_name.add_argument("--short", help="short instrument name (e.g. 'S.')")
+    set_staff_name.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    set_score_info = sub.add_parser(
+        "set-score-info",
+        help="set title, composer, and lyricist in Score Info (backs up first)",
+    )
+    set_score_info.add_argument("--title", help="score title")
+    set_score_info.add_argument("--composer", help="composer name")
+    set_score_info.add_argument("--lyricist", help="lyricist name")
+    set_score_info.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    set_break = sub.add_parser(
+        "set-break",
+        help="set system or page break at a bar (backs up first)",
+    )
+    set_break.add_argument("--bar", type=int, required=True, help="bar number (from 1)")
+    set_break.add_argument(
+        "--type",
+        choices=["system", "page", "none"],
+        default="system",
+        help="break type: system, page, or none (default: system)",
+    )
+    set_break.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     export = sub.add_parser("export", help="export the active (or a given) score to another format")
     export.add_argument("--format", choices=sorted(EXPORT_FORMATS), default="musicxml")
     export.add_argument("--out", help="output path (default: next to the source file)")
@@ -444,7 +489,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 9
+CURRENT_BRIDGE_VERSION = 12
 
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
@@ -566,7 +611,9 @@ async def _run_read(args: argparse.Namespace) -> int:
             info = await _bridge(client, "GetScoreInfo")
             staves_info = await _bridge(client, "GetStaves")
             bars = await _bridge(client, "ReadBars", [args.staff, start_bar, end_bar])
-            raw_lyrics = await _bridge(client, "ReadLyrics", [args.staff])
+            raw_lyrics = await _bridge(
+                client, "ReadLyrics", [args.staff, start_bar, end_bar]
+            )
             filtered_lyrics = lyrics.filter_lyrics(raw_lyrics, from_bar=start_bar, to_bar=end_bar)
 
             key_name = "C"
@@ -625,7 +672,9 @@ async def _run_read_lyrics(args: argparse.Namespace) -> int:
     by_bar = getattr(args, "by_bar", False)
 
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        raw_lyrics = await _bridge(client, "ReadLyrics", [args.staff])
+        raw_lyrics = await _bridge(
+            client, "ReadLyrics", [args.staff, from_b or 0, to_b or 0]
+        )
         filtered = lyrics.filter_lyrics(raw_lyrics, from_bar=from_b, to_bar=to_b, verse=verse)
 
         if args.words:
@@ -670,7 +719,9 @@ async def _run_check_lyrics(args: argparse.Namespace) -> int:
             )
             for i, s in enumerate(staves_info)
         }
-        raw_lyrics = await _bridge(client, "ReadLyrics", [args.staff])
+        raw_lyrics = await _bridge(
+            client, "ReadLyrics", [args.staff, from_b or 0, to_b or 0]
+        )
         filtered_lyrics = lyrics.filter_lyrics(
             raw_lyrics, from_bar=from_b, to_bar=to_b, verse=verse
         )
@@ -702,7 +753,39 @@ async def _run_check_lyrics(args: argparse.Namespace) -> int:
 
 
 async def _run_set_lyric(args: argparse.Namespace) -> int:
-    return await _run_write(args, "SetLyricText", [args.staff, args.bar, args.index, args.text])
+    text = args.text
+    if getattr(args, "font", None):
+        size_tag = f"\\s{args.font_size}\\" if getattr(args, "font_size", None) else ""
+        text = f"\\f{args.font}\\{size_tag}{text}"
+    elif getattr(args, "font_size", None):
+        text = f"\\s{args.font_size}\\{text}"
+    elif not getattr(args, "raw", False) and not text.startswith("\\f"):
+        try:
+            async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+                await _check_bridge_version(client)
+                raw = await _bridge(client, "ReadLyrics", [args.staff, args.bar, args.bar])
+                existing = next(
+                    (s for s in raw if s.get("bar") == args.bar and s.get("index") == args.index),
+                    None,
+                )
+                if existing:
+                    font, size = lyrics.extract_font_and_size(existing)
+                    if font:
+                        font_family = font
+                        if font == "BigCaslon-Medium":
+                            font_family = "Big Caslon"
+                        size_tag = f"\\s{size}\\" if size else ""
+                        text = f"\\f{font_family}\\{size_tag}{text}"
+        except Exception:
+            pass
+
+    return await _run_write(args, "SetLyricText", [args.staff, args.bar, args.index, text])
+
+
+async def _run_set_lyric_style(args: argparse.Namespace) -> int:
+    return await _run_write(
+        args, "SetLyricStyle", [args.staff, args.bar, args.index, args.style]
+    )
 
 
 async def _run_transpose(args: argparse.Namespace) -> int:
@@ -733,6 +816,24 @@ async def _run_transpose(args: argparse.Namespace) -> int:
 
 async def _run_set_key(args: argparse.Namespace) -> int:
     return await _run_write(args, "SetKeySignature", [args.bar, args.key, not args.minor])
+
+
+async def _run_set_staff_name(args: argparse.Namespace) -> int:
+    return await _run_write(
+        args, "SetStaffName", [args.staff, args.full or "", args.short or ""]
+    )
+
+
+async def _run_set_score_info(args: argparse.Namespace) -> int:
+    return await _run_write(
+        args,
+        "SetScoreInfo",
+        [args.title or "", args.composer or "", args.lyricist or ""],
+    )
+
+
+async def _run_set_break(args: argparse.Namespace) -> int:
+    return await _run_write(args, "SetBarBreak", [args.bar, args.type])
 
 
 async def _run_copy_passage(args: argparse.Namespace) -> int:
@@ -1024,6 +1125,10 @@ def main(argv: list[str] | None = None) -> int:
         "add-notes": _run_add_notes,
         "add-note": _run_add_notes,
         "add-abc": _run_add_abc,
+        "set-staff-name": _run_set_staff_name,
+        "set-score-info": _run_set_score_info,
+        "set-break": _run_set_break,
+        "set-lyric-style": _run_set_lyric_style,
     }[args.subcommand]
     try:
         return int(run_sync(runner(args)))
