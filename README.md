@@ -42,6 +42,7 @@ Reading the open score (requires the bridge plug-in):
 
 ```bash
 uv run sibelius-websocket-cli score-info          # title, file, staves, bars
+uv run sibelius-websocket-cli inspect             # compact identity, staves, selection
 uv run sibelius-websocket-cli staves              # instrument names per staff
 uv run sibelius-websocket-cli selection           # current passage selection
 uv run sibelius-websocket-cli read --staff 1 --from 1 --to 4
@@ -57,7 +58,9 @@ Writing (each write backs up first: in-file version + save + timestamped
 uv run sibelius-websocket-cli check-lyrics                # lint lyrics for typos, collisions, untexted bars
 uv run sibelius-websocket-cli read-lyrics --words         # lyrics grouped by staff and bar into words
 uv run sibelius-websocket-cli read-lyrics                 # all raw lyrics with addresses
+uv run sibelius-websocket-cli read-lyrics --compact       # compact edit addresses
 uv run sibelius-websocket-cli set-lyric --staff 1 --bar 3 --index 2 --text "ry-"
+uv run sibelius-websocket-cli patch-lyrics --file patches.json --font Plantin --font-size 95
 uv run sibelius-websocket-cli transpose --from-note C --to-note D --up
 uv run sibelius-websocket-cli set-key --key D             # key signature only
 uv run sibelius-websocket-cli backup                      # backup on demand
@@ -91,6 +94,7 @@ Global options: `--host`, `--port`, `--client-name`, `--timeout` (seconds to
 wait for the approval dialog), `--launch` / `--no-launch` (automatically start Sibelius
 if not running, default: true), `--launch-timeout` (seconds to wait for Sibelius to start, default: 30),
 `--sibelius-path` (custom application executable path), `--json` (raw JSON responses),
+`--expect-file` (reject writes to a different frontmost score),
 `-v` (wire traffic logging).
 
 Exit codes: `0` success, `1` the call failed (plug-in not found, bridge error),
@@ -98,8 +102,11 @@ Exit codes: `0` success, `1` the call failed (plug-in not found, bridge error),
 
 ## Multi-Agent Skills (Claude, Antigravity, Cursor)
 
-The repository provides a complete Sibelius runbook skill. Keep skill definitions across
-harnesses in sync:
+The canonical Sibelius skill lives in `.claude/skills/sibelius/`. Its concise
+entrypoint links to focused references that agents read only for the active
+workflow. The complete directory is exposed to Antigravity by symlink; the
+generated Cursor rule links back to the same canonical references without
+automatically loading them. Keep the harness files in sync:
 
 ```bash
 python scripts/sync_skills.py          # sync .claude/skills, .agents/skills, and .cursor/rules
