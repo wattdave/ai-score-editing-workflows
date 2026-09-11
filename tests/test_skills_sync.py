@@ -119,3 +119,81 @@ def test_check_detects_agents_md_drift(tmp_path: Path) -> None:
     in_sync, issues = check_sync(tmp_path)
     assert in_sync is False
     assert any("not a symlink" in i for i in issues)
+
+
+def test_cursor_rule_rewrites_reference_links_without_eager_includes(
+    tmp_path: Path,
+) -> None:
+    """Cursor rules point to canonical references without using eager @file includes."""
+    skill_dir = tmp_path / ".claude" / "skills" / "linked-skill"
+    references = skill_dir / "references"
+    references.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: linked-skill\ndescription: Linked\n---\n\n"
+        "Read [details](references/details.md) when needed.\n",
+        encoding="utf-8",
+    )
+    (references / "details.md").write_text("# Details\n", encoding="utf-8")
+    (tmp_path / "CLAUDE.md").write_text("# Instructions\n", encoding="utf-8")
+
+    sync_all(tmp_path)
+
+    cursor_rule = (tmp_path / ".cursor" / "rules" / "linked-skill.mdc").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        "[details](../../.claude/skills/linked-skill/references/details.md)"
+        in cursor_rule
+    )
+    assert "@.claude" not in cursor_rule
+    assert check_sync(tmp_path) == (True, [])
+
+
+def test_check_detects_missing_skill_reference(tmp_path: Path) -> None:
+    """A reference linked by the canonical skill entrypoint must exist."""
+    skill_dir = tmp_path / ".claude" / "skills" / "linked-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: linked-skill\ndescription: Linked\n---\n\n"
+        "Read [details](references/missing.md) when needed.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "CLAUDE.md").write_text("# Instructions\n", encoding="utf-8")
+
+    in_sync, issues = check_sync(tmp_path)
+
+    assert in_sync is False
+    assert any(
+        "references/missing.md" in issue and "is missing" in issue for issue in issues
+    )
+
+
+def test_antigravity_skill_symlink_exposes_references(tmp_path: Path) -> None:
+    """The directory symlink exposes canonical supporting files without copies."""
+    skill_dir = tmp_path / ".claude" / "skills" / "linked-skill"
+    references = skill_dir / "references"
+    references.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: linked-skill\ndescription: Linked\n---\n\n"
+        "Read [details](references/details.md) when needed.\n",
+        encoding="utf-8",
+    )
+    (references / "details.md").write_text("# Canonical details\n", encoding="utf-8")
+    (tmp_path / "CLAUDE.md").write_text("# Instructions\n", encoding="utf-8")
+
+    sync_all(tmp_path)
+
+    linked_reference = (
+        tmp_path / ".agents" / "skills" / "linked-skill" / "references" / "details.md"
+    )
+    assert linked_reference.read_text(encoding="utf-8") == "# Canonical details\n"
+
+
+def test_repo_skill_entrypoint_stays_within_token_budget() -> None:
+    """Keep the always-loaded skill router within its planned static budget."""
+    skill_text = (ROOT_DIR / ".claude" / "skills" / "sibelius" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert len(skill_text.encode("utf-8")) <= 5_120
+    assert len(skill_text.split()) <= 700

@@ -10,7 +10,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from sibelius_websocket_cli import abc_notation, lyrics, music, protocol
+from sibelius_websocket_cli import (
+    abc_notation,
+    agent_output,
+    batch_lyrics,
+    lyrics,
+    music,
+    protocol,
+)
 from sibelius_websocket_cli.client import ConnectionFailed, SibeliusClient, run_sync
 from sibelius_websocket_cli.intervals import compute_transposition
 from sibelius_websocket_cli.token_store import TokenStore
@@ -73,6 +80,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="custom path to Sibelius application or executable",
     )
     parser.add_argument("--json", action="store_true", help="print raw JSON responses")
+    parser.add_argument(
+        "--expect-file",
+        help="refuse writes unless the active score resolves to this path",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="log the wire traffic")
 
     sub = parser.add_subparsers(dest="subcommand", required=True)
@@ -102,6 +113,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub.add_parser("staves", help="list staves of the open score (requires bridge plug-in)")
     sub.add_parser("selection", help="describe the current selection (requires bridge plug-in)")
+    sub.add_parser(
+        "inspect",
+        help="compact score identity, staff, and selection summary",
+    )
     read = sub.add_parser("read", help="read bar contents (requires bridge plug-in)")
     read.add_argument("--staff", type=int, default=1, help="staff number, from 1")
     read.add_argument("--from", dest="from_bar", type=int, default=1, help="first bar, from 1")
@@ -133,6 +148,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="when used with --words, format strictly bar-by-bar rather than grouped by verse",
     )
+    read_lyrics.add_argument(
+        "--compact",
+        action="store_true",
+        help="print one address-preserving line per lyric",
+    )
     check_lyrics = sub.add_parser(
         "check-lyrics",
         help="lint score lyrics for typos, cross-voice divergence, collisions, and missing text",
@@ -149,9 +169,32 @@ def build_parser() -> argparse.ArgumentParser:
     set_lyric.add_argument("--index", type=int, required=True)
     set_lyric.add_argument("--text", required=True)
     set_lyric.add_argument("--font", help="override font family, e.g. 'Big Caslon'")
-    set_lyric.add_argument("--font-size", type=int, help="override font size in 1/32 space units (e.g. 88)")
+    set_lyric.add_argument(
+        "--font-size",
+        type=int,
+        help="styled-string font size in tenths of a point (e.g. 110 = 11 pt)",
+    )
     set_lyric.add_argument("--raw", action="store_true", help="do not preserve existing font/size tags")
+    set_lyric.add_argument(
+        "--allow-style-reset",
+        action="store_true",
+        help="acknowledge that --raw may reset the lyric to its text style",
+    )
     set_lyric.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    patch_lyrics = sub.add_parser(
+        "patch-lyrics",
+        help="apply and verify a validated JSON batch of lyric corrections",
+    )
+    patch_lyrics.add_argument("--file", required=True, help="JSON patch array")
+    patch_lyrics.add_argument("--font", help="default font family for patched lyrics")
+    patch_lyrics.add_argument(
+        "--font-size",
+        type=int,
+        help="default styled-string font size in tenths of a point",
+    )
+    patch_lyrics.add_argument(
+        "--save", action="store_true", help="save active score after all patches verify"
+    )
     set_lyric_style = sub.add_parser(
         "set-lyric-style", help="change a lyric item's verse/style line (backs up first)"
     )
@@ -500,6 +543,27 @@ async def _check_bridge_version(client: SibeliusClient) -> None:
         )
 
 
+async def _assert_expected_score(
+    client: SibeliusClient,
+    args: argparse.Namespace,
+    info: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Fail before mutation when --expect-file does not name the active score."""
+    expected_arg = getattr(args, "expect_file", None)
+    if not expected_arg:
+        return info
+    if info is None:
+        info = await _bridge(client, "GetScoreInfo")
+    actual_arg = info.get("fileName") if isinstance(info, dict) else None
+    if not actual_arg:
+        raise BridgeError("active score has no file path; --expect-file cannot be verified")
+    expected = Path(expected_arg).expanduser().resolve()
+    actual = Path(actual_arg).expanduser().resolve()
+    if actual != expected:
+        raise BridgeError(f"active score mismatch: expected {expected}, got {actual}")
+    return info
+
+
 async def _backup(client: SibeliusClient, name: str) -> dict[str, Any]:
     """In-file version + save + timestamped filesystem copy. Returns details."""
     import shutil
@@ -526,6 +590,7 @@ async def _run_write(
     """Backup, then run a bridge write method and print its result."""
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         await _check_bridge_version(client)
+        await _assert_expected_score(client, args)
         backup = await _backup(client, f"before {args.subcommand}")
         print(f"backed up: {backup['copy']}", file=sys.stderr)
         result = await _bridge(client, method, call_args)
@@ -539,6 +604,7 @@ async def _run_write(
 async def _run_save(args: argparse.Namespace) -> int:
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         await _check_bridge_version(client)
+        await _assert_expected_score(client, args)
         saved = await _bridge(client, "Save")
     print(json.dumps(saved) if args.json else f"saved: {saved.get('fileName', '')}")
     return EXIT_OK
@@ -553,6 +619,9 @@ async def _run_reset_design(args: argparse.Namespace) -> int:
 
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         await _check_bridge_version(client)
+        await _assert_expected_score(client, args)
+        backup = await _backup(client, f"before {args.subcommand}")
+        print(f"backed up: {backup['copy']}", file=sys.stderr)
         response = await client.invoke_commands(commands)
         if not protocol.is_success(response):
             print(f"error resetting design: {json.dumps(response)}", file=sys.stderr)
@@ -593,6 +662,20 @@ async def _run_staves(args: argparse.Namespace) -> int:
 
 async def _run_selection(args: argparse.Namespace) -> int:
     return await _run_bridge_call(args, "GetSelectionInfo")
+
+
+async def _run_inspect(args: argparse.Namespace) -> int:
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _check_bridge_version(client)
+        info = await _bridge(client, "GetScoreInfo")
+        staves = await _bridge(client, "GetStaves")
+        selection = await _bridge(client, "GetSelectionInfo")
+    projected = agent_output.project_inspect(info, staves, selection)
+    if args.json:
+        print(json.dumps(projected, ensure_ascii=False, separators=(",", ":")))
+    else:
+        print(agent_output.render_compact_inspect(info, staves, selection))
+    return EXIT_OK
 
 
 async def _run_read(args: argparse.Namespace) -> int:
@@ -671,11 +754,20 @@ async def _run_read_lyrics(args: argparse.Namespace) -> int:
     verse = getattr(args, "verse", None)
     by_bar = getattr(args, "by_bar", False)
 
+    if getattr(args, "compact", False) and getattr(args, "words", False):
+        print("error: --compact and --words cannot be combined", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         raw_lyrics = await _bridge(
             client, "ReadLyrics", [args.staff, from_b or 0, to_b or 0]
         )
         filtered = lyrics.filter_lyrics(raw_lyrics, from_bar=from_b, to_bar=to_b, verse=verse)
+
+        if getattr(args, "compact", False):
+            annotated = lyrics.infer_syllable_lines(filtered)
+            print(agent_output.render_compact_lyrics(annotated))
+            return EXIT_OK
 
         if args.words:
             if args.json:
@@ -759,6 +851,12 @@ async def _run_check_lyrics(args: argparse.Namespace) -> int:
 
 
 async def _run_set_lyric(args: argparse.Namespace) -> int:
+    if getattr(args, "raw", False) and not getattr(args, "allow_style_reset", False):
+        print(
+            "error: --raw can reset lyric typography; pass --allow-style-reset to acknowledge",
+            file=sys.stderr,
+        )
+        return EXIT_COMMAND_FAILED
     text = args.text
     if getattr(args, "font", None):
         size = getattr(args, "font_size", None) or 110
@@ -811,6 +909,118 @@ async def _run_set_lyric(args: argparse.Namespace) -> int:
     return await _run_write(args, "SetLyricText", [args.staff, args.bar, args.index, text])
 
 
+async def _run_patch_lyrics(args: argparse.Namespace) -> int:
+    try:
+        patches = batch_lyrics.load_lyric_patches(args.file)
+        if getattr(args, "font", None) is not None and not args.font.strip():
+            raise batch_lyrics.BatchLyricsError("--font must be a non-empty string")
+        if getattr(args, "font_size", None) is not None and args.font_size < 1:
+            raise batch_lyrics.BatchLyricsError("--font-size must be a positive integer")
+    except batch_lyrics.BatchLyricsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+
+    ranges = batch_lyrics.affected_lyric_ranges(patches)
+    needs_inference = any(
+        patch.font is None
+        and getattr(args, "font", None) is None
+        and patch.font_size is None
+        and getattr(args, "font_size", None) is None
+        and not patch.text.startswith("\\f")
+        for patch in patches
+    )
+
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _check_bridge_version(client)
+        info: dict[str, Any] | None = None
+        if getattr(args, "expect_file", None) or needs_inference:
+            info = await _bridge(client, "GetScoreInfo")
+        await _assert_expected_score(client, args, info)
+
+        before: list[dict[str, Any]] = []
+        for affected in ranges:
+            before.extend(
+                await _bridge(
+                    client,
+                    "ReadLyrics",
+                    [affected.staff, affected.from_bar, affected.to_bar],
+                )
+            )
+        try:
+            batch_lyrics.validate_patch_targets(patches, before)
+        except batch_lyrics.BatchLyricsError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_COMMAND_FAILED
+
+        staff_lyrics: dict[int, list[dict[str, Any]]] = {}
+        if needs_inference:
+            for staff in sorted({patch.staff for patch in patches}):
+                staff_lyrics[staff] = await _bridge(client, "ReadLyrics", [staff, 0, 0])
+
+        score_default_font = info.get("mainTextFontName") if info else None
+        try:
+            rendered = [
+                batch_lyrics.resolve_lyric_text(
+                    patch,
+                    default_font=getattr(args, "font", None),
+                    default_font_size=getattr(args, "font_size", None),
+                    staff_lyrics=staff_lyrics.get(patch.staff, before),
+                    score_default_font=score_default_font,
+                )
+                for patch in patches
+            ]
+        except batch_lyrics.BatchLyricsError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_COMMAND_FAILED
+
+        backup = await _backup(client, f"before {args.subcommand}")
+        write_results: list[dict[str, Any]] = []
+        try:
+            for patch, text in zip(patches, rendered):
+                write_results.append(
+                    await _bridge(
+                        client,
+                        "SetLyricText",
+                        [patch.staff, patch.bar, patch.index, text],
+                    )
+                )
+        except BridgeError as exc:
+            print(
+                f"error: lyric batch stopped after {len(write_results)}/{len(patches)} writes; "
+                f"backup: {backup.get('copy', '')}; {exc}",
+                file=sys.stderr,
+            )
+            return EXIT_COMMAND_FAILED
+
+        after: list[dict[str, Any]] = []
+        for affected in ranges:
+            after.extend(
+                await _bridge(
+                    client,
+                    "ReadLyrics",
+                    [affected.staff, affected.from_bar, affected.to_bar],
+                )
+            )
+        verification = batch_lyrics.verify_lyric_patches(patches, after)
+
+        saved = None
+        if all(item.verified for item in verification) and getattr(args, "save", False):
+            saved = await _bridge(client, "Save")
+
+    summary = batch_lyrics.build_batch_summary(
+        patches, write_results, verification, backup=backup, saved=saved
+    )
+    if args.json:
+        print(json.dumps(summary, ensure_ascii=False, separators=(",", ":")))
+    else:
+        print(batch_lyrics.format_compact_summary(summary))
+    return (
+        EXIT_OK
+        if summary["verified"] == summary["patched"]
+        else EXIT_COMMAND_FAILED
+    )
+
+
 async def _run_set_lyric_style(args: argparse.Namespace) -> int:
     return await _run_write(
         args, "SetLyricStyle", [args.staff, args.bar, args.index, args.style]
@@ -821,6 +1031,7 @@ async def _run_transpose(args: argparse.Namespace) -> int:
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         await _check_bridge_version(client)
         info = await _bridge(client, "GetScoreInfo")
+        await _assert_expected_score(client, args, info)
         from_bar = args.from_bar or 1
         to_bar = args.to_bar or info["barCount"]
         top = args.top_staff or 1
@@ -969,6 +1180,7 @@ async def _run_add_abc(args: argparse.Namespace) -> int:
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         await _check_bridge_version(client)
         info = await _bridge(client, "GetScoreInfo")
+        await _assert_expected_score(client, args, info)
         default_key = "C"
         for ks in info.get("keySignatures", []):
             if ks.get("bar", 1) <= args.bar:
@@ -1062,6 +1274,7 @@ async def _run_export(args: argparse.Namespace) -> int:
 async def _run_backup(args: argparse.Namespace) -> int:
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         await _check_bridge_version(client)
+        await _assert_expected_score(client, args)
         result = await _backup(client, args.name)
     print(json.dumps(result, indent=2))
     return EXIT_OK
@@ -1129,12 +1342,14 @@ def main(argv: list[str] | None = None) -> int:
         "score-info": _run_score_info,
         "staves": _run_staves,
         "selection": _run_selection,
+        "inspect": _run_inspect,
         "read": _run_read,
         "do": _run_do,
         "bridge-version": _run_bridge_version,
         "read-lyrics": _run_read_lyrics,
         "check-lyrics": _run_check_lyrics,
         "set-lyric": _run_set_lyric,
+        "patch-lyrics": _run_patch_lyrics,
         "transpose": _run_transpose,
         "set-key": _run_set_key,
         "backup": _run_backup,

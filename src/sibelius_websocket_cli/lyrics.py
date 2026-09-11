@@ -203,7 +203,12 @@ def _edit_distance(s1: str, s2: str) -> int:
 
 
 def extract_font_and_size(syl: dict[str, Any]) -> tuple[str | None, int | None]:
-    """Extract font name and point size (in 1/32 space units) from syllable metadata or styled text tags."""
+    """Extract font name and its raw size value without conflating Sibelius units.
+
+    Styled-string ``\\sN\\`` values are tenths of a point. Historical or
+    synthetic ``initialFontSize`` metadata may use Sibelius' native space
+    units, so callers must not treat the two representations as convertible.
+    """
     font = syl.get("initialFontName")
     size = syl.get("initialFontSize")
     text = syl.get("textWithFormatting") or syl.get("text", "")
@@ -301,8 +306,8 @@ def analyze_lyric_typography(
                 "size": size,
                 "expected_size": predominant_size,
                 "message": (
-                    f"Staff {staff} ({s_name}): Syllable {text!r} uses font size {size} SUs, "
-                    f"differing from predominant size {predominant_size} SUs"
+                    f"Staff {staff} ({s_name}): Syllable {text!r} uses font size value {size}, "
+                    f"differing from predominant value {predominant_size}"
                 ),
             })
 
@@ -732,9 +737,9 @@ def format_lint_report(
             )
         pred_size_val = typography.get("predominant_size")
         if pred_size_val:
-            lines.append(f"  Predominant Size:   {pred_size_val} SUs")
+            lines.append(f"  Predominant Size Value: {pred_size_val}")
         else:
-            lines.append("  Predominant Size:   Standard text style default (approx. 11pt / 88 SUs)")
+            lines.append("  Predominant Size Value: unavailable from lyric objects")
 
         if len(typography.get("font_counts", {})) > 1:
             dist = ", ".join(
