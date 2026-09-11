@@ -18,6 +18,9 @@ from pathlib import Path
 DEFAULT_ROOT_DIR = Path(__file__).resolve().parent.parent
 
 FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n(.*)$", re.DOTALL)
+REFERENCE_LINK_PATTERN = re.compile(
+    r"(?P<prefix>\[[^\]]+\]\()(?P<target>references/[^)\s]+)(?P<suffix>\))"
+)
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
@@ -36,7 +39,9 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
             k, v = line.split(":", 1)
             current_key = k.strip()
             v_strip = v.strip()
-            current_val = [v_strip] if v_strip and v_strip not in {">", ">-", "|"} else []
+            current_val = (
+                [v_strip] if v_strip and v_strip not in {">", ">-", "|"} else []
+            )
         elif current_key is not None:
             current_val.append(line.strip())
 
@@ -46,15 +51,31 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
     return metadata, body
 
 
-def generate_cursor_mdc(metadata: dict[str, str], body: str) -> str:
+def reference_targets(body: str) -> list[str]:
+    """Return relative reference targets linked from a skill entrypoint."""
+    return [
+        match.group("target").split("#", 1)[0]
+        for match in REFERENCE_LINK_PATTERN.finditer(body)
+    ]
+
+
+def generate_cursor_mdc(metadata: dict[str, str], body: str, skill_name: str) -> str:
+    """Generate a Cursor rule while keeping supporting references on demand."""
     description = metadata.get("description", "").replace("\n", " ").strip()
+    cursor_body = REFERENCE_LINK_PATTERN.sub(
+        lambda match: (
+            f"{match.group('prefix')}../../.claude/skills/{skill_name}/"
+            f"{match.group('target')}{match.group('suffix')}"
+        ),
+        body,
+    )
     return f"""---
 description: {description}
 globs: *
 alwaysApply: false
 ---
 
-{body.strip()}
+{cursor_body.strip()}
 """
 
 
@@ -100,6 +121,17 @@ def check_sync(root_dir: Path | None = None) -> tuple[bool, list[str]]:
         skill_name = skill_dir.name
         skill_names.add(skill_name)
 
+        content = skill_file.read_text(encoding="utf-8")
+        meta, body = parse_frontmatter(content)
+
+        for target in reference_targets(body):
+            reference = skill_dir / target
+            if not reference.is_file():
+                issues.append(
+                    f"Skill reference {reference.relative_to(root)} linked from "
+                    f"{skill_file.relative_to(root)} is missing"
+                )
+
         # Check Antigravity link
         ag_link = agents_skills / skill_name
         expected_target = f"../../.claude/skills/{skill_name}"
@@ -117,9 +149,7 @@ def check_sync(root_dir: Path | None = None) -> tuple[bool, list[str]]:
         if not mdc_file.exists():
             issues.append(f"Cursor rule {mdc_file.relative_to(root)} is missing")
         else:
-            content = skill_file.read_text(encoding="utf-8")
-            meta, body = parse_frontmatter(content)
-            expected_mdc = generate_cursor_mdc(meta, body)
+            expected_mdc = generate_cursor_mdc(meta, body, skill_name)
             actual_mdc = mdc_file.read_text(encoding="utf-8")
             if actual_mdc != expected_mdc:
                 issues.append(
@@ -130,7 +160,9 @@ def check_sync(root_dir: Path | None = None) -> tuple[bool, list[str]]:
     if cursor_rules.exists():
         for mdc in cursor_rules.glob("*.mdc"):
             if mdc.stem not in skill_names:
-                issues.append(f"Orphan Cursor rule without Claude skill: {mdc.relative_to(root)}")
+                issues.append(
+                    f"Orphan Cursor rule without Claude skill: {mdc.relative_to(root)}"
+                )
 
     # 4. Check for orphan antigravity skills
     if agents_skills.exists():
@@ -187,7 +219,7 @@ def sync_all(root_dir: Path | None = None) -> None:
         mdc_file = cursor_rules / f"{skill_name}.mdc"
         content = skill_file.read_text(encoding="utf-8")
         meta, body = parse_frontmatter(content)
-        mdc_content = generate_cursor_mdc(meta, body)
+        mdc_content = generate_cursor_mdc(meta, body, skill_name)
         mdc_file.write_text(mdc_content, encoding="utf-8")
         print(f"Updated Cursor rule: {mdc_file.relative_to(root)}")
 
@@ -195,8 +227,14 @@ def sync_all(root_dir: Path | None = None) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Sync skills between Claude, Antigravity, and Cursor.")
-    parser.add_argument("--check", action="store_true", help="check if harnesses are in sync without modifying files")
+    parser = argparse.ArgumentParser(
+        description="Sync skills between Claude, Antigravity, and Cursor."
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="check if harnesses are in sync without modifying files",
+    )
     args = parser.parse_args(argv)
 
     if args.check:
@@ -208,7 +246,9 @@ def main(argv: list[str] | None = None) -> int:
             print("Harness skill files are out of sync:", file=sys.stderr)
             for issue in issues:
                 print(f"  - {issue}", file=sys.stderr)
-            print("Run 'python scripts/sync_skills.py' to synchronize.", file=sys.stderr)
+            print(
+                "Run 'python scripts/sync_skills.py' to synchronize.", file=sys.stderr
+            )
             return 1
 
     sync_all()

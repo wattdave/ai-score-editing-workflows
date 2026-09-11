@@ -343,11 +343,10 @@ def test_format_lint_report_with_typography():
     assert "=== Lyric Typography Analysis ===" in report
     assert "Score Default Font: Plantin" in report
     assert "Predominant Font:   Quicksand (45/48 syllables, 94%)" in report
-    assert "Predominant Size:   88 SUs" in report
+    assert "Predominant Size Value: 88" in report
     assert "Divergence detected" in report
     assert "Adopt 'Quicksand'" in report
     assert "No lyric issues found" in report
-
 
 
 
