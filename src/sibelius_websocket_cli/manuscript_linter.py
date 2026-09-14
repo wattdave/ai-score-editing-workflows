@@ -70,7 +70,7 @@ OBJECT_MODEL: dict[str, dict[str, set[str]]] = {
     },
     "NoteRest": {
         "variables": {
-            "duration", "hasficta", "gracenote", "notecount",
+            "beam", "duration", "hasficta", "gracenote", "notecount",
             "singlevoiceaccidental", "voicenumber",
         },
         "methods": {

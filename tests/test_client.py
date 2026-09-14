@@ -350,6 +350,14 @@ def test_parser_new_subcommands_and_flags():
     args = parser.parse_args(["flip-stem", "--staff", "1", "--bar", "1", "--index", "0", "--save"])
     assert args.save is True
 
+    # beam
+    args = parser.parse_args(
+        ["beam", "--staff", "1", "--bar", "2", "--from-index", "3", "--to-index", "5", "--save"]
+    )
+    assert args.from_index == 3
+    assert args.to_index == 5
+    assert args.save is True
+
     # nudge with --save
     args = parser.parse_args(["nudge", "--staff", "1", "--bar", "1", "--index", "0", "--dx", "1", "--save"])
     assert args.save is True

@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 14);
+		return CreateDictionary('version', 22);
 	}"
 
 	Echo "(value) {
@@ -105,6 +105,7 @@
 				'position', obj.Position,
 				'voice', obj.VoiceNumber,
 				'duration', obj.Duration,
+				'beam', obj.Beam,
 				'notes', notes);
 		}
 		if (obj.Type = 'LyricItem') {
@@ -548,6 +549,48 @@
 			'staff', staffNum, 'bar', barNumber, 'position', lyric.Position, 'text', lyric.Text);
 	}"
 
+	AddLyrics "(items) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (items = null or items.Length < 1) {
+			return CreateDictionary('error', 'items is empty');
+		}
+		added = 0;
+		for i = 0 to items.Length {
+			item = items[i];
+			staffNum = item['staff'];
+			barNumber = item['bar'];
+			position = item['position'];
+			duration = item['duration'];
+			text = item['text'];
+			syllableType = item['syllableType'];
+			if (staffNum < 1 or staffNum > score.StaffCount) {
+				return CreateDictionary('error', 'staffNum out of range at item ' & i);
+			}
+			staff = score.NthStaff(staffNum);
+			if (barNumber < 1 or barNumber > staff.BarCount) {
+				return CreateDictionary('error', 'barNumber out of range at item ' & i);
+			}
+			st = EndOfWord;
+			if (syllableType = 'middle') {
+				st = MiddleOfWord;
+			}
+			voice = 1;
+			if (item['voice'] != null and item['voice'] >= 1 and item['voice'] <= 4) {
+				voice = item['voice'];
+			}
+			bar = staff.NthBar(barNumber);
+			lyric = bar.AddLyric(position, duration, text, st, 1, voice);
+			if (lyric = null) {
+				return CreateDictionary('error', 'AddLyric failed at item ' & i);
+			}
+			added = added + 1;
+		}
+		return CreateDictionary('added', added);
+	}"
+
 	DeleteObject "(staffNum, barNumber, index) {
 		score = RequireScore();
 		if (score = null) {
@@ -560,6 +603,39 @@
 		deleted = DescribeObject(obj, index);
 		obj.Delete();
 		return CreateDictionary('deleted', deleted);
+	}"
+
+	DeleteSystemTimeSignature "(barNumber) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		systemStaff = score.SystemStaff;
+		if (barNumber < 1 or barNumber > systemStaff.BarCount) {
+			return CreateDictionary('error', 'bar number out of range');
+		}
+		bar = systemStaff.NthBar(barNumber);
+		target = bar[0];
+		if (target = null or target.Type != 'TimeSignature') {
+			return CreateDictionary('error', 'no time signature at that bar');
+		}
+		deleted = CreateDictionary(
+			'type', 'TimeSignature', 'numerator', target.Numerator,
+			'denominator', target.Denominator);
+		target.Delete();
+		return CreateDictionary('deleted', deleted);
+	}"
+
+	HideSystemTimeSignature "(barNumber) {
+		score = RequireScore();
+		if (score = null) { return CreateDictionary('error', 'no score open'); }
+		bar = score.SystemStaff.NthBar(barNumber);
+		target = bar[0];
+		if (target = null or target.Type != 'TimeSignature') {
+			return CreateDictionary('error', 'no time signature at that bar');
+		}
+		target.Hidden = True;
+		return CreateDictionary('bar', barNumber, 'hidden', target.Hidden);
 	}"
 
 	AddVersion "(name, comment) {
@@ -639,6 +715,30 @@
 			'newPitch', newNote.Pitch, 'newName', newNote.Name, 'tied', wasTied);
 	}"
 
+	SetTie "(staffNum, barNumber, index, tied) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		obj = GetObjectAt(staffNum, barNumber, index);
+		if (obj = null or obj.Type != 'NoteRest') {
+			return CreateDictionary('error', 'tie target must be a NoteRest object');
+		}
+		if (obj.NoteCount < 1) {
+			return CreateDictionary('error', 'cannot tie a rest');
+		}
+		newTied = True;
+		if (tied != null and tied = False) {
+			newTied = False;
+		}
+		changed = 0;
+		for each note in obj {
+			note.Tied = newTied;
+			changed = changed + 1;
+		}
+		return CreateDictionary('staff', staffNum, 'bar', barNumber, 'index', index, 'tied', newTied, 'notes', changed);
+	}"
+
 	DeleteVoiceInPassage "(fromBar, toBar, staffNum, voice) {
 		score = RequireScore();
 		if (score = null) {
@@ -676,6 +776,49 @@
 		}
 		obj.FlipStem();
 		return CreateDictionary('flipped', True, 'staff', staffNum, 'bar', barNumber, 'index', index);
+	}"
+
+	SetBeamGroup "(staffNum, barNumber, firstIndex, lastIndex) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (firstIndex > lastIndex) {
+			return CreateDictionary('error', 'firstIndex must not exceed lastIndex');
+		}
+		first = GetObjectAt(staffNum, barNumber, firstIndex);
+		last = GetObjectAt(staffNum, barNumber, lastIndex);
+		if (first = null or last = null) {
+			return CreateDictionary('error', 'no object at a beam endpoint');
+		}
+		if (first.Type != 'NoteRest' or last.Type != 'NoteRest') {
+			return CreateDictionary('error', 'beam endpoints must be NoteRest objects');
+		}
+		staff = score.NthStaff(staffNum);
+		bar = staff.NthBar(barNumber);
+		noteCount = 0;
+		for i = firstIndex to lastIndex + 1 {
+			obj = GetObjectAt(staffNum, barNumber, i);
+			if (obj != null and obj.Type = 'NoteRest') {
+				noteCount = noteCount + 1;
+				if (i = firstIndex) {
+					obj.Beam = StartBeam;
+				} else {
+					if (i = lastIndex) {
+						obj.Beam = SingleBeam;
+					} else {
+						obj.Beam = ContinueBeam;
+					}
+				}
+			}
+		}
+		if (noteCount < 2) {
+			return CreateDictionary('error', 'beam group must contain at least two NoteRest objects');
+		}
+		return CreateDictionary(
+			'staff', staffNum, 'bar', barNumber,
+			'firstIndex', firstIndex, 'lastIndex', lastIndex,
+			'noteCount', noteCount, 'firstBeam', first.Beam, 'lastBeam', last.Beam);
 	}"
 
 	NudgeObject "(staffNum, barNumber, index, dx, dy) {
@@ -840,5 +983,118 @@
 			'oldStyleId', oldStyleId,
 			'newStyleId', '' & obj.StyleId);
 	}"
-}
 
+	GetLayoutInfo "() {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		setup = score.DocumentSetup;
+		return CreateDictionary(
+			'pageCount', score.PageCount,
+			'pageSize', setup.PageSize,
+			'orientation', setup.Orientation,
+			'pageWidth', setup.PageWidth,
+			'pageHeight', setup.PageHeight,
+			'staffSize', setup.StaffSize,
+			'pageTopMargin', setup.PageTopMargin,
+			'pageBottomMargin', setup.PageBottomMargin,
+			'pageLeftMargin', setup.PageLeftMargin,
+			'pageRightMargin', setup.PageRightMargin,
+			'aboveTopStaveGap', setup.AboveTopStaveGap,
+			'belowBottomStaveGap', setup.BelowBottomStaveGap);
+	}"
+
+	SetDocumentLayout "(pageSize, orientation, staffSize, pageMargin, verticalStaveGap) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		setup = score.DocumentSetup;
+		setup.PageSize = pageSize;
+		setup.Orientation = orientation;
+		setup.PageTopMargin = pageMargin;
+		setup.PageBottomMargin = pageMargin;
+		setup.PageLeftMargin = pageMargin;
+		setup.PageRightMargin = pageMargin;
+		setup.StaffSize = staffSize;
+		setup.AboveTopStaveGap = verticalStaveGap;
+		setup.BelowBottomStaveGap = verticalStaveGap;
+		score.Redraw = True;
+		return GetLayoutInfo();
+	}"
+
+	HideEmptyStaves "(startBar, endBar) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (startBar < 1 or endBar > score.SystemStaff.BarCount or startBar > endBar) {
+			return CreateDictionary('error', 'bar range out of range');
+		}
+		score.HideEmptyStaves(1, score.StaffCount, startBar, endBar);
+		score.OptimizeStaffSpacing(1, score.StaffCount, startBar, endBar);
+		score.Redraw = True;
+		return CreateDictionary('startBar', startBar, 'endBar', endBar, 'pageCount', score.PageCount);
+	}"
+
+	SetLyricSpan "(staffNum, barNumber, index, numNotes) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (numNotes < 1) {
+			return CreateDictionary('error', 'numNotes must be at least 1');
+		}
+		obj = GetObjectAt(staffNum, barNumber, index);
+		if (obj = null) {
+			return CreateDictionary('error', 'no object at that address');
+		}
+		if (obj.Type != 'LyricItem') {
+			return CreateDictionary('error', 'object at address is a ' & obj.Type & ', not a LyricItem');
+		}
+		oldNumNotes = obj.NumNotes;
+		oldDuration = obj.Duration;
+		obj.NumNotes = numNotes;
+		score.Redraw = True;
+		return CreateDictionary(
+			'staff', staffNum,
+			'bar', barNumber,
+			'index', index,
+			'text', obj.Text,
+			'oldNumNotes', oldNumNotes,
+			'newNumNotes', obj.NumNotes,
+			'oldDuration', oldDuration,
+			'newDuration', obj.Duration);
+	}"
+
+	SetLyricDuration "(staffNum, barNumber, index, duration) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (duration < 1) {
+			return CreateDictionary('error', 'duration must be at least 1');
+		}
+		obj = GetObjectAt(staffNum, barNumber, index);
+		if (obj = null) {
+			return CreateDictionary('error', 'no object at that address');
+		}
+		if (obj.Type != 'LyricItem') {
+			return CreateDictionary('error', 'object at address is a ' & obj.Type & ', not a LyricItem');
+		}
+		oldDuration = obj.Duration;
+		oldNumNotes = obj.NumNotes;
+		obj.Duration = duration;
+		score.Redraw = True;
+		return CreateDictionary(
+			'staff', staffNum,
+			'bar', barNumber,
+			'index', index,
+			'text', obj.Text,
+			'oldNumNotes', oldNumNotes,
+			'newNumNotes', obj.NumNotes,
+			'oldDuration', oldDuration,
+			'newDuration', obj.Duration);
+	}"
+}
