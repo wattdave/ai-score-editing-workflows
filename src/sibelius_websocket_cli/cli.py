@@ -119,14 +119,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     read = sub.add_parser("read", help="read bar contents (requires bridge plug-in)")
     read.add_argument("--staff", type=int, default=1, help="staff number, from 1")
-    read.add_argument("--from", dest="from_bar", type=int, default=1, help="first bar, from 1")
+    read.add_argument("--from", dest="from_bar", type=int, help="first bar, from 1")
     read.add_argument("--to", dest="to_bar", type=int, help="last bar (default: same as --from)")
     read.add_argument("--bar", type=int, help="specific bar number")
     read.add_argument("--bars", type=str, help="bar range, e.g. '1-3' or '5'")
     read.add_argument("--abc", action="store_true", help="format output as ABC notation with aligned lyrics")
     read_abc = sub.add_parser("read-abc", help="format bar contents as standard ABC notation")
     read_abc.add_argument("--staff", type=int, default=1, help="staff number, from 1")
-    read_abc.add_argument("--from", dest="from_bar", type=int, default=1, help="first bar, from 1")
+    read_abc.add_argument("--from", dest="from_bar", type=int, help="first bar, from 1")
     read_abc.add_argument("--to", dest="to_bar", type=int, help="last bar (default: same as --from)")
     read_abc.add_argument("--bar", type=int, help="specific bar number")
     read_abc.add_argument("--bars", type=str, help="bar range, e.g. '1-3' or '5'")
@@ -137,7 +137,11 @@ def build_parser() -> argparse.ArgumentParser:
     read_lyrics.add_argument("--to", dest="to_bar", type=int, help="last bar")
     read_lyrics.add_argument("--bar", type=int, help="specific bar number")
     read_lyrics.add_argument("--bars", type=str, help="bar range, e.g. '1-3' or '5'")
-    read_lyrics.add_argument("--verse", type=int, help="filter to a specific verse/line number (1-based)")
+    read_lyrics.add_argument(
+        "--verse",
+        type=int,
+        help="filter to a specific verse/line number (1-based; 0 = all)",
+    )
     read_lyrics.add_argument(
         "--words",
         action="store_true",
@@ -162,7 +166,11 @@ def build_parser() -> argparse.ArgumentParser:
     check_lyrics.add_argument("--to", dest="to_bar", type=int, help="last bar")
     check_lyrics.add_argument("--bar", type=int, help="specific bar number")
     check_lyrics.add_argument("--bars", type=str, help="bar range, e.g. '1-3' or '5'")
-    check_lyrics.add_argument("--verse", type=int, help="filter to a specific verse/line number (1-based)")
+    check_lyrics.add_argument(
+        "--verse",
+        type=int,
+        help="filter to a specific verse/line number (1-based; 0 = all)",
+    )
     set_lyric = sub.add_parser("set-lyric", help="rewrite one lyric syllable (backs up first)")
     set_lyric.add_argument("--staff", type=int, required=True)
     set_lyric.add_argument("--bar", type=int, required=True)
@@ -242,6 +250,12 @@ def build_parser() -> argparse.ArgumentParser:
     set_note.add_argument("--old-pitch", type=int, required=True, help="MIDI pitch to replace")
     set_note.add_argument("--new-pitch", type=int, required=True, help="replacement MIDI pitch")
     set_note.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    tie = sub.add_parser("tie", help="tie a NoteRest to its following matching note (backs up first)")
+    tie.add_argument("--staff", type=int, required=True)
+    tie.add_argument("--bar", type=int, required=True)
+    tie.add_argument("--index", type=int, required=True)
+    tie.add_argument("--remove", action="store_true", help="remove the tie instead")
+    tie.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     del_obj = sub.add_parser("delete-object", help="delete the object at an address (backs up first)")
     del_obj.add_argument("--staff", type=int, required=True)
     del_obj.add_argument("--bar", type=int, required=True)
@@ -261,6 +275,12 @@ def build_parser() -> argparse.ArgumentParser:
     flip.add_argument("--bar", type=int, required=True)
     flip.add_argument("--index", type=int, required=True)
     flip.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    beam = sub.add_parser("beam", help="beam a contiguous group of NoteRest objects (backs up first)")
+    beam.add_argument("--staff", type=int, required=True)
+    beam.add_argument("--bar", type=int, required=True)
+    beam.add_argument("--from-index", type=int, required=True, help="first NoteRest object index")
+    beam.add_argument("--to-index", type=int, required=True, help="last NoteRest object index")
+    beam.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     nudge = sub.add_parser("nudge", help="shift an object graphically (1/32 spaces; backs up first)")
     nudge.add_argument("--staff", type=int, required=True)
     nudge.add_argument("--bar", type=int, required=True)
@@ -336,6 +356,25 @@ def build_parser() -> argparse.ArgumentParser:
     set_staff_name.add_argument("--full", help="full instrument name (e.g. 'Soprano')")
     set_staff_name.add_argument("--short", help="short instrument name (e.g. 'S.')")
     set_staff_name.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    set_initial_instrument = sub.add_parser(
+        "set-initial-instrument",
+        help="set a staff's instrument at score start (backs up first)",
+    )
+    set_initial_instrument.add_argument("--staff", type=int, required=True, help="staff number (from 1)")
+    set_initial_instrument.add_argument(
+        "--instrument",
+        required=True,
+        help="instrument alias or style ID, e.g. 'bass' or 'instrument.singers.bass'",
+    )
+    set_initial_instrument.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    duplicate_octave_down = sub.add_parser(
+        "duplicate-octave-down-to-voice2",
+        help="add hidden voice-2 copies of octave-down chord tones (backs up first)",
+    )
+    duplicate_octave_down.add_argument("--staff", type=int, required=True, help="staff number (from 1)")
+    duplicate_octave_down.add_argument("--from-bar", type=int, required=True, help="first bar (from 1)")
+    duplicate_octave_down.add_argument("--to-bar", type=int, required=True, help="last bar")
+    duplicate_octave_down.add_argument("--save", action="store_true", help="save active score after change")
     set_score_info = sub.add_parser(
         "set-score-info",
         help="set title, composer, and lyricist in Score Info (backs up first)",
@@ -532,7 +571,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 14
+CURRENT_BRIDGE_VERSION = 30
 
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
@@ -693,6 +732,10 @@ async def _run_read(args: argparse.Namespace) -> int:
             await _check_bridge_version(client)
             info = await _bridge(client, "GetScoreInfo")
             staves_info = await _bridge(client, "GetStaves")
+            # An unaddressed ABC export is expected to represent the whole
+            # staff.  Ordinary `read` retains its one-bar default.
+            if from_b is None and to_b is None:
+                end_bar = info.get("barCount", end_bar)
             bars = await _bridge(client, "ReadBars", [args.staff, start_bar, end_bar])
             raw_lyrics = await _bridge(
                 client, "ReadLyrics", [args.staff, start_bar, end_bar]
@@ -752,6 +795,8 @@ async def _run_read_lyrics(args: argparse.Namespace) -> int:
         to_bar=getattr(args, "to_bar", None),
     )
     verse = getattr(args, "verse", None)
+    if verse == 0:
+        verse = None
     by_bar = getattr(args, "by_bar", False)
 
     if getattr(args, "compact", False) and getattr(args, "words", False):
@@ -798,6 +843,8 @@ async def _run_check_lyrics(args: argparse.Namespace) -> int:
         to_bar=getattr(args, "to_bar", None),
     )
     verse = getattr(args, "verse", None)
+    if verse == 0:
+        verse = None
 
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         info = await _bridge(client, "GetScoreInfo")
@@ -1064,6 +1111,19 @@ async def _run_set_staff_name(args: argparse.Namespace) -> int:
     )
 
 
+async def _run_set_initial_instrument(args: argparse.Namespace) -> int:
+    style_id = music.resolve_instrument_style(args.instrument)
+    return await _run_write(args, "SetInitialInstrument", [args.staff, style_id])
+
+
+async def _run_duplicate_octave_down_to_voice2(args: argparse.Namespace) -> int:
+    return await _run_write(
+        args,
+        "DuplicateOctaveDownToVoice2",
+        [args.staff, args.from_bar, args.to_bar],
+    )
+
+
 async def _run_set_score_info(args: argparse.Namespace) -> int:
     return await _run_write(
         args,
@@ -1093,6 +1153,10 @@ async def _run_set_note(args: argparse.Namespace) -> int:
     )
 
 
+async def _run_tie(args: argparse.Namespace) -> int:
+    return await _run_write(args, "SetTie", [args.staff, args.bar, args.index, not args.remove])
+
+
 async def _run_delete_object(args: argparse.Namespace) -> int:
     return await _run_write(args, "DeleteObject", [args.staff, args.bar, args.index])
 
@@ -1105,6 +1169,12 @@ async def _run_delete_voice(args: argparse.Namespace) -> int:
 
 async def _run_flip_stem(args: argparse.Namespace) -> int:
     return await _run_write(args, "FlipStem", [args.staff, args.bar, args.index])
+
+
+async def _run_beam(args: argparse.Namespace) -> int:
+    return await _run_write(
+        args, "SetBeamGroup", [args.staff, args.bar, args.from_index, args.to_index]
+    )
 
 
 async def _run_nudge(args: argparse.Namespace) -> int:
@@ -1356,11 +1426,13 @@ def main(argv: list[str] | None = None) -> int:
         "export": _run_export,
         "copy-passage": _run_copy_passage,
         "set-note": _run_set_note,
+        "tie": _run_tie,
         "delete-object": _run_delete_object,
         "delete-voice": _run_delete_voice,
         "save": _run_save,
         "reset-design": _run_reset_design,
         "flip-stem": _run_flip_stem,
+        "beam": _run_beam,
         "nudge": _run_nudge,
         "read-abc": _run_read_abc,
         "add-staff": _run_add_staff,
@@ -1370,6 +1442,8 @@ def main(argv: list[str] | None = None) -> int:
         "add-note": _run_add_notes,
         "add-abc": _run_add_abc,
         "set-staff-name": _run_set_staff_name,
+        "set-initial-instrument": _run_set_initial_instrument,
+        "duplicate-octave-down-to-voice2": _run_duplicate_octave_down_to_voice2,
         "set-score-info": _run_set_score_info,
         "set-break": _run_set_break,
         "set-lyric-style": _run_set_lyric_style,

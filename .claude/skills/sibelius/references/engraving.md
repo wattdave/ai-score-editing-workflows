@@ -15,6 +15,17 @@ Numbered pages are written as `check_0001.png`, `check_0002.png`, and so on.
 Inspect the relevant page, make one scoped adjustment, re-export, and inspect
 again.
 
+## System layout and footer space
+
+When an imported score has cramped or manually displaced systems, distinguish
+system/staff offsets from the actual page margin. Resetting **Space Above** on a
+passage can clear unintended vertical staff offsets; then re-render before
+changing any document-wide spacing. If the remaining issue is unused space
+below the final system, reduce **Below Bottom Stave Gap** in Document Setup
+rather than the page bottom margin. Keep page margins intact unless the user
+explicitly wants a smaller printable margin, and use the separate first-page
+value when Document Setup provides one.
+
 Available layout operations include:
 
 - `nudge --staff S --bar B --index I --dx X --dy Y` for an addressed object's
