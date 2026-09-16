@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 25);
+		return CreateDictionary('version', 30);
 	}"
 
 	Echo "(value) {
@@ -996,6 +996,69 @@
 			'staffNum', staffNum,
 			'fullInstrumentName', staff.FullInstrumentName,
 			'shortInstrumentName', staff.ShortInstrumentName);
+	}"
+
+	SetInitialInstrument "(staffNum, styleId) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		if (styleId = null or styleId = '') {
+			return CreateDictionary('error', 'styleId is required');
+		}
+		staff = score.NthStaff(staffNum);
+		bar = staff.NthBar(1);
+		change = bar.AddInstrumentChange(0, styleId, False, False);
+		if (change = null) {
+			return CreateDictionary('error', 'AddInstrumentChange failed');
+		}
+		return CreateDictionary('staffNum', staffNum, 'styleId', styleId);
+	}"
+
+	DuplicateOctaveDownToVoice2 "(staffNum, fromBar, toBar) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		if (fromBar < 1 or toBar < fromBar or toBar > staff.BarCount) {
+			return CreateDictionary('error', 'invalid bar range');
+	}
+	added = 0;
+	lastBar = toBar + 1;
+	for barNum = fromBar to lastBar {
+		bar = staff.NthBar(barNum);
+		found = False;
+		pitch = 0;
+		position = 0;
+		duration = 0;
+		for each obj in bar {
+			if (found = False and obj.Type = 'NoteRest' and obj.VoiceNumber = 1) {
+				for each note in obj {
+					for each other in obj {
+						if (other.Pitch = (note.Pitch + 12)) {
+							pitch = note.Pitch;
+							position = obj.Position;
+							duration = obj.Duration;
+							found = True;
+						}
+					}
+				}
+			}
+		}
+		if (found) {
+			duplicate = bar.AddNote(position, pitch, duration, False, 2);
+			duplicate.ParentNoteRest.Hidden = True;
+			added = added + 1;
+		}
+	}
+		return CreateDictionary('staffNum', staffNum, 'fromBar', fromBar, 'toBar', toBar, 'added', added);
 	}"
 
 	SetScoreInfo "(title, composer, lyricist) {

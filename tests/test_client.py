@@ -421,6 +421,21 @@ def test_parser_new_subcommands_and_flags():
     assert args.short == "S."
     assert args.save is True
 
+    # set-initial-instrument
+    args = parser.parse_args(["set-initial-instrument", "--staff", "4", "--instrument", "bass", "--save"])
+    assert args.subcommand == "set-initial-instrument"
+    assert args.staff == 4
+    assert args.instrument == "bass"
+    assert args.save is True
+
+    # duplicate-octave-down-to-voice2
+    args = parser.parse_args(["duplicate-octave-down-to-voice2", "--staff", "4", "--from-bar", "1", "--to-bar", "12", "--save"])
+    assert args.subcommand == "duplicate-octave-down-to-voice2"
+    assert args.staff == 4
+    assert args.from_bar == 1
+    assert args.to_bar == 12
+    assert args.save is True
+
     # set-score-info
     args = parser.parse_args(["set-score-info", "--title", "Hallelujah", "--composer", "William Walker", "--save"])
     assert args.subcommand == "set-score-info"

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Tenor Playback Repair"
+  short_description: "Fix octave-high tenor playback after MusicXML import"

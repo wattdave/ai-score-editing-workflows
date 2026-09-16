@@ -356,6 +356,25 @@ def build_parser() -> argparse.ArgumentParser:
     set_staff_name.add_argument("--full", help="full instrument name (e.g. 'Soprano')")
     set_staff_name.add_argument("--short", help="short instrument name (e.g. 'S.')")
     set_staff_name.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    set_initial_instrument = sub.add_parser(
+        "set-initial-instrument",
+        help="set a staff's instrument at score start (backs up first)",
+    )
+    set_initial_instrument.add_argument("--staff", type=int, required=True, help="staff number (from 1)")
+    set_initial_instrument.add_argument(
+        "--instrument",
+        required=True,
+        help="instrument alias or style ID, e.g. 'bass' or 'instrument.singers.bass'",
+    )
+    set_initial_instrument.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    duplicate_octave_down = sub.add_parser(
+        "duplicate-octave-down-to-voice2",
+        help="add hidden voice-2 copies of octave-down chord tones (backs up first)",
+    )
+    duplicate_octave_down.add_argument("--staff", type=int, required=True, help="staff number (from 1)")
+    duplicate_octave_down.add_argument("--from-bar", type=int, required=True, help="first bar (from 1)")
+    duplicate_octave_down.add_argument("--to-bar", type=int, required=True, help="last bar")
+    duplicate_octave_down.add_argument("--save", action="store_true", help="save active score after change")
     set_score_info = sub.add_parser(
         "set-score-info",
         help="set title, composer, and lyricist in Score Info (backs up first)",
@@ -552,7 +571,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 18
+CURRENT_BRIDGE_VERSION = 30
 
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
@@ -1092,6 +1111,19 @@ async def _run_set_staff_name(args: argparse.Namespace) -> int:
     )
 
 
+async def _run_set_initial_instrument(args: argparse.Namespace) -> int:
+    style_id = music.resolve_instrument_style(args.instrument)
+    return await _run_write(args, "SetInitialInstrument", [args.staff, style_id])
+
+
+async def _run_duplicate_octave_down_to_voice2(args: argparse.Namespace) -> int:
+    return await _run_write(
+        args,
+        "DuplicateOctaveDownToVoice2",
+        [args.staff, args.from_bar, args.to_bar],
+    )
+
+
 async def _run_set_score_info(args: argparse.Namespace) -> int:
     return await _run_write(
         args,
@@ -1410,6 +1442,8 @@ def main(argv: list[str] | None = None) -> int:
         "add-note": _run_add_notes,
         "add-abc": _run_add_abc,
         "set-staff-name": _run_set_staff_name,
+        "set-initial-instrument": _run_set_initial_instrument,
+        "duplicate-octave-down-to-voice2": _run_duplicate_octave_down_to_voice2,
         "set-score-info": _run_set_score_info,
         "set-break": _run_set_break,
         "set-lyric-style": _run_set_lyric_style,
