@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 22);
+		return CreateDictionary('version', 25);
 	}"
 
 	Echo "(value) {
@@ -589,6 +589,110 @@
 			added = added + 1;
 		}
 		return CreateDictionary('added', added);
+	}"
+
+	RelocateLyrics "(items) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (items = null or items.Length < 1) {
+			return CreateDictionary('error', 'items is empty');
+		}
+		for i = 0 to items.Length {
+			item = items[i];
+			staff = score.NthStaff(item['staff']);
+			if (staff = null) {
+				return CreateDictionary('error', 'invalid staff at item ' & i);
+			}
+			obj = GetObjectAt(item['staff'], item['fromBar'], item['fromIndex']);
+			if (obj = null or obj.Type != 'LyricItem') {
+				return CreateDictionary('error', 'source is not a lyric at item ' & i);
+			}
+			name = 'relocateLyricSource' & i;
+			@name = obj;
+		}
+		sel = score.Selection;
+		for i = 0 to items.Length {
+			item = items[i];
+			name = 'relocateLyricSource' & i;
+			obj = @name;
+			st = EndOfWord;
+			if (item['syllableType'] = 'middle') {
+				st = MiddleOfWord;
+			}
+			if (item['updateOnly']) {
+				obj.Text = item['text'];
+				obj.SyllableType = st;
+			}
+			else {
+				sel.Clear();
+				obj.Select();
+				sel.Copy(1);
+				if (item['keepSourceText'] != null) {
+					obj.Text = item['keepSourceText'];
+					if (item['keepSourceSyllableType'] = 'middle') {
+						obj.SyllableType = MiddleOfWord;
+					}
+					else {
+						obj.SyllableType = EndOfWord;
+					}
+				}
+				else {
+					obj.Delete();
+				}
+				if (sel.PasteToPosition(item['staff'], item['bar'], item['position'], 1, False) != True) {
+					return CreateDictionary('error', 'PasteToPosition failed at item ' & i);
+				}
+			}
+		}
+		score.Redraw = True;
+		return CreateDictionary('relocated', items.Length);
+	}"
+
+	CopyLyricsBetweenStaves "(fromStaffNum, toStaffNum) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (fromStaffNum = toStaffNum) {
+			return CreateDictionary('error', 'source and destination staves must differ');
+		}
+		sourceStaff = score.NthStaff(fromStaffNum);
+		destinationStaff = score.NthStaff(toStaffNum);
+		if (sourceStaff = null or destinationStaff = null) {
+			return CreateDictionary('error', 'source or destination staff does not exist');
+		}
+
+		for barNum = 1 to destinationStaff.BarCount + 1 {
+			destinationBar = destinationStaff.NthBar(barNum);
+			for each destinationObject in destinationBar {
+				if (destinationObject.Type = 'LyricItem') {
+					return CreateDictionary('error', 'destination staff already contains lyrics');
+				}
+			}
+		}
+
+		selection = score.Selection;
+		copied = 0;
+		for barNum = 1 to sourceStaff.BarCount + 1 {
+			sourceBar = sourceStaff.NthBar(barNum);
+			for each sourceObject in sourceBar {
+				if (sourceObject.Type = 'LyricItem') {
+					selection.Clear();
+					sourceObject.Select();
+					selection.Copy(1);
+					if (selection.PasteToPosition(toStaffNum, barNum, sourceObject.Position, 1, False) != True) {
+						selection.Clear();
+						return CreateDictionary('error', 'PasteToPosition failed at bar ' & barNum);
+					}
+					copied = copied + 1;
+				}
+			}
+		}
+		selection.Clear();
+		score.Redraw = True;
+		return CreateDictionary('copied', copied);
 	}"
 
 	DeleteObject "(staffNum, barNumber, index) {
