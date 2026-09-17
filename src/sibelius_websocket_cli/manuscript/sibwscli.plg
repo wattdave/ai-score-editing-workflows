@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 30);
+		return CreateDictionary('version', 31);
 	}"
 
 	Echo "(value) {
@@ -1102,6 +1102,102 @@
 		return CreateDictionary(
 			'bar', barNum,
 			'breakType', '' & bar.BreakType);
+	}"
+
+	GetSpecialBarlines "(fromBar, toBar) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		systemStaff = score.SystemStaff;
+		if (fromBar < 1 or toBar > systemStaff.BarCount or fromBar > toBar) {
+			return CreateDictionary('error', 'bar range out of range');
+		}
+		results = CreateSparseArray();
+		for barNum = fromBar to toBar + 1 {
+			bar = systemStaff.NthBar(barNum);
+			for each SpecialBarline sb in bar {
+				results.Push(CreateDictionary(
+					'bar', barNum,
+					'type', sb.BarlineType,
+					'internalType', sb.BarlineInternalType,
+					'position', sb.Position));
+			}
+		}
+		return results;
+	}"
+
+	SetSpecialBarline "(barNum, barlineType) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		systemStaff = score.SystemStaff;
+		if (barNum < 1 or barNum > systemStaff.BarCount) {
+			return CreateDictionary('error', 'barNum out of range');
+		}
+		bar = systemStaff.NthBar(barNum);
+		toDelete = CreateSparseArray();
+		for each SpecialBarline sb in bar {
+			toDelete.Push(sb);
+		}
+		deleted = 0;
+		if (toDelete.Length > 0) {
+			for i = 0 to toDelete.Length {
+				target = toDelete[i];
+				if (target != null) {
+					target.Delete();
+					deleted = deleted + 1;
+				}
+			}
+		}
+		bType = -1;
+		if (barlineType = 'start_repeat' or barlineType = 'StartRepeat' or barlineType = 0 or barlineType = '0') {
+			bType = SpecialBarlineStartRepeat;
+		}
+		if (barlineType = 'end_repeat' or barlineType = 'EndRepeat' or barlineType = 1 or barlineType = '1') {
+			bType = SpecialBarlineEndRepeat;
+		}
+		if (barlineType = 'dashed' or barlineType = 'Dashed' or barlineType = 2 or barlineType = '2') {
+			bType = SpecialBarlineDashed;
+		}
+		if (barlineType = 'double' or barlineType = 'Double' or barlineType = 3 or barlineType = '3') {
+			bType = SpecialBarlineDouble;
+		}
+		if (barlineType = 'final' or barlineType = 'Final' or barlineType = 4 or barlineType = '4') {
+			bType = SpecialBarlineFinal;
+		}
+		if (barlineType = 'invisible' or barlineType = 'Invisible' or barlineType = 5 or barlineType = '5') {
+			bType = SpecialBarlineInvisible;
+		}
+		if (barlineType = 'between_staves' or barlineType = 'BetweenStaves' or barlineType = 6 or barlineType = '6') {
+			bType = SpecialBarlineBetweenStaves;
+		}
+		if (barlineType = 'normal' or barlineType = 'Normal' or barlineType = 7 or barlineType = '7' or barlineType = 'none') {
+			bType = SpecialBarlineNormal;
+		}
+		if (barlineType = 'tick' or barlineType = 'Tick' or barlineType = 8 or barlineType = '8') {
+			bType = SpecialBarlineTick;
+		}
+		if (barlineType = 'short' or barlineType = 'Short' or barlineType = 9 or barlineType = '9') {
+			bType = SpecialBarlineShort;
+		}
+		if (barlineType = 'dotted' or barlineType = 'Dotted' or barlineType = 10 or barlineType = '10') {
+			bType = SpecialBarlineDotted;
+		}
+		if (barlineType = 'triple' or barlineType = 'Triple' or barlineType = 11 or barlineType = '11') {
+			bType = SpecialBarlineTriple;
+		}
+		if (barlineType = 'thick' or barlineType = 'Thick' or barlineType = 12 or barlineType = '12') {
+			bType = SpecialBarlineThick;
+		}
+		if (bType >= 0 and bType != SpecialBarlineNormal) {
+			bar.AddSpecialBarline(bType);
+		}
+		return CreateDictionary(
+			'bar', barNum,
+			'deleted', deleted,
+			'barlineType', '' & bType);
 	}"
 
 	SetLyricStyle "(staffNum, barNumber, index, styleId) {

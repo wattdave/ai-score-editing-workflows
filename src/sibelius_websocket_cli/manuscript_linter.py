@@ -160,11 +160,16 @@ OBJECT_MODEL: dict[str, dict[str, set[str]]] = {
             "addbarrest", "addclef", "addcomment", "addguitarframe",
             "addguitarscalediagram", "addinstrumentchange", "addkeysignature",
             "addline", "addlyric", "addnote", "addnoterest",
-            "addrehearsalmark", "addsymbol", "addsystemsymbol", "addsystemtext",
+            "addrehearsalmark", "addspecialbarline", "addsymbol", "addsystemsymbol", "addsystemtext",
             "addtext", "addtimesignature", "addtuplet", "clear", "delete",
             "getendtime", "getstarttime", "insertbarrest", "nthobject",
         },
         "bases": set(),
+    },
+    "SpecialBarline": {
+        "variables": {"barlinetype", "barlineinternaltype"},
+        "methods": set(),
+        "bases": {"BarObject"},
     },
     "Staff": {
         "variables": {
