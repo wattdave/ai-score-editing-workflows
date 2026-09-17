@@ -395,6 +395,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="break type: system, page, or none (default: system)",
     )
     set_break.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    set_barline = sub.add_parser(
+        "set-barline",
+        help="set or change special barline at a bar (backs up first)",
+    )
+    set_barline.add_argument("--bar", type=int, required=True, help="bar number (from 1)")
+    set_barline.add_argument(
+        "--type",
+        choices=[
+            "double", "start_repeat", "end_repeat", "final", "dashed",
+            "invisible", "between_staves", "normal", "tick", "short",
+            "dotted", "triple", "thick", "none",
+        ],
+        default="double",
+        help="barline type (default: double)",
+    )
+    set_barline.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    read_barlines = sub.add_parser(
+        "read-barlines",
+        help="read special barlines in a bar or range",
+    )
+    read_barlines.add_argument("--bar", type=int, help="specific bar number")
+    read_barlines.add_argument("--bars", help="bar range, e.g. '1-10'")
+    read_barlines.add_argument("--from", dest="from_bar", type=int, help="first bar")
+    read_barlines.add_argument("--to", dest="to_bar", type=int, help="last bar")
     export = sub.add_parser("export", help="export the active (or a given) score to another format")
     export.add_argument("--format", choices=sorted(EXPORT_FORMATS), default="musicxml")
     export.add_argument("--out", help="output path (default: next to the source file)")
@@ -1136,6 +1160,24 @@ async def _run_set_break(args: argparse.Namespace) -> int:
     return await _run_write(args, "SetBarBreak", [args.bar, args.type])
 
 
+async def _run_set_barline(args: argparse.Namespace) -> int:
+    return await _run_write(args, "SetSpecialBarline", [args.bar, args.type])
+
+
+async def _run_read_barlines(args: argparse.Namespace) -> int:
+    from_b, to_b = parse_bar_range(
+        bar=getattr(args, "bar", None),
+        bars=getattr(args, "bars", None),
+        from_bar=getattr(args, "from_bar", None),
+        to_bar=getattr(args, "to_bar", None),
+    )
+    if from_b is None:
+        from_b = 1
+    if to_b is None:
+        to_b = from_b
+    return await _run_bridge_call(args, "GetSpecialBarlines", [from_b, to_b])
+
+
 async def _run_copy_passage(args: argparse.Namespace) -> int:
     bottom = args.bottom_staff or args.top_staff
     return await _run_write(
@@ -1446,6 +1488,8 @@ def main(argv: list[str] | None = None) -> int:
         "duplicate-octave-down-to-voice2": _run_duplicate_octave_down_to_voice2,
         "set-score-info": _run_set_score_info,
         "set-break": _run_set_break,
+        "set-barline": _run_set_barline,
+        "read-barlines": _run_read_barlines,
         "set-lyric-style": _run_set_lyric_style,
     }[args.subcommand]
     try:
