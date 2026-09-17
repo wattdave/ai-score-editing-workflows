@@ -450,6 +450,18 @@ def test_parser_new_subcommands_and_flags():
     assert args.type == "system"
     assert args.save is True
 
+    # set-barline
+    args = parser.parse_args(["set-barline", "--bar", "71", "--type", "double", "--save"])
+    assert args.subcommand == "set-barline"
+    assert args.bar == 71
+    assert args.type == "double"
+    assert args.save is True
+
+    # read-barlines
+    args = parser.parse_args(["read-barlines", "--bars", "70-75"])
+    assert args.subcommand == "read-barlines"
+    assert args.bars == "70-75"
+
     # set-lyric font options
     args = parser.parse_args([
         "set-lyric", "--staff", "1", "--bar", "12", "--index", "6", "--text", "When",
@@ -585,3 +597,30 @@ async def test_run_set_lyric_adopts_score_default_font_and_size_when_unstyled() 
         mock_write.assert_called_once_with(
             args, "SetLyricText", [1, 2, 0, "\\fTimes New Roman\\\\s110\\hermosa"]
         )
+
+
+async def test_run_set_barline() -> None:
+    from unittest.mock import AsyncMock, patch
+    from sibelius_websocket_cli.cli import _run_set_barline, build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["set-barline", "--bar", "71", "--type", "double"])
+
+    with patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=0)) as mock_write:
+        res = await _run_set_barline(args)
+        assert res == 0
+        mock_write.assert_called_once_with(args, "SetSpecialBarline", [71, "double"])
+
+
+async def test_run_read_barlines() -> None:
+    from unittest.mock import AsyncMock, patch
+    from sibelius_websocket_cli.cli import _run_read_barlines, build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["read-barlines", "--bars", "70-75"])
+
+    with patch("sibelius_websocket_cli.cli._run_bridge_call", new=AsyncMock(return_value=0)) as mock_call:
+        res = await _run_read_barlines(args)
+        assert res == 0
+        mock_call.assert_called_once_with(args, "GetSpecialBarlines", [70, 75])
+
