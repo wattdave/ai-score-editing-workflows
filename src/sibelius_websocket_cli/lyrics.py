@@ -21,7 +21,13 @@ def get_syllable_line(syl: dict[str, Any], default: int = 1) -> int:
     if isinstance(style_id, str):
         match = re.search(r"(?:line|verse)(\d+)", style_id, re.IGNORECASE)
         if match:
-            return int(match.group(1))
+            line_num = int(match.group(1))
+            dy = syl.get("dy")
+            if line_num == 5 and dy is not None and isinstance(dy, (int, float)) and dy <= -550:
+                return 6
+            return line_num
+        if "chorus" in style_id.lower():
+            return 6
     return default
 
 
@@ -44,7 +50,7 @@ def infer_syllable_lines(lyrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for staff, staff_syls in by_staff.items():
         explicit = any(
             ("line" in s and s["line"] is not None)
-            or bool(re.search(r"(?:line|verse)(\d+)", str(s.get("styleId", "")), re.I))
+            or bool(re.search(r"(?:line|verse)(\d+)|chorus", str(s.get("styleId", "")), re.I))
             for s in staff_syls
         )
 
@@ -58,10 +64,15 @@ def infer_syllable_lines(lyrics: list[dict[str, Any]]) -> list[dict[str, Any]]:
         is_multi_verse = multi_positions >= 2
 
         for (bar, pos), s_list in by_bar_pos.items():
+            used_lines: set[int] = set()
             for i, s in enumerate(s_list):
                 s_copy = dict(s)
                 if explicit:
-                    s_copy["line"] = get_syllable_line(s_copy, default=i + 1)
+                    line = get_syllable_line(s_copy, default=i + 1)
+                    if line in used_lines and line == 5 and (i + 1) == 6:
+                        line = 6
+                    used_lines.add(line)
+                    s_copy["line"] = line
                 elif is_multi_verse:
                     s_copy["line"] = i + 1
                 else:

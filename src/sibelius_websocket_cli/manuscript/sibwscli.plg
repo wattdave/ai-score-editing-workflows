@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 31);
+		return CreateDictionary('version', 33);
 	}"
 
 	Echo "(value) {
@@ -121,7 +121,10 @@
 				'text', obj.Text,
 				'syllableType', syllableType,
 				'styleId', '' & obj.StyleId,
-				'styleAsText', '' & obj.StyleAsText);
+				'styleAsText', '' & obj.StyleAsText,
+				'hidden', obj.Hidden,
+				'dy', obj.Dy,
+				'dx', obj.Dx);
 		}
 		if (obj.Type = 'KeySignature') {
 			return CreateDictionary(
@@ -210,7 +213,9 @@
 							'text', obj.Text,
 							'syllableType', syllableType,
 							'styleId', '' & obj.StyleId,
-							'styleAsText', '' & obj.StyleAsText));
+							'styleAsText', '' & obj.StyleAsText,
+							'hidden', obj.Hidden,
+							'dy', obj.Dy));
 					}
 					index = index + 1;
 				}
@@ -585,6 +590,19 @@
 			lyric = bar.AddLyric(position, duration, text, st, 1, voice);
 			if (lyric = null) {
 				return CreateDictionary('error', 'AddLyric failed at item ' & i);
+			}
+			if (item['hidden'] = True or item['hidden'] = 1 or item['hidden'] = 'true') {
+				lyric.Hidden = True;
+			}
+			if (item['styleId'] != null and item['styleId'] != '') {
+				targetStyleId = '' & item['styleId'];
+				if (targetStyleId = 'verse5') {
+					targetStyleId = 'text.staff.space.hypen.lyrics.verse5';
+				}
+				lyric.StyleId = targetStyleId;
+			}
+			if (item['dy'] != null) {
+				lyric.Dy = item['dy'];
 			}
 			added = added + 1;
 		}
@@ -1360,4 +1378,160 @@
 			'oldDuration', oldDuration,
 			'newDuration', obj.Duration);
 	}"
+
+	GetEngravingRules "() {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		rules = score.EngravingRules;
+		return CreateDictionary(
+			'spacesBetweenStaves', rules.SpacesBetweenStaves,
+			'extraSpacesBelowVocalStaves', rules.ExtraSpacesBelowVocalStaves,
+			'spacesBetweenSystems', rules.SpacesBetweenSystems);
+	}"
+
+	SetStaffSpacing "(spacesBetweenStaves, extraSpacesBelowVocal, spacesBetweenSystems) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		rules = score.EngravingRules;
+		if (spacesBetweenStaves > 0) {
+			rules.SpacesBetweenStaves = spacesBetweenStaves;
+		}
+		if (extraSpacesBelowVocal >= 0) {
+			rules.ExtraSpacesBelowVocalStaves = extraSpacesBelowVocal;
+		}
+		if (spacesBetweenSystems > 0) {
+			rules.SpacesBetweenSystems = spacesBetweenSystems;
+		}
+		score.Redraw = True;
+		return CreateDictionary(
+			'spacesBetweenStaves', rules.SpacesBetweenStaves,
+			'extraSpacesBelowVocal', rules.ExtraSpacesBelowVocalStaves,
+			'spacesBetweenSystems', rules.SpacesBetweenSystems);
+	}"
+
+	SetLyricPosition "(staffNum, barNumber, index, dy) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		obj = GetObjectAt(staffNum, barNumber, index);
+		if (obj = null) {
+			return CreateDictionary('error', 'no object at that address');
+		}
+		if (obj.Type != 'LyricItem') {
+			return CreateDictionary('error', 'object at address is a ' & obj.Type & ', not a LyricItem');
+		}
+		oldDy = obj.Dy;
+		obj.Dy = dy;
+		score.Redraw = True;
+		return CreateDictionary(
+			'staff', staffNum,
+			'bar', barNumber,
+			'index', index,
+			'oldDy', oldDy,
+			'newDy', obj.Dy);
+	}"
+
+	SetObjectHidden "(staffNum, barNumber, index, hidden) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		obj = GetObjectAt(staffNum, barNumber, index);
+		if (obj = null) {
+			return CreateDictionary('error', 'no object at that address');
+		}
+		oldHidden = obj.Hidden;
+		if (hidden = True or hidden = 1 or hidden = 'true') {
+			obj.Hidden = True;
+		} else {
+			obj.Hidden = False;
+		}
+		score.Redraw = True;
+		return CreateDictionary(
+			'staff', staffNum,
+			'bar', barNumber,
+			'index', index,
+			'oldHidden', oldHidden,
+			'newHidden', obj.Hidden);
+	}"
+
+	SetStaffLyricsHidden "(staffNum, fromBar, toBar, hidden) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		if (fromBar < 1) {
+			fromBar = 1;
+		}
+		if (toBar < 1 or toBar > staff.BarCount) {
+			toBar = staff.BarCount;
+		}
+		hVal = False;
+		if (hidden = True or hidden = 1 or hidden = 'true') {
+			hVal = True;
+		}
+		count = 0;
+		for b = fromBar to toBar + 1 {
+			bar = staff.NthBar(b);
+			for each LyricItem lyric in bar {
+				lyric.Hidden = hVal;
+				count = count + 1;
+			}
+		}
+		score.Redraw = True;
+		return CreateDictionary(
+			'staff', staffNum,
+			'fromBar', fromBar,
+			'toBar', toBar,
+			'count', count,
+			'hidden', hVal);
+	}"
+
+	ConvertVerse6ToRoman "(staffNum, fromBar, toBar) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		if (fromBar < 1) {
+			fromBar = 1;
+		}
+		if (toBar < 1 or toBar > staff.BarCount) {
+			toBar = staff.BarCount;
+		}
+		converted = 0;
+		for b = fromBar to toBar + 1 {
+			bar = staff.NthBar(b);
+			for each LyricItem lyric in bar {
+				if (lyric.StyleId = 'text.staff.space.hypen.lyrics.chorus') {
+					oldDy = lyric.Dy;
+					lyric.StyleId = 'text.staff.space.hypen.lyrics.verse5';
+					if (oldDy != 0) {
+						lyric.Dy = oldDy;
+					} else {
+						lyric.Dy = -592;
+					}
+					converted = converted + 1;
+				}
+			}
+		}
+		score.Redraw = True;
+		return CreateDictionary('converted', converted);
+	}"
 }
+

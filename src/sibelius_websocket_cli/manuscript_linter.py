@@ -42,7 +42,7 @@ class LintIssue:
 # Base classes
 BAR_OBJECT_VARIABLES = {
     "canbeinmultiplevoices", "color", "coloralpha", "colorred", "colorgreen",
-    "colorblue", "cuesize", "dx", "dy", "parentbar", "position", "selected",
+    "colorblue", "cuesize", "dx", "dy", "hidden", "parentbar", "position", "selected",
     "type", "voicenumber",
 }
 
