@@ -62,3 +62,65 @@ Image resolution or staff line interference causes the OMR detector to drop beam
 ### Repair
 - Beams: Use `<beam number="1">begin</beam>` and `<beam number="1">end</beam>` on eighth note groups.
 - Slurs: Enclose melismatic note groups in `<notations><slur type="start" number="1"/></notations>` on the first note, and `<notations><slur type="stop" number="1"/></notations>` on the last note.
+
+---
+
+## Pattern 5: Missing Pages in OMR Scanner Exports
+
+### Symptom
+Multi-page OMR scans (e.g. Halbestunde) occasionally skip an entire page completely (e.g. Page 12 omitted out of a 13-page score), resulting in an abrupt jump in measure numbers or missing choral sections.
+
+### Cause
+Scanner page-split failures or OCR timeouts during heavy multi-voice engraving.
+
+### Repair
+1. Compare page count and printed rehearsal/measure numbers between the source PDF and the raw XML export.
+2. If a page was omitted, crop each system of the missing page from the high-resolution PDF preview (`PIL.Image` or `qlmanage`).
+3. Transcribe the missing measures directly into programmatic note/rest lists matching standard MusicXML structures, validating clefs, key signatures, and accidentals.
+
+---
+
+## Pattern 6: Rhythmic Misclassification & Meter Misalignment
+
+### Symptom
+Beamed eighth notes are misrecognized as quarter notes (or vice versa), causing an OMR engine to invent spurious time signatures or insert spurious rests (e.g. converting a $3/4$ measure into $4/4$ with a rest).
+
+### Cause
+Close stem spacing or thick beam lines causing the OCR classifier to misidentify notehead durations.
+
+### Repair
+1. Calculate the exact tick sum for each measure (`divisions * beats * (4 / beat_type)`).
+2. Trace barlines visually on the source scan across all staves in the system to verify true measure boundaries.
+3. Check anacruses/pickups: if an eighth-note pickup into the next measure was mistakenly placed after the barline with an eighth rest, reposition the pickup to the end of the preceding measure and restore true meter.
+
+---
+
+## Pattern 7: MusicXML Schema Child Sequence for Sibelius Compatibility
+
+### Symptom
+Sibelius rejects the imported MusicXML with schema errors such as:
+`Line X: Element 'tie': This element is not expected. Expected is one of ( lyrics, play, listen )`
+
+### Cause
+Sibelius strictly enforces the W3C MusicXML schema element sequence. Inside `<note>`, child tags MUST appear in exact canonical order:
+`grace | cue | chord` $\to$ `pitch | unpitched | rest` $\to$ `duration` $\to$ `tie` $\to$ `instrument` $\to$ `voice` $\to$ `type` $\to$ `dot` $\to$ `accidental` $\to$ `time-modification` $\to$ `stem` $\to$ `notehead` $\to$ `staff` $\to$ `beam` $\to$ `notations` $\to$ `lyric` $\to$ `play` $\to$ `listen`.
+Similarly, inside `<notations>`, children must follow:
+`tied` $\to$ `slur` $\to$ `tuplet` $\to$ `glissando` $\to$ `slide` $\to$ `ornaments` $\to$ `technical` $\to$ `articulations` $\to$ `dynamics` $\to$ `fermata`...
+
+### Repair
+Always run a post-processing sort pass over all `<note>` and `<notations>` elements using a pre-defined tag order map prior to writing output XML, and validate with:
+```bash
+xmllint --noout --schema "/Applications/Sibelius.app/Contents/Components/MusicXML/musicxml.xsd" score.xml
+```
+
+---
+
+## Pattern 8: Double-Chorus & Antiphonal Divisi Scoring
+
+### Symptom
+Scores for double choir (e.g. SSAATTBB $\times$ 2 = 16 voices) have sections written on 2 or 4 staves labeled *"Both choirs unis."*, alternating with Choir 1 solo or antiphonal Choir 1 / Choir 2 passages.
+
+### Repair
+1. Maintain 16 discrete `<part>` elements (`P1`–`P16`) throughout the entire score to ensure independent MIDI channels and clean part extraction in Sibelius.
+2. Implement a `tutti_unison_measure()` builder that clones identical notes and lyrics across the corresponding vocal pairs (e.g. Soprano $\to$ P1, P2, P9, P10; Alto $\to$ P3, P4, P11, P12, etc.).
+3. Audit dangling ties across antiphonal section transitions using automated scripts to guarantee zero infinite-sustain playback bugs in Sibelius.
