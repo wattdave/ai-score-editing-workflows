@@ -117,7 +117,7 @@ A Bar contains BarObject objects. `for each variable in` produces the BarObjects
 - `AddKeySignature(pos,num sharps,major key[,add double barline[,hidden[,one staff only]]])` — Adds a key signature by sharps (+1..+7), flats (–1..–7), 0 (no accidentals) or –8 (atonal); returns the KeySignature object.
 - `AddLine(pos,duration,line style[,dx[,dy[,voicenumber[,hidden]]]])` — Adds a line (style ID like "line.staff.hairpin.crescendo" preferred); returns the Line object created.
 - `AddLiveTempoTapPoint(position)` — Adds a Live Tempo tap point at the position (1/256th quarters).
-- `AddLyric(position,duration,text[,syllable type[,number of notes,voicenum]]])` — Adds a lyric (position/duration in 1/256th quarters); returns the LyricItem created.
+- `AddLyric(position,duration,text[,syllable type[,number of notes,voicenum]]])` — Adds a lyric (position/duration in 1/256th quarters); returns the LyricItem created. Note: 'number of notes' (`numNotes`) is the melisma span count, not the verse line number; verse line is set via `LyricItem.StyleId`.
 - `AddNote(pos,sounding pitch,duration,[tied[,voice[,diatonic pitch[,string number]]]])` — Adds a note (adds to an existing NoteRest at that position, else creates one); returns the Note object created.
 - `AddPageNumber([blank page offset])` — Creates and returns a page number change at the end of the bar (also creates a page break); optional 1-based blank-page offset.
 - `AddPageNumberAtStartOfBar()` — Creates and returns a page number change at the start of the bar (no forced page break).
