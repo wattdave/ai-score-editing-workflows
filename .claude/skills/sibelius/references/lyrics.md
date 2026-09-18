@@ -71,6 +71,47 @@ adopt those definitions.
 - Styled-string sizes are tenths of a point. They are not Sibelius
   `InitialFontSize` space-unit values.
 
+## Multi-verse and batch lyric workflows
+
+### ManuScript `Bar.AddLyric` argument semantics
+
+- In ManuScript, `Bar.AddLyric(position, duration, text, syllableType, numNotes, voiceNumber)`
+  takes `numNotes` (the melisma note span count) as its 5th argument, **not**
+  the lyric verse line number.
+- Lyric line/verse assignment is controlled exclusively by `LyricItem.StyleId`
+  (e.g. `text.staff.space.hypen.lyrics.verse1` through `verse5`), not by an
+  argument to `AddLyric`.
+
+### Safe reverse-order batch lyric deletion
+
+- When clearing, replacing, or re-flowing lyrics in a bar, query `ReadBars` or
+  `read-lyrics`, collect all `LyricItem` indices in that bar, and delete them in
+  **strict descending index order** (`sorted(indices, reverse=True)`) using
+  `DeleteObject(staff, bar, idx)`.
+- Deleting in ascending order causes remaining object indices in the bar to shift
+  down with each deletion, corrupting subsequent target addresses and leading to
+  index-out-of-range errors or wrong objects being removed.
+
+### Lower-voice lyric duplication for playback
+
+- When duplicating vocal lyrics into accompaniment or lower vocal lines (e.g.
+  Alto, Bass) solely so virtual instruments articulate playback without
+  altering visual engraving:
+  - Mark every duplicated lyric item hidden: `lyric.Hidden = True`.
+  - Apply compact vertical offsets: `Dy = -192` for verses 1–5, and `-592` for
+    verse 6. Do not leave default or unconstrained vertical offsets on
+    duplicated items, as Sibelius's magnetic layout engine can expand stave
+    spacing even for hidden objects.
+
+### Verse 6 style and line disambiguation
+
+- Sibelius provides built-in text styles only for `verse1` through `verse5`
+  (`text.staff.space.hypen.lyrics.verse1` ... `verse5`). Scores with 6 or more
+  verses typically reuse `text.staff.space.hypen.lyrics.verse5` for line 6.
+- In inspection tooling and verse-line inference, disambiguate Verse 6 from
+  Verse 5 by inspecting `dy` (`dy == -592`) or tracking sequential occurrence
+  after Verse 5 at the same rhythmic position.
+
 ## Verify
 
 `patch-lyrics` performs one readback verification for the complete batch. After
@@ -78,3 +119,4 @@ a standalone write, re-read before reusing addresses. Re-export the
 representative page only when visual style or layout is part of the change, and
 compare edited syllables with adjacent lyrics. Save after verification when
 requested.
+
