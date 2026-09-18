@@ -595,7 +595,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 30
+CURRENT_BRIDGE_VERSION = 33
 
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
