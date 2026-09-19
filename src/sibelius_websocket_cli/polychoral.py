@@ -562,7 +562,20 @@ def demix_16voices(
     Handles alternating open score (P1-P8) and short score (P9, P11),
     clef configuration, tie preservation, lyric propagation, and duration normalization.
     """
+    # The public function remains for callers of the original module.  The
+    # deterministic onset-based package owns all new production routing.
+    from .musicxml_split.profiles.polychoral_16 import Polychoral16Options, split_16voices
+
     in_p = Path(in_path)
+    result = split_16voices(
+        in_p,
+        Path(out_path),
+        Polychoral16Options(frozenset(choir_unison_indices)) if choir_unison_indices is not None else None,
+    )
+    return result.as_dict(in_p)
+
+    # Legacy implementation retained below only as an import-compatible
+    # reference while downstream users migrate helper-level integrations.
     out_p = Path(out_path)
 
     tree, root = parse_musicxml(in_p)
@@ -773,6 +786,37 @@ def demix_16voices(
 
 def validate_16voices(path: Path | str) -> list[str]:
     """Validate measure durations and consistency across all 16 parts in a score."""
+    # Historical public API: report cross-part duration disagreement.  The
+    # shared validator additionally diagnoses malformed rhythm and is used by
+    # the CLI and profiles; retaining this narrow behavior avoids a breaking
+    # change for callers that used it as a consistency-only check.
+    from .musicxml_split.io import parse_musicxml as shared_parse
+
+    p = Path(path)
+    if not p.exists():
+        return [f"File not found: {p}"]
+    _, root = shared_parse(p)
+    parts = root.findall("part")
+    if len(parts) != 16:
+        return [f"Expected 16 parts, found {len(parts)}"]
+    count = len(parts[0].findall("measure"))
+    problems: list[str] = []
+    for index in range(count):
+        durations = {}
+        for part in parts:
+            measures = part.findall("measure")
+            if index >= len(measures):
+                problems.append(f"Part {part.attrib.get('id', 'unknown')} missing measure index {index}")
+                continue
+            durations[part.attrib.get("id", "unknown")] = sum(
+                int(note.findtext("duration") or "0")
+                for note in measures[index].findall("note")
+                if note.find("chord") is None
+            )
+        if len(set(durations.values())) > 1:
+            problems.append(f"Measure index {index}: duration discrepancy across parts: {durations}")
+    return problems
+
     p = Path(path)
     if not p.exists():
         return [f"File not found: {p}"]

@@ -320,7 +320,7 @@ def test_end_to_end_synthetic_score(tmp_path: Path) -> None:
 
 
 def test_real_12pp_export_if_available() -> None:
-    """If the exported 12pp MusicXML exists in /tmp, verify 0 duration and tie issues."""
+    """Real exports report malformed rhythm rather than shortening it to validate."""
     p = Path("/private/tmp/12pp_native_export.musicxml")
     if not p.exists():
         pytest.skip("12pp export not present in /tmp")
@@ -330,5 +330,10 @@ def test_real_12pp_export_if_available() -> None:
     assert res["totalMeasures"] == 127
     assert res["partsCount"] == 16
 
-    issues = validate_16voices(out_p)
-    assert issues == []
+    from sibelius_websocket_cli.musicxml_split.validation import validate_file
+
+    issues = validate_file(out_p, expected_parts=16)
+    # This historical fixture has overflowed source measures.  The old engine
+    # silently trimmed them; the shared engine preserves their durations and
+    # reports the condition for a caller to resolve.
+    assert any(issue.code in {"measure-overflow", "target-overflow"} for issue in issues)

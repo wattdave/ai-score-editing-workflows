@@ -138,6 +138,24 @@ async def test_split_parts_with_open_flag(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_split_parts_satb_and_audit_mode(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    in_file = tmp_path / "input.musicxml"
+    output = tmp_path / "satb.mxl"
+    _create_minimal_valid_score(in_file)
+    parser = build_parser()
+    args = parser.parse_args(["--json", "split-parts", str(in_file), "--preset", "satb", "-o", str(output)])
+    assert await _run_split_parts(args) == EXIT_OK
+    assert output.exists()
+    assert json.loads(capsys.readouterr().out)["partsCount"] == 4
+
+    audit = parser.parse_args(["--json", "split-parts", str(in_file), "--preset", "satb", "--audit"])
+    assert await _run_split_parts(audit) == EXIT_OK
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["outputFile"] is None
+    assert payload["audit"]
+
+
+@pytest.mark.asyncio
 async def test_split_parts_active_score_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     export_target = tmp_path / "fake_exported.musicxml"
     _create_minimal_valid_score(export_target)

@@ -461,7 +461,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     split_parts.add_argument(
         "--preset",
-        choices=["16voices"],
+        choices=["16voices", "satb"],
         default="16voices",
         help="demixing preset (default: 16voices)",
     )
@@ -476,6 +476,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=True,
         help="validate measure durations across generated parts (default: True)",
     )
+    split_parts.add_argument(
+        "--audit",
+        action="store_true",
+        help="report layout and routing diagnostics without writing an output score",
+    )
+    split_parts.add_argument("--soprano-solo", help="SATB solo bars, e.g. 8-15,20")
+    split_parts.add_argument("--tenor-solo", help="SATB solo bars, e.g. 8-15,20")
+    split_parts.add_argument("--bass-solo", help="SATB solo bars, e.g. 8-15,20")
     split_parts.add_argument(
         "--open",
         action="store_true",
@@ -1500,36 +1508,64 @@ async def _run_split_parts(args: argparse.Namespace) -> int:
         out_path = default_parent / f"{default_stem}_{args.preset}.mxl"
 
     try:
+        from sibelius_websocket_cli.musicxml_split.profiles.polychoral_16 import split_16voices
+        from sibelius_websocket_cli.musicxml_split.profiles.satb import SATBOptions, split_satb
+        from sibelius_websocket_cli.musicxml_split.validation import validate_file
+
+        def parse_ranges(value: str | None) -> frozenset[int]:
+            bars: set[int] = set()
+            for item in (value or "").split(","):
+                item = item.strip()
+                if not item:
+                    continue
+                start, separator, end = item.partition("-")
+                bars.update(range(int(start), int(end) + 1) if separator else [int(start)])
+            return frozenset(bars)
+
         if args.preset == "16voices":
-            res = polychoral.demix_16voices(xml_input_path, out_path)
-            val_issues = polychoral.validate_16voices(out_path) if args.validate else []
+            result = split_16voices(xml_input_path, None if args.audit else out_path, audit_only=args.audit)
+        elif args.preset == "satb":
+            result = split_satb(
+                xml_input_path,
+                None if args.audit else out_path,
+                SATBOptions(
+                    soprano_solo_bars=parse_ranges(args.soprano_solo),
+                    tenor_solo_bars=parse_ranges(args.tenor_solo),
+                    bass_solo_bars=parse_ranges(args.bass_solo),
+                ),
+                audit_only=args.audit,
+            )
         else:
             print(f"error: unknown preset {args.preset}", file=sys.stderr)
             return EXIT_COMMAND_FAILED
 
-        res["valid"] = len(val_issues) == 0
+        res = result.as_dict(xml_input_path)
+        val_issues = validate_file(out_path, expected_parts=len(result.parts)) if args.validate and not args.audit else []
+        all_issues = result.issues + val_issues
+        res["valid"] = not any(issue.severity == "error" for issue in all_issues)
+        res["issues"] = [issue.as_dict() for issue in all_issues]
         if val_issues:
-            res["validationIssues"] = val_issues
+            res["validationIssues"] = [issue.as_dict() for issue in val_issues]
 
-        if args.open:
+        if args.open and not args.audit:
             launcher.open_score_file(out_path, app_path=args.sibelius_path)
             res["opened"] = True
 
         if args.json:
             print(json.dumps(res, indent=2))
         else:
-            print(
-                f"Demixed {res['totalMeasures']} measures across {res['partsCount']} parts ({args.preset})."
-            )
-            print(f"Saved to: {res['outputFile']}")
+            action = "Audited" if args.audit else "Demixed"
+            print(f"{action} {res['totalMeasures']} measures across {res['partsCount']} parts ({args.preset}).")
+            if not args.audit:
+                print(f"Saved to: {res['outputFile']}")
             if args.validate:
-                if val_issues:
+                if all_issues:
                     print(
-                        f"Validation warning: {len(val_issues)} issue(s) detected:",
+                        f"Validation warning: {len(all_issues)} issue(s) detected:",
                         file=sys.stderr,
                     )
-                    for issue in val_issues[:10]:
-                        print(f"  - {issue}", file=sys.stderr)
+                    for issue in all_issues[:10]:
+                        print(f"  - {issue.code}: {issue.message}", file=sys.stderr)
                 else:
                     print("Validation passed: 0 discrepancies found.")
         return EXIT_OK
