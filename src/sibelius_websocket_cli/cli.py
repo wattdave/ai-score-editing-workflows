@@ -1196,7 +1196,9 @@ async def _run_set_note(args: argparse.Namespace) -> int:
 
 
 async def _run_tie(args: argparse.Namespace) -> int:
-    return await _run_write(args, "SetTie", [args.staff, args.bar, args.index, not args.remove])
+    return await _run_write(
+        args, "SetTie", [args.staff, args.bar, args.index, "false" if args.remove else "true"]
+    )
 
 
 async def _run_delete_object(args: argparse.Namespace) -> int:
