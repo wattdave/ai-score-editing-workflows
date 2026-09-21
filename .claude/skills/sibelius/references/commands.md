@@ -10,6 +10,8 @@ argument list. Run commands from the repository root.
 - `score-snapshot [--bars A-B] [--lyrics] [--no-barlines]`: one-session,
   compact structural snapshot with identity, staves, selection, key/time
   signatures, and special barlines; lyrics are opt-in.
+- `proofread [--bars A-B] [--staff N] [--lyrics]`: one-session read-only
+  structural and lyric lint report with compact issue records.
 - `score-info`: title, file, key signatures, and time signatures.
 - `staves`: staff numbers and names.
 - `selection`: current Sibelius selection.

@@ -18,6 +18,7 @@ from sibelius_websocket_cli.cli import (
     _run_score_snapshot,
     _run_patch_lyrics,
     _run_patch_layout,
+    _run_proofread,
     _run_read_lyrics,
     _run_reset_design,
     _run_set_lyric,
@@ -75,6 +76,10 @@ def test_parser_accepts_agent_and_safety_options(tmp_path: Path) -> None:
     assert snapshot_args.subcommand == "score-snapshot"
     assert snapshot_args.lyrics is True
     assert snapshot_args.barlines is True
+
+    proofread_args = parser.parse_args(["proofread", "--bars", "2-3", "--lyrics"])
+    assert proofread_args.subcommand == "proofread"
+    assert proofread_args.lyrics is True
 
 
 async def test_inspect_combines_three_reads_in_one_context(capsys: pytest.CaptureFixture[str]) -> None:
@@ -195,6 +200,55 @@ async def test_patch_layout_uses_one_context_and_one_backup(
     output = capsys.readouterr().out.strip()
     assert '"operations":2' in output
     assert '"verified":2' in output
+
+
+async def test_proofread_combines_reads_and_returns_compact_report(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    args = build_parser().parse_args(["proofread", "--bars", "2-3", "--lyrics"])
+    context, _client = _client_context()
+
+    async def bridge_side_effect(
+        unused_client: Any, method: str, call_args: list[Any] | None = None
+    ) -> Any:
+        del unused_client
+        if method == "GetScoreInfo":
+            return {
+                "fileName": "/scores/a.sib",
+                "title": "A",
+                "staffCount": 1,
+                "barCount": 8,
+                "keySignatures": [],
+                "timeSignatures": [{"bar": 1, "numerator": 4, "denominator": 4}],
+                "mainTextFontName": "Plantin",
+            }
+        if method == "GetStaves":
+            return [{"staffNum": 1, "fullInstrumentName": "Soprano"}]
+        if method == "GetSelectionInfo":
+            return {"isPassage": False}
+        if method == "ReadLyrics":
+            assert call_args == [0, 2, 3]
+            return [{"staff": 1, "bar": 2, "index": 0, "position": 0, "text": "la"}]
+        if method == "ReadBars":
+            assert call_args == [1, 2, 3]
+            return [{"barNumber": 2, "objects": []}]
+        if method == "GetSpecialBarlines":
+            assert call_args == [2, 3]
+            return [{"bar": 2, "position": 1024, "type": "EndRepeat"}]
+        raise AssertionError(method)
+
+    with (
+        patch("sibelius_websocket_cli.cli._client", return_value=context),
+        patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge_side_effect),
+        patch("sibelius_websocket_cli.cli.lyrics.lint_lyrics", return_value=[]),
+    ):
+        assert await _run_proofread(args) == EXIT_OK
+
+    output = capsys.readouterr().out.strip()
+    assert '"errors":0' in output
+    assert '"warnings":0' in output
+    assert '"lyrics":[{"staff":1,"bar":2,"index":0,"position":0,"line":1,"text":"la"}]' in output
 
 
 async def test_compact_read_lyrics_keeps_edit_address(capsys: pytest.CaptureFixture[str]) -> None:

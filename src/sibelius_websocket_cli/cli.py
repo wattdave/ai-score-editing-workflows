@@ -135,6 +135,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="omit special barlines from the snapshot",
     )
     snapshot.set_defaults(barlines=True)
+    proofread = sub.add_parser(
+        "proofread",
+        help="read-only structural and lyric proofreading report",
+    )
+    proofread.add_argument("--bars", help="bar range to inspect, e.g. '1-30'")
+    proofread.add_argument("--staff", type=int, default=0, help="staff to inspect (0 = all lyric-bearing staves)")
+    proofread.add_argument("--lyrics", action="store_true", help="include compact lyric data in the report")
+    proofread.add_argument("--no-barlines", dest="barlines", action="store_false", help="omit special barlines")
+    proofread.set_defaults(barlines=True)
     patch_layout = sub.add_parser(
         "patch-layout",
         help="apply and verify a validated JSON batch of layout corrections",
@@ -843,6 +852,76 @@ async def _run_score_snapshot(args: argparse.Namespace) -> int:
     )
     print(agent_output.render_compact_snapshot(snapshot))
     return EXIT_OK
+
+
+async def _run_proofread(args: argparse.Namespace) -> int:
+    from_b, to_b = parse_bar_range(bars=getattr(args, "bars", None))
+    verse = None
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _check_bridge_version(client)
+        info = await _bridge(client, "GetScoreInfo")
+        staves_info = await _bridge(client, "GetStaves")
+        selection = await _bridge(client, "GetSelectionInfo")
+        names = {
+            s.get("staffNum", s.get("staffNumber", i + 1)): (
+                s.get("fullInstrumentName")
+                or s.get("instrumentName")
+                or s.get("name")
+                or f"Staff {s.get('staffNum', i + 1)}"
+            )
+            for i, s in enumerate(staves_info)
+        }
+        raw_lyrics = await _bridge(client, "ReadLyrics", [args.staff, from_b or 0, to_b or 0])
+        filtered_lyrics = lyrics.filter_lyrics(raw_lyrics, from_bar=from_b, to_bar=to_b, verse=verse)
+
+        bar_count = int(info.get("barCount", 0))
+        start_b = from_b or 1
+        end_b = to_b or bar_count
+        target_staves = [args.staff] if args.staff > 0 else sorted({s.get("staff", 1) for s in filtered_lyrics})
+        staff_bars: dict[int, list[dict[str, Any]]] = {}
+        for staff_num in target_staves:
+            if end_b >= start_b:
+                staff_bars[staff_num] = await _bridge(client, "ReadBars", [staff_num, start_b, end_b])
+
+        barlines: list[dict[str, Any]] = []
+        if args.barlines:
+            barlines = await _bridge(client, "GetSpecialBarlines", [start_b, end_b])
+
+    score_default_font = info.get("mainTextFontName")
+    typography = lyrics.analyze_lyric_typography(
+        filtered_lyrics, score_default_font=score_default_font, staff_names=names
+    )
+    issues = lyrics.lint_lyrics(
+        filtered_lyrics, names, staff_bars, score_default_font=score_default_font
+    )
+    snapshot = agent_output.project_score_snapshot(
+        info,
+        staves_info,
+        selection,
+        barlines=barlines,
+        lyrics=filtered_lyrics if args.lyrics else None,
+    )
+    compact_issues = [
+        {
+            field: issue[field]
+            for field in ("type", "severity", "bar", "staff", "staves", "line", "message")
+            if field in issue
+        }
+        for issue in issues
+    ]
+    report = {
+        "snapshot": snapshot,
+        "issues": compact_issues,
+        "errors": sum(issue.get("severity") == "error" for issue in issues),
+        "warnings": sum(issue.get("severity") == "warning" for issue in issues),
+        "typography": {
+            field: typography[field]
+            for field in ("predominant_font", "predominant_size", "has_divergence_from_score_default")
+            if field in typography
+        },
+    }
+    print(json.dumps(report, ensure_ascii=False, separators=(",", ":")))
+    return EXIT_COMMAND_FAILED if report["errors"] else EXIT_OK
 
 
 async def _run_patch_layout(args: argparse.Namespace) -> int:
@@ -1743,6 +1822,7 @@ def main(argv: list[str] | None = None) -> int:
         "selection": _run_selection,
         "inspect": _run_inspect,
         "score-snapshot": _run_score_snapshot,
+        "proofread": _run_proofread,
         "patch-layout": _run_patch_layout,
         "read": _run_read,
         "do": _run_do,
