@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import struct
@@ -11,6 +12,13 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+try:
+    from sibelius_websocket_cli.client import SibeliusClient
+    from sibelius_websocket_cli.cli import _bridge, BRIDGE_PLUGIN, _backup
+    HAVE_CLIENT = True
+except ImportError:
+    HAVE_CLIENT = False
 
 
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -78,7 +86,10 @@ def parse_midi_events(data: bytes) -> tuple[int, int, list[dict[str, Any]]]:
                 meta_data = track_data[pos:pos+length]
                 pos += length
                 if meta_type == 0x03:
-                    track_name = meta_data.decode("latin-1", errors="replace")
+                    try:
+                        track_name = meta_data.decode("utf-8", errors="replace")
+                    except Exception:
+                        pass
             elif status in (0xF0, 0xF7):
                 length = 0
                 while True:
@@ -196,21 +207,11 @@ def cmd_audit_midi(args: argparse.Namespace) -> int:
         return 1 if total_hanging > 0 else 0
 
 
-def cmd_audit_score(args: argparse.Namespace) -> int:
-    """Audit score bars via sibelius-websocket-cli read to detect dangling ties."""
-    cmd = ["uv", "run", "sibelius-websocket-cli", "read", "--staff", str(args.staff), "--from", str(args.from_bar), "--to", str(args.to_bar)]
-    res = subprocess.run(cmd, capture_output=True, text=True)
-    if res.returncode != 0:
-        print(f"error calling sibelius-websocket-cli: {res.stderr}", file=sys.stderr)
-        return res.returncode
-
-    try:
-        bars_data = json.loads(res.stdout)
-    except json.JSONDecodeError as exc:
-        print(f"error decoding score JSON: {exc}", file=sys.stderr)
-        return 1
-
-    # Flatten notes with bar and index info
+def audit_score_data(
+    bars_data: list[dict[str, Any]],
+    staff_num: int = 1,
+) -> dict[str, Any]:
+    """Audit score bars for dangling ties, tuplet boundary ties, and same-pitch re-attacks."""
     notes_sequence = []
     tuplets_seen = set()
 
@@ -237,16 +238,20 @@ def cmd_audit_score(args: argparse.Namespace) -> int:
 
     dangling = []
     tuplet_ties = []
+    reattacks = []
+
     for i, current in enumerate(notes_sequence):
-        for n_idx, n in enumerate(current["notes"]):
+        for n in current["notes"]:
             if n.get("tied") is True:
                 curr_pitch = n.get("pitch")
                 curr_name = n.get("name")
-                # Look for the following NoteRest in the same voice
                 next_obj = None
-                for candidate in notes_sequence[i+1:]:
+                next_obj_idx = None
+                for cand_idx in range(i + 1, len(notes_sequence)):
+                    candidate = notes_sequence[cand_idx]
                     if candidate["voice"] == current["voice"]:
                         next_obj = candidate
+                        next_obj_idx = cand_idx
                         break
 
                 if not next_obj:
@@ -277,7 +282,7 @@ def cmd_audit_score(args: argparse.Namespace) -> int:
                             "reason": f"Tie pitch mismatch: current {curr_name} (pitch {curr_pitch}) -> next note is {next_pitches} in Bar {next_obj['bar']} index {next_obj['index']}",
                         })
                     else:
-                        # Check if a Tuplet starts between current and next
+                        # Tuplet boundary check
                         crosses_tuplet = any(
                             (current["bar"] < tb or (current["bar"] == tb and current["position"] <= tp)) and
                             (tb < next_obj["bar"] or (tb == next_obj["bar"] and tp <= next_obj["position"]))
@@ -294,27 +299,142 @@ def cmd_audit_score(args: argparse.Namespace) -> int:
                                 "reason": f"Tie crosses a tuplet boundary into Bar {next_obj['bar']} index {next_obj['index']}",
                             })
 
-    if not dangling and not tuplet_ties:
-        print(f"Clean score: no dangling ties detected on Staff {args.staff} in bars {args.from_bar}-{args.to_bar}.")
-        return 0
+                        # Same-pitch re-attack conflict check
+                        if next_obj_idx is not None:
+                            for sub_idx in range(next_obj_idx + 1, len(notes_sequence)):
+                                sub_cand = notes_sequence[sub_idx]
+                                if sub_cand["voice"] == current["voice"]:
+                                    if sub_cand["is_rest"]:
+                                        break
+                                    if sub_cand["bar"] > next_obj["bar"] + 1:
+                                        break
+                                    if any(sn.get("pitch") == curr_pitch for sn in sub_cand["notes"]):
+                                        reattacks.append({
+                                            "bar": current["bar"],
+                                            "index": current["index"],
+                                            "pitch": curr_pitch,
+                                            "name": curr_name,
+                                            "next_bar": next_obj["bar"],
+                                            "next_index": next_obj["index"],
+                                            "reattack_bar": sub_cand["bar"],
+                                            "reattack_index": sub_cand["index"],
+                                            "reattack_position": sub_cand["position"],
+                                            "reason": (
+                                                f"Note is tied to Bar {next_obj['bar']} idx {next_obj['index']}, but the same pitch {curr_name} "
+                                                f"re-attacks at Bar {sub_cand['bar']} pos {sub_cand['position']} in the same voice without voice separation. "
+                                                f"SoundWorld drops Note-Off for the tied note when the re-attack ends."
+                                            ),
+                                        })
+                                        break
+                                    else:
+                                        break
+
+    return {
+        "staff": staff_num,
+        "dangling": dangling,
+        "tuplet_ties": tuplet_ties,
+        "reattacks": reattacks,
+    }
+
+
+def format_audit_results(results: dict[str, Any]) -> tuple[str, bool]:
+    """Format audit results for a staff into user-readable report. Returns (report_text, has_errors)."""
+    lines = []
+    staff = results["staff"]
+    dangling = results.get("dangling", [])
+    tuplet_ties = results.get("tuplet_ties", [])
+    reattacks = results.get("reattacks", [])
+
+    has_errors = bool(dangling or reattacks)
 
     if dangling:
-        print(f"\n[!] Flagged {len(dangling)} DEFECTIVE DANGLING TIE(S) on Staff {args.staff} (Safe to Auto-Remove):")
+        lines.append(f"\n[!] Flagged {len(dangling)} DEFECTIVE DANGLING TIE(S) on Staff {staff} (Tier 1 Error - Safe to Auto-Remove):")
         for d in dangling:
-            print(f"  • Bar {d['bar']} index {d['index']}: {d['name']} (pitch {d['pitch']})")
-            print(f"    Reason: {d['reason']}")
-            print(f"    Suggested Fix: uv run sibelius-websocket-cli tie --staff {args.staff} --bar {d['bar']} --index {d['index']} --remove\n")
+            lines.append(f"  • Bar {d['bar']} index {d['index']}: {d['name']} (pitch {d['pitch']})")
+            lines.append(f"    Reason: {d['reason']}")
+            lines.append(f"    Suggested Fix: uv run sibelius-websocket-cli tie --staff {staff} --bar {d['bar']} --index {d['index']} --remove\n")
+
+    if reattacks:
+        lines.append(f"\n[!] Flagged {len(reattacks)} SAME-PITCH RE-ATTACK CONFLICT(S) on Staff {staff} (Tier 3 Error - Dropped Note-Off Hazard):")
+        for r in reattacks:
+            lines.append(f"  • Bar {r['bar']} index {r['index']}: {r['name']} (pitch {r['pitch']}) -> Bar {r['next_bar']} index {r['next_index']}")
+            lines.append(f"    Hazard: Re-attacks at Bar {r['reattack_bar']} pos {r['reattack_position']} in same voice")
+            lines.append(f"    Reason: {r['reason']}")
+            lines.append(f"    Suggested Fix: uv run sibelius-websocket-cli tie --staff {staff} --bar {r['bar']} --index {r['index']} --remove\n")
 
     if tuplet_ties:
-        print(f"\n[i] Found {len(tuplet_ties)} NOTATIONALLY VALID TUPLET BOUNDARY TIE(S) on Staff {args.staff}:")
+        lines.append(f"\n[i] Found {len(tuplet_ties)} NOTATIONALLY VALID TUPLET BOUNDARY TIE(S) on Staff {staff} (Tier 2 Playback Engine Bug):")
         for t in tuplet_ties:
-            print(f"  • Bar {t['bar']} index {t['index']}: {t['name']} (pitch {t['pitch']}) -> Bar {t['next_bar']} index {t['next_index']}")
-            print(f"    Notice: Matches sheet music notation. If Sibelius's real-time playback engine hangs on this note,")
-            print(f"            remove the tie and replace with a Slur ('S' in Sibelius) to preserve visual engraving and restore clean playback.")
-            print(f"    Workaround: uv run sibelius-websocket-cli tie --staff {args.staff} --bar {t['bar']} --index {t['index']} --remove\n")
+            lines.append(f"  • Bar {t['bar']} index {t['index']}: {t['name']} (pitch {t['pitch']}) -> Bar {t['next_bar']} index {t['next_index']}")
+            lines.append(f"    Notice: Matches sheet music notation. If Sibelius's real-time playback engine hangs on this note,")
+            lines.append(f"            remove the tie and replace with a Slur ('S' in Sibelius) to preserve visual engraving and restore clean playback.")
+            lines.append(f"    Workaround: uv run sibelius-websocket-cli tie --staff {staff} --bar {t['bar']} --index {t['index']} --remove\n")
 
-    return 1 if dangling else 0
+    return "\n".join(lines), has_errors
 
+
+def cmd_audit_score(args: argparse.Namespace) -> int:
+    """Audit score bars via sibelius-websocket-cli read to detect playback hang hazards."""
+    staff_arg = str(args.staff).lower().strip()
+    from_bar = args.from_bar
+    to_bar = args.to_bar
+
+    # Determine staves to audit
+    target_staves = []
+    if staff_arg in ("all", "0"):
+        info_res = subprocess.run(["uv", "run", "sibelius-websocket-cli", "score-info"], capture_output=True, text=True)
+        if info_res.returncode == 0:
+            try:
+                staff_count = json.loads(info_res.stdout).get("staffCount", 16)
+                target_staves = list(range(1, staff_count + 1))
+            except Exception:
+                target_staves = list(range(1, 17))
+        else:
+            target_staves = list(range(1, 17))
+    elif "," in staff_arg:
+        target_staves = [int(s) for s in staff_arg.split(",") if s.strip().isdigit()]
+    elif "-" in staff_arg:
+        start_s, end_s = staff_arg.split("-", 1)
+        target_staves = list(range(int(start_s), int(end_s) + 1))
+    else:
+        target_staves = [int(staff_arg)]
+
+    total_issues = 0
+    total_clean = 0
+
+    for s in target_staves:
+        cmd = ["uv", "run", "sibelius-websocket-cli", "read", "--staff", str(s), "--from", str(from_bar), "--to", str(to_bar)]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode != 0:
+            print(f"error calling sibelius-websocket-cli for staff {s}: {res.stderr}", file=sys.stderr)
+            total_issues += 1
+            continue
+
+        try:
+            bars_data = json.loads(res.stdout)
+        except json.JSONDecodeError as exc:
+            print(f"error decoding score JSON for staff {s}: {exc}", file=sys.stderr)
+            total_issues += 1
+            continue
+
+        audit_res = audit_score_data(bars_data, staff_num=s)
+        report, has_err = format_audit_results(audit_res)
+
+        if report:
+            print(report)
+            if has_err:
+                total_issues += 1
+        else:
+            total_clean += 1
+
+    if total_issues == 0:
+        if len(target_staves) == 1:
+            print(f"Clean score: no hanging note hazards detected on Staff {target_staves[0]} in bars {from_bar}-{to_bar}.")
+        else:
+            print(f"Clean score: no hanging note hazards detected across all {len(target_staves)} staves in bars {from_bar}-{to_bar}.")
+        return 0
+
+    return 1
 
 
 def cmd_render_pdf(args: argparse.Namespace) -> int:
@@ -374,8 +494,8 @@ def main() -> int:
     p_midi.set_defaults(func=cmd_audit_midi)
 
     # audit-score
-    p_score = subparsers.add_parser("audit-score", help="Audit live score structure for dangling/cross-tuplet ties")
-    p_score.add_argument("--staff", type=int, default=1, help="Staff number (default: 1)")
+    p_score = subparsers.add_parser("audit-score", help="Audit live score structure for dangling ties and re-attack conflicts")
+    p_score.add_argument("--staff", default="1", help="Staff number (1, 2, 'all', or range '1-4') (default: 1)")
     p_score.add_argument("--from-bar", type=int, default=1, help="First bar (default: 1)")
     p_score.add_argument("--to-bar", type=int, default=10, help="Last bar (default: 10)")
     p_score.set_defaults(func=cmd_audit_score)

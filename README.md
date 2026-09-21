@@ -80,6 +80,19 @@ uv run sibelius-websocket-cli invoke select_all delete
                                                   # see docs/commands.md for all 627
 ```
 
+Splitting MusicXML is performed locally and deterministically (no score is
+edited in Sibelius except optional `.sib` export/opening):
+
+```bash
+uv run sibelius-websocket-cli split-parts score.mxl --preset satb --out score_satb.mxl
+uv run sibelius-websocket-cli split-parts score.mxl --preset 16voices --audit --json
+```
+
+The SATB profile accepts `--soprano-solo`, `--tenor-solo`, and
+`--bass-solo` bar ranges. Audit mode writes nothing and returns stable issue
+codes for malformed rhythm, ambiguous XML voices, unsupported pitch counts,
+and ties.
+
 Calling ManuScript plug-ins and exploring the protocol:
 
 ```bash

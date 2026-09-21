@@ -46,6 +46,10 @@ several non-obvious traps that this skill handles systematically.
 
 ## Quick Start
 
+The SATB wrapper routes notes through the repository's shared onset-based
+MusicXML engine. Its lyric reconnection remains SATB-only post-processing;
+the generic engine never attempts OMR lyric repair.
+
 ### 1. Audit the Input Score
 Inspect the 2-staff MusicXML (`.xml` or `.mxl`) to determine voice usage and chords:
 ```bash

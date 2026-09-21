@@ -15,6 +15,12 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+# The skill remains runnable with plain ``python3`` from a source checkout.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
+SOURCE_ROOT = REPOSITORY_ROOT / "src"
+if str(SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SOURCE_ROOT))
+
 
 SEMITONES = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 
@@ -298,6 +304,24 @@ def cmd_audit(args: argparse.Namespace) -> int:
     return 0
 
 
+def _copy_soprano_lyrics_to_tb(root: ET.Element) -> None:
+    """Copy only missing lyrics when source and target note streams align."""
+    parts = {part.attrib.get("id"): part for part in root.findall("part")}
+    soprano, tenor, bass = parts.get("P1"), parts.get("P3"), parts.get("P4")
+    if soprano is None or tenor is None or bass is None:
+        return
+    for s_measure, t_measure, b_measure in zip(
+        soprano.findall("measure"), tenor.findall("measure"), bass.findall("measure"), strict=True
+    ):
+        source = [copy.deepcopy(note.findall("lyric")[0]) if note.findall("lyric") else None for note in s_measure.findall("note")]
+        for measure in (t_measure, b_measure):
+            notes = measure.findall("note")
+            if len(notes) == len(source):
+                for note, lyric in zip(notes, source, strict=True):
+                    if lyric is not None and not note.findall("lyric"):
+                        note.append(lyric)
+
+
 def cmd_split(args: argparse.Namespace) -> int:
     """Split a 2-staff score into 4 discrete SATB parts."""
     in_path = Path(args.input)
@@ -305,6 +329,30 @@ def cmd_split(args: argparse.Namespace) -> int:
     if not in_path.exists():
         print(f"error: file not found: {in_path}", file=sys.stderr)
         return 1
+
+    # All musical routing now lives in the shared onset-based engine.  This
+    # wrapper deliberately keeps SATB-only lyric repair as post-processing.
+    from sibelius_websocket_cli.musicxml_split.profiles.satb import SATBOptions, split_satb
+
+    options = SATBOptions(
+        soprano_solo_bars=frozenset(parse_bar_ranges(args.soprano_solo or "")),
+        tenor_solo_bars=frozenset(parse_bar_ranges(args.tenor_solo or "")),
+        bass_solo_bars=frozenset(parse_bar_ranges(args.bass_solo or "")),
+    )
+    result = split_satb(in_path, out_path, options)
+    if result.issues:
+        for issue in result.issues:
+            print(f"[{issue.severity}] {issue.code}: {issue.message}", file=sys.stderr)
+    if args.copy_lyrics_to_tb or args.reconnect_lyrics:
+        _, output_root = parse_musicxml(out_path)
+        if args.copy_lyrics_to_tb:
+            _copy_soprano_lyrics_to_tb(output_root)
+        if args.reconnect_lyrics:
+            count = reconnect_lyrics_in_root(output_root)
+            print(f"Reconnected {count} multi-syllable words across parts.")
+        save_musicxml(output_root, out_path)
+    print(f"Successfully split into 4-staff score: {out_path}")
+    return 0
 
     tree, root = parse_musicxml(in_path)
 

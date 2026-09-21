@@ -216,5 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local scratch: score exports, temp working files, and planning notes
+output/
+tmp/
+thoughts/
 .claude/config/
-.claude/config

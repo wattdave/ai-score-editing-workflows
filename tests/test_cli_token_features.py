@@ -19,6 +19,7 @@ from sibelius_websocket_cli.cli import (
     _run_read_lyrics,
     _run_reset_design,
     _run_set_lyric,
+    _run_tie,
     _run_write,
     build_parser,
 )
@@ -263,3 +264,24 @@ async def test_patch_lyrics_uses_one_connection_backup_and_verification(
     output = capsys.readouterr().out
     assert "patched 2; verified 2/2" in output
     assert "saved /scores/a.sib" in output
+
+
+async def test_tie_passes_string_booleans_to_bridge() -> None:
+    parser = build_parser()
+
+    # Test tie add passes "true"
+    tie_args = parser.parse_args(["tie", "--staff", "1", "--bar", "2", "--index", "3"])
+    with patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=EXIT_OK)) as run_write:
+        assert await _run_tie(tie_args) == EXIT_OK
+        run_write.assert_awaited_once_with(
+            tie_args, "SetTie", [1, 2, 3, "true"]
+        )
+
+    # Test tie remove passes "false"
+    untie_args = parser.parse_args(["tie", "--staff", "1", "--bar", "2", "--index", "3", "--remove"])
+    with patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=EXIT_OK)) as run_write:
+        assert await _run_tie(untie_args) == EXIT_OK
+        run_write.assert_awaited_once_with(
+            untie_args, "SetTie", [1, 2, 3, "false"]
+        )
+
