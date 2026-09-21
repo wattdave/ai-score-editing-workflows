@@ -32,6 +32,9 @@ Write commands create a backup before mutation.
 - Entry: `add-notes` and `add-abc`.
 - Editing: `set-note`, `set-lyric`, `patch-lyrics`, `set-lyric-style`, `transpose`, `set-key`,
   `copy-passage`, `flip-stem`, `nudge`, and `reset-design`.
+- Batched layout: `patch-layout --file PATH [--save]`, with validated `nudge`,
+  `set-break`, `set-barline`, `reset-design`, and conservative
+  `remove-redundant-clefs` operations.
 - Persistence: `save` and `backup`.
 - Export: `export --format musicxml|mxl|pdf|midi|png [--out PATH] [--file SCORE]`.
 
