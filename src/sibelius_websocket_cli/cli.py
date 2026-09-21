@@ -16,6 +16,7 @@ from sibelius_websocket_cli import (
     agent_output,
     batch_lyrics,
     launcher,
+    layout,
     lyrics,
     music,
     polychoral,
@@ -134,6 +135,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="omit special barlines from the snapshot",
     )
     snapshot.set_defaults(barlines=True)
+    patch_layout = sub.add_parser(
+        "patch-layout",
+        help="apply and verify a validated JSON batch of layout corrections",
+    )
+    patch_layout.add_argument("--file", required=True, help="JSON layout operation array")
+    patch_layout.add_argument("--save", action="store_true", help="save after all operations complete")
+    patch_layout.add_argument("--dry-run", action="store_true", help="validate and report without connecting or mutating")
     read = sub.add_parser("read", help="read bar contents (requires bridge plug-in)")
     read.add_argument("--staff", type=int, default=1, help="staff number, from 1")
     read.add_argument("--from", dest="from_bar", type=int, help="first bar, from 1")
@@ -834,6 +842,81 @@ async def _run_score_snapshot(args: argparse.Namespace) -> int:
         lyrics=lyric_data,
     )
     print(agent_output.render_compact_snapshot(snapshot))
+    return EXIT_OK
+
+
+async def _run_patch_layout(args: argparse.Namespace) -> int:
+    try:
+        operations = layout.load_layout_patches(args.file)
+    except layout.LayoutPatchError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+
+    if args.dry_run:
+        print(layout.compact_summary({"operations": len(operations), "validated": True, "dryRun": True}))
+        return EXIT_OK
+
+    results: list[dict[str, Any]] = []
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _check_bridge_version(client)
+        await _assert_expected_score(client, args)
+        backup = await _backup(client, "before patch-layout")
+        for operation in operations:
+            op = operation["op"]
+            operation_verified = True
+            if op == "nudge":
+                result = await _bridge(
+                    client,
+                    "NudgeObject",
+                    [
+                        operation["staff"], operation["bar"], operation["index"],
+                        operation.get("dx", 0), operation.get("dy", 0),
+                    ],
+                )
+            elif op == "set-break":
+                result = await _bridge(client, "SetBarBreak", [operation["bar"], operation.get("type", "system")])
+            elif op == "set-barline":
+                result = await _bridge(client, "SetSpecialBarline", [operation["bar"], operation.get("type", "double")])
+            elif op == "remove-redundant-clefs":
+                from scripts.clean_clefs import delete_redundant_clefs, find_redundant_clefs
+
+                target_staff = operation.get("staff")
+                findings = await find_redundant_clefs(client, target_staff)
+                deleted = await delete_redundant_clefs(client, findings)
+                remaining = await find_redundant_clefs(client, target_staff)
+                operation_verified = not remaining
+                result = {
+                    "found": len(findings),
+                    "deleted": deleted,
+                    "remaining": len(remaining),
+                    "staff": target_staff,
+                }
+                if not operation_verified:
+                    raise BridgeError(f"remove-redundant-clefs left {len(remaining)} finding(s)")
+            else:  # reset-design
+                commands = ["select_all"]
+                if operation.get("lyrics", False):
+                    commands.append("filter_lyrics")
+                commands.extend(["reset_design", "select_none"])
+                response = await client.invoke_commands(commands)
+                if not protocol.is_success(response):
+                    raise BridgeError(f"reset-design failed: {json.dumps(response)}")
+                result = {"commands": commands, "ok": True}
+            results.append({"op": op, "result": result, "verified": operation_verified})
+
+        saved = None
+        if args.save:
+            saved = await _bridge(client, "Save")
+
+    summary = {
+        "operations": len(operations),
+        "verified": len(results),
+        "backup": backup.get("copy"),
+        "results": results,
+    }
+    if saved is not None:
+        summary["saved"] = saved.get("fileName", "")
+    print(layout.compact_summary(summary))
     return EXIT_OK
 
 
@@ -1660,6 +1743,7 @@ def main(argv: list[str] | None = None) -> int:
         "selection": _run_selection,
         "inspect": _run_inspect,
         "score-snapshot": _run_score_snapshot,
+        "patch-layout": _run_patch_layout,
         "read": _run_read,
         "do": _run_do,
         "bridge-version": _run_bridge_version,

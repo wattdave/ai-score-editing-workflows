@@ -194,6 +194,54 @@ async def _staff_default_clef(
     return None, "unknown - default-clef check skipped"
 
 
+async def find_redundant_clefs(client: Any, staff: int | None = None) -> list[dict[str, Any]]:
+    """Return conservative redundant-clef findings for one or all staves."""
+    score_info = await _bridge(client, "GetScoreInfo")
+    staff_count = int(score_info.get("staffCount", 0))
+    bar_count = int(score_info.get("barCount", 0))
+    meter_map = build_meter_map(score_info.get("timeSignatures"), bar_count)
+    target_staves = [staff] if staff and staff > 0 else list(range(1, staff_count + 1))
+
+    staves_info = await _bridge(client, "GetStaves")
+    instrument_names: dict[int, str] = {}
+    staff_bar_counts: dict[int, int] = {}
+    for sinfo in staves_info if isinstance(staves_info, list) else []:
+        if not isinstance(sinfo, dict):
+            continue
+        snum = sinfo.get("staffNum", 0)
+        instrument_names[snum] = sinfo.get("fullInstrumentName") or sinfo.get("instrumentName") or ""
+        if sinfo.get("barCount"):
+            staff_bar_counts[snum] = int(sinfo["barCount"])
+
+    findings: list[dict[str, Any]] = []
+    for target in target_staves:
+        default_clef, _ = await _staff_default_clef(client, target, instrument_names.get(target, ""))
+        last_bar = min(bar_count, staff_bar_counts.get(target, bar_count))
+        for start_bar in range(1, last_bar + 1, 30):
+            end_bar = min(start_bar + 29, last_bar)
+            bars = await _bridge(client, "ReadBars", [target, start_bar, end_bar])
+            findings.extend(
+                audit_score_clefs(bars, staff_num=target, default_clef=default_clef, bar_ticks=meter_map)
+            )
+    return findings
+
+
+async def delete_redundant_clefs(client: Any, findings: list[dict[str, Any]]) -> int:
+    """Delete findings in reverse index order and return the deletion count."""
+    grouped: dict[int, dict[int, list[int]]] = defaultdict(lambda: defaultdict(list))
+    for finding in findings:
+        grouped[finding["staff"]][finding["bar"]].append(finding["index"])
+
+    deleted_count = 0
+    for staff in sorted(grouped):
+        for bar in sorted(grouped[staff]):
+            for index in sorted(grouped[staff][bar], reverse=True):
+                result = await _bridge(client, "DeleteObject", [staff, bar, index])
+                if "deleted" in result:
+                    deleted_count += 1
+    return deleted_count
+
+
 async def _run_audit_or_strip(staff: int | None, dry_run: bool, is_audit_only: bool) -> int:
     if not HAVE_CLIENT:
         print("error: sibelius_websocket_cli required; run with 'uv run python scripts/clean_clefs.py'", file=sys.stderr)
