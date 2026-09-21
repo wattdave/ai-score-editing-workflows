@@ -120,6 +120,20 @@ def build_parser() -> argparse.ArgumentParser:
         "inspect",
         help="compact score identity, staff, and selection summary",
     )
+    snapshot = sub.add_parser(
+        "score-snapshot",
+        help="compact structural snapshot from one bridge session",
+    )
+    snapshot.add_argument("--bars", help="bar range for optional lyrics and barlines, e.g. '1-30'")
+    snapshot.add_argument("--staff", type=int, default=0, help="staff for optional lyrics (0 = all)")
+    snapshot.add_argument("--lyrics", action="store_true", help="include compact lyric data")
+    snapshot.add_argument(
+        "--no-barlines",
+        dest="barlines",
+        action="store_false",
+        help="omit special barlines from the snapshot",
+    )
+    snapshot.set_defaults(barlines=True)
     read = sub.add_parser("read", help="read bar contents (requires bridge plug-in)")
     read.add_argument("--staff", type=int, default=1, help="staff number, from 1")
     read.add_argument("--from", dest="from_bar", type=int, help="first bar, from 1")
@@ -787,6 +801,39 @@ async def _run_inspect(args: argparse.Namespace) -> int:
         print(json.dumps(projected, ensure_ascii=False, separators=(",", ":")))
     else:
         print(agent_output.render_compact_inspect(info, staves, selection))
+    return EXIT_OK
+
+
+async def _run_score_snapshot(args: argparse.Namespace) -> int:
+    from_b, to_b = parse_bar_range(bars=getattr(args, "bars", None))
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _check_bridge_version(client)
+        info = await _bridge(client, "GetScoreInfo")
+        staves = await _bridge(client, "GetStaves")
+        selection = await _bridge(client, "GetSelectionInfo")
+
+        barlines: list[dict[str, Any]] = []
+        if args.barlines:
+            bar_start = from_b or 1
+            bar_end = to_b or int(info.get("barCount", bar_start))
+            barlines = await _bridge(client, "GetSpecialBarlines", [bar_start, bar_end])
+
+        lyric_data: list[dict[str, Any]] | None = None
+        if args.lyrics:
+            lyric_data = await _bridge(
+                client,
+                "ReadLyrics",
+                [args.staff, from_b or 0, to_b or 0],
+            )
+
+    snapshot = agent_output.project_score_snapshot(
+        info,
+        staves,
+        selection,
+        barlines=barlines,
+        lyrics=lyric_data,
+    )
+    print(agent_output.render_compact_snapshot(snapshot))
     return EXIT_OK
 
 
@@ -1612,6 +1659,7 @@ def main(argv: list[str] | None = None) -> int:
         "staves": _run_staves,
         "selection": _run_selection,
         "inspect": _run_inspect,
+        "score-snapshot": _run_score_snapshot,
         "read": _run_read,
         "do": _run_do,
         "bridge-version": _run_bridge_version,

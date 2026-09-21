@@ -4,8 +4,10 @@ import json
 
 from sibelius_websocket_cli.agent_output import (
     project_inspect,
+    project_score_snapshot,
     render_compact_inspect,
     render_compact_lyrics,
+    render_compact_snapshot,
 )
 
 
@@ -67,6 +69,29 @@ def test_render_compact_inspect_is_one_line_unicode_json_with_fallbacks() -> Non
         "selection": {"isPassage": False},
         "staves": [{"staffNum": 4, "instrumentName": "Staff 4"}],
     }
+
+
+def test_score_snapshot_projects_structural_fields_and_optional_data() -> None:
+    snapshot = project_score_snapshot(
+        {
+            "fileName": "/scores/a.sib",
+            "title": "A",
+            "staffCount": 1,
+            "barCount": 8,
+            "keySignatures": [{"bar": 1, "name": "Bb", "sharps": -2, "major": True, "ignored": 1}],
+            "timeSignatures": [{"bar": 1, "numerator": 6, "denominator": 4, "ignored": 1}],
+        },
+        [{"staffNum": 1, "fullInstrumentName": "Soprano", "ignored": 1}],
+        {"isPassage": False, "ignored": 1},
+        barlines=[{"bar": 5, "position": 768, "type": "EndRepeat", "ignored": 1}],
+        lyrics=[{"staff": 1, "bar": 2, "index": 3, "position": 256, "text": "la", "ignored": 1}],
+    )
+
+    assert snapshot["keySignatures"] == [{"bar": 1, "name": "Bb", "sharps": -2, "major": True}]
+    assert snapshot["timeSignatures"] == [{"bar": 1, "numerator": 6, "denominator": 4}]
+    assert snapshot["barlines"] == [{"bar": 5, "position": 768, "type": "EndRepeat"}]
+    assert snapshot["lyrics"] == [{"staff": 1, "bar": 2, "index": 3, "position": 256, "text": "la"}]
+    assert "\n" not in render_compact_snapshot(snapshot)
 
 
 def test_render_compact_lyrics_preserves_addresses_text_and_order() -> None:
