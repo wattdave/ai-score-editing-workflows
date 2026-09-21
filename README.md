@@ -43,6 +43,7 @@ Reading the open score (requires the bridge plug-in):
 ```bash
 uv run sibelius-websocket-cli score-info          # title, file, staves, bars
 uv run sibelius-websocket-cli inspect             # compact identity, staves, selection
+uv run sibelius-websocket-cli score-snapshot      # compact structural snapshot
 uv run sibelius-websocket-cli staves              # instrument names per staff
 uv run sibelius-websocket-cli selection           # current passage selection
 uv run sibelius-websocket-cli read --staff 1 --from 1 --to 4

@@ -55,6 +55,69 @@ def render_compact_inspect(
     )
 
 
+def project_score_snapshot(
+    score_info: Mapping[str, Any],
+    staves: Sequence[Mapping[str, Any]],
+    selection: Mapping[str, Any],
+    *,
+    barlines: Sequence[Mapping[str, Any]] = (),
+    lyrics: Sequence[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Project a compact, stable structural snapshot for before/after comparison."""
+    projected = project_inspect(score_info, staves, selection)
+    projected["keySignatures"] = [
+        {
+            field: signature[field]
+            for field in ("bar", "name", "sharps", "major")
+            if field in signature
+        }
+        for signature in score_info.get("keySignatures", [])
+    ]
+    projected["timeSignatures"] = [
+        {
+            field: signature[field]
+            for field in ("bar", "numerator", "denominator")
+            if field in signature
+        }
+        for signature in score_info.get("timeSignatures", [])
+    ]
+    projected["barlines"] = [
+        {
+            field: barline[field]
+            for field in ("bar", "position", "type", "internalType")
+            if field in barline
+        }
+        for barline in sorted(
+            barlines,
+            key=lambda item: (_integer(item.get("bar")), _integer(item.get("position"))),
+        )
+    ]
+    if lyrics is not None:
+        projected["lyrics"] = [
+            {
+                field: item[field]
+                for field in ("staff", "bar", "index", "position", "voice", "line", "text")
+                if field in item
+            }
+            for item in sorted(
+                lyrics,
+                key=lambda item: (
+                    _integer(item.get("staff")),
+                    _integer(item.get("bar")),
+                    _integer(item.get("index")),
+                    _integer(item.get("position")),
+                    _integer(item.get("voice")),
+                ),
+            )
+        ]
+    return projected
+
+
+def render_compact_snapshot(snapshot: Mapping[str, Any]) -> str:
+    """Render a score snapshot as whitespace-free Unicode JSON."""
+    return json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
+
+
 def render_compact_lyrics(syllables: Sequence[Mapping[str, Any]]) -> str:
     """Render lyric edit addresses as one deterministic, safely quoted line each."""
     ordered = sorted(
