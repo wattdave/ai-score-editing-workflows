@@ -40,6 +40,12 @@ Use optional per-item `font` and `fontSize` fields when patches need different
 styles. Add `--save` when textual readback is sufficient; when visual review is
 required, export and inspect first, then run `--expect-file PATH save`.
 
+**Never infer a lyric font size when the bridge does not return one.** An
+inferred fallback can silently introduce a visible size mismatch. Export and
+inspect a neighboring body lyric to establish its actual point size, then pass
+both `font` and `fontSize` explicitly. If that size cannot be established,
+stop and ask rather than writing a bare or fallback-styled lyric.
+
 For a single correction:
 
 ```bash
@@ -119,4 +125,3 @@ a standalone write, re-read before reusing addresses. Re-export the
 representative page only when visual style or layout is part of the change, and
 compare edited syllables with adjacent lyrics. Save after verification when
 requested.
-

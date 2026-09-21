@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 33);
+		return CreateDictionary('version', 35);
 	}"
 
 	Echo "(value) {
@@ -314,6 +314,38 @@
 			return CreateDictionary('error', err);
 		}
 		return CreateDictionary('bar', barNumber, 'numerator', top, 'denominator', bottom);
+	}"
+
+	InsertIrregularBar "(barNumber, length) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (barNumber < 1 or barNumber > score.SystemStaff.BarCount + 1) {
+			return CreateDictionary('error', 'barNumber out of range');
+		}
+		if (length < 1) {
+			return CreateDictionary('error', 'length must be positive');
+		}
+		score.InsertBars(1, barNumber, length);
+		return CreateDictionary('inserted', 1, 'bar', barNumber, 'length', length);
+	}"
+
+	SetBarNumber "(barNumber, newNumber, skipThisBar) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (barNumber < 1 or barNumber > score.SystemStaff.BarCount) {
+			return CreateDictionary('error', 'barNumber out of range');
+		}
+		skip = False;
+		if (skipThisBar = True or skipThisBar = 1 or skipThisBar = 'true') {
+			skip = True;
+		}
+		bar = score.SystemStaff.NthBar(barNumber);
+		bar.AddBarNumber(newNumber, 0, '', False, skip);
+		return CreateDictionary('bar', barNumber, 'number', newNumber, 'skipThisBar', skip);
 	}"
 
 	CreateStaff "(styleId, position, fullName, shortName) {
@@ -1534,4 +1566,3 @@
 		return CreateDictionary('converted', converted);
 	}"
 }
-
