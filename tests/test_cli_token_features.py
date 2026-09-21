@@ -17,6 +17,7 @@ from sibelius_websocket_cli.cli import (
     _run_inspect,
     _run_score_snapshot,
     _run_patch_lyrics,
+    _run_patch_layout,
     _run_read_lyrics,
     _run_reset_design,
     _run_set_lyric,
@@ -65,6 +66,10 @@ def test_parser_accepts_agent_and_safety_options(tmp_path: Path) -> None:
     batch_args = parser.parse_args(["patch-lyrics", "--file", str(patch_file)])
     assert batch_args.subcommand == "patch-lyrics"
     assert batch_args.file == str(patch_file)
+
+    layout_args = parser.parse_args(["patch-layout", "--file", str(patch_file), "--dry-run"])
+    assert layout_args.subcommand == "patch-layout"
+    assert layout_args.dry_run is True
 
     snapshot_args = parser.parse_args(["score-snapshot", "--lyrics", "--bars", "2-3"])
     assert snapshot_args.subcommand == "score-snapshot"
@@ -152,6 +157,44 @@ async def test_score_snapshot_combines_structural_reads_in_one_context(
     assert output.startswith('{"fileName":"/scores/a.sib"')
     assert '"barlines":[{"bar":2,"position":1024,"type":"EndRepeat"}]' in output
     assert '"lyrics":[{"staff":1,"bar":2,"index":0,"position":0,"text":"la"}]' in output
+
+
+async def test_patch_layout_uses_one_context_and_one_backup(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    patch_file = tmp_path / "layout.json"
+    patch_file.write_text(
+        '[{"op":"nudge","staff":1,"bar":4,"index":2,"dx":8},'
+        '{"op":"set-barline","bar":20,"type":"end_repeat"}]'
+    )
+    args = build_parser().parse_args(["patch-layout", "--file", str(patch_file), "--save"])
+    context, client = _client_context()
+
+    async def bridge_side_effect(
+        unused_client: Any, method: str, call_args: list[Any] | None = None
+    ) -> Any:
+        del unused_client, call_args
+        if method == "Save":
+            return {"fileName": "/scores/a.sib"}
+        return {"changed": True}
+
+    with (
+        patch("sibelius_websocket_cli.cli._client", return_value=context),
+        patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._assert_expected_score", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._backup", new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"})) as backup,
+        patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge_side_effect) as bridge,
+    ):
+        assert await _run_patch_layout(args) == EXIT_OK
+
+    assert context.__aenter__.call_count == 1
+    backup.assert_awaited_once()
+    assert [call.args[1] for call in bridge.call_args_list] == [
+        "NudgeObject", "SetSpecialBarline", "Save"
+    ]
+    output = capsys.readouterr().out.strip()
+    assert '"operations":2' in output
+    assert '"verified":2' in output
 
 
 async def test_compact_read_lyrics_keeps_edit_address(capsys: pytest.CaptureFixture[str]) -> None:
