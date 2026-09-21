@@ -15,6 +15,22 @@ uv run sibelius-websocket-cli <command>
 The CLI talks to the frontmost score in Sibelius through Sibelius Connect and
 the bundled `sibwscli` ManuScript bridge.
 
+## Desktop access and opening scores
+
+Bridge commands communicate with the running macOS Sibelius application. Run
+every such command (`inspect`, reads, writes, exports, and plug-in calls) with
+desktop access outside the filesystem sandbox. A sandboxed invocation can fail
+to see an already-running Sibelius process and mistakenly try to relaunch it.
+
+If a requested score is not frontmost, open it directly rather than asking the
+user to do so:
+
+```bash
+open -a /Applications/Sibelius.app /absolute/path/to/score.sib
+```
+
+Then run `inspect` and confirm `fileName` before reading or changing the score.
+
 ## Required workflow
 
 1. Run `inspect` and confirm that `fileName` is the score the user intends.
