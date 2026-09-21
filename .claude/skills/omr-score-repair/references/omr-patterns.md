@@ -124,3 +124,30 @@ Scores for double choir (e.g. SSAATTBB $\times$ 2 = 16 voices) have sections wri
 1. Maintain 16 discrete `<part>` elements (`P1`–`P16`) throughout the entire score to ensure independent MIDI channels and clean part extraction in Sibelius.
 2. Implement a `tutti_unison_measure()` builder that clones identical notes and lyrics across the corresponding vocal pairs (e.g. Soprano $\to$ P1, P2, P9, P10; Alto $\to$ P3, P4, P11, P12, etc.).
 3. Audit dangling ties across antiphonal section transitions using automated scripts to guarantee zero infinite-sustain playback bugs in Sibelius.
+
+---
+
+## Pattern 9: Redundant Clef Objects at System Breaks (Post-Import Engraving Clutter)
+
+### Symptom
+After importing the repaired MusicXML, the Sibelius score shows duplicate clefs mid-bar — typically one at each original system break, repeated across every staff. The page looks cluttered, but playback is unaffected.
+
+### Cause
+Scanners emit a full `<attributes>` block, including `<clef>`, at the start of every recognized system. Unstacking (Pattern 1) concatenates those measures end-to-end, so each former line start carries its own clef restatement. Pattern 1 step 5 strips these at the XML level; any that survive — or that Sibelius materializes on import — persist as live `Clef` objects in the score.
+
+### Repair
+Operate on the score open in Sibelius, using `clean_clefs.py` (repo root `scripts/`, not this skill's `scripts/`):
+1. Audit without modifying anything:
+   ```bash
+   uv run python scripts/clean_clefs.py audit
+   ```
+2. Review the flagged list against the printed page, then purge:
+   ```bash
+   uv run python scripts/clean_clefs.py strip --dry-run   # preview
+   uv run python scripts/clean_clefs.py strip             # backs up, deletes, saves
+   ```
+
+A clef is flagged when its `styleId` matches the staff's default clef (read from bar 1 of that staff, falling back to inference from the instrument name), or when it sits at or past the end of its bar, computed from that bar's meter. Where either input is unknown the corresponding check is skipped rather than guessed, so the audit under-reports instead of proposing a wrong deletion — see the caveats in the skill's Common Mistakes.
+
+### Not a playback defect
+These clefs generate no MIDI events and never cause hanging or droning notes. A score that drones has a tie defect; use the `hanging-playback-note-repair` skill instead.

@@ -89,3 +89,21 @@ def test_launch_sibelius_windows() -> None:
     with patch("sys.platform", "win32"), patch("subprocess.Popen", mock_popen):
         launcher.launch_sibelius()
     mock_popen.assert_called_once_with(["cmd", "/c", "start", "", "Sibelius"])
+
+
+def test_open_score_file_macos(tmp_path: Path) -> None:
+    score = tmp_path / "test.mxl"
+    score.touch()
+    mock_popen = MagicMock()
+    with patch("sys.platform", "darwin"), patch("subprocess.Popen", mock_popen):
+        with patch.object(Path, "exists", return_value=True):
+            launcher.open_score_file(score, app_path="/Applications/Sibelius.app")
+    mock_popen.assert_called_once_with(["open", "-a", "/Applications/Sibelius.app", str(score.resolve())])
+
+
+def test_open_score_file_windows(tmp_path: Path) -> None:
+    score = tmp_path / "test.mxl"
+    score.touch()
+    with patch("sys.platform", "win32"), patch("os.startfile", create=True) as mock_startfile:
+        launcher.open_score_file(score)
+        mock_startfile.assert_called_once_with(str(score.resolve()))

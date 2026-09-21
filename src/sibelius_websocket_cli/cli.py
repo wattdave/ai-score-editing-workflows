@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -14,8 +15,10 @@ from sibelius_websocket_cli import (
     abc_notation,
     agent_output,
     batch_lyrics,
+    launcher,
     lyrics,
     music,
+    polychoral,
     protocol,
 )
 from sibelius_websocket_cli.client import ConnectionFailed, SibeliusClient, run_sync
@@ -439,6 +442,52 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument(
         "--plugin-dir",
         help="override the Sibelius user plug-in directory",
+    )
+    split_parts = sub.add_parser(
+        "split-parts",
+        aliases=["demix"],
+        help="demix multi-voice / choral scores into discrete vocal staves",
+    )
+    split_parts.add_argument(
+        "score_file",
+        nargs="?",
+        help="input score file (.sib, .xml, .mxl); defaults to active score in Sibelius",
+    )
+    split_parts.add_argument(
+        "--file",
+        "-f",
+        dest="file_opt",
+        help="alternative to positional score file",
+    )
+    split_parts.add_argument(
+        "--preset",
+        choices=["16voices", "satb"],
+        default="16voices",
+        help="demixing preset (default: 16voices)",
+    )
+    split_parts.add_argument(
+        "--out",
+        "-o",
+        help="output path (default: <input_stem>_<preset>.mxl)",
+    )
+    split_parts.add_argument(
+        "--validate",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="validate measure durations across generated parts (default: True)",
+    )
+    split_parts.add_argument(
+        "--audit",
+        action="store_true",
+        help="report layout and routing diagnostics without writing an output score",
+    )
+    split_parts.add_argument("--soprano-solo", help="SATB solo bars, e.g. 8-15,20")
+    split_parts.add_argument("--tenor-solo", help="SATB solo bars, e.g. 8-15,20")
+    split_parts.add_argument("--bass-solo", help="SATB solo bars, e.g. 8-15,20")
+    split_parts.add_argument(
+        "--open",
+        action="store_true",
+        help="open the resulting score in Sibelius upon completion",
     )
     sub.add_parser("forget-token", help="delete the cached session token for host:port")
     return parser
@@ -1196,7 +1245,9 @@ async def _run_set_note(args: argparse.Namespace) -> int:
 
 
 async def _run_tie(args: argparse.Namespace) -> int:
-    return await _run_write(args, "SetTie", [args.staff, args.bar, args.index, not args.remove])
+    return await _run_write(
+        args, "SetTie", [args.staff, args.bar, args.index, "false" if args.remove else "true"]
+    )
 
 
 async def _run_delete_object(args: argparse.Namespace) -> int:
@@ -1417,6 +1468,112 @@ def _run_install_plugin(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+async def _run_split_parts(args: argparse.Namespace) -> int:
+    input_str = args.file_opt or args.score_file
+    temp_dir: tempfile.TemporaryDirectory[str] | None = None
+    source_path: Path | None = None
+
+    if input_str:
+        source_path = Path(input_str).expanduser().resolve()
+        if not source_path.exists():
+            print(f"error: {source_path} does not exist", file=sys.stderr)
+            return EXIT_COMMAND_FAILED
+
+    # If input is .sib or omitted, connect to Sibelius to export to MusicXML
+    if source_path is None or source_path.suffix.lower() == ".sib":
+        temp_dir = tempfile.TemporaryDirectory(prefix="sib_split_parts_")
+        exported_xml = Path(temp_dir.name) / "source_export.musicxml"
+        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            await _check_bridge_version(client)
+            if source_path is not None:
+                opened = await _bridge(client, "OpenScore", [str(source_path)])
+                print(f"opened: {opened.get('fileName', str(source_path))}", file=sys.stderr)
+            info = await _bridge(client, "GetScoreInfo")
+            saveas_type, _ = EXPORT_FORMATS["musicxml"]
+            await _bridge(client, "ExportScore", [str(exported_xml), saveas_type])
+
+        xml_input_path = exported_xml
+        file_name = info.get("fileName")
+        default_stem = source_path.stem if source_path else (Path(file_name).stem if file_name else "score")
+        default_parent = source_path.parent if source_path else (Path(file_name).parent if file_name else Path.cwd())
+    else:
+        xml_input_path = source_path
+        default_stem = source_path.stem
+        default_parent = source_path.parent
+
+    # Determine destination output path
+    if args.out:
+        out_path = Path(args.out).expanduser().resolve()
+    else:
+        out_path = default_parent / f"{default_stem}_{args.preset}.mxl"
+
+    try:
+        from sibelius_websocket_cli.musicxml_split.profiles.polychoral_16 import split_16voices
+        from sibelius_websocket_cli.musicxml_split.profiles.satb import SATBOptions, split_satb
+        from sibelius_websocket_cli.musicxml_split.validation import validate_file
+
+        def parse_ranges(value: str | None) -> frozenset[int]:
+            bars: set[int] = set()
+            for item in (value or "").split(","):
+                item = item.strip()
+                if not item:
+                    continue
+                start, separator, end = item.partition("-")
+                bars.update(range(int(start), int(end) + 1) if separator else [int(start)])
+            return frozenset(bars)
+
+        if args.preset == "16voices":
+            result = split_16voices(xml_input_path, None if args.audit else out_path, audit_only=args.audit)
+        elif args.preset == "satb":
+            result = split_satb(
+                xml_input_path,
+                None if args.audit else out_path,
+                SATBOptions(
+                    soprano_solo_bars=parse_ranges(args.soprano_solo),
+                    tenor_solo_bars=parse_ranges(args.tenor_solo),
+                    bass_solo_bars=parse_ranges(args.bass_solo),
+                ),
+                audit_only=args.audit,
+            )
+        else:
+            print(f"error: unknown preset {args.preset}", file=sys.stderr)
+            return EXIT_COMMAND_FAILED
+
+        res = result.as_dict(xml_input_path)
+        val_issues = validate_file(out_path, expected_parts=len(result.parts)) if args.validate and not args.audit else []
+        all_issues = result.issues + val_issues
+        res["valid"] = not any(issue.severity == "error" for issue in all_issues)
+        res["issues"] = [issue.as_dict() for issue in all_issues]
+        if val_issues:
+            res["validationIssues"] = [issue.as_dict() for issue in val_issues]
+
+        if args.open and not args.audit:
+            launcher.open_score_file(out_path, app_path=args.sibelius_path)
+            res["opened"] = True
+
+        if args.json:
+            print(json.dumps(res, indent=2))
+        else:
+            action = "Audited" if args.audit else "Demixed"
+            print(f"{action} {res['totalMeasures']} measures across {res['partsCount']} parts ({args.preset}).")
+            if not args.audit:
+                print(f"Saved to: {res['outputFile']}")
+            if args.validate:
+                if all_issues:
+                    print(
+                        f"Validation warning: {len(all_issues)} issue(s) detected:",
+                        file=sys.stderr,
+                    )
+                    for issue in all_issues[:10]:
+                        print(f"  - {issue.code}: {issue.message}", file=sys.stderr)
+                else:
+                    print("Validation passed: 0 discrepancies found.")
+        return EXIT_OK
+    finally:
+        if temp_dir is not None:
+            temp_dir.cleanup()
+
+
 def _client(args: argparse.Namespace, plugins: list[str] | None = None) -> SibeliusClient:
     return SibeliusClient(
         host=args.host,
@@ -1491,6 +1648,8 @@ def main(argv: list[str] | None = None) -> int:
         "set-barline": _run_set_barline,
         "read-barlines": _run_read_barlines,
         "set-lyric-style": _run_set_lyric_style,
+        "split-parts": _run_split_parts,
+        "demix": _run_split_parts,
     }[args.subcommand]
     try:
         return int(run_sync(runner(args)))

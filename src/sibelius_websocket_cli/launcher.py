@@ -141,3 +141,22 @@ def launch_sibelius(app_path: str | Path | None = None) -> None:
     else:
         target = str(resolved) if resolved else "sibelius"
         subprocess.Popen([target])
+
+
+def open_score_file(file_path: str | Path, app_path: str | Path | None = None) -> None:
+    """Open a score file (such as .sib, .mxl, .musicxml) in Sibelius."""
+    resolved = find_sibelius_app(app_path)
+    score_str = str(Path(file_path).expanduser().resolve())
+    logger.info("Opening score %s in Sibelius (app: %s)...", score_str, resolved or app_path or "default")
+
+    if sys.platform == "darwin":
+        target = str(resolved) if resolved else "Sibelius"
+        subprocess.Popen(["open", "-a", target, score_str])
+    elif sys.platform == "win32":
+        try:
+            os.startfile(score_str)  # type: ignore[attr-defined]
+        except AttributeError:
+            target = str(resolved) if resolved else "Sibelius"
+            subprocess.Popen([target, score_str])
+    else:
+        subprocess.Popen(["xdg-open", score_str])
