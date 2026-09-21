@@ -7,6 +7,9 @@ argument list. Run commands from the repository root.
 
 - `inspect`: compact score identity, staff names, and current selection. Prefer
   this initial safety check over three separate read commands.
+- `score-snapshot [--bars A-B] [--lyrics] [--no-barlines]`: one-session,
+  compact structural snapshot with identity, staves, selection, key/time
+  signatures, and special barlines; lyrics are opt-in.
 - `score-info`: title, file, key signatures, and time signatures.
 - `staves`: staff numbers and names.
 - `selection`: current Sibelius selection.
