@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import sys
@@ -457,6 +458,16 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("--format", choices=sorted(EXPORT_FORMATS), default="musicxml")
     export.add_argument("--out", help="output path (default: next to the source file)")
     export.add_argument("--file", dest="sib_file", help=".sib file to open first (default: active score)")
+    verify_render = sub.add_parser(
+        "verify-render",
+        help="export a score and verify that the rendered files are present and non-empty",
+    )
+    verify_render.add_argument("--format", choices=sorted(EXPORT_FORMATS), default="png")
+    verify_render.add_argument("--out", help="output path (default: next to the source file)")
+    verify_render.add_argument("--file", dest="sib_file", help=".sib file to open first (default: active score)")
+    verify_render.add_argument("--expect-pages", type=int, help="require exactly this many rendered files")
+    verify_render.add_argument("--min-bytes", type=int, default=1, help="minimum size for each rendered file")
+    verify_render.add_argument("--sha256", action="store_true", help="include SHA-256 hashes in the report")
     backup = sub.add_parser("backup", help="in-file version + save + timestamped file copy")
     backup.add_argument("--name", default="sibelius-websocket-cli backup")
     do = sub.add_parser("do", help="run a named operation (curated command IDs)")
@@ -1643,6 +1654,68 @@ async def _run_export(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+async def _run_verify_render(args: argparse.Namespace) -> int:
+    if args.min_bytes < 1:
+        print("error: --min-bytes must be positive", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    saveas_type, extension = EXPORT_FORMATS[args.format]
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _check_bridge_version(client)
+        if args.sib_file:
+            source = Path(args.sib_file).expanduser().resolve()
+            if not source.exists():
+                print(f"error: {source} does not exist", file=sys.stderr)
+                return EXIT_COMMAND_FAILED
+            await _bridge(client, "OpenScore", [str(source)])
+        info = await _bridge(client, "GetScoreInfo")
+        await _assert_expected_score(client, args, info)
+        if not info.get("fileName") and not args.out:
+            print("error: active score has never been saved; pass --out", file=sys.stderr)
+            return EXIT_COMMAND_FAILED
+        out = (
+            Path(args.out).expanduser().resolve()
+            if args.out
+            else Path(info["fileName"]).with_suffix(extension)
+        )
+        await _bridge(client, "ExportScore", [str(out), saveas_type])
+
+    produced = [out] if out.exists() else sorted(out.parent.glob(f"{out.stem}_*{out.suffix}"))
+    files: list[dict[str, Any]] = []
+    for path in produced:
+        try:
+            size = path.stat().st_size
+        except OSError:
+            continue
+        entry: dict[str, Any] = {"path": str(path), "bytes": size}
+        if args.sha256:
+            digest = hashlib.sha256()
+            with path.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            entry["sha256"] = digest.hexdigest()
+        files.append(entry)
+
+    reasons: list[str] = []
+    if not files:
+        reasons.append(f"no rendered files found at {out}")
+    if any(item["bytes"] < args.min_bytes for item in files):
+        reasons.append(f"a rendered file is smaller than {args.min_bytes} bytes")
+    if args.expect_pages is not None and len(files) != args.expect_pages:
+        reasons.append(f"expected {args.expect_pages} rendered files, found {len(files)}")
+    report = {
+        "verified": not reasons,
+        "format": args.format,
+        "source": info.get("fileName", ""),
+        "files": files,
+        "pages": len(files),
+        "bytes": sum(item["bytes"] for item in files),
+    }
+    if reasons:
+        report["errors"] = reasons
+    print(json.dumps(report, ensure_ascii=False, separators=(",", ":")))
+    return EXIT_OK if report["verified"] else EXIT_COMMAND_FAILED
+
+
 async def _run_backup(args: argparse.Namespace) -> int:
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         await _check_bridge_version(client)
@@ -1835,6 +1908,7 @@ def main(argv: list[str] | None = None) -> int:
         "set-key": _run_set_key,
         "backup": _run_backup,
         "export": _run_export,
+        "verify-render": _run_verify_render,
         "copy-passage": _run_copy_passage,
         "set-note": _run_set_note,
         "tie": _run_tie,

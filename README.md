@@ -45,6 +45,7 @@ uv run sibelius-websocket-cli score-info          # title, file, staves, bars
 uv run sibelius-websocket-cli inspect             # compact identity, staves, selection
 uv run sibelius-websocket-cli score-snapshot      # compact structural snapshot
 uv run sibelius-websocket-cli proofread            # read-only structural/lyric report
+uv run sibelius-websocket-cli verify-render --format png --out /tmp/score-proof.png
 uv run sibelius-websocket-cli staves              # instrument names per staff
 uv run sibelius-websocket-cli selection           # current passage selection
 uv run sibelius-websocket-cli read --staff 1 --from 1 --to 4
