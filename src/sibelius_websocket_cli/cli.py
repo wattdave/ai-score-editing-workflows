@@ -20,6 +20,7 @@ from sibelius_websocket_cli import (
     layout,
     lyrics,
     music,
+    note_patches,
     polychoral,
     protocol,
 )
@@ -152,6 +153,13 @@ def build_parser() -> argparse.ArgumentParser:
     patch_layout.add_argument("--file", required=True, help="JSON layout operation array")
     patch_layout.add_argument("--save", action="store_true", help="save after all operations complete")
     patch_layout.add_argument("--dry-run", action="store_true", help="validate and report without connecting or mutating")
+    patch_notes = sub.add_parser(
+        "patch-notes",
+        help="apply a validated JSON batch of pitch, tie, stem, and delete edits",
+    )
+    patch_notes.add_argument("--file", required=True, help="JSON note operation array")
+    patch_notes.add_argument("--save", action="store_true", help="save after all operations complete")
+    patch_notes.add_argument("--dry-run", action="store_true", help="validate and report without connecting or mutating")
     read = sub.add_parser("read", help="read bar contents (requires bridge plug-in)")
     read.add_argument("--staff", type=int, default=1, help="staff number, from 1")
     read.add_argument("--from", dest="from_bar", type=int, help="first bar, from 1")
@@ -1001,6 +1009,55 @@ async def _run_patch_layout(args: argparse.Namespace) -> int:
     summary = {
         "operations": len(operations),
         "verified": len(results),
+        "backup": backup.get("copy"),
+        "results": results,
+    }
+    if saved is not None:
+        summary["saved"] = saved.get("fileName", "")
+    print(layout.compact_summary(summary))
+    return EXIT_OK
+
+
+async def _run_patch_notes(args: argparse.Namespace) -> int:
+    try:
+        operations = note_patches.load_note_patches(args.file)
+    except note_patches.NotePatchError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+
+    ordered = note_patches.execution_order(operations)
+    if args.dry_run:
+        print(layout.compact_summary({
+            "operations": len(operations),
+            "validated": True,
+            "dryRun": True,
+            "order": [op["op"] for op in ordered],
+        }))
+        return EXIT_OK
+
+    results: list[dict[str, Any]] = []
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _check_bridge_version(client)
+        await _assert_expected_score(client, args)
+        backup = await _backup(client, "before patch-notes")
+        for operation in ordered:
+            method, call_args = note_patches.bridge_call(operation)
+            try:
+                result = await _bridge(client, method, call_args)
+            except BridgeError as exc:
+                raise BridgeError(
+                    f"patch-notes stopped at {json.dumps(operation)} after "
+                    f"{len(results)} applied; restore from {backup.get('copy')}: {exc}"
+                ) from exc
+            results.append({"op": operation["op"], "args": call_args, "result": result})
+
+        saved = None
+        if args.save:
+            saved = await _bridge(client, "Save")
+
+    summary = {
+        "operations": len(operations),
+        "applied": len(results),
         "backup": backup.get("copy"),
         "results": results,
     }
@@ -1897,6 +1954,7 @@ def main(argv: list[str] | None = None) -> int:
         "score-snapshot": _run_score_snapshot,
         "proofread": _run_proofread,
         "patch-layout": _run_patch_layout,
+        "patch-notes": _run_patch_notes,
         "read": _run_read,
         "do": _run_do,
         "bridge-version": _run_bridge_version,

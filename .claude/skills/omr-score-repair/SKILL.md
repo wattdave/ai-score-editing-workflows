@@ -43,6 +43,19 @@ systematic architectural and engraving mistakes:
 
 ---
 
+## Token-efficient operation
+
+- Run `omr_tool.py audit` once per file and work from its summary; do not
+  dump the MusicXML.
+- Render only the PDF pages you need, at the size you need.
+- After import, use one `score-snapshot` for staff count, keys, and barlines,
+  and one `proofread --lyrics` instead of `inspect` + `read-lyrics` +
+  `check-lyrics`.
+- Fold clef cleanup and restored system breaks into one `patch-layout` file
+  (`remove-redundant-clefs` plus `set-break` ops) so the score is backed up,
+  changed, and verified once.
+- Put lyric corrections found in Sibelius into one `patch-lyrics` file.
+
 ## Quick Start
 
 ### 1. Audit a scanned MusicXML file
@@ -111,8 +124,8 @@ Use `omr_tool.py unstack` to restructure the score:
   uv run python .claude/skills/omr-score-repair/scripts/omr_tool.py validate "path/to/repaired.xml"
   ```
 - Open the score in Sibelius:
-  - Run `uv run sibelius-websocket-cli inspect` to verify staff count and title.
-  - Run `uv run sibelius-websocket-cli read-lyrics` or `check-lyrics` to ensure all words and hyphens render cleanly.
+  - Run `uv run sibelius-websocket-cli score-snapshot` to verify staff count, title, keys, and barlines in one call.
+  - Run `uv run sibelius-websocket-cli proofread --lyrics` to check words and hyphens in one report.
 
 ### Step 6: Purge Redundant Clefs in the Live Score
 Unstacking strips clef restatements at the XML level, but surviving duplicates
@@ -136,6 +149,11 @@ score open, after the import itself has been verified. See
    ```
    `strip` backs up the score first, deletes in reverse index order within each
    bar so earlier indices stay valid, then **saves the score automatically**.
+
+   When system breaks also need restoring, prefer one `patch-layout` file that
+   combines `{"op":"remove-redundant-clefs"}` (optionally with `"staff"`) and
+   the `set-break` operations; validate with `--dry-run`, then apply with
+   `--save`. The audit step above still comes first.
 
 Redundant clefs are engraving clutter only — they emit no MIDI events. If the
 score also drones during playback, that is a separate tie defect; use the
