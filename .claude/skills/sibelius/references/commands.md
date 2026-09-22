@@ -12,6 +12,8 @@ argument list. Run commands from the repository root.
   signatures, and special barlines; lyrics are opt-in.
 - `proofread [--bars A-B] [--staff N] [--lyrics]`: one-session read-only
   structural and lyric lint report with compact issue records.
+- `verify-render [--format png|pdf] [--out PATH]`: export once and verify that
+  rendered files exist, are non-empty, and optionally match page/hash checks.
 - `score-info`: title, file, key signatures, and time signatures.
 - `staves`: staff numbers and names.
 - `selection`: current Sibelius selection.
@@ -38,7 +40,8 @@ Write commands create a backup before mutation.
   `set-break`, `set-barline`, `reset-design`, and conservative
   `remove-redundant-clefs` operations.
 - Persistence: `save` and `backup`.
-- Export: `export --format musicxml|mxl|pdf|midi|png [--out PATH] [--file SCORE]`.
+- Export: `export --format musicxml|mxl|pdf|midi|png [--out PATH] [--file SCORE]`;
+  `verify-render` adds file/page verification for rendered output.
 
 Most mutating commands accept `--save`. Read their `--help` before composing a
 new invocation rather than inferring omitted arguments.
