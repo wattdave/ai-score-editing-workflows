@@ -19,6 +19,7 @@ from sibelius_websocket_cli.cli import (
     _run_patch_lyrics,
     _run_patch_layout,
     _run_proofread,
+    _run_verify_render,
     _run_read_lyrics,
     _run_reset_design,
     _run_set_lyric,
@@ -80,6 +81,10 @@ def test_parser_accepts_agent_and_safety_options(tmp_path: Path) -> None:
     proofread_args = parser.parse_args(["proofread", "--bars", "2-3", "--lyrics"])
     assert proofread_args.subcommand == "proofread"
     assert proofread_args.lyrics is True
+
+    render_args = parser.parse_args(["verify-render", "--format", "png", "--expect-pages", "3"])
+    assert render_args.subcommand == "verify-render"
+    assert render_args.expect_pages == 3
 
 
 async def test_inspect_combines_three_reads_in_one_context(capsys: pytest.CaptureFixture[str]) -> None:
@@ -249,6 +254,42 @@ async def test_proofread_combines_reads_and_returns_compact_report(
     assert '"errors":0' in output
     assert '"warnings":0' in output
     assert '"lyrics":[{"staff":1,"bar":2,"index":0,"position":0,"line":1,"text":"la"}]' in output
+
+
+async def test_verify_render_exports_and_verifies_files(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output_path = tmp_path / "proof.png"
+    args = build_parser().parse_args(
+        ["verify-render", "--format", "png", "--out", str(output_path), "--expect-pages", "1", "--sha256"]
+    )
+    context, _client = _client_context()
+
+    async def bridge_side_effect(
+        unused_client: Any, method: str, call_args: list[Any] | None = None
+    ) -> Any:
+        del unused_client, call_args
+        if method == "GetScoreInfo":
+            return {"fileName": "/scores/a.sib"}
+        if method == "ExportScore":
+            output_path.write_bytes(b"rendered")
+            return {"exportedTo": str(output_path)}
+        raise AssertionError(method)
+
+    with (
+        patch("sibelius_websocket_cli.cli._client", return_value=context),
+        patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge_side_effect) as bridge,
+        patch("sibelius_websocket_cli.cli._assert_expected_score", new=AsyncMock()),
+    ):
+        assert await _run_verify_render(args) == EXIT_OK
+
+    assert context.__aenter__.call_count == 1
+    assert [call.args[1] for call in bridge.call_args_list] == ["GetScoreInfo", "ExportScore"]
+    output = capsys.readouterr().out.strip()
+    assert '"verified":true' in output
+    assert '"pages":1' in output
+    assert '"sha256"' in output
 
 
 async def test_compact_read_lyrics_keeps_edit_address(capsys: pytest.CaptureFixture[str]) -> None:
