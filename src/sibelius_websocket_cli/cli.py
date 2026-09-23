@@ -551,6 +551,25 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="open the resulting score in Sibelius upon completion",
     )
+    round_cmd = sub.add_parser(
+        "round",
+        help="arrange a single-part round as staggered voices for playback (MusicXML in and out)",
+    )
+    round_cmd.add_argument("score_file", help="single-part round (.xml, .musicxml, .mxl)")
+    round_cmd.add_argument("--out", "-o", help="output path (default: <input_stem>_round.musicxml)")
+    round_cmd.add_argument("--voices", type=int, help='number of voices (default: highest "N." entry mark)')
+    round_cmd.add_argument("--gap", type=int, help='bars between entries (default: from "1." and "2." marks)')
+    round_cmd.add_argument("--passes", type=int, default=2, help="times each voice sings the song (default: 2)")
+    round_cmd.add_argument(
+        "--program", type=int, default=53, help="General MIDI program, 1-based (default: 53, Choir Aahs)"
+    )
+    round_cmd.add_argument(
+        "--no-hold-final",
+        dest="hold_final",
+        action="store_false",
+        help="keep each voice's last bar as written instead of holding its first note",
+    )
+    round_cmd.add_argument("--open", action="store_true", help="open the result in Sibelius")
     sub.add_parser("forget-token", help="delete the cached session token for host:port")
     return parser
 
@@ -1952,6 +1971,35 @@ async def _run_split_parts(args: argparse.Namespace) -> int:
             temp_dir.cleanup()
 
 
+async def _run_round(args: argparse.Namespace) -> int:
+    import xml.etree.ElementTree as ET
+
+    from sibelius_websocket_cli.musicxml_round import RoundOptions, build_round
+    from sibelius_websocket_cli.musicxml_split.io import parse_musicxml, save_musicxml
+
+    source = Path(args.score_file).expanduser().resolve()
+    if source.suffix.lower() not in {".xml", ".musicxml", ".mxl"}:
+        print("error: round needs MusicXML input; export .sib scores first", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    out = Path(args.out).expanduser().resolve() if args.out else source.with_name(f"{source.stem}_round.musicxml")
+    try:
+        _, root = parse_musicxml(source)
+        result = build_round(root, RoundOptions(
+            voices=args.voices, gap=args.gap, passes=args.passes,
+            program=args.program, hold_final=args.hold_final,
+        ))
+    except (OSError, ValueError, ET.ParseError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    save_musicxml(result.root, out)
+    summary = {**result.as_dict(), "outputFile": str(out)}
+    if args.open:
+        launcher.open_score_file(out, app_path=args.sibelius_path)
+        summary["opened"] = True
+    print(layout.compact_summary(summary))
+    return EXIT_OK
+
+
 def _client(args: argparse.Namespace, plugins: list[str] | None = None) -> SibeliusClient:
     return SibeliusClient(
         host=args.host,
@@ -2035,6 +2083,7 @@ def main(argv: list[str] | None = None) -> int:
         "set-lyric-style": _run_set_lyric_style,
         "split-parts": _run_split_parts,
         "demix": _run_split_parts,
+        "round": _run_round,
     }[args.subcommand]
     try:
         return int(run_sync(runner(args)))
