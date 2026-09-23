@@ -75,10 +75,9 @@ Before pushing commits to GitHub, always verify:
    python3 scripts/sync_skills.py --check
    ```
    If out of sync, run `python3 scripts/sync_skills.py` and commit the updated links/rules.
-3. **Manuscript plugin lint passes** (if `.plg` files modified):
-   ```bash
-   uv run sibwscli lint-plugin
-   ```
+3. **Manuscript plugin lint passes** (if `.plg` files modified): covered by
+   `tests/test_manuscript_lint.py` in the test suite above; there is no
+   separate lint command.
 4. **Git status is clean**: Ensure no scratch or temporary test output is accidentally staged.
 
 ---

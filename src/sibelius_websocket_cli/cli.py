@@ -277,6 +277,12 @@ def build_parser() -> argparse.ArgumentParser:
     set_key.add_argument("--key", required=True, help='key name, e.g. D or Bb')
     set_key.add_argument("--minor", action="store_true")
     set_key.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    set_time = sub.add_parser("set-time", help="add a time signature (backs up first)")
+    set_time.add_argument("--bar", type=int, default=1)
+    set_time.add_argument("--top", type=int, required=True)
+    set_time.add_argument("--bottom", type=int, required=True)
+    set_time.add_argument("--symbol", choices=["common", "cut"], help="draw 4/4 as common time or 2/2 as cut time")
+    set_time.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     copyp = sub.add_parser("copy-passage", help="copy a passage to another staff/bar (backs up first)")
     copyp.add_argument("--from-bar", type=int, required=True)
     copyp.add_argument("--to-bar", type=int, required=True)
@@ -318,6 +324,12 @@ def build_parser() -> argparse.ArgumentParser:
     flip.add_argument("--bar", type=int, required=True)
     flip.add_argument("--index", type=int, required=True)
     flip.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    bracket = sub.add_parser("bracket", help="put a note or chord in parentheses (backs up first)")
+    bracket.add_argument("--staff", type=int, required=True)
+    bracket.add_argument("--bar", type=int, required=True)
+    bracket.add_argument("--index", type=int, required=True)
+    bracket.add_argument("--remove", action="store_true", help="remove the parentheses instead")
+    bracket.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     beam = sub.add_parser("beam", help="beam a contiguous group of NoteRest objects (backs up first)")
     beam.add_argument("--staff", type=int, required=True)
     beam.add_argument("--bar", type=int, required=True)
@@ -694,7 +706,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 33
+CURRENT_BRIDGE_VERSION = 36
 
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
@@ -740,6 +752,11 @@ async def _backup(client: SibeliusClient, name: str) -> dict[str, Any]:
         print(f"warning: in-file version skipped: {exc}", file=sys.stderr)
     saved = await _bridge(client, "Save")
     source = Path(saved["fileName"])
+    if not source.is_absolute():
+        # Bridges before v36 accept an imported score's bare title as a path.
+        raise BridgeError(
+            f"score {saved['fileName']!r} has never been saved as a .sib; save it in Sibelius first"
+        )
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     copy = source.with_name(f"{source.stem}.backup-{stamp}{source.suffix}")
     shutil.copy2(source, copy)
@@ -975,6 +992,11 @@ async def _run_patch_layout(args: argparse.Namespace) -> int:
                 result = await _bridge(client, "SetBarBreak", [operation["bar"], operation.get("type", "system")])
             elif op == "set-barline":
                 result = await _bridge(client, "SetSpecialBarline", [operation["bar"], operation.get("type", "double")])
+            elif op == "set-time":
+                result = await _bridge(client, "SetTimeSignature", [
+                    operation["bar"], operation["top"], operation["bottom"],
+                    "true" if operation.get("symbol") else "false",
+                ])
             elif op == "remove-redundant-clefs":
                 from scripts.clean_clefs import delete_redundant_clefs, find_redundant_clefs
 
@@ -1455,6 +1477,17 @@ async def _run_set_key(args: argparse.Namespace) -> int:
     return await _run_write(args, "SetKeySignature", [args.bar, args.key, not args.minor])
 
 
+async def _run_set_time(args: argparse.Namespace) -> int:
+    try:
+        layout.validate_time_signature(args.top, args.bottom, args.symbol)
+    except layout.LayoutPatchError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    return await _run_write(
+        args, "SetTimeSignature", [args.bar, args.top, args.bottom, "true" if args.symbol else "false"]
+    )
+
+
 async def _run_set_staff_name(args: argparse.Namespace) -> int:
     return await _run_write(
         args, "SetStaffName", [args.staff, args.full or "", args.short or ""]
@@ -1539,6 +1572,12 @@ async def _run_delete_voice(args: argparse.Namespace) -> int:
 
 async def _run_flip_stem(args: argparse.Namespace) -> int:
     return await _run_write(args, "FlipStem", [args.staff, args.bar, args.index])
+
+
+async def _run_bracket(args: argparse.Namespace) -> int:
+    return await _run_write(
+        args, "SetBracketed", [args.staff, args.bar, args.index, "false" if args.remove else "true"]
+    )
 
 
 async def _run_beam(args: argparse.Namespace) -> int:
@@ -1964,6 +2003,7 @@ def main(argv: list[str] | None = None) -> int:
         "patch-lyrics": _run_patch_lyrics,
         "transpose": _run_transpose,
         "set-key": _run_set_key,
+        "set-time": _run_set_time,
         "backup": _run_backup,
         "export": _run_export,
         "verify-render": _run_verify_render,
@@ -1975,6 +2015,7 @@ def main(argv: list[str] | None = None) -> int:
         "save": _run_save,
         "reset-design": _run_reset_design,
         "flip-stem": _run_flip_stem,
+        "bracket": _run_bracket,
         "beam": _run_beam,
         "nudge": _run_nudge,
         "read-abc": _run_read_abc,

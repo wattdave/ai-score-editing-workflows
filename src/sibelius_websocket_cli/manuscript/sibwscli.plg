@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 35);
+		return CreateDictionary('version', 36);
 	}"
 
 	Echo "(value) {
@@ -299,7 +299,7 @@
 		return CreateDictionary('bar', barNumber, 'name', ks.AsText, 'sharps', ks.Sharps, 'major', ks.Major);
 	}"
 
-	SetTimeSignature "(barNumber, top, bottom) {
+	SetTimeSignature "(barNumber, top, bottom, useSymbol) {
 		score = RequireScore();
 		if (score = null) {
 			return CreateDictionary('error', 'no score open');
@@ -309,11 +309,49 @@
 			return CreateDictionary('error', 'barNumber out of range');
 		}
 		bar = systemStaff.NthBar(barNumber);
-		err = bar.AddTimeSignature(top, bottom, True, True);
+		symbol = False;
+		if (useSymbol != null and useSymbol = True) {
+			symbol = True;
+		}
+		err = bar.AddTimeSignature(top, bottom, True, True, symbol);
 		if (err != '') {
 			return CreateDictionary('error', err);
 		}
-		return CreateDictionary('bar', barNumber, 'numerator', top, 'denominator', bottom);
+		ts = systemStaff.CurrentTimeSignature(barNumber);
+		style = 'numeric';
+		if (ts.Text = CommonTimeString) {
+			style = 'common';
+		}
+		if (ts.Text = AllaBreveTimeString) {
+			style = 'cut';
+		}
+		return CreateDictionary(
+			'bar', barNumber, 'numerator', ts.Numerator, 'denominator', ts.Denominator, 'style', style);
+	}"
+
+	SetBracketed "(staffNum, barNumber, index, bracketed) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		obj = GetObjectAt(staffNum, barNumber, index);
+		if (obj = null or obj.Type != 'NoteRest') {
+			return CreateDictionary('error', 'bracket target must be a NoteRest object');
+		}
+		if (obj.NoteCount < 1) {
+			return CreateDictionary('error', 'cannot bracket a rest');
+		}
+		newBracketed = True;
+		if (bracketed != null and bracketed = False) {
+			newBracketed = False;
+		}
+		changed = 0;
+		for each note in obj {
+			note.Bracketed = newBracketed;
+			changed = changed + 1;
+		}
+		return CreateDictionary(
+			'staff', staffNum, 'bar', barNumber, 'index', index, 'bracketed', newBracketed, 'notes', changed);
 	}"
 
 	InsertIrregularBar "(barNumber, length) {
@@ -1018,7 +1056,8 @@
 			return CreateDictionary('error', 'no score open');
 		}
 		fileName = score.FileName & '';
-		if (fileName = '') {
+		// An imported MusicXML score reports a bare title, not a path.
+		if (fileName = '' or Substring(fileName, 0, 1) != '/') {
 			return CreateDictionary('error', 'score has never been saved; save it in Sibelius first');
 		}
 		score.Save(fileName);
