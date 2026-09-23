@@ -16,7 +16,8 @@ _BARLINE_TYPES = {
     "between_staves", "normal", "tick", "short", "dotted", "triple", "thick", "none",
 }
 _BREAK_TYPES = {"system", "page", "none"}
-_OPERATIONS = {"nudge", "set-break", "set-barline", "reset-design", "remove-redundant-clefs"}
+_TIME_SYMBOLS = {"common": (4, 4), "cut": (2, 2)}
+_OPERATIONS = {"nudge", "set-break", "set-barline", "set-time", "reset-design", "remove-redundant-clefs"}
 
 
 def load_layout_patches(path: str) -> list[dict[str, Any]]:
@@ -59,6 +60,14 @@ def _validate_operation(operation: Any, index: int) -> None:
         _positive_int(operation, "bar", label)
         if operation.get("type", "double") not in _BARLINE_TYPES:
             raise LayoutPatchError(f"{label}.type must be one of: {', '.join(sorted(_BARLINE_TYPES))}")
+    elif op == "set-time":
+        _positive_int(operation, "bar", label)
+        validate_time_signature(
+            _positive_int(operation, "top", label),
+            _positive_int(operation, "bottom", label),
+            operation.get("symbol"),
+            label,
+        )
     elif op == "reset-design":
         if not isinstance(operation.get("lyrics", False), bool):
             raise LayoutPatchError(f"{label}.lyrics must be boolean")
@@ -66,6 +75,19 @@ def _validate_operation(operation: Any, index: int) -> None:
         staff = operation.get("staff")
         if staff is not None:
             _positive_int(operation, "staff", label)
+
+
+def validate_time_signature(top: int, bottom: int, symbol: Any, label: str = "time signature") -> None:
+    """Reject a denominator Sibelius cannot notate or a symbol that contradicts the meter."""
+    if bottom & (bottom - 1) or bottom > 64:
+        raise LayoutPatchError(f"{label}.bottom must be a power of two up to 64")
+    if symbol is None:
+        return
+    if symbol not in _TIME_SYMBOLS:
+        raise LayoutPatchError(f"{label}.symbol must be one of: {', '.join(sorted(_TIME_SYMBOLS))}")
+    if _TIME_SYMBOLS[symbol] != (top, bottom):
+        expected = "/".join(map(str, _TIME_SYMBOLS[symbol]))
+        raise LayoutPatchError(f"{label}.symbol {symbol} requires {expected}")
 
 
 def _integer(operation: dict[str, Any], field: str, label: str, *, default: int | None = None) -> int:
