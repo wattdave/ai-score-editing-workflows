@@ -11,8 +11,8 @@ class NotePatchError(ValueError):
     """A note patch file is malformed or contains an unsupported operation."""
 
 
-_OPERATIONS = {"set-pitch", "tie", "flip-stem", "delete", "delete-voice"}
-_ADDRESSED = {"set-pitch", "tie", "flip-stem", "delete"}
+_OPERATIONS = {"set-pitch", "tie", "bracket", "flip-stem", "delete", "delete-voice"}
+_ADDRESSED = {"set-pitch", "tie", "bracket", "flip-stem", "delete"}
 
 
 def load_note_patches(path: str) -> list[dict[str, Any]]:
@@ -62,6 +62,11 @@ def bridge_call(operation: dict[str, Any]) -> tuple[str, list[Any]]:
             operation["staff"], operation["bar"], operation["index"],
             "false" if operation.get("remove", False) else "true",
         ]
+    if op == "bracket":
+        return "SetBracketed", [
+            operation["staff"], operation["bar"], operation["index"],
+            "false" if operation.get("remove", False) else "true",
+        ]
     if op == "flip-stem":
         return "FlipStem", [operation["staff"], operation["bar"], operation["index"]]
     if op == "delete":
@@ -88,7 +93,7 @@ def _validate_operation(operation: Any, index: int) -> None:
         new = _pitch(operation, "newPitch", label)
         if old == new:
             raise NotePatchError(f"{label} set-pitch must change the pitch")
-    elif op == "tie":
+    elif op in {"tie", "bracket"}:
         if not isinstance(operation.get("remove", False), bool):
             raise NotePatchError(f"{label}.remove must be boolean")
     elif op == "delete-voice":

@@ -30,6 +30,9 @@ open -a /Applications/Sibelius.app /absolute/path/to/score.sib
 
 Then run `inspect` and confirm `fileName` before reading or changing the score.
 
+Writes refuse an imported, never-saved MusicXML score; have the user save it
+as `.sib` first.
+
 ## Batch first: minimize calls and output
 
 Each CLI call opens a session and its output enters context. Batch commands
@@ -92,6 +95,8 @@ Do not load unrelated references.
 - A new Sibelius process or changed declared plug-in list can show an approval
   dialog. If a command reports that it is waiting, ask the user to click OK in
   Sibelius; the connection timeout is 120 seconds.
+- A fresh Sibelius may reject the first connection
+  (`kClientRejected_UserRefusedRequest`) without a prompt; retry once.
 - Exit 2 means Sibelius is unavailable or Sibelius Connect is disabled under
   Preferences → Input Devices.
 - Exit 1 with a bridge-unreachable or version-mismatch message requires

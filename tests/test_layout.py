@@ -37,3 +37,29 @@ def test_load_layout_patches_rejects_invalid_operations(tmp_path, payload, messa
 
     with pytest.raises(LayoutPatchError, match=message):
         load_layout_patches(str(path))
+
+
+def test_set_time_accepts_symbol_matching_meter(tmp_path) -> None:
+    path = tmp_path / "layout.json"
+    path.write_text(json.dumps([
+        {"op": "set-time", "bar": 1, "top": 2, "bottom": 2, "symbol": "cut"},
+        {"op": "set-time", "bar": 5, "top": 3, "bottom": 4},
+    ]))
+
+    assert len(load_layout_patches(str(path))) == 2
+
+
+@pytest.mark.parametrize(
+    "operation, message",
+    [
+        ({"op": "set-time", "bar": 1, "top": 3, "bottom": 4, "symbol": "cut"}, "requires 2/2"),
+        ({"op": "set-time", "bar": 1, "top": 4, "bottom": 4, "symbol": "breve"}, "symbol must be one of"),
+        ({"op": "set-time", "bar": 1, "top": 3, "bottom": 5}, "power of two"),
+    ],
+)
+def test_set_time_rejects_invalid_signatures(tmp_path, operation, message) -> None:
+    path = tmp_path / "layout.json"
+    path.write_text(json.dumps([operation]))
+
+    with pytest.raises(LayoutPatchError, match=message):
+        load_layout_patches(str(path))
