@@ -20,5 +20,8 @@ version mismatch.
   `docs/manuscript-object-tree.md` (for example `CurrentTimeSignature` is on
   `SystemStaff`, not `Score`). The lint test does not check receivers, and a
   wrong one fails only at runtime with "Unknown method".
+- A timeout followed by `busyError` usually means a ManuScript runtime error
+  dialog is blocking Sibelius. Screenshot it, report the error, and ask the
+  user to dismiss it; writes made before the failing line persist.
 - Exercise bridge changes against a scratch copy of a score before using a real
   score.
