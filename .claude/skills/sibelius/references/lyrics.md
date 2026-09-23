@@ -6,12 +6,15 @@ layout, collisions, or typography.
 
 ## Proofread
 
-1. Run `check-lyrics [--staff N] [--bars A-B] [--verse N]` for structural
-   findings such as collisions, missing vowels, cross-voice divergence, and
-   untexted passages.
-2. Run `read-lyrics --words [--verse N] [--bars A-B]` to review complete words.
-3. Before editing, run `read-lyrics --compact --staff N [--bars A-B]` and
-   retain each item's `staff`, `bar`, and `index`.
+1. Run one `proofread --lyrics [--staff N] [--bars A-B]` for structural
+   findings (collisions, missing vowels, cross-voice divergence, untexted
+   passages) and compact lyric data together. Do not also run `check-lyrics`.
+2. Only if the report is not enough to judge wording, run
+   `read-lyrics --words [--verse N] [--bars A-B]` on the flagged bars.
+3. Before editing, run one `read-lyrics --compact [--staff N] --bars A-B`
+   covering every bar you will patch and retain each item's `staff`, `bar`,
+   and `index`.
+4. Put every correction into a single `patch-lyrics` file.
 
 ## Preserve the score's lyric typography
 
@@ -20,8 +23,9 @@ layout, collisions, or typography.
 font of typed lyrics. Before a lyric write, export a representative page to PNG
 and inspect the body lyrics to establish their font family and point size.
 
-Pass the observed style explicitly. For several corrections, prefer one batch
-so the score is read, backed up, changed, and verified once:
+Establish the style from one rendered page, once per score, not per edit.
+Pass the observed style explicitly. For two or more corrections, always use
+one batch so the score is read, backed up, changed, and verified once:
 
 ```json
 [
@@ -93,7 +97,8 @@ adopt those definitions.
 - When clearing, replacing, or re-flowing lyrics in a bar, query `ReadBars` or
   `read-lyrics`, collect all `LyricItem` indices in that bar, and delete them in
   **strict descending index order** (`sorted(indices, reverse=True)`) using
-  `DeleteObject(staff, bar, idx)`.
+  `DeleteObject(staff, bar, idx)`. From the CLI, one `patch-notes` file of
+  `delete` ops does this ordering for you.
 - Deleting in ascending order causes remaining object indices in the bar to shift
   down with each deletion, corrupting subsequent target addresses and leading to
   index-out-of-range errors or wrong objects being removed.
@@ -120,8 +125,9 @@ adopt those definitions.
 
 ## Verify
 
-`patch-lyrics` performs one readback verification for the complete batch. After
-a standalone write, re-read before reusing addresses. Re-export the
+`patch-lyrics` performs one readback verification for the complete batch;
+trust its summary rather than re-reading. After a standalone write, re-read
+before reusing addresses. Re-export the
 representative page only when visual style or layout is part of the change, and
 compare edited syllables with adjacent lyrics. Save after verification when
 requested.

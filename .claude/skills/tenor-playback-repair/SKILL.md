@@ -9,8 +9,8 @@ Use this skill when a tenor line looks correctly notated but plays an octave too
 
 ## Safe diagnosis
 
-1. Confirm the active score with `inspect`; read a representative Tenor passage and record its MIDI pitches.
-2. Export a temporary MusicXML copy. Inspect the Tenor part: the intended octave-treble representation has one `<clef-octave-change>-1</clef-octave-change>` and no `<transpose>` element.
+1. Confirm the active score with `inspect`; read one short representative Tenor passage (`read --staff N --bars A-B`, a few bars only) and record its MIDI pitches.
+2. Export a temporary MusicXML copy. Grep the Tenor part's `<attributes>` rather than reading the whole file: the intended octave-treble representation has one `<clef-octave-change>-1</clef-octave-change>` and no `<transpose>` element.
 3. Import that MusicXML as a separate, unsaved test score. Never overwrite the original during the round trip.
 4. Export the test score to MIDI. Run `scripts/inspect_midi_pitches.py` on the MIDI file. For a written opening A4 tenor note, correct sounding playback is MIDI 57 (A3), not 69 (A4).
 

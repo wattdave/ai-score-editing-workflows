@@ -1,11 +1,13 @@
 # Music-Edit Workflows
 
 Read the destination range before every targeted music edit and read it again
-afterward.
+afterward. Use `read --abc --staff N --bars A-B` for both; it is much smaller
+than JSON. Plan all edits first, then apply ranged commands (`transpose`,
+`copy-passage`, `add-abc`) once rather than per bar or per note.
 
 ## Transpose to a key
 
-1. Read `score-info.keySignatures`; an empty list represents C major or no
+1. Read `keySignatures` from `score-snapshot` (or `score-info`); an empty list represents C major or no
    explicit signature.
 2. If upward versus downward motion is musically ambiguous, confirm the
    direction with the user.
@@ -25,14 +27,15 @@ Use `--from-note X --to-note X --octaves N` for a pure octave transposition.
    paste carries them with the music.
 3. Run `copy-passage` with the source bars/staves and destination staff/bar.
 4. Apply any requested transposition to only the destination range.
-5. Remove unwanted copied objects with `DeleteObject`, deleting higher indexes
-   first because each deletion shifts subsequent addresses.
+5. Remove unwanted copied objects with one `patch-notes` file of `delete`
+   ops, using addresses from a single read; the CLI orders deletes by
+   descending index so addresses stay valid.
 6. Read the destination again.
 
 ## Targeted note and key edits
 
-- Use `set-note --staff --bar --index --old-pitch --new-pitch` to repitch one
-  addressed note. Pitches are MIDI numbers; `old-pitch` guards the target.
+- Use `patch-notes` `set-pitch` ops for several repitches (or `set-note` for
+  one). Pitches are MIDI numbers; `old-pitch` guards the target.
 - Use `set-key --bar --key [--minor]` for a key-signature change.
-- Use `add-notes` or `add-abc` for new music. Consult the command's `--help`
+- Use `add-abc` to enter a whole passage in one call (or `add-notes`). Consult the command's `--help`
   for durations, positions, voices, ties, and save behavior.

@@ -18,6 +18,7 @@ from sibelius_websocket_cli.cli import (
     _run_score_snapshot,
     _run_patch_lyrics,
     _run_patch_layout,
+    _run_patch_notes,
     _run_proofread,
     _run_verify_render,
     _run_read_lyrics,
@@ -205,6 +206,47 @@ async def test_patch_layout_uses_one_context_and_one_backup(
     output = capsys.readouterr().out.strip()
     assert '"operations":2' in output
     assert '"verified":2' in output
+
+
+async def test_patch_notes_uses_one_backup_and_deletes_high_indexes_first(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    patch_file = tmp_path / "notes.json"
+    patch_file.write_text(
+        '[{"op":"delete","staff":1,"bar":4,"index":1},'
+        '{"op":"delete","staff":1,"bar":4,"index":3},'
+        '{"op":"tie","staff":2,"bar":5,"index":0,"remove":true}]'
+    )
+    args = build_parser().parse_args(["patch-notes", "--file", str(patch_file), "--save"])
+    context, _client = _client_context()
+
+    async def bridge_side_effect(
+        unused_client: Any, method: str, call_args: list[Any] | None = None
+    ) -> Any:
+        del unused_client, call_args
+        if method == "Save":
+            return {"fileName": "/scores/a.sib"}
+        return {"changed": True}
+
+    with (
+        patch("sibelius_websocket_cli.cli._client", return_value=context),
+        patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._assert_expected_score", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._backup", new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"})) as backup,
+        patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge_side_effect) as bridge,
+    ):
+        assert await _run_patch_notes(args) == EXIT_OK
+
+    assert context.__aenter__.call_count == 1
+    backup.assert_awaited_once()
+    assert [(call.args[1], call.args[2] if len(call.args) > 2 else None) for call in bridge.call_args_list] == [
+        ("SetTie", [2, 5, 0, "false"]),
+        ("DeleteObject", [1, 4, 3]),
+        ("DeleteObject", [1, 4, 1]),
+        ("Save", None),
+    ]
+    output = capsys.readouterr().out.strip()
+    assert '"applied":3' in output
 
 
 async def test_proofread_combines_reads_and_returns_compact_report(
