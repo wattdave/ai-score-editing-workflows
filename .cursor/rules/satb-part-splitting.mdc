@@ -82,11 +82,17 @@ Import the repaired `.mxl` into Sibelius:
 ```bash
 open -a Sibelius "path/to/4staff_satb.mxl"
 ```
-Audit ties and playback using the sibling skill:
+Verify in as few calls as possible: one `score-snapshot` for staves, keys,
+and barlines, one `proofread --lyrics` for lyric integrity across all four
+parts, and one tie audit across every staff:
 ```bash
+uv run sibelius-websocket-cli score-snapshot
+uv run sibelius-websocket-cli proofread --lyrics
 python3 .claude/skills/hanging-playback-note-repair/scripts/hanging_notes.py audit-score \
-  --staff 3 --from-bar 1 --to-bar 30
+  --staff all --from-bar 1 --to-bar 30
 ```
+Fix any lyric findings with a single `patch-lyrics` file rather than
+per-syllable `set-lyric` calls.
 
 
 ---
@@ -128,4 +134,4 @@ When a single voice has a solo passage (e.g. Tenor solo):
 1. **Duration Check:** Run `split_satb.py validate <file.mxl>`. (Must report 0 issues).
 2. **Clef Verification:** In Sibelius, confirm that Soprano and Alto are in Treble, Tenor is in Treble-8vb (little "8" under the clef), and Bass is in Bass clef.
 3. **Mixer Verification:** Open Sibelius Mixer (`M`). Confirm 4 discrete strips (S, A, T, B) with Choir Aahs on channels 1–4.
-4. **Tie Verification:** Run `hanging_notes.py audit-score` across all 4 staves to guarantee no dangling ties were introduced during demixing.
+4. **Tie Verification:** Run one `hanging_notes.py audit-score --staff all` to guarantee no dangling ties were introduced during demixing.

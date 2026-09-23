@@ -76,6 +76,16 @@ Never treat all tie anomalies the same. Score issues fall into three fundamental
 
 ---
 
+## Token-efficient operation
+
+- Audit once with `--staff all` across the whole suspect range instead of
+  one staff at a time; the helper reads everything in one session.
+- Render only the single source page you need for ground truth.
+- Classify every flagged tie before writing anything, then remove them all
+  with one `patch-notes` file of `{"op":"tie",...,"remove":true}` ops and
+  `--save`.
+- Export MIDI once, after all repairs, for `audit-midi`.
+
 ## Quick Start with Helper Script
 
 ### 1. Audit Live Score Structure (Single Staff or All Staves)
@@ -146,8 +156,11 @@ uv run sibelius-websocket-cli --expect-file "<PATH_TO_SIB>" tie \
 ```
 
 ### Step 4: Save and Verify Playback
-1. Save the score:
+1. Apply all Tier 1–3 tie removals in one batch:
    ```bash
-   uv run sibelius-websocket-cli save
+   uv run sibelius-websocket-cli --expect-file "<PATH_TO_SIB>" patch-notes \
+     --file /private/tmp/ties.json --save
    ```
-2. Test live playback in Sibelius starting 2 bars before the problem measure to confirm the drone is completely silenced.
+2. Re-run a single `audit-score --staff all` over the range to confirm no
+   flags remain.
+3. Test live playback in Sibelius starting 2 bars before the problem measure to confirm the drone is completely silenced.

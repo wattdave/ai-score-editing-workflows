@@ -5,15 +5,34 @@ changes whose result is visible rather than fully represented by bridge reads.
 
 ## Render and iterate
 
-Export PNG pages with:
+Render and verify pages in one call:
 
 ```bash
-uv run sibelius-websocket-cli export --format png --out /tmp/check.png
+uv run sibelius-websocket-cli verify-render --format png --out /tmp/check.png
 ```
 
 Numbered pages are written as `check_0001.png`, `check_0002.png`, and so on.
-Inspect the relevant page, make one scoped adjustment, re-export, and inspect
-again.
+Open only the page that contains the passage in question; images are
+expensive in context.
+
+Batch adjustments rather than iterating one object per render: note every
+collision on the page, write all fixes into one `patch-layout` file, validate
+it with `--dry-run`, apply it, and render once. Re-render only the pages the
+batch touched.
+
+```json
+[
+  {"op": "nudge", "staff": 1, "bar": 12, "index": 3, "dy": -32},
+  {"op": "nudge", "staff": 2, "bar": 12, "index": 1, "dx": 16},
+  {"op": "set-break", "bar": 17, "type": "system"}
+]
+```
+
+```bash
+uv run sibelius-websocket-cli patch-layout --file /tmp/ops.json --dry-run
+uv run sibelius-websocket-cli --expect-file /path/to/score.sib \
+  patch-layout --file /tmp/ops.json
+```
 
 ## System layout and footer space
 
@@ -28,12 +47,15 @@ value when Document Setup provides one.
 
 Available layout operations include:
 
-- `nudge --staff S --bar B --index I --dx X --dy Y` for an addressed object's
-  horizontal or vertical offset in 1/32 spaces. Moving one colliding syllable
-  can transfer the collision, so inspect both sides afterward.
+- `nudge` (a `patch-layout` op, or the single-object command) for an
+  addressed object's horizontal or vertical offset in 1/32 spaces. Moving one
+  colliding syllable can transfer the collision, so include both sides in the
+  same batch and inspect both afterward.
+- `set-break`, `set-barline`, and `reset-design` are also `patch-layout` ops;
+  combine them with nudges in one file.
 - `flip-stem --staff S --bar B --index I` for stem direction.
-- `invoke select_all reset_note_spacing select_none` or `increase_spacing` for
-  global note spacing.
+- `invoke select_all reset_note_spacing select_none` (one call, several IDs)
+  or `increase_spacing` for global note spacing.
 - `set-lyric-style --staff S --bar B --index I --style verse1` when a unison
   refrain should use lyric line 1 consistently.
 
