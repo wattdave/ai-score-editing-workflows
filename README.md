@@ -99,6 +99,16 @@ The SATB profile accepts `--soprano-solo`, `--tenor-solo`, and
 codes for malformed rhythm, ambiguous XML voices, unsupported pitch counts,
 and ties.
 
+`round` arranges a single-part round as one part per voice for playback, also
+locally. Voice count and entry spacing come from the score's `1.` `2.` entry
+marks unless given; each voice sings the song `--passes` times (default 2),
+holds its final note and drops out, and the last voice ends under a fermata:
+
+```bash
+uv run sibelius-websocket-cli round round.musicxml --open
+uv run sibelius-websocket-cli round round.mxl --voices 3 --gap 4 --passes 1 -o out.mxl
+```
+
 Calling ManuScript plug-ins and exploring the protocol:
 
 ```bash

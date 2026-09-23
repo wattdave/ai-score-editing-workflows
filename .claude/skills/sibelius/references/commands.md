@@ -60,6 +60,9 @@ and verify once for the whole set.
   - `{"op":"reset-design","lyrics":false}`
   - `{"op":"remove-redundant-clefs"[,"staff":S]}`
 - `invoke ID1 ID2 ...`: several built-in command IDs in one request.
+- `round FILE.musicxml [--voices N --gap BARS --passes P --open]`: local
+  MusicXML transform; builds a staggered-entry playback score from a
+  single-part round, inferring voices and gap from `1.` `2.` entry marks.
 
 Single-object writes:
 
