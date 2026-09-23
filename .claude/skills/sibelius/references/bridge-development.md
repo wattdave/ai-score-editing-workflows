@@ -16,5 +16,9 @@ version mismatch.
   `docs/commands.md`, and `SPEC.md` as the local API authority. Known guide
   discrepancies include `utils.CalculateDegree` and `return_value` versus
   `returnValue`.
+- A method lives on the object whose section lists it in
+  `docs/manuscript-object-tree.md` (for example `CurrentTimeSignature` is on
+  `SystemStaff`, not `Score`). The lint test does not check receivers, and a
+  wrong one fails only at runtime with "Unknown method".
 - Exercise bridge changes against a scratch copy of a score before using a real
   score.
