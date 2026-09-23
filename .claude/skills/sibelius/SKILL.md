@@ -30,9 +30,8 @@ open -a /Applications/Sibelius.app /absolute/path/to/score.sib
 
 Then run `inspect` and confirm `fileName` before reading or changing the score.
 
-An imported MusicXML file opens as an unsaved score whose `fileName` is a bare
-title (`peace round`), not a path. Every write backs up first and refuses such
-a score, so ask the user to save it as `.sib` (File → Save) before editing.
+Writes refuse an imported, never-saved MusicXML score; have the user save it
+as `.sib` first.
 
 ## Batch first: minimize calls and output
 
@@ -96,12 +95,8 @@ Do not load unrelated references.
 - A new Sibelius process or changed declared plug-in list can show an approval
   dialog. If a command reports that it is waiting, ask the user to click OK in
   Sibelius; the connection timeout is 120 seconds.
-- The first connection to a freshly launched Sibelius can be rejected at once
-  with `kClientRejected_UserRefusedRequest` although no prompt was shown or
-  clicked. Retry once before involving the user.
-- A timeout followed by `busyError` usually means a ManuScript runtime error
-  dialog is open and blocking Sibelius. Take a screenshot, report the error,
-  and ask the user to dismiss it; writes made before the failing line persist.
+- A fresh Sibelius may reject the first connection
+  (`kClientRejected_UserRefusedRequest`) without a prompt; retry once.
 - Exit 2 means Sibelius is unavailable or Sibelius Connect is disabled under
   Preferences → Input Devices.
 - Exit 1 with a bridge-unreachable or version-mismatch message requires
