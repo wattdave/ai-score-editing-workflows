@@ -51,3 +51,20 @@ def test_execution_order_runs_edits_then_descending_deletes_then_voices(tmp_path
 def test_load_note_patches_rejects_invalid_operations(tmp_path, payload, message) -> None:
     with pytest.raises(NotePatchError, match=message):
         load_note_patches(_write(tmp_path, payload))
+
+
+def test_bracket_maps_to_set_bracketed(tmp_path) -> None:
+    ops = load_note_patches(_write(tmp_path, [
+        {"op": "bracket", "staff": 1, "bar": 8, "index": 1},
+        {"op": "bracket", "staff": 1, "bar": 8, "index": 2, "remove": True},
+    ]))
+
+    assert bridge_call(ops[0]) == ("SetBracketed", [1, 8, 1, "true"])
+    assert bridge_call(ops[1]) == ("SetBracketed", [1, 8, 2, "false"])
+
+
+def test_bracket_rejects_non_boolean_remove(tmp_path) -> None:
+    with pytest.raises(NotePatchError, match="remove must be boolean"):
+        load_note_patches(_write(tmp_path, [
+            {"op": "bracket", "staff": 1, "bar": 8, "index": 1, "remove": "yes"},
+        ]))

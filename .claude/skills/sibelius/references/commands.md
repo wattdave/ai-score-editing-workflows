@@ -48,6 +48,7 @@ and verify once for the whole set.
   deletions, so addresses never shift under it:
   - `{"op":"set-pitch","staff":S,"bar":B,"index":I,"oldPitch":P,"newPitch":Q}`
   - `{"op":"tie","staff":S,"bar":B,"index":I[,"remove":true]}`
+  - `{"op":"bracket","staff":S,"bar":B,"index":I[,"remove":true]}` (parenthesize a note/chord)
   - `{"op":"flip-stem","staff":S,"bar":B,"index":I}`
   - `{"op":"delete","staff":S,"bar":B,"index":I}`
   - `{"op":"delete-voice","staff":S,"fromBar":A,"toBar":B,"voice":V}`
@@ -55,6 +56,7 @@ and verify once for the whole set.
   - `{"op":"nudge","staff":S,"bar":B,"index":I,"dx":X,"dy":Y}`
   - `{"op":"set-break","bar":B,"type":"system|page|none"}`
   - `{"op":"set-barline","bar":B,"type":"double|final|..."}`
+  - `{"op":"set-time","bar":B,"top":N,"bottom":D[,"symbol":"cut|common"]}`
   - `{"op":"reset-design","lyrics":false}`
   - `{"op":"remove-redundant-clefs"[,"staff":S]}`
 - `invoke ID1 ID2 ...`: several built-in command IDs in one request.
@@ -65,7 +67,7 @@ Single-object writes:
   `set-break`.
 - Entry: `add-notes` and `add-abc` (enter a whole passage per call).
 - Editing: `set-note`, `set-lyric`, `set-lyric-style`, `tie`, `delete-object`,
-  `delete-voice`, `transpose`, `set-key`, `copy-passage`, `flip-stem`, `nudge`,
+  `delete-voice`, `transpose`, `set-key`, `set-time`, `bracket`, `copy-passage`, `flip-stem`, `nudge`,
   `reset-design`. `transpose` and `delete-voice` take ranges; use one ranged
   call instead of per-bar calls.
 - Persistence: `save` and `backup`. Prefer `--save` on the final write over a

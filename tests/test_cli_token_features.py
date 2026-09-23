@@ -24,6 +24,9 @@ from sibelius_websocket_cli.cli import (
     _run_read_lyrics,
     _run_reset_design,
     _run_set_lyric,
+    _backup,
+    _run_bracket,
+    _run_set_time,
     _run_tie,
     _run_write,
     build_parser,
@@ -522,3 +525,34 @@ async def test_tie_passes_string_booleans_to_bridge() -> None:
         run_write.assert_awaited_once_with(
             untie_args, "SetTie", [1, 2, 3, "false"]
         )
+
+
+async def test_bracket_and_set_time_pass_string_booleans_to_bridge() -> None:
+    parser = build_parser()
+
+    bracket_args = parser.parse_args(["bracket", "--staff", "1", "--bar", "8", "--index", "1"])
+    with patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=EXIT_OK)) as run_write:
+        assert await _run_bracket(bracket_args) == EXIT_OK
+        run_write.assert_awaited_once_with(bracket_args, "SetBracketed", [1, 8, 1, "true"])
+
+    cut_args = parser.parse_args(["set-time", "--top", "2", "--bottom", "2", "--symbol", "cut"])
+    with patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=EXIT_OK)) as run_write:
+        assert await _run_set_time(cut_args) == EXIT_OK
+        run_write.assert_awaited_once_with(cut_args, "SetTimeSignature", [1, 2, 2, "true"])
+
+
+async def test_set_time_rejects_symbol_contradicting_meter() -> None:
+    args = build_parser().parse_args(["set-time", "--top", "3", "--bottom", "4", "--symbol", "cut"])
+    with patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock()) as run_write:
+        assert await _run_set_time(args) == EXIT_COMMAND_FAILED
+        run_write.assert_not_awaited()
+
+
+async def test_backup_refuses_imported_score_without_a_path() -> None:
+    responses = {"AddVersion": {"ok": True}, "Save": {"fileName": "peace round"}}
+    with patch(
+        "sibelius_websocket_cli.cli._bridge",
+        new=AsyncMock(side_effect=lambda _client, method, *_: responses[method]),
+    ):
+        with pytest.raises(BridgeError, match="never been saved as a .sib"):
+            await _backup(MagicMock(), "before set-time")

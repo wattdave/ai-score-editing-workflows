@@ -68,6 +68,7 @@ uv run sibelius-websocket-cli patch-layout --file layout-fixes.json --save
 uv run sibelius-websocket-cli patch-notes --file note-fixes.json --save   # pitches, ties, stems, deletes
 uv run sibelius-websocket-cli transpose --from-note C --to-note D --up
 uv run sibelius-websocket-cli set-key --key D             # key signature only
+uv run sibelius-websocket-cli set-time --top 2 --bottom 2 --symbol cut  # cut time
 uv run sibelius-websocket-cli backup                      # backup on demand
 uv run sibelius-websocket-cli bridge-version              # check installed bridge
 ```
