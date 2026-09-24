@@ -745,11 +745,12 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 44
+CURRENT_BRIDGE_VERSION = 45
 QUERY_BRIDGE_VERSION = 38
 BATCH_BRIDGE_VERSION = 39
 NUDGE_BRIDGE_VERSION = 41
 STRUCTURAL_BRIDGE_VERSION = 44
+STRUCTURE_READ_BRIDGE_VERSION = 45
 
 
 def _batch_bridge_version(operations: list[dict[str, Any]]) -> int:
