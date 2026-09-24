@@ -151,3 +151,42 @@ A clef is flagged when its `styleId` matches the staff's default clef (read from
 
 ### Not a playback defect
 These clefs generate no MIDI events and never cause hanging or droning notes. A score that drones has a tie defect; use the `hanging-playback-note-repair` skill instead.
+
+---
+
+## Pattern 10: Late-Entering Staves Flagged as Stacked Systems
+
+### Symptom
+`omr_tool.py audit` reports `Stacked system suspected: True`, and some parts consist mostly of "dummy rest measures" at the start of the piece (for example `P2` rests for bars 1-19 and `P3` for bars 1-26).
+
+### Cause
+The audit reads long runs of whole-bar rests as padding. In a genuine ensemble score where voices enter later, the printed page hides empty staves ("hide empty staves"), so the OMR fills those bars with rests. The rests are correct.
+
+### Repair
+Check the PDF before unstacking. If later systems show the extra staves singing at the same time, the parts are real: **do not unstack**. Delete only bars that are rests in *every* part and have no printed counterpart, and hide empty staves in Sibelius after import. Check each part's rests in 3/4 or other changed-meter bars: OMR sometimes leaves a hidden staff's rest at the previous meter's length.
+
+---
+
+## Pattern 11: Chords Collapsed to Their Lowest Note
+
+### Symptom
+Where the print shows a chord or divisi on one staff (for example D3/A3/D4), the MusicXML has a single note, usually the **lowest** chord member. The melody drops out of that bar, and repeated low notes appear where the tune moves.
+
+### Cause
+Some engines (Halbestunde in particular) keep only one notehead of a stacked chord, and the others are lost silently.
+
+### Repair
+Compare every printed chord with the XML and rebuild the bar with `<chord/>` notes. Search the PDF for stacked noteheads, especially at cadences and fermatas and in bars where the meter changes. A melody that suddenly repeats a low note is a strong hint.
+
+---
+
+## Pattern 12: Missing Key Signature on a Late-Entering Staff
+
+### Symptom
+After import, one staff (typically the last to enter) has no key signature until partway through, and spells its sharps or flats as accidentals. Sibelius reports extra "key changes" to the same key (`score-snapshot` → `keySignatures` lists G major at bars 18 and 32, say). Courtesy key signatures appear at the end of the preceding systems.
+
+### Cause
+The OMR omitted `<key>` from that part's first `<attributes>`, then restated it where the staff first became visible. Sibelius turns each restatement into a key-change object.
+
+### Repair
+Fix it in the MusicXML: put `<key>` in bar 1 of **every** part and remove `<key>` from later bars unless the key really changes. The bridge cannot delete key-signature objects (they live on the system staff), so re-import rather than patching the live score. After import, `score-snapshot` should list no `keySignatures` for a piece with no key changes (the initial key is not reported).
