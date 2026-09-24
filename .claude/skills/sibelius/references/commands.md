@@ -74,6 +74,28 @@ and verify once for the whole set.
     (adds to an existing chord at that position)
   - `{"op":"add-text","staff":S,"bar":B,"position":P,"text":T[,"styleId":"text.staff.expression","voice":V]}`
   - `{"op":"add-lyric","staff":S,"bar":B,"position":P,"duration":D,"text":T[,"syllableType":"middle","voice":V]}`
+  - `{"op":"beam","staff":S,"bar":B,"firstIndex":I,"lastIndex":J}`: beam the
+    NoteRests from I to J together (bridge v44)
+
+  Structural operations (bridge v44) work on bar ranges or the whole score.
+  They must come **after every operation above**, since they can replace or
+  renumber the objects an address points at. Bars and staves refer to the
+  score before the batch. A `set-time` re-bars what follows it, so no later
+  operation may name a bar after its bar, and every `set-time` must come
+  before any `set-key`, `set-break` or `set-barline` (re-barring erased a
+  barline just before it).
+  - `{"op":"transpose","fromBar":A,"toBar":B,"topStaff":T,"bottomStaff":U,"fromNote":"C","toNote":"D","direction":"up"[,"octaves":N]}`,
+    or `"degree"` (±21) and `"intervalType"` (0-10) instead of the notes
+  - `{"op":"copy-passage","fromBar":A,"toBar":B,"topStaff":T,"bottomStaff":U,"destStaff":S,"destBar":D[,"destPosition":P]}`:
+    overwrites the destination; pasting past the last bar adds bars
+  - `{"op":"set-key","bar":B,"key":"Bb"[,"minor":true]}`: one of the 15
+    standard keys per mode; adds a double barline, as Sibelius does
+  - `{"op":"set-time","bar":B,"numerator":N,"denominator":D[,"symbol":"common"|"cut"]}`
+  - `{"op":"set-break","bar":B,"type":"system"|"page"|"none"}`
+  - `{"op":"set-barline","bar":B,"type":T}`: types as in `set-barline`;
+    replaces any special barline already there
+  - `{"op":"add-bars","count":N}`: appends N bars at the end
+  - `{"op":"delete-voice","fromBar":A,"toBar":B,"staff":S,"voice":V}`
 
   Typical flow: `query` to find targets, write the operations with the
   returned addresses plus `type`/`position` guards, `apply --dry-run`, then
