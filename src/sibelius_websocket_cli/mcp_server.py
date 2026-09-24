@@ -23,6 +23,7 @@ from sibelius_websocket_cli.cli import (
     BRIDGE_PLUGIN,
     EXPORT_FORMATS,
     QUERY_BRIDGE_VERSION,
+    STRUCTURE_READ_BRIDGE_VERSION,
     BridgeError,
     _apply_batch,
     _backup,
@@ -155,7 +156,8 @@ WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint
 @server.tool(annotations=READ_ONLY)
 async def score_overview() -> dict[str, Any]:
     """Describe the open score: title, file, bar count, staves (number and
-    instrument names) and the current selection. Call this first."""
+    instrument names) and the current selection. Call this first; call
+    score_structure for key and time signatures, barlines and breaks."""
 
     async def action(client: SibeliusClient) -> dict[str, Any]:
         return {
@@ -164,6 +166,33 @@ async def score_overview() -> dict[str, Any]:
             "staves": await _call(client, "GetStaves"),
             "selection": await _call(client, "GetSelectionInfo"),
         }
+
+    return await session.run(action, retry=True)
+
+
+@server.tool(annotations=READ_ONLY)
+async def score_structure(bars: str | None = None) -> dict[str, Any]:
+    """Read the score's structure: key and time signatures, special barlines
+    and system/page breaks, for bars such as "1-40" (default all).
+
+    Key and time signatures report the bar they take effect in (a change is
+    stored at the end of the bar before; storedBar says which). Barline and
+    break types use the names apply_batch's set-barline and set-break take;
+    a barline or break at bar B sits at the end of bar B.
+    """
+    try:
+        from_bar, to_bar = parse_bar_range(bars=bars) if bars else (None, None)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+
+    async def action(client: SibeliusClient) -> dict[str, Any]:
+        await _guarded(_require_bridge(client, STRUCTURE_READ_BRIDGE_VERSION, "score_structure"))
+        first = from_bar or 1
+        last = to_bar
+        if last is None:
+            info = await _call(client, "GetScoreInfo")
+            last = info["barCount"]
+        return batch_ops.name_structure(await _call(client, "GetScoreStructure", [first, last]))
 
     return await session.run(action, retry=True)
 

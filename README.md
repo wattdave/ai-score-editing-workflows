@@ -137,6 +137,7 @@ Sibelius Connect session open and needs the bridge plug-in (v39+).
 | Tool | Does |
 |---|---|
 | `score_overview` | Score info, staves and selection |
+| `score_structure` | Key and time signatures, special barlines and breaks, with the names `apply_batch` takes |
 | `query_score` | Find bar objects by staff, bars, type, voice and property filters |
 | `apply_batch` | Apply a batch of edits as one undo step, after checking every operation (`dry_run` to check only) |
 | `undo` | Undo the last step(s); one batch is one step |
