@@ -18,6 +18,7 @@ from sibelius_websocket_cli.cli import (
     _run_score_snapshot,
     _run_patch_lyrics,
     _run_patch_layout,
+    _run_apply,
     _run_patch_notes,
     _run_proofread,
     _run_verify_render,
@@ -254,12 +255,13 @@ async def test_patch_layout_removes_redundant_clefs_from_installed_package(
     assert '"verified":1' in capsys.readouterr().out
 
 
-async def test_patch_notes_uses_one_backup_and_deletes_high_indexes_first(
+async def test_patch_notes_sends_one_batch_then_voice_deletes(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     patch_file = tmp_path / "notes.json"
     patch_file.write_text(
         '[{"op":"delete","staff":1,"bar":4,"index":1},'
+        '{"op":"delete-voice","staff":2,"fromBar":1,"toBar":2,"voice":2},'
         '{"op":"delete","staff":1,"bar":4,"index":3},'
         '{"op":"tie","staff":2,"bar":5,"index":0,"remove":true}]'
     )
@@ -274,25 +276,106 @@ async def test_patch_notes_uses_one_backup_and_deletes_high_indexes_first(
             return {"fileName": "/scores/a.sib"}
         return {"changed": True}
 
+    batch_result = {"applied": 3, "results": [{"i": 0}, {"i": 1}, {"i": 2}]}
     with (
         patch("sibelius_websocket_cli.cli._client", return_value=context),
-        patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._require_bridge", new=AsyncMock()),
         patch("sibelius_websocket_cli.cli._assert_expected_score", new=AsyncMock()),
         patch("sibelius_websocket_cli.cli._backup", new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"})) as backup,
+        patch("sibelius_websocket_cli.cli._apply_batch", new=AsyncMock(return_value=batch_result)) as apply_batch,
         patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge_side_effect) as bridge,
     ):
         assert await _run_patch_notes(args) == EXIT_OK
 
     assert context.__aenter__.call_count == 1
     backup.assert_awaited_once()
+    apply_batch.assert_awaited_once()
+    batch, dry_run = apply_batch.await_args.args[1:]
+    assert dry_run is False
+    assert batch == [
+        {"op": "tie", "staff": 2, "bar": 5, "index": 0, "tied": False},
+        {"op": "delete", "staff": 1, "bar": 4, "index": 3},
+        {"op": "delete", "staff": 1, "bar": 4, "index": 1},
+    ]
     assert [(call.args[1], call.args[2] if len(call.args) > 2 else None) for call in bridge.call_args_list] == [
-        ("SetTie", [2, 5, 0, "false"]),
-        ("DeleteObject", [1, 4, 3]),
-        ("DeleteObject", [1, 4, 1]),
+        ("DeleteVoiceInPassage", [1, 2, 2, 2]),
         ("Save", None),
     ]
-    output = capsys.readouterr().out.strip()
-    assert '"applied":3' in output
+    assert '"applied":4' in capsys.readouterr().out.strip()
+
+
+async def test_apply_dry_run_skips_backup_and_save(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    batch_file = tmp_path / "ops.json"
+    batch_file.write_text('[{"op":"set","staff":1,"bar":1,"index":0,"prop":"Dx","value":8}]')
+    args = build_parser().parse_args(["apply", "--file", str(batch_file), "--dry-run", "--save"])
+    context, _client = _client_context()
+    result = {"applied": 0, "dryRun": True, "results": [{"i": 0, "op": "set"}]}
+    with (
+        patch("sibelius_websocket_cli.cli._client", return_value=context),
+        patch("sibelius_websocket_cli.cli._require_bridge", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._assert_expected_score", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._backup", new=AsyncMock()) as backup,
+        patch("sibelius_websocket_cli.cli._apply_batch", new=AsyncMock(return_value=result)) as apply_batch,
+        patch("sibelius_websocket_cli.cli._bridge", new=AsyncMock()) as bridge,
+    ):
+        assert await _run_apply(args) == EXIT_OK
+
+    backup.assert_not_awaited()
+    bridge.assert_not_awaited()
+    assert apply_batch.await_args.args[2] is True
+    assert '"dryRun":true' in capsys.readouterr().out
+
+
+async def test_apply_reports_partial_failure_with_undo_hint(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    batch_file = tmp_path / "ops.json"
+    batch_file.write_text(
+        '[{"op":"add-note","staff":1,"bar":1,"position":0,"duration":256,"pitches":[60]},'
+        '{"op":"add-note","staff":1,"bar":1,"position":256,"duration":256,"pitches":[62]}]'
+    )
+    args = build_parser().parse_args(["apply", "--file", str(batch_file), "--save"])
+    context, _client = _client_context()
+    result = {"error": "op 1: Sibelius refused add-note", "applied": 1, "failedOp": 1}
+    with (
+        patch("sibelius_websocket_cli.cli._client", return_value=context),
+        patch("sibelius_websocket_cli.cli._require_bridge", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._assert_expected_score", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._backup", new=AsyncMock(return_value={"copy": "/b.sib"})),
+        patch(
+            "sibelius_websocket_cli.cli._apply_batch",
+            new=AsyncMock(side_effect=[{"applied": 0, "dryRun": True}, result]),
+        ),
+        patch("sibelius_websocket_cli.cli._bridge", new=AsyncMock()) as bridge,
+    ):
+        assert await _run_apply(args) == EXIT_COMMAND_FAILED
+
+    bridge.assert_not_awaited()  # no save after a failed batch
+    assert "invoke undo" in capsys.readouterr().err
+
+
+async def test_apply_refused_batch_skips_backup(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    batch_file = tmp_path / "ops.json"
+    batch_file.write_text('[{"op":"delete","staff":1,"bar":1,"index":99}]')
+    args = build_parser().parse_args(["apply", "--file", str(batch_file)])
+    context, _client = _client_context()
+    refused = {"error": "op 0: no object at staff 1 bar 1 index 99", "applied": 0, "failedOp": 0}
+    with (
+        patch("sibelius_websocket_cli.cli._client", return_value=context),
+        patch("sibelius_websocket_cli.cli._require_bridge", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._assert_expected_score", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._backup", new=AsyncMock()) as backup,
+        patch("sibelius_websocket_cli.cli._apply_batch", new=AsyncMock(return_value=refused)) as apply_batch,
+    ):
+        assert await _run_apply(args) == EXIT_COMMAND_FAILED
+
+    backup.assert_not_awaited()
+    assert [call.args[2] for call in apply_batch.await_args_list] == [True]
+    assert "nothing was changed" in capsys.readouterr().err
 
 
 async def test_proofread_combines_reads_and_returns_compact_report(

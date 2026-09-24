@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 38);
+		return CreateDictionary('version', 39);
 	}"
 
 	Echo "(value) {
@@ -1844,5 +1844,238 @@
 			}
 		}
 		return CreateDictionary('objects', objects, 'count', objects.Length, 'truncated', truncated);
+	}"
+
+	BatchWritableTable "() {
+		// Properties ApplyBatch 'set' may write through obj.@name, per object
+		// kind. Mirrored by batch_ops.py WRITABLE_PROPS, which also checks value
+		// types; a test keeps the two in sync.
+		common = CreateDictionary('Dx', True, 'Dy', True, 'Hidden', True, 'CueSize', True);
+		types = CreateDictionary(
+			'NoteRest', CreateDictionary('Beam', True, 'RestPosition', True),
+			'LyricItem', CreateDictionary('Text', True, 'Duration', True),
+			'Text', CreateDictionary('Text', True),
+			'Line', CreateDictionary('Duration', True, 'RhDx', True));
+		return CreateDictionary('common', common, 'types', types);
+	}"
+
+	BatchAddressed "(opName) {
+		if (opName = 'set' or opName = 'set-pitch' or opName = 'tie' or opName = 'bracket') {
+			return True;
+		}
+		if (opName = 'flip-stem' or opName = 'delete') {
+			return True;
+		}
+		return False;
+	}"
+
+	BatchBar "(score, op) {
+		staffNum = op['staff'];
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return null;
+		}
+		staff = score.NthStaff(staffNum);
+		barNumber = op['bar'];
+		if (barNumber < 1 or barNumber > staff.BarCount) {
+			return null;
+		}
+		return staff.NthBar(barNumber);
+	}"
+
+	BatchCheck "(score, op, target, writable) {
+		// Returns '' when op can run against the score as it is now.
+		opName = op['op'];
+		if (BatchAddressed(opName)) {
+			if (target = null) {
+				return 'no object at staff ' & op['staff'] & ' bar ' & op['bar'] & ' index ' & op['index'];
+			}
+			if (op['type'] != null) {
+				if (target.Type != op['type'] and QueryKind(target) != op['type']) {
+					return 'expected a ' & op['type'] & ' but found a ' & target.Type;
+				}
+			}
+			if (op['position'] != null) {
+				if (target.Position != op['position']) {
+					return 'expected position ' & op['position'] & ' but found ' & target.Position;
+				}
+			}
+			kind = QueryKind(target);
+			if (opName = 'set') {
+				if (QueryIsReadable(writable, kind, op['prop']) = False) {
+					return 'property ' & op['prop'] & ' is not writable on a ' & target.Type;
+				}
+				return '';
+			}
+			if (opName = 'delete') {
+				return '';
+			}
+			if (target.Type != 'NoteRest') {
+				return opName & ' needs a NoteRest but found a ' & target.Type;
+			}
+			if (opName = 'set-pitch') {
+				found = False;
+				for each note in target {
+					if (note.Pitch = op['oldPitch']) {
+						found = True;
+					}
+				}
+				if (found = False) {
+					return 'no note with pitch ' & op['oldPitch'];
+				}
+			}
+			if (opName = 'tie' or opName = 'bracket') {
+				if (target.NoteCount < 1) {
+					return 'cannot ' & opName & ' a rest';
+				}
+			}
+			return '';
+		}
+		bar = BatchBar(score, op);
+		if (bar = null) {
+			return 'no bar ' & op['bar'] & ' on staff ' & op['staff'];
+		}
+		if (op['position'] < 0 or op['position'] >= bar.Length) {
+			return 'position ' & op['position'] & ' is outside the bar';
+		}
+		return '';
+	}"
+
+	BatchRun "(score, op, target) {
+		// Applies one checked op; returns a description of the result, or
+		// null if Sibelius refused the change.
+		opName = op['op'];
+		if (opName = 'set') {
+			prop = op['prop'];
+			target.@prop = op['value'];
+			return DescribeObject(target, op['index']);
+		}
+		if (opName = 'set-pitch') {
+			oldNote = null;
+			for each note in target {
+				if (note.Pitch = op['oldPitch']) {
+					oldNote = note;
+				}
+			}
+			newNote = target.AddNote(op['newPitch'], oldNote.Tied);
+			if (newNote = null) {
+				return null;
+			}
+			target.RemoveNote(oldNote);
+			return DescribeObject(target, op['index']);
+		}
+		if (opName = 'tie') {
+			for each note in target {
+				note.Tied = op['tied'];
+			}
+			return DescribeObject(target, op['index']);
+		}
+		if (opName = 'bracket') {
+			for each note in target {
+				note.Bracketed = op['bracketed'];
+			}
+			return DescribeObject(target, op['index']);
+		}
+		if (opName = 'flip-stem') {
+			target.FlipStem();
+			return DescribeObject(target, op['index']);
+		}
+		if (opName = 'delete') {
+			target.Delete();
+			return CreateDictionary('deleted', True);
+		}
+		bar = BatchBar(score, op);
+		voice = 1;
+		if (op['voice'] != null) {
+			voice = op['voice'];
+		}
+		if (opName = 'add-note') {
+			pitches = op['pitches'];
+			tied = False;
+			if (op['tied'] = True) {
+				tied = True;
+			}
+			firstNote = bar.AddNote(op['position'], pitches[0], op['duration'], tied, voice);
+			if (firstNote = null) {
+				return null;
+			}
+			noteRest = firstNote.ParentNoteRest;
+			for i = 1 to pitches.Length {
+				noteRest.AddNote(pitches[i], tied);
+			}
+			return DescribeObject(noteRest, -1);
+		}
+		if (opName = 'add-text') {
+			text = bar.AddText(op['position'], op['text'], op['styleId'], voice);
+			if (text = null) {
+				return null;
+			}
+			return DescribeObject(text, -1);
+		}
+		if (opName = 'add-lyric') {
+			st = EndOfWord;
+			if (op['syllableType'] = 'middle') {
+				st = MiddleOfWord;
+			}
+			lyric = bar.AddLyric(op['position'], op['duration'], op['text'], st, 1, voice);
+			if (lyric = null) {
+				return null;
+			}
+			return DescribeObject(lyric, -1);
+		}
+		return null;
+	}"
+
+	ApplyBatch "(ops, dryRun) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (ops = null or ops.Length < 1) {
+			return CreateDictionary('error', 'ops is empty');
+		}
+		writable = BatchWritableTable();
+		// Resolve every address before the first edit: later edits shift bar
+		// indices, but references taken now stay valid (SPEC.md 1.3.1).
+		targets = CreateSparseArray();
+		results = CreateSparseArray();
+		for i = 0 to ops.Length {
+			op = ops[i];
+			target = null;
+			if (BatchAddressed(op['op'])) {
+				target = GetObjectAt(op['staff'], op['bar'], op['index']);
+			}
+			targets[i] = target;
+			problem = BatchCheck(score, op, target, writable);
+			if (problem != '') {
+				return CreateDictionary('error', 'op ' & i & ': ' & problem, 'failedOp', i, 'applied', 0);
+			}
+			before = null;
+			if (target != null) {
+				before = DescribeObject(target, op['index']);
+			}
+			results.Push(CreateDictionary('i', i, 'op', op['op'], 'before', before));
+		}
+		if (dryRun = True) {
+			return CreateDictionary('results', results, 'applied', 0, 'dryRun', True);
+		}
+		applied = 0;
+		failure = '';
+		for i = 0 to ops.Length {
+			if (failure = '') {
+				op = ops[i];
+				after = BatchRun(score, op, targets[i]);
+				result = results[i];
+				if (after = null) {
+					failure = 'op ' & i & ': Sibelius refused ' & op['op'];
+				} else {
+					result['after'] = after;
+					applied = applied + 1;
+				}
+			}
+		}
+		if (failure != '') {
+			return CreateDictionary('error', failure, 'failedOp', applied, 'applied', applied, 'results', results);
+		}
+		return CreateDictionary('results', results, 'applied', applied);
 	}"
 }

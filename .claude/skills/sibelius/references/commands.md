@@ -51,13 +51,36 @@ Targeted reads (always scope with `--staff` and `--bars`):
 Write commands create a backup before mutation. Batch writes back up, apply,
 and verify once for the whole set.
 
+- `apply --file PATH [--dry-run] [--save]`: the general batch. A JSON array
+  of operations runs in one call as **one undo step**; `invoke undo` reverts
+  the whole batch. Every operation is checked against the open score first,
+  and if any check fails nothing changes and no backup is made. Addresses
+  are `staff`/`bar`/`index` exactly as `query` or `read` reported them before
+  the batch; they stay correct even when earlier operations shift indices.
+  Add `"type"` and/or `"position"` from the query result to any addressed
+  operation as a guard against editing the wrong object. `--dry-run` checks
+  and reports each target without changing anything.
+  - `{"op":"set","staff":S,"bar":B,"index":I,"prop":P,"value":V}`: writable
+    `Dx`, `Dy` (int), `Hidden`, `CueSize` (bool) on anything; `Beam`,
+    `RestPosition` on NoteRest; `Text`, `Duration` on LyricItem; `Text` on
+    Text; `Duration`, `RhDx` on lines.
+  - `set-pitch`, `tie`, `bracket`, `flip-stem`, `delete`: as in `patch-notes`
+    below. Deleting a NoteRest leaves a rest.
+  - `{"op":"add-note","staff":S,"bar":B,"position":P,"duration":D,"pitches":[..][,"voice":V,"tied":true]}`
+    (adds to an existing chord at that position)
+  - `{"op":"add-text","staff":S,"bar":B,"position":P,"text":T[,"styleId":"text.staff.expression","voice":V]}`
+  - `{"op":"add-lyric","staff":S,"bar":B,"position":P,"duration":D,"text":T[,"syllableType":"middle","voice":V]}`
+
+  Typical flow: `query` to find targets, write the operations with the
+  returned addresses plus `type`/`position` guards, `apply --dry-run`, then
+  `apply`.
 - `patch-lyrics --file PATH [--font F --font-size N] [--save]`: JSON array of
   `{staff, bar, index, text[, font, fontSize]}`. Use for two or more lyric
   changes.
 - `patch-notes --file PATH [--save] [--dry-run]`: JSON array of note edits.
-  All addresses refer to the score as read before the batch; the CLI runs
-  edits first, then deletes in descending index order per bar, then voice
-  deletions, so addresses never shift under it:
+  All addresses refer to the score as read before the batch. Everything but
+  `delete-voice` runs as one `apply` batch (one undo step); voice deletions
+  follow as separate steps:
   - `{"op":"set-pitch","staff":S,"bar":B,"index":I,"oldPitch":P,"newPitch":Q}`
   - `{"op":"tie","staff":S,"bar":B,"index":I[,"remove":true]}`
   - `{"op":"bracket","staff":S,"bar":B,"index":I[,"remove":true]}` (parenthesize a note/chord)
