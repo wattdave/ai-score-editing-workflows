@@ -569,7 +569,7 @@ async def test_expected_score_failure_prevents_backup_and_write() -> None:
         patch("sibelius_websocket_cli.cli._bridge", new=AsyncMock()) as bridge,
     ):
         with pytest.raises(BridgeError, match="active score mismatch"):
-            await _run_write(args, "SetKeySignature", [1, "D", True])
+            await _run_write(args, "SetStaffName", [1, "Flute", "Fl."])
 
     backup.assert_not_awaited()
     bridge.assert_not_awaited()
