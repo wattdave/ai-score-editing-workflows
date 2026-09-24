@@ -211,6 +211,49 @@ async def test_patch_layout_uses_one_context_and_one_backup(
     assert '"verified":2' in output
 
 
+async def test_patch_layout_removes_redundant_clefs_from_installed_package(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    patch_file = tmp_path / "layout.json"
+    patch_file.write_text('[{"op":"remove-redundant-clefs","staff":1}]')
+    args = build_parser().parse_args(["patch-layout", "--file", str(patch_file)])
+    context, _client = _client_context()
+    deleted: list[list[Any]] = []
+
+    async def bridge_side_effect(
+        unused_client: Any, method: str, call_args: list[Any] | None = None
+    ) -> Any:
+        del unused_client
+        if method == "GetScoreInfo":
+            return {"staffCount": 1, "barCount": 1,
+                    "timeSignatures": [{"bar": 1, "numerator": 2, "denominator": 4}]}
+        if method == "GetStaves":
+            return [{"staffNum": 1, "instrumentName": "Bass", "barCount": 1}]
+        if method == "ReadBars":
+            # Initial clefs are not bar objects, so only the courtesy clef shows.
+            objects = [] if deleted else [
+                {"type": "Clef", "index": 3, "position": 512, "styleId": "clef.treble"}
+            ]
+            return [{"barNumber": 1, "objects": objects}]
+        if method == "DeleteObject":
+            deleted.append(call_args or [])
+            return {"deleted": True}
+        raise AssertionError(f"unexpected bridge call {method}")
+
+    with (
+        patch("sibelius_websocket_cli.cli._client", return_value=context),
+        patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._assert_expected_score", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._backup", new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"})),
+        patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge_side_effect),
+    ):
+        assert await _run_patch_layout(args) == EXIT_OK
+
+    # The courtesy clef sits at the end of the 2/4 bar (tick 512).
+    assert deleted == [[1, 1, 3]]
+    assert '"verified":1' in capsys.readouterr().out
+
+
 async def test_patch_notes_uses_one_backup_and_deletes_high_indexes_first(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

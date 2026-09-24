@@ -1017,7 +1017,7 @@ async def _run_patch_layout(args: argparse.Namespace) -> int:
                     "true" if operation.get("symbol") else "false",
                 ])
             elif op == "remove-redundant-clefs":
-                from scripts.clean_clefs import delete_redundant_clefs, find_redundant_clefs
+                from .clefs import delete_redundant_clefs, find_redundant_clefs
 
                 target_staff = operation.get("staff")
                 findings = await find_redundant_clefs(client, target_staff)
