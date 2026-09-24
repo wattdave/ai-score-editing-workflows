@@ -45,6 +45,7 @@ def test_python_allow_list_matches_plugin() -> None:
     ("expression", "expected"),
     [
         ("Pitch>=72", {"prop": "Pitch", "op": ">=", "value": 72}),
+        ("Bracketed=true", {"prop": "Bracketed", "op": "=", "value": True}),
         ("Hidden = true", {"prop": "Hidden", "op": "=", "value": True}),
         ("Dx!=-32", {"prop": "Dx", "op": "!=", "value": -32}),
         ("Text='la la'", {"prop": "Text", "op": "=", "value": "la la"}),

@@ -24,7 +24,9 @@ Batch reads (one session, compact output):
   carries its `staff`/`bar`/`index` edit address. Types include `NoteRest`,
   `LyricItem`, `Text`, `Clef`, `Tuplet`, `Line` (any line kind) or a specific
   line type such as `Slur`. `--where` filters combine with AND; `Pitch`
-  matches if any note of a chord matches. Properties are allow-listed per
+  and `Bracketed` match if any note of a chord matches (each note in the
+  results also lists its `bracketed` state), and `StemFlipped=true` finds
+  flipped stems. Properties are allow-listed per
   object type (an unknown name is rejected with the full list); objects lacking a
   filtered property never match. Use instead of reading bar ranges to hunt
   for objects, e.g. `query --staff Tenor --where 'Pitch>=67'` or
