@@ -6,15 +6,17 @@ When repairing Optical Music Recognition (OMR) output or reconciling MusicXML di
 
 ## 1. Quick PDF-to-Image Rendering on macOS
 
-Do not rely on heavy external rasterizers (`pdf2image`, `poppler`, or `pdftoppm`). Use the built-in macOS QuickLook utility:
+Do not rely on heavy external rasterizers (`pdf2image`, `poppler`, or `pdftoppm`); they are usually not installed. Use the bundled PDFKit script, which renders **every** page:
 
 ```bash
-qlmanage -t -s 2000 -o <scratch_dir> "<pdf_path>"
+swift .claude/skills/omr-score-repair/scripts/render_pdf_pages.swift "<pdf_path>" <scratch_dir> [scale]
 ```
 
-- `-t`: Thumbnail/rendered page preview.
-- `-s 2000`: High resolution (2000px on long edge) for crisp notation and text readability.
-- Generates `<pdf_name>.pdf.png` in the specified directory.
+- Writes `<scratch_dir>/page1.png`, `page2.png`, ... and prints each path.
+- The default scale of 1.8 gives about 1100x1425 px for a Letter page, which is enough for notes and lyrics without exceeding image-viewing limits.
+- Check the page count first with `mdls -name kMDItemNumberOfPages "<pdf_path>"`.
+
+QuickLook (`qlmanage -t -s 2000 -o <scratch_dir> "<pdf_path>"`) is faster for a one-page preview, but it renders **only the first page** and writes a single `<pdf_name>.pdf.png`. Never use it as evidence about later pages.
 
 ---
 

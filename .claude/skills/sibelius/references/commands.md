@@ -83,6 +83,27 @@ inferring omitted arguments.
 Use global `--expect-file PATH` before a mutating subcommand to make the CLI
 reject a frontmost-score mismatch before backup or mutation.
 
+## Importing MusicXML
+
+Writes refuse an imported, never-saved MusicXML score. Import and save it
+through the bridge instead of asking the user to click through the import
+dialog and Save As:
+
+```bash
+uv run sibelius-websocket-cli plugin sibwscli OpenScore --args '["/abs/score.xml"]'
+uv run sibelius-websocket-cli plugin sibwscli ExportScore --args '["/abs/score.sib", "SIBL"]'
+uv run sibelius-websocket-cli plugin sibwscli OpenScore --args '["/abs/score.sib"]'
+```
+
+`OpenScore` imports MusicXML silently. `ExportScore` with `SIBL` writes a
+`.sib` but leaves the untitled import as the active window, so reopen the
+saved file before editing. Back up any existing `.sib` at that path first.
+
+`OpenScore` does not bring an already-open score to the front. With several
+copies of the same score open (for example an old window and a fresh
+re-import), reads can hit a stale window. Ask the user to close every copy,
+confirm `score-snapshot` reports `no score open`, and then open from disk.
+
 ## Escape hatches
 
 - `do undo` invokes the named built-in command.
