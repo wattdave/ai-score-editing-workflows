@@ -380,6 +380,44 @@ async def test_verify_render_exports_and_verifies_files(
     assert '"sha256"' in output
 
 
+@pytest.mark.parametrize("pages", [1, 2])
+async def test_verify_render_finds_files_when_out_has_no_extension(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], pages: int
+) -> None:
+    args = build_parser().parse_args(
+        ["verify-render", "--format", "png", "--out", str(tmp_path / "proof"), "--expect-pages", str(pages)]
+    )
+    context, _client = _client_context()
+
+    async def bridge_side_effect(
+        unused_client: Any, method: str, call_args: list[Any] | None = None
+    ) -> Any:
+        del unused_client
+        if method == "GetScoreInfo":
+            return {"fileName": "/scores/a.sib"}
+        if method == "ExportScore":
+            # Mimic Sibelius: add the extension, and page suffixes for multi-page images.
+            target = Path((call_args or [""])[0])
+            stem = target.name.removesuffix(".png")
+            names = [f"{stem}.png"] if pages == 1 else [f"{stem}_{i:04d}.png" for i in range(1, pages + 1)]
+            for name in names:
+                (target.parent / name).write_bytes(b"rendered")
+            return {"exportedTo": str(target)}
+        raise AssertionError(method)
+
+    with (
+        patch("sibelius_websocket_cli.cli._client", return_value=context),
+        patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge_side_effect),
+        patch("sibelius_websocket_cli.cli._assert_expected_score", new=AsyncMock()),
+    ):
+        assert await _run_verify_render(args) == EXIT_OK
+
+    output = capsys.readouterr().out
+    assert '"verified":true' in output
+    assert f'"pages":{pages}' in output
+
+
 async def test_compact_read_lyrics_keeps_edit_address(capsys: pytest.CaptureFixture[str]) -> None:
     args = build_parser().parse_args(["read-lyrics", "--compact", "--staff", "1"])
     context, _client = _client_context()

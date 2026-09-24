@@ -447,7 +447,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--type",
         choices=["system", "page", "none"],
         default="system",
-        help="break type: system, page, or none (default: system)",
+        help="break type: system, page, or none to clear an existing break (default: system)",
     )
     set_break.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     set_barline = sub.add_parser(
@@ -725,7 +725,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 36
+CURRENT_BRIDGE_VERSION = 37
 
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
@@ -1734,6 +1734,19 @@ async def _run_add_abc(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _export_path(requested: str | None, score_file: str, extension: str) -> Path:
+    """Resolve an export target that always carries the format's extension.
+
+    Sibelius appends the extension itself when it is missing (``--out proof``
+    is written as ``proof.png``), so the path is normalized up front to name
+    the file Sibelius actually writes.
+    """
+    out = Path(requested).expanduser().resolve() if requested else Path(score_file).with_suffix(extension)
+    if out.suffix.lower() != extension:
+        out = out.with_name(out.name + extension)
+    return out
+
+
 async def _run_export(args: argparse.Namespace) -> int:
     saveas_type, extension = EXPORT_FORMATS[args.format]
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
@@ -1749,11 +1762,7 @@ async def _run_export(args: argparse.Namespace) -> int:
         if not info["fileName"] and not args.out:
             print("error: active score has never been saved; pass --out", file=sys.stderr)
             return EXIT_COMMAND_FAILED
-        out = (
-            Path(args.out).expanduser().resolve()
-            if args.out
-            else Path(info["fileName"]).with_suffix(extension)
-        )
+        out = _export_path(args.out, info["fileName"], extension)
         result = await _bridge(client, "ExportScore", [str(out), saveas_type])
     # Sibelius appends page suffixes for image formats (foo_0001.png).
     produced = [out] if out.exists() else sorted(out.parent.glob(f"{out.stem}_*{out.suffix}"))
@@ -1787,11 +1796,7 @@ async def _run_verify_render(args: argparse.Namespace) -> int:
         if not info.get("fileName") and not args.out:
             print("error: active score has never been saved; pass --out", file=sys.stderr)
             return EXIT_COMMAND_FAILED
-        out = (
-            Path(args.out).expanduser().resolve()
-            if args.out
-            else Path(info["fileName"]).with_suffix(extension)
-        )
+        out = _export_path(args.out, info["fileName"], extension)
         await _bridge(client, "ExportScore", [str(out), saveas_type])
 
     produced = [out] if out.exists() else sorted(out.parent.glob(f"{out.stem}_*{out.suffix}"))
