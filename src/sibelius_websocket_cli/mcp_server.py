@@ -184,7 +184,8 @@ async def query_score(
     as "12-20" or "5" (default all). types: NoteRest, LyricItem, Text, Clef,
     KeySignature, TimeSignature, Tuplet, Line (any line), or a specific line
     type such as Slur. voice: 1-4. where: conditions that must all hold, e.g.
-    "Pitch>=72" (any note of a chord), "Hidden=true", "Text='dolce'". fields:
+    "Pitch>=72" or "Bracketed=true" (any note of a chord), "StemFlipped=true",
+    "Hidden=true", "Text='dolce'". fields:
     extra properties to return, e.g. ["Dx", "Dy"]. Only allow-listed
     properties exist; an unknown one is rejected with the list.
 
