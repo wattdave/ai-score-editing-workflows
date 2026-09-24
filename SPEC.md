@@ -135,6 +135,48 @@ Probed on Sibelius 26.8 against a scratch score:
   returns `objects: 0` without selecting when there are none.
 - **Bar-local objects only.** A staff's initial clef, key and time signature
   are not objects in bar 1, so `Query` does not return them.
+- **Passage operations join the call's undo step.** A `FlipStem` followed by
+  `Selection.Transpose`, or by `Selection.Copy` + `PasteToPosition`, in one
+  call was reverted (pitches and stem) by a single undo.
+- **A passage selection outlives the call.** After `Transpose` or a paste the
+  selection is still the passage and the user sees it; `Selection.Clear()`
+  removes it. Every passage operation must clear it.
+- **Transpose keeps objects; paste replaces them.** A reference held across
+  `Transpose` read the new pitch. A reference to a note that a paste wrote over
+  read no error and no dialog, but reported the old pitch and stem while the
+  bar held the pasted note. Stale references fail silently, so structural
+  operations must come after every object operation in a batch.
+- **Unknown key names succeed silently.** `AddKeySignatureFromText(0, 'H#',
+  True)` returned a C major key signature with no error. Validate key names
+  before calling.
+- **A zero time signature crashes Sibelius.** `AddTimeSignature(0, 4, ...)`
+  never returned; Sibelius crashed to the Avid crash reporter. Numerator and
+  denominator must be validated (numerator >= 1, denominator a power of two)
+  before the call; out-of-range values were not probed further.
+- **Out-of-range transpose arguments are modal.** `Selection.Transpose(70, 11,
+  True, True)` showed "Method Transpose not found", whether called as a
+  statement or for its value; `Transpose(1, 5, True, True)` works. Interval type
+  must be 0-10 (docs/manuscript-constants.md) and the degree kept small; which
+  of the two arguments triggered it was not isolated.
+- **`AddBars(0)` is a harmless no-op.** No error, no dialog, bar count
+  unchanged.
+- **Re-barring and pasting work as expected.** A 3/4 at bar 2 of a 4/4 score
+  re-barred 4 bars to 5. Pasting past the last bar added a bar. Pasting to
+  mid-bar (position 128) returned True. Copying a bar onto itself or onto an
+  overlapping range returned True with no dialog. `Beam = ContinueBeam` on
+  quarter notes was accepted. Each was one undo step.
+- **Re-barring erases the barline before it and leaves a selection.** A
+  special barline at the end of bar 2 disappeared when the same batch then
+  added 3/4 at bar 3, and bars 3-5 were left selected. `ApplyBatch` clears the
+  selection after any structural op, and `batch_ops.py` puts every set-time
+  before set-key, set-break and set-barline (verified 2026-09-24, bridge v44).
+- **Key changes sit at the end of the previous bar.**
+  `AddKeySignatureFromText(0, ...)` on bar 2 stored the KeySignature at bar 1,
+  position 1024, and added a double barline, as its optional argument
+  defaults.
+- **Undo with nothing to undo is modal.** `invokeCommands ["undo"]` on an empty
+  undo history shows "There are no actions to undo". Only undo after a read-back
+  shows a change.
 
 ### 1.4 Errors
 

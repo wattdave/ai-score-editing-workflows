@@ -20,13 +20,13 @@ from mcp.types import ToolAnnotations
 
 from sibelius_websocket_cli import batch_ops, protocol
 from sibelius_websocket_cli.cli import (
-    BATCH_BRIDGE_VERSION,
     BRIDGE_PLUGIN,
     EXPORT_FORMATS,
     QUERY_BRIDGE_VERSION,
     BridgeError,
     _apply_batch,
     _backup,
+    _batch_bridge_version,
     _export_path,
     _require_bridge,
     parse_bar_range,
@@ -240,6 +240,28 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
     - {"op":"add-text",...,"text":T[,"styleId":"text.staff.expression","voice":V]}
     - {"op":"add-lyric",...,"duration":D,"text":T[,"syllableType":"middle","voice":V]}
 
+    Structural operations work on bar ranges or the whole score and must come
+    after every operation above. Bars and staves refer to the score before the
+    batch; no operation may name a bar after an earlier set-time's bar, and
+    every set-time must come before any set-key, set-break or set-barline.
+
+    - {"op":"beam","staff":S,"bar":B,"firstIndex":I,"lastIndex":J}: beam the
+      NoteRests from I to J together (may sit among the operations above)
+    - {"op":"transpose","fromBar":A,"toBar":B,"topStaff":T,"bottomStaff":U,
+      "fromNote":"C","toNote":"D","direction":"up"|"down"[,"octaves":N]}
+      (or "degree" and "intervalType" 0-10 instead of the notes)
+    - {"op":"copy-passage","fromBar":A,"toBar":B,"topStaff":T,"bottomStaff":U,
+      "destStaff":S,"destBar":D[,"destPosition":P]}: overwrites the
+      destination; pasting past the last bar adds bars
+    - {"op":"set-key","bar":B,"key":"Bb"[,"minor":true]}
+    - {"op":"set-time","bar":B,"numerator":N,"denominator":D[,"symbol":"common"|"cut"]}:
+      re-bars the music after it
+    - {"op":"set-break","bar":B,"type":"system"|"page"|"none"}
+    - {"op":"set-barline","bar":B,"type":"double"|"final"|"start_repeat"|
+      "end_repeat"|"dashed"|"dotted"|"thick"|...|"none"}
+    - {"op":"add-bars","count":N}: appends bars at the end
+    - {"op":"delete-voice","fromBar":A,"toBar":B,"staff":S,"voice":V}
+
     Returns each operation's before/after description and the number applied.
     """
     try:
@@ -248,7 +270,7 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
         raise ToolError(str(exc)) from exc
 
     async def action(client: SibeliusClient) -> dict[str, Any]:
-        await _guarded(_require_bridge(client, BATCH_BRIDGE_VERSION, "apply_batch"))
+        await _guarded(_require_bridge(client, _batch_bridge_version(batch), "apply_batch"))
         result = await _guarded(_apply_batch(client, batch, True))
         if dry_run or "error" in result:
             if "error" in result:

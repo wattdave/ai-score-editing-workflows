@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 43);
+		return CreateDictionary('version', 44);
 	}"
 
 	Echo "(value) {
@@ -1700,6 +1700,238 @@
 		return False;
 	}"
 
+	BatchStructural "(opName) {
+		// Range and score operations. They may replace or renumber the objects
+		// addressed ops hold, so they must come after every other op.
+		if (opName = 'transpose' or opName = 'copy-passage' or opName = 'delete-voice') {
+			return True;
+		}
+		if (opName = 'set-key' or opName = 'set-time' or opName = 'set-break') {
+			return True;
+		}
+		if (opName = 'set-barline' or opName = 'add-bars') {
+			return True;
+		}
+		return False;
+	}"
+
+	BatchBeamTargets "(op) {
+		// The objects from firstIndex to lastIndex, resolved before any edit.
+		objects = CreateSparseArray();
+		for i = op['firstIndex'] to op['lastIndex'] + 1 {
+			objects.Push(GetObjectAt(op['staff'], op['bar'], i));
+		}
+		return objects;
+	}"
+
+	BatchCheckRange "(score, op) {
+		// Bars and staves of a range op, against the score before the batch.
+		barCount = score.SystemStaff.BarCount;
+		if (op['fromBar'] < 1 or op['toBar'] > barCount or op['fromBar'] > op['toBar']) {
+			return 'bars ' & op['fromBar'] & '-' & op['toBar'] & ' are outside the score (' & barCount & ' bars)';
+		}
+		if (op['topStaff'] != null) {
+			if (op['topStaff'] < 1 or op['bottomStaff'] > score.StaffCount or op['topStaff'] > op['bottomStaff']) {
+				return 'staves ' & op['topStaff'] & '-' & op['bottomStaff'] & ' are outside the score';
+			}
+		}
+		return '';
+	}"
+
+	BatchCheckStructural "(score, op) {
+		opName = op['op'];
+		barCount = score.SystemStaff.BarCount;
+		if (op['bar'] != null) {
+			if (op['bar'] < 1 or op['bar'] > barCount) {
+				return 'no bar ' & op['bar'] & ' (score has ' & barCount & ' bars)';
+			}
+		}
+		if (op['fromBar'] != null) {
+			problem = BatchCheckRange(score, op);
+			if (problem != '') {
+				return problem;
+			}
+		}
+		if (opName = 'transpose') {
+			// Out-of-range arguments raise a modal dialog (SPEC.md 1.3.1).
+			if (op['intervalType'] < 0 or op['intervalType'] > 10 or op['degree'] < -21 or op['degree'] > 21) {
+				return 'transposition out of range';
+			}
+		}
+		if (opName = 'copy-passage') {
+			lastDest = op['destStaff'] + op['bottomStaff'] - op['topStaff'];
+			if (op['destStaff'] < 1 or lastDest > score.StaffCount) {
+				return 'destination staves ' & op['destStaff'] & '-' & lastDest & ' are outside the score';
+			}
+			if (op['destBar'] < 1 or op['destBar'] > barCount) {
+				return 'no destination bar ' & op['destBar'];
+			}
+			destBar = score.SystemStaff.NthBar(op['destBar']);
+			if (op['destPosition'] < 0 or op['destPosition'] >= destBar.Length) {
+				return 'destPosition ' & op['destPosition'] & ' is outside bar ' & op['destBar'];
+			}
+		}
+		if (opName = 'delete-voice') {
+			if (op['staff'] < 1 or op['staff'] > score.StaffCount) {
+				return 'no staff ' & op['staff'];
+			}
+			if (op['voice'] < 1 or op['voice'] > 4) {
+				return 'voice must be 1-4';
+			}
+		}
+		if (opName = 'set-time') {
+			// A zero numerator crashes Sibelius (SPEC.md 1.3.1).
+			d = op['denominator'];
+			if (op['numerator'] < 1 or op['numerator'] > 64) {
+				return 'numerator must be 1-64';
+			}
+			if (d != 1 and d != 2 and d != 4 and d != 8 and d != 16 and d != 32 and d != 64) {
+				return 'denominator must be a power of two up to 64';
+			}
+		}
+		if (opName = 'add-bars') {
+			if (op['count'] < 1 or op['count'] > 1000) {
+				return 'count must be 1-1000';
+			}
+		}
+		return '';
+	}"
+
+	BatchBarlineType "(name) {
+		// -1 for 'none' and 'normal': remove special barlines, add nothing.
+		if (name = 'start_repeat') {
+			return SpecialBarlineStartRepeat;
+		}
+		if (name = 'end_repeat') {
+			return SpecialBarlineEndRepeat;
+		}
+		if (name = 'dashed') {
+			return SpecialBarlineDashed;
+		}
+		if (name = 'double') {
+			return SpecialBarlineDouble;
+		}
+		if (name = 'final') {
+			return SpecialBarlineFinal;
+		}
+		if (name = 'invisible') {
+			return SpecialBarlineInvisible;
+		}
+		if (name = 'between_staves') {
+			return SpecialBarlineBetweenStaves;
+		}
+		if (name = 'tick') {
+			return SpecialBarlineTick;
+		}
+		if (name = 'short') {
+			return SpecialBarlineShort;
+		}
+		if (name = 'dotted') {
+			return SpecialBarlineDotted;
+		}
+		if (name = 'triple') {
+			return SpecialBarlineTriple;
+		}
+		if (name = 'thick') {
+			return SpecialBarlineThick;
+		}
+		return -1;
+	}"
+
+	BatchRunStructural "(score, op) {
+		opName = op['op'];
+		systemStaff = score.SystemStaff;
+		selection = score.Selection;
+		if (opName = 'transpose') {
+			selection.SelectPassage(op['fromBar'], op['toBar'], op['topStaff'], op['bottomStaff']);
+			selection.Transpose(op['degree'], op['intervalType'], True, True);
+			selection.Clear();
+			return CreateDictionary('fromBar', op['fromBar'], 'toBar', op['toBar'],
+				'degree', op['degree'], 'intervalType', op['intervalType']);
+		}
+		if (opName = 'copy-passage') {
+			selection.SelectPassage(op['fromBar'], op['toBar'], op['topStaff'], op['bottomStaff']);
+			selection.Copy();
+			ok = selection.PasteToPosition(op['destStaff'], op['destBar'], op['destPosition']);
+			selection.Clear();
+			if (ok != True) {
+				return null;
+			}
+			return CreateDictionary('destStaff', op['destStaff'], 'destBar', op['destBar'],
+				'destPosition', op['destPosition'], 'barCount', systemStaff.BarCount);
+		}
+		if (opName = 'delete-voice') {
+			// Deleting from an empty selection raises a modal dialog, so an
+			// empty voice is reported without selecting anything.
+			voice = op['voice'];
+			staff = score.NthStaff(op['staff']);
+			found = 0;
+			for barNum = op['fromBar'] to op['toBar'] + 1 {
+				for each obj in staff.NthBar(barNum) {
+					if (obj.VoiceNumber = voice) {
+						found = found + 1;
+					}
+				}
+			}
+			if (found > 0) {
+				selection.SelectPassage(op['fromBar'], op['toBar'], op['staff'], op['staff']);
+				Sibelius.Execute('filter_voice' & voice & '_only');
+				Sibelius.Execute('delete');
+				selection.Clear();
+			}
+			return CreateDictionary('staff', op['staff'], 'voice', voice, 'objects', found);
+		}
+		if (opName = 'add-bars') {
+			score.AddBars(op['count']);
+			return CreateDictionary('addedBars', op['count'], 'barCount', systemStaff.BarCount);
+		}
+		bar = systemStaff.NthBar(op['bar']);
+		if (opName = 'set-key') {
+			ks = bar.AddKeySignatureFromText(0, op['key'], op['major']);
+			if (ks = null) {
+				return null;
+			}
+			return CreateDictionary('bar', op['bar'], 'name', ks.AsText, 'sharps', ks.Sharps, 'major', ks.Major);
+		}
+		if (opName = 'set-time') {
+			err = bar.AddTimeSignature(op['numerator'], op['denominator'], True, True, op['symbol']);
+			if (err != '') {
+				return null;
+			}
+			ts = systemStaff.CurrentTimeSignature(op['bar']);
+			return CreateDictionary('bar', op['bar'], 'numerator', ts.Numerator,
+				'denominator', ts.Denominator, 'barCount', systemStaff.BarCount);
+		}
+		if (opName = 'set-break') {
+			bType = EndOfSystemOrPage;
+			if (op['type'] = 'page') {
+				bType = EndOfPage;
+			}
+			// Clearing a break means Default; MiddleOfSystem would forbid one.
+			if (op['type'] = 'none') {
+				bType = Default;
+			}
+			bar.BreakType = bType;
+			return CreateDictionary('bar', op['bar'], 'breakType', '' & bar.BreakType);
+		}
+		if (opName = 'set-barline') {
+			existing = CreateSparseArray();
+			for each SpecialBarline sb in bar {
+				existing.Push(sb);
+			}
+			for i = 0 to existing.Length {
+				sbOld = existing[i];
+				sbOld.Delete();
+			}
+			bType = BatchBarlineType(op['type']);
+			if (bType >= 0) {
+				bar.AddSpecialBarline(bType);
+			}
+			return CreateDictionary('bar', op['bar'], 'removed', existing.Length, 'barlineType', '' & bType);
+		}
+		return null;
+	}"
+
 	BatchBar "(score, op) {
 		staffNum = op['staff'];
 		if (staffNum < 1 or staffNum > score.StaffCount) {
@@ -1758,6 +1990,30 @@
 				if (target.NoteCount < 1) {
 					return 'cannot ' & opName & ' a rest';
 				}
+			}
+			return '';
+		}
+		if (BatchStructural(opName)) {
+			return BatchCheckStructural(score, op);
+		}
+		if (opName = 'beam') {
+			noteRests = 0;
+			for i = 0 to target.Length {
+				obj = target[i];
+				if (obj = null) {
+					return 'no object at staff ' & op['staff'] & ' bar ' & op['bar'] & ' index ' & (op['firstIndex'] + i);
+				}
+				if (obj.Type = 'NoteRest') {
+					noteRests = noteRests + 1;
+				}
+			}
+			first = target[0];
+			last = target[target.Length - 1];
+			if (first.Type != 'NoteRest' or last.Type != 'NoteRest') {
+				return 'beam endpoints must be NoteRests';
+			}
+			if (noteRests < 2) {
+				return 'a beam needs at least two NoteRests';
 			}
 			return '';
 		}
@@ -1825,6 +2081,28 @@
 				'type', target.Type, 'oldDx', oldDx, 'newDx', target.Dx,
 				'oldDy', oldDy, 'newDy', target.Dy);
 		}
+		if (opName = 'beam') {
+			last = target.Length - 1;
+			for i = 0 to target.Length {
+				obj = target[i];
+				if (obj.Type = 'NoteRest') {
+					if (i = 0) {
+						obj.Beam = StartBeam;
+					} else {
+						if (i = last) {
+							obj.Beam = SingleBeam;
+						} else {
+							obj.Beam = ContinueBeam;
+						}
+					}
+				}
+			}
+			return CreateDictionary('staff', op['staff'], 'bar', op['bar'],
+				'firstIndex', op['firstIndex'], 'lastIndex', op['lastIndex']);
+		}
+		if (BatchStructural(opName)) {
+			return BatchRunStructural(score, op);
+		}
 		bar = BatchBar(score, op);
 		voice = 1;
 		if (op['voice'] != null) {
@@ -1880,11 +2158,23 @@
 		// indices, but references taken now stay valid (SPEC.md 1.3.1).
 		targets = CreateSparseArray();
 		results = CreateSparseArray();
+		structuralSeen = False;
 		for i = 0 to ops.Length {
 			op = ops[i];
+			if (BatchStructural(op['op'])) {
+				structuralSeen = True;
+			} else {
+				if (structuralSeen) {
+					return CreateDictionary('error', 'op ' & i & ': structural ops must come after every other op',
+						'failedOp', i, 'applied', 0);
+				}
+			}
 			target = null;
 			if (BatchAddressed(op['op'])) {
 				target = GetObjectAt(op['staff'], op['bar'], op['index']);
+			}
+			if (op['op'] = 'beam') {
+				target = BatchBeamTargets(op);
 			}
 			targets[i] = target;
 			problem = BatchCheck(score, op, target, writable);
@@ -1892,7 +2182,7 @@
 				return CreateDictionary('error', 'op ' & i & ': ' & problem, 'failedOp', i, 'applied', 0);
 			}
 			before = null;
-			if (target != null) {
+			if (target != null and BatchAddressed(op['op'])) {
 				before = DescribeObject(target, op['index']);
 			}
 			results.Push(CreateDictionary('i', i, 'op', op['op'], 'before', before));
@@ -1914,6 +2204,11 @@
 					applied = applied + 1;
 				}
 			}
+		}
+		if (structuralSeen) {
+			// Passage ops and re-barring leave a selection the user would see.
+			selection = score.Selection;
+			selection.Clear();
 		}
 		if (failure != '') {
 			return CreateDictionary('error', failure, 'failedOp', applied, 'applied', applied, 'results', results);
