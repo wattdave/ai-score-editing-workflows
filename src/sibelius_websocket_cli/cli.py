@@ -745,9 +745,10 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 40
+CURRENT_BRIDGE_VERSION = 41
 QUERY_BRIDGE_VERSION = 38
 BATCH_BRIDGE_VERSION = 39
+NUDGE_BRIDGE_VERSION = 41
 
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
@@ -846,6 +847,7 @@ async def _run_op(
     args: argparse.Namespace,
     operation: dict[str, Any],
     legacy: Callable[[dict[str, Any]], Any],
+    min_bridge: int = BATCH_BRIDGE_VERSION,
 ) -> int:
     """Run one object edit as a one-operation ApplyBatch.
 
@@ -859,7 +861,7 @@ async def _run_op(
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_COMMAND_FAILED
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _require_bridge(client, BATCH_BRIDGE_VERSION, args.subcommand)
+        await _require_bridge(client, min_bridge, args.subcommand)
         await _assert_expected_score(client, args)
         checked = await _apply_batch(client, batch, True)
         if "error" in checked:
@@ -1078,21 +1080,38 @@ async def _run_patch_layout(args: argparse.Namespace) -> int:
     results: list[dict[str, Any]] = []
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         await _check_bridge_version(client)
+        if any(operation["op"] == "nudge" for operation in operations):
+            await _require_bridge(client, NUDGE_BRIDGE_VERSION, "patch-layout nudge")
         await _assert_expected_score(client, args)
         backup = await _backup(client, "before patch-layout")
+        pending: list[dict[str, Any]] = []
+
+        async def flush_nudges() -> None:
+            # A run of consecutive nudges is one checked batch and one undo step.
+            if not pending:
+                return
+            batch = batch_ops.validate_batch([
+                {"op": "nudge", "staff": n["staff"], "bar": n["bar"], "index": n["index"],
+                 "dx": n.get("dx", 0), "dy": n.get("dy", 0)}
+                for n in pending
+            ])
+            outcome = await _apply_batch(client, batch, False)
+            if "error" in outcome:
+                raise BridgeError(
+                    f"nudge batch failed: {outcome['error']}; restore from {backup.get('copy')}"
+                )
+            for result in outcome["results"]:
+                results.append({"op": "nudge", "result": result["after"], "verified": True})
+            pending.clear()
+
         for operation in operations:
             op = operation["op"]
             operation_verified = True
             if op == "nudge":
-                result = await _bridge(
-                    client,
-                    "NudgeObject",
-                    [
-                        operation["staff"], operation["bar"], operation["index"],
-                        operation.get("dx", 0), operation.get("dy", 0),
-                    ],
-                )
-            elif op == "set-break":
+                pending.append(operation)
+                continue
+            await flush_nudges()
+            if op == "set-break":
                 result = await _bridge(client, "SetBarBreak", [operation["bar"], operation.get("type", "system")])
             elif op == "set-barline":
                 result = await _bridge(client, "SetSpecialBarline", [operation["bar"], operation.get("type", "double")])
@@ -1127,6 +1146,7 @@ async def _run_patch_layout(args: argparse.Namespace) -> int:
                     raise BridgeError(f"reset-design failed: {json.dumps(response)}")
                 result = {"commands": commands, "ok": True}
             results.append({"op": op, "result": result, "verified": operation_verified})
+        await flush_nudges()
 
         saved = None
         if args.save:
@@ -1521,7 +1541,11 @@ async def _run_set_lyric(args: argparse.Namespace) -> int:
         except Exception:
             pass
 
-    return await _run_write(args, "SetLyricText", [args.staff, args.bar, args.index, text])
+    return await _run_op(
+        args,
+        {"op": "set", **_address(args), "type": "LyricItem", "prop": "Text", "value": text},
+        lambda result: {"oldText": result["before"]["text"], "newText": result["after"]["text"]},
+    )
 
 
 async def _run_patch_lyrics(args: argparse.Namespace) -> int:
@@ -1588,24 +1612,28 @@ async def _run_patch_lyrics(args: argparse.Namespace) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return EXIT_COMMAND_FAILED
 
+        # One checked batch: nothing changes unless every target is still a
+        # lyric, and the whole patch set is one undo step.
+        batch = batch_ops.validate_batch([
+            {"op": "set", "staff": patch.staff, "bar": patch.bar, "index": patch.index,
+             "type": "LyricItem", "prop": "Text", "value": text}
+            for patch, text in zip(patches, rendered)
+        ])
+        await _require_bridge(client, BATCH_BRIDGE_VERSION, args.subcommand)
+        checked = await _apply_batch(client, batch, True)
+        if "error" in checked:
+            print(f"error: {checked['error']}; nothing was changed", file=sys.stderr)
+            return EXIT_COMMAND_FAILED
         backup = await _backup(client, f"before {args.subcommand}")
-        write_results: list[dict[str, Any]] = []
-        try:
-            for patch, text in zip(patches, rendered):
-                write_results.append(
-                    await _bridge(
-                        client,
-                        "SetLyricText",
-                        [patch.staff, patch.bar, patch.index, text],
-                    )
-                )
-        except BridgeError as exc:
+        outcome = await _apply_batch(client, batch, False)
+        if "error" in outcome:
             print(
-                f"error: lyric batch stopped after {len(write_results)}/{len(patches)} writes; "
-                f"backup: {backup.get('copy', '')}; {exc}",
+                f"error: lyric batch stopped after {outcome.get('applied', 0)}/{len(patches)} writes "
+                f"(one undo step); backup: {backup.get('copy', '')}; {outcome['error']}",
                 file=sys.stderr,
             )
             return EXIT_COMMAND_FAILED
+        write_results = [{"oldText": result["before"]["text"]} for result in outcome["results"]]
 
         after: list[dict[str, Any]] = []
         for affected in ranges:
@@ -1807,7 +1835,12 @@ async def _run_beam(args: argparse.Namespace) -> int:
 
 
 async def _run_nudge(args: argparse.Namespace) -> int:
-    return await _run_write(args, "NudgeObject", [args.staff, args.bar, args.index, args.dx, args.dy])
+    return await _run_op(
+        args,
+        {"op": "nudge", **_address(args), "dx": args.dx, "dy": args.dy},
+        lambda result: result["after"],
+        NUDGE_BRIDGE_VERSION,
+    )
 
 
 async def _run_add_staff(args: argparse.Namespace) -> int:

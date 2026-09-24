@@ -90,3 +90,10 @@ def test_note_patches_translate_to_batch_operations() -> None:
     ])
     assert [op["op"] for op in batch] == ["set-pitch", "tie", "flip-stem"]
     assert validate_batch(batch)[1]["tied"] is False
+
+
+def test_nudge_is_relative_and_defaults_to_zero() -> None:
+    batch = validate_batch([{"op": "nudge", "staff": 1, "bar": 2, "index": 0, "dx": -16}])
+    assert batch == [{"op": "nudge", "staff": 1, "bar": 2, "index": 0, "dx": -16, "dy": 0}]
+    with pytest.raises(BatchError, match="dy must be an integer"):
+        validate_batch([{"op": "nudge", "staff": 1, "bar": 2, "index": 0, "dy": 1.5}])

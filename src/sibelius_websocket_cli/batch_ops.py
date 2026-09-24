@@ -25,7 +25,7 @@ WRITABLE_PROPS: dict[str, dict[str, type]] = {
     "Line": {"Duration": int, "RhDx": int},
 }
 
-ADDRESSED = {"set", "set-pitch", "tie", "bracket", "flip-stem", "delete"}
+ADDRESSED = {"set", "set-pitch", "tie", "bracket", "flip-stem", "delete", "nudge"}
 ADDING = {"add-note", "add-text", "add-lyric"}
 OPERATIONS = ADDRESSED | ADDING
 DEFAULT_TEXT_STYLE = "text.staff.expression"
@@ -97,6 +97,12 @@ def _validate(operation: Any, i: int) -> dict[str, Any]:
         if not isinstance(remove, bool):
             raise BatchError(f"{label}.remove must be boolean")
         out["tied" if op == "tie" else "bracketed"] = not remove
+    elif op == "nudge":
+        for field in ("dx", "dy"):
+            value = operation.get(field, 0)
+            if not _is_type(value, int):
+                raise BatchError(f"{label}.{field} must be an integer")
+            out[field] = value
     elif op == "add-note":
         pitches = operation.get("pitches")
         if not isinstance(pitches, list) or not pitches or not all(

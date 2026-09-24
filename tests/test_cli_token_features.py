@@ -202,15 +202,20 @@ async def test_patch_layout_uses_one_context_and_one_backup(
         patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()),
         patch("sibelius_websocket_cli.cli._assert_expected_score", new=AsyncMock()),
         patch("sibelius_websocket_cli.cli._backup", new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"})) as backup,
+        patch("sibelius_websocket_cli.cli._require_bridge", new=AsyncMock()),
+        patch(
+            "sibelius_websocket_cli.cli._apply_batch",
+            new=AsyncMock(return_value={"applied": 1, "results": [{"i": 0, "after": {"newDx": 8}}]}),
+        ) as apply_batch,
         patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge_side_effect) as bridge,
     ):
         assert await _run_patch_layout(args) == EXIT_OK
 
     assert context.__aenter__.call_count == 1
     backup.assert_awaited_once()
-    assert [call.args[1] for call in bridge.call_args_list] == [
-        "NudgeObject", "SetSpecialBarline", "Save"
-    ]
+    apply_batch.assert_awaited_once()
+    assert [op["op"] for op in apply_batch.await_args.args[1]] == ["nudge"]
+    assert [call.args[1] for call in bridge.call_args_list] == ["SetSpecialBarline", "Save"]
     output = capsys.readouterr().out.strip()
     assert '"operations":2' in output
     assert '"verified":2' in output
@@ -630,6 +635,8 @@ async def test_patch_lyrics_uses_one_connection_backup_and_verification(
     )
     context, _client = _client_context()
     reads = 0
+    old = [{"i": 0, "before": {"text": "old-a"}}, {"i": 1, "before": {"text": "old-b"}}]
+    batch_replies = [{"applied": 0, "dryRun": True, "results": old}, {"applied": 2, "results": old}]
 
     async def bridge_side_effect(
         unused_client: Any, method: str, call_args: list[Any] | None = None
@@ -643,9 +650,6 @@ async def test_patch_lyrics_uses_one_connection_backup_and_verification(
                 {"staff": 1, "bar": 2, "index": 0, "text": texts[0]},
                 {"staff": 1, "bar": 2, "index": 2, "text": texts[1]},
             ]
-        if method == "SetLyricText":
-            assert call_args is not None
-            return {"oldText": "old", "newText": call_args[-1]}
         if method == "Save":
             return {"fileName": "/scores/a.sib"}
         raise AssertionError(method)
@@ -658,16 +662,19 @@ async def test_patch_lyrics_uses_one_connection_backup_and_verification(
             "sibelius_websocket_cli.cli._backup",
             new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"}),
         ) as backup,
-        patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge_side_effect) as bridge,
+        patch("sibelius_websocket_cli.cli._require_bridge", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._apply_batch", new=AsyncMock(side_effect=batch_replies)) as apply_batch,
+        patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge_side_effect),
     ):
         assert await _run_patch_lyrics(args) == EXIT_OK
 
     assert context.__aenter__.call_count == 1
     backup.assert_awaited_once()
-    write_calls = [call for call in bridge.call_args_list if call.args[1] == "SetLyricText"]
-    assert [call.args[2] for call in write_calls] == [
-        [1, 2, 0, "\\fPlantin\\\\s95\\glo-"],
-        [1, 2, 2, "\\fPlantin\\\\s95\\ry"],
+    # Checked first, then applied as one batch.
+    assert [call.args[2] for call in apply_batch.await_args_list] == [True, False]
+    assert [(op["index"], op["type"], op["value"]) for op in apply_batch.await_args.args[1]] == [
+        (0, "LyricItem", "\\fPlantin\\\\s95\\glo-"),
+        (2, "LyricItem", "\\fPlantin\\\\s95\\ry"),
     ]
     assert reads == 2
     output = capsys.readouterr().out
@@ -773,3 +780,39 @@ async def test_add_note_pitches_reports_only_added_notes(capsys: pytest.CaptureF
     op = run_op.await_args.args[1]
     assert op["op"] == "add-note" and op["pitches"] == [55] and op["duration"] == 1024
     assert json.loads(capsys.readouterr().out)["notes"] == [{"pitch": 55, "name": "G", "tied": False}]
+
+
+async def test_patch_layout_batches_consecutive_nudges_in_order(tmp_path: Path) -> None:
+    patch_file = tmp_path / "layout.json"
+    patch_file.write_text(json.dumps([
+        {"op": "nudge", "staff": 1, "bar": 1, "index": 0, "dx": 8},
+        {"op": "nudge", "staff": 1, "bar": 1, "index": 1, "dy": -8},
+        {"op": "set-barline", "bar": 2, "type": "double"},
+        {"op": "nudge", "staff": 2, "bar": 3, "index": 0, "dx": 4},
+    ]))
+    args = build_parser().parse_args(["patch-layout", "--file", str(patch_file)])
+    context, _client = _client_context()
+    calls: list[str] = []
+
+    async def apply_batch(unused_client: Any, batch: list[dict[str, Any]], dry_run: bool) -> dict[str, Any]:
+        del unused_client, dry_run
+        calls.append(f"batch{len(batch)}")
+        return {"applied": len(batch), "results": [{"i": i, "after": {}} for i in range(len(batch))]}
+
+    async def bridge(unused_client: Any, method: str, call_args: list[Any] | None = None) -> Any:
+        del unused_client, call_args
+        calls.append(method)
+        return {"ok": True}
+
+    with (
+        patch("sibelius_websocket_cli.cli._client", return_value=context),
+        patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._require_bridge", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._assert_expected_score", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._backup", new=AsyncMock(return_value={"copy": "/b.sib"})),
+        patch("sibelius_websocket_cli.cli._apply_batch", side_effect=apply_batch),
+        patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge),
+    ):
+        assert await _run_patch_layout(args) == EXIT_OK
+
+    assert calls == ["batch2", "SetSpecialBarline", "batch1"]
