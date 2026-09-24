@@ -30,8 +30,8 @@ open -a /Applications/Sibelius.app /absolute/path/to/score.sib
 
 Then run `inspect` and confirm `fileName` before reading or changing the score.
 
-Writes refuse an imported, never-saved MusicXML score; have the user save it
-as `.sib` first.
+Writes refuse a never-saved MusicXML import; import and save it through the
+bridge, not dialogs ([commands](references/commands.md#importing-musicxml)).
 
 ## Batch first: minimize calls and output
 

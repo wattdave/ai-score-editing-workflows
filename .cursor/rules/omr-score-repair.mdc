@@ -83,9 +83,10 @@ uv run python scripts/clean_clefs.py strip          # backs up, deletes, saves
 
 ### Step 1: Establish Visual Ground Truth
 Always inspect the source PDF or image before making musical decisions:
-- Render high-resolution page previews using macOS QuickLook:
+- Render every page with the bundled PDFKit script (QuickLook's `qlmanage`
+  renders only page 1):
   ```bash
-  qlmanage -t -s 2000 -o /tmp/score_preview "path/to/score.pdf"
+  swift .claude/skills/omr-score-repair/scripts/render_pdf_pages.swift "path/to/score.pdf" /tmp/score_preview
   ```
 - Check the printed layout:
   - How many visual lines/systems appear on the page?
@@ -161,5 +162,8 @@ score also drones during playback, that is a separate tie defect; use the
 - **Trusting OMR bar counts without visual inspection**: Scanners frequently miss thin barlines or pad systems with empty bars. Always count visual barlines on the printed page.
 - **Adding manual hyphens to lyric text**: Do not write `<text>pe-</text>`. Let `<syllabic>begin</syllabic>` or `middle` drive hyphenation automatically to prevent double-hyphen engraving defects.
 - **Leaving spurious rests across system breaks**: When Line 1 has 5 bars and Line 2 has 6 bars, retaining a 6th dummy rest bar breaks the musical phrase and sentence in half.
+- **Unstacking genuine ensemble parts**: a `Stacked system suspected` audit result can simply mean voices enter late. Check the PDF first; see [Pattern 10](../../.claude/skills/omr-score-repair/references/omr-patterns.md).
+- **Reading only lyric line 1**: verses 2+ are separate `<lyric number="N">` elements on the same notes. Dump every lyric number before reporting a verse as missing.
+- **Trusting single notes where the print shows chords**: OMR often keeps only the lowest chord member; see [Pattern 11](../../.claude/skills/omr-score-repair/references/omr-patterns.md). Also check that every part has a key signature in bar 1 ([Pattern 12](../../.claude/skills/omr-score-repair/references/omr-patterns.md)).
 - **Stripping clefs without reading the audit first**: a *genuine* clef change that falls at a system break is engraved as a courtesy clef at the end of the previous bar, which looks identical to the artifact. Deleting the wrong one of the pair removes the clef change itself. Always review the `audit` output, or use `strip --dry-run`, against the printed page before deleting.
 - **Expecting full coverage on staves with no inferable clef**: when the staff default cannot be read from bar 1 and the instrument name implies nothing definite (`Piano`, `Organ`), the default-clef comparison is skipped by design and only end-of-bar artifacts are reported. That under-reports rather than risking a wrong deletion; clean those staves by eye.
