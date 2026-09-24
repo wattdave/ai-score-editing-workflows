@@ -15,7 +15,8 @@ def midi(note: Element) -> int:
     pitch = note.find("pitch")
     if pitch is None or not pitch.findtext("step") or not pitch.findtext("octave"):
         return -1
-    alter = int(pitch.findtext("alter") or "0")
+    # MusicXML alter is a decimal ("-1.0" in some exports, "0.5" for a quarter tone).
+    alter = round(float(pitch.findtext("alter") or "0"))
     return 12 * (int(pitch.findtext("octave") or "0") + 1) + SEMITONES[pitch.findtext("step") or "C"] + alter
 
 

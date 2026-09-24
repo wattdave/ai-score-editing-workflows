@@ -51,7 +51,8 @@ def get_midi(note: ET.Element) -> int:
     step = step_elem.text
     octave = int(octave_elem.text)
     alter_elem = p.find("alter")
-    alter = int(alter_elem.text) if (alter_elem is not None and alter_elem.text) else 0
+    # MusicXML alter is a decimal ("-1.0" in some exports, "0.5" for a quarter tone).
+    alter = round(float(alter_elem.text)) if (alter_elem is not None and alter_elem.text) else 0
     return 12 * (octave + 1) + SEMITONES.get(step, 0) + alter
 
 
