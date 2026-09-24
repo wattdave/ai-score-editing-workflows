@@ -167,6 +167,17 @@ def build_parser() -> argparse.ArgumentParser:
     read.add_argument("--bar", type=int, help="specific bar number")
     read.add_argument("--bars", type=str, help="bar range, e.g. '1-3' or '5'")
     read.add_argument("--abc", action="store_true", help="format output as ABC notation with aligned lyrics")
+    query = sub.add_parser(
+        "query",
+        help="find bar objects by staff, bars, type, voice and property filters (requires bridge plug-in)",
+    )
+    query.add_argument("--staff", action="append", default=[], help="staff number or instrument name; repeatable (default: all)")
+    query.add_argument("--bars", type=str, help="bar range, e.g. '12-20' or '5' (default: all)")
+    query.add_argument("--type", action="append", default=[], help="object type, e.g. NoteRest, LyricItem, Text, Line, Slur; repeatable or comma-separated")
+    query.add_argument("--voice", type=int, help="voice 1-4")
+    query.add_argument("--where", action="append", default=[], help="property filter, e.g. 'Pitch>=72' or 'Hidden=true'; repeatable, all must match")
+    query.add_argument("--field", action="append", default=[], help="extra properties to return, e.g. Dx,Dy; repeatable or comma-separated")
+    query.add_argument("--limit", type=int, default=500, help="maximum objects to return (default: 500)")
     read_abc = sub.add_parser("read-abc", help="format bar contents as standard ABC notation")
     read_abc.add_argument("--staff", type=int, default=1, help="staff number, from 1")
     read_abc.add_argument("--from", dest="from_bar", type=int, help="first bar, from 1")
@@ -725,7 +736,8 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 37
+CURRENT_BRIDGE_VERSION = 38
+QUERY_BRIDGE_VERSION = 38
 
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
@@ -1105,6 +1117,46 @@ async def _run_patch_notes(args: argparse.Namespace) -> int:
     if saved is not None:
         summary["saved"] = saved.get("fileName", "")
     print(layout.compact_summary(summary))
+    return EXIT_OK
+
+
+async def _run_query(args: argparse.Namespace) -> int:
+    from .query import QueryError, build_selector, resolve_staves
+
+    from_b, to_b = (None, None)
+    if args.bars:
+        from_b, to_b = parse_bar_range(bars=args.bars)
+    try:
+        # Validate everything but staff names before connecting.
+        selector = build_selector(
+            staves=[],
+            from_bar=from_b,
+            to_bar=to_b,
+            types=args.type,
+            voice=args.voice,
+            where=args.where,
+            fields=args.field,
+            limit=args.limit,
+        )
+        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            version = await _bridge(client, "GetBridgeVersion")
+            if not (isinstance(version, dict) and version.get("version", 0) >= QUERY_BRIDGE_VERSION):
+                raise BridgeError(
+                    f"query needs bridge v{QUERY_BRIDGE_VERSION}+, got {version!r} — "
+                    "run install-plugin and restart Sibelius"
+                )
+            if args.staff:
+                selector["staves"] = resolve_staves(args.staff, await _bridge(client, "GetStaves"))
+            result = await _bridge(client, "Query", [selector])
+    except QueryError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    except BridgeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    print(json.dumps(result, indent=None if args.json else 2))
+    if result.get("truncated"):
+        print(f"warning: truncated at {args.limit} objects; narrow the query or raise --limit", file=sys.stderr)
     return EXIT_OK
 
 
@@ -2049,6 +2101,7 @@ def main(argv: list[str] | None = None) -> int:
         "patch-notes": _run_patch_notes,
         "read": _run_read,
         "do": _run_do,
+        "query": _run_query,
         "bridge-version": _run_bridge_version,
         "read-lyrics": _run_read_lyrics,
         "check-lyrics": _run_check_lyrics,

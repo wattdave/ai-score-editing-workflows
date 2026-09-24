@@ -18,6 +18,18 @@ Batch reads (one session, compact output):
 - `proofread [--bars A-B] [--staff N] [--lyrics] [--no-barlines]`: read-only
   structural and lyric lint report with compact issue records. Use as the
   first pass for any review instead of `check-lyrics` plus per-staff reads.
+- `query [--staff N|NAME]... [--bars A-B] [--type T,...] [--voice V]
+  [--where 'Prop OP value']... [--field P,...] [--limit N]`: find bar objects
+  anywhere in the score in one call, filtered inside Sibelius. Each result
+  carries its `staff`/`bar`/`index` edit address. Types include `NoteRest`,
+  `LyricItem`, `Text`, `Clef`, `Tuplet`, `Line` (any line kind) or a specific
+  line type such as `Slur`. `--where` filters combine with AND; `Pitch`
+  matches if any note of a chord matches. Properties are allow-listed per
+  object type (an unknown name is rejected with the full list); objects lacking a
+  filtered property never match. Use instead of reading bar ranges to hunt
+  for objects, e.g. `query --staff Tenor --where 'Pitch>=67'` or
+  `query --type Text --field Dx,Dy`. Output is capped at 500 objects; a
+  `truncated: true` result means narrow the query.
 - `verify-render [--format png|pdf] [--out PATH]`: export once and verify that
   rendered files exist, are non-empty, and optionally match page/hash checks.
 
