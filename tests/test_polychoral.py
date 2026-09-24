@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -26,7 +27,7 @@ def _make_note(
     step: str,
     octave: int,
     dur: int = 256,
-    alter: int = 0,
+    alter: float = 0,
     voice: str = "1",
     chord: bool = False,
     lyric: str | None = None,
@@ -86,6 +87,18 @@ def test_get_midi() -> None:
 
     rest = _make_rest(256)
     assert get_midi(rest) == -1
+
+
+def test_midi_accepts_decimal_alter() -> None:
+    """Some exports write <alter>-1.0</alter>; alter is a decimal in MusicXML."""
+    from sibelius_websocket_cli.musicxml_split.routing import midi
+
+    for note, expected in ((_make_note("B", 4, alter=-1.0), 70), (_make_note("C", 4, alter=2.0), 62)):
+        assert note.findtext("pitch/alter") in {"-1.0", "2.0"}
+        assert get_midi(note) == expected
+        assert midi(note) == expected
+    # A quarter-tone alter rounds to the nearest semitone.
+    assert get_midi(_make_note("D", 4, alter=0.5)) in {62, 63}
 
 
 def test_clean_note() -> None:
@@ -319,21 +332,185 @@ def test_end_to_end_synthetic_score(tmp_path: Path) -> None:
     assert issues == []
 
 
-def test_real_12pp_export_if_available() -> None:
-    """Real exports report malformed rhythm rather than shortening it to validate."""
-    p = Path("/private/tmp/12pp_native_export.musicxml")
-    if not p.exists():
-        pytest.skip("12pp export not present in /tmp")
+def test_real_12pp_export_if_available(tmp_path: Path) -> None:
+    """Demix a real export kept outside the repo (the score is copyrighted).
 
-    out_p = Path("/private/tmp/test_pytest_16voices.mxl")
+    Set SIBWS_12PP_EXPORT to its path to run this; the synthetic tests above
+    cover the same code paths everywhere else.
+    """
+    source = os.environ.get("SIBWS_12PP_EXPORT")
+    if not source:
+        pytest.skip("set SIBWS_12PP_EXPORT to a real 12pp MusicXML export to run")
+    p = Path(source).expanduser()
+    if not p.exists():
+        pytest.fail(f"SIBWS_12PP_EXPORT points at a missing file: {p}")
+
+    out_p = tmp_path / "real_16voices.mxl"
     res = demix_16voices(p, out_p)
-    assert res["totalMeasures"] == 127
+    source_part = ET.parse(p).getroot().find("part")
+    assert source_part is not None
+    assert res["totalMeasures"] == len(source_part.findall("measure"))
     assert res["partsCount"] == 16
 
     from sibelius_websocket_cli.musicxml_split.validation import validate_file
 
     issues = validate_file(out_p, expected_parts=16)
-    # This historical fixture has overflowed source measures.  The old engine
-    # silently trimmed them; the shared engine preserves their durations and
-    # reports the condition for a caller to resolve.
+    # Real exports have overflowed source measures. The engine keeps their
+    # durations and reports the condition for a caller to resolve.
     assert any(issue.code in {"measure-overflow", "target-overflow"} for issue in issues)
+
+
+def _measure(part: ET.Element, number: str, *children: ET.Element, first: bool = False) -> ET.Element:
+    m = ET.SubElement(part, "measure", number=number)
+    if first:
+        attrs = ET.SubElement(m, "attributes")
+        ET.SubElement(attrs, "divisions").text = "256"
+        time = ET.SubElement(attrs, "time")
+        ET.SubElement(time, "beats").text = "4"
+        ET.SubElement(time, "beat-type").text = "4"
+    m.extend(children)
+    return m
+
+
+def _el(tag: str, text: str | None = None, **attrib: str) -> ET.Element:
+    e = ET.Element(tag, attrib)
+    e.text = text
+    return e
+
+
+def _on_staff(note: ET.Element, staff: str) -> ET.Element:
+    ET.SubElement(note, "staff").text = staff
+    return note
+
+
+def _backup(dur: int) -> ET.Element:
+    b = ET.Element("backup")
+    ET.SubElement(b, "duration").text = str(dur)
+    return b
+
+
+def _raw_export_features(path: Path) -> None:
+    """A 2-measure, 10-part score with the features a raw OMR export has.
+
+    Each feature mirrors code only the real 12pp export used to reach: XML
+    voices sharing a staff (open and short score), <backup>, a part that
+    stops mid-measure, an overflowing measure, staff-bound directions and
+    barlines, extra top-level elements, and ties with a missing end.
+    """
+    root = ET.Element("score-partwise")
+    work = ET.SubElement(root, "work")
+    ET.SubElement(work, "work-title").text = "Synthetic raw export"
+    plist = ET.SubElement(root, "part-list")
+    ids = [f"P{i}" for i in range(1, 9)] + ["P9", "P11"]
+    parts = {}
+    for pid in ids:
+        ET.SubElement(ET.SubElement(plist, "score-part", id=pid), "part-name").text = pid
+        parts[pid] = ET.SubElement(root, "part", id=pid)
+
+    # Measure 1, open score.
+    direction = ET.Element("direction", placement="above")
+    words = ET.SubElement(ET.SubElement(direction, "direction-type"), "words")
+    words.text = "Lento"
+    ET.SubElement(direction, "staff").text = "1"
+    barline = ET.Element("barline", location="right")
+    ET.SubElement(barline, "bar-style").text = "light-light"
+    # P1: two XML voices on one staff, joined with <backup>.
+    _measure(parts["P1"], "1", direction,
+             _make_note("C", 5, dur=1024, voice="1"), _backup(1024),
+             _make_note("A", 4, dur=1024, voice="2"), barline, first=True)
+    # P2: stops after a half note; the rest of the bar must be filled.
+    _measure(parts["P2"], "1", _make_note("G", 4, dur=512), first=True)
+    # P3: five quarters in 4/4, which must be reported, not shortened.
+    _measure(parts["P3"], "1", *[_make_note("E", 4, dur=256) for _ in range(5)], first=True)
+    # P4: a tie that never stops.
+    _measure(parts["P4"], "1", _make_note("D", 4, dur=1024, tie_start=True), first=True)
+    for pid in ("P5", "P6", "P7", "P8"):
+        _measure(parts[pid], "1", _make_note("C", 4, dur=1024), first=True)
+    for pid in ("P9", "P11"):
+        _measure(parts[pid], "1", _make_rest(1024), first=True)
+
+    # Measure 2, short score on P9; P5 has a tie stop with no start.
+    for pid in ("P1", "P2", "P3", "P4", "P6", "P7", "P8", "P11"):
+        _measure(parts[pid], "2", _make_rest(1024))
+    _measure(parts["P5"], "2", _make_rest(1024))
+    _measure(parts["P9"], "2",
+             _on_staff(_make_note("E", 5, dur=1024, voice="1"), "1"), _backup(1024),
+             _on_staff(_make_note("C", 5, dur=1024, voice="2"), "1"), _backup(1024),
+             _on_staff(_make_note("C", 3, dur=1024, voice="3", tie_stop=True), "2"),
+             _on_staff(_make_note("G", 3, dur=1024, voice="3", chord=True), "2"))
+
+    # Measure 3, open score with choir 2 silent.
+    forward = ET.Element("forward")
+    ET.SubElement(forward, "duration").text = "512"
+    # P1: voice 1 has a rest; voice 2 enters late.
+    _measure(parts["P1"], "3",
+             _make_note("D", 5, dur=512, voice="1"), _make_rest(512, voice="1"), _backup(1024),
+             forward, _make_note("B", 4, dur=512, voice="2"))
+    # P2: three pitches for two voices must be reported, not dropped silently.
+    _measure(parts["P2"], "3", _make_note("C", 4, dur=1024), _make_note("E", 4, dur=1024, chord=True),
+             _make_note("G", 4, dur=1024, chord=True))
+    # P3: three XML voices cannot be split into two parts.
+    _measure(parts["P3"], "3", *[
+        child for i, step in enumerate("CEG", 1)
+        for child in (_make_note(step, 3, dur=1024, voice=str(i)), _backup(1024))
+    ][:-1])
+    # P4: one voice overlapping itself.
+    _measure(parts["P4"], "3", _make_note("F", 3, dur=1024), _backup(1024), _make_note("A", 3, dur=512))
+    for pid in ("P5", "P6", "P7", "P8", "P9", "P11"):
+        _measure(parts[pid], "3", _make_rest(1024))
+    ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)
+
+
+def test_raw_export_features(tmp_path: Path) -> None:
+    from sibelius_websocket_cli.musicxml_split.profiles.polychoral_16 import split_16voices
+    from sibelius_websocket_cli.musicxml_split.validation import validate_file
+
+    source = tmp_path / "raw.musicxml"
+    out = tmp_path / "raw16.musicxml"
+    _raw_export_features(source)
+    result = split_16voices(source, out)
+    assert result.measure_count == 3 and len(result.parts) == 16
+
+    root = ET.parse(out).getroot()
+    assert root.findtext("work/work-title") == "Synthetic raw export"
+    part = {p.get("id"): p for p in root.findall("part")}
+
+    def pitches(pid: str, measure: int) -> list[str]:
+        m = part[pid].findall("measure")[measure]
+        return [f"{n.findtext('pitch/step')}{n.findtext('pitch/octave')}" if n.find("pitch") is not None else "rest"
+                for n in m.findall("note")]
+
+    # Open score: P1's two XML voices become C1 S1 and S2.
+    assert pitches("C1_S1", 0) == ["C5"] and pitches("C1_S2", 0) == ["A4"]
+    # A direction goes to each choir's top staff without its <staff>; barlines go everywhere.
+    c1_s1 = part["C1_S1"].findall("measure")[0]
+    assert c1_s1.findtext("direction/direction-type/words") == "Lento"
+    assert c1_s1.find("direction/staff") is None
+    assert all(p.findall("measure")[0].find("barline") is not None for p in part.values())
+    # P2's half note is followed by a filling rest.
+    assert pitches("C1_A1", 0) == ["G4", "rest"]
+    # Short score: P9 staff 1 voices 1 and 2 fill the upper slots, staff 2 the lower.
+    assert pitches("C1_S1", 1) == ["E5"] and pitches("C1_A1", 1) == ["C5"]
+    assert {pitches("C1_T1", 1)[0], pitches("C1_B1", 1)[0]} <= {"G3", "C3"}
+
+    codes = {issue.code for issue in result.issues} | {issue.code for issue in validate_file(out, expected_parts=16)}
+    assert {"target-overflow", "measure-overflow"} & codes
+    assert {"dangling-tie", "unmatched-tie-stop"} <= codes
+    assert {"unsupported-pitch-count", "ambiguous-xml-voices", "target-overlap"} <= codes
+
+    # Measure 3: voice 1's rest is kept, and voice 2's late entry gets a rest first.
+    assert pitches("C1_S1", 2) == ["D5", "rest"] and pitches("C1_S2", 2) == ["rest", "B4"]
+    # Choir 2 has nothing of its own; bar 3 is in the default unison range, so it copies choir 1.
+    assert pitches("C2_S1", 2) == pitches("C1_S1", 2)
+
+
+def test_silent_choir_2_outside_unison_range_stays_silent(tmp_path: Path) -> None:
+    from sibelius_websocket_cli.musicxml_split.profiles.polychoral_16 import Polychoral16Options, split_16voices
+
+    source = tmp_path / "raw.musicxml"
+    out = tmp_path / "raw16.musicxml"
+    _raw_export_features(source)
+    split_16voices(source, out, Polychoral16Options(choir_unison_indices=frozenset()))
+    c2_s1 = next(p for p in ET.parse(out).getroot().findall("part") if p.get("id") == "C2_S1")
+    notes = c2_s1.findall("measure")[2].findall("note")
+    assert len(notes) == 1 and notes[0].find("rest") is not None

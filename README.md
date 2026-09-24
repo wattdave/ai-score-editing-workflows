@@ -180,6 +180,15 @@ python scripts/sync_skills.py --check  # check for drift without modifying files
 uv run pytest        # tests run against a fake Sibelius Connect server
 ```
 
+Tests never reach a running Sibelius: `tests/conftest.py` fails any test that
+connects to the Sibelius Connect port. One test demixes a real 12-page choral
+export, which is copyrighted and kept out of the repository; it skips unless
+`SIBWS_12PP_EXPORT` names the file:
+
+```bash
+SIBWS_12PP_EXPORT=~/Downloads/export.xml uv run pytest tests/test_polychoral.py
+```
+
 Sources: `src/sibelius_websocket_cli/` — `protocol.py` (message builders),
 `client.py` (async client with token/approval handling), `launcher.py` (Sibelius
 process detection and launch), `token_store.py`, `cli.py`, and the bundled bridge plug-in
