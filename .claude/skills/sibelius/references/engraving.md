@@ -45,6 +45,25 @@ rather than the page bottom margin. Keep page margins intact unless the user
 explicitly wants a smaller printable margin, and use the separate first-page
 value when Document Setup provides one.
 
+To reset a freshly imported score whose systems overlap, reset positions and
+spacing across the whole score, then hide empty staves:
+
+```bash
+uv run sibelius-websocket-cli invoke select_all reset_position \
+  reset_space_above_staff reset_space_below_staff reset_note_spacing \
+  reset_stems_and_beam_positions
+uv run sibelius-websocket-cli plugin sibwscli HideEmptyStaves --args '[1, LAST_BAR]'
+uv run sibelius-websocket-cli command escape
+```
+
+`HideEmptyStaves` also optimizes staff spacing. If systems still collide,
+check for system and page breaks carried over from MusicXML `<print>`
+elements: breaks copied from a printed page can force more systems onto a page
+than fit once staves are added. Clear them with `set-break` `"type": "none"`
+ops (a break imported at the start of bar N may sit on bar N-1, so clear
+both), or with `invoke select_all unlock_format`. `invoke` always reports
+success, so render to confirm.
+
 Available layout operations include:
 
 - `nudge` (a `patch-layout` op, or the single-object command) for an
@@ -52,7 +71,9 @@ Available layout operations include:
   colliding syllable can transfer the collision, so include both sides in the
   same batch and inspect both afterward.
 - `set-break`, `set-barline`, and `reset-design` are also `patch-layout` ops;
-  combine them with nudges in one file.
+  combine them with nudges in one file. `set-break` `"type": "none"` clears a
+  break (bridge v37+); on older bridges it forbade one and collapsed the score
+  onto a single system.
 - `flip-stem --staff S --bar B --index I` for stem direction.
 - `invoke select_all reset_note_spacing select_none` (one call, several IDs)
   or `increase_spacing` for global note spacing.
