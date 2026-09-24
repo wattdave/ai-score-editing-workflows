@@ -66,6 +66,8 @@ and verify once for the whole set.
     `Dx`, `Dy` (int), `Hidden`, `CueSize` (bool) on anything; `Beam`,
     `RestPosition` on NoteRest; `Text`, `Duration` on LyricItem; `Text` on
     Text; `Duration`, `RhDx` on lines.
+  - `{"op":"nudge","staff":S,"bar":B,"index":I,"dx":X,"dy":Y}`: move by
+    relative offsets (1/32 space); unlike `set` `Dx`, adds to the current value.
   - `set-pitch`, `tie`, `bracket`, `flip-stem`, `delete`: as in `patch-notes`
     below. Deleting a NoteRest leaves a rest.
   - `{"op":"add-note","staff":S,"bar":B,"position":P,"duration":D,"pitches":[..][,"voice":V,"tied":true]}`

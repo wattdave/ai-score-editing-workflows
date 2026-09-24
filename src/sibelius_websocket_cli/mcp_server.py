@@ -231,6 +231,7 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
     - {"op":"set-pitch",...,"oldPitch":P,"newPitch":Q}
     - {"op":"tie"|"bracket",...[,"remove":true]}
     - {"op":"flip-stem",...}
+    - {"op":"nudge",...,"dx":X,"dy":Y}: move by relative offsets (1/32 space)
     - {"op":"delete",...} (a deleted NoteRest becomes a rest)
 
     Adding operations take staff, bar and position instead of index:

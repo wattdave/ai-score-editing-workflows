@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 40);
+		return CreateDictionary('version', 41);
 	}"
 
 	Echo "(value) {
@@ -1868,7 +1868,7 @@
 		if (opName = 'set' or opName = 'set-pitch' or opName = 'tie' or opName = 'bracket') {
 			return True;
 		}
-		if (opName = 'flip-stem' or opName = 'delete') {
+		if (opName = 'flip-stem' or opName = 'delete' or opName = 'nudge') {
 			return True;
 		}
 		return False;
@@ -1911,7 +1911,7 @@
 				}
 				return '';
 			}
-			if (opName = 'delete') {
+			if (opName = 'delete' or opName = 'nudge') {
 				return '';
 			}
 			if (target.Type != 'NoteRest') {
@@ -1987,6 +1987,17 @@
 		if (opName = 'delete') {
 			target.Delete();
 			return CreateDictionary('deleted', True);
+		}
+		if (opName = 'nudge') {
+			// Relative offsets. Reports the offsets themselves, which
+			// DescribeObject does not include for most object types.
+			oldDx = target.Dx;
+			oldDy = target.Dy;
+			target.Dx = oldDx + op['dx'];
+			target.Dy = oldDy + op['dy'];
+			return CreateDictionary(
+				'type', target.Type, 'oldDx', oldDx, 'newDx', target.Dx,
+				'oldDy', oldDy, 'newDy', target.Dy);
 		}
 		bar = BatchBar(score, op);
 		voice = 1;

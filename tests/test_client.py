@@ -504,13 +504,15 @@ async def test_run_set_lyric_adopts_predominant_font() -> None:
     with patch("sibelius_websocket_cli.cli._client", return_value=mock_client_ctx), \
          patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()), \
          patch("sibelius_websocket_cli.cli._bridge", new=AsyncMock(return_value=staff_lyrics)), \
-         patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=0)) as mock_write:
+         patch("sibelius_websocket_cli.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
 
         res = await _run_set_lyric(args)
         assert res == 0
-        mock_write.assert_called_once_with(
-            args, "SetLyricText", [1, 2, 0, "\\fQuicksand\\\\s88\\hermosa"]
-        )
+        mock_write.assert_awaited_once()
+        assert mock_write.await_args.args[1] == {
+            "op": "set", "staff": 1, "bar": 2, "index": 0,
+            "type": "LyricItem", "prop": "Text", "value": "\\fQuicksand\\\\s88\\hermosa",
+        }
 
 
 async def test_run_set_lyric_adopts_predominant_font_when_existing_is_outlier() -> None:
@@ -534,13 +536,15 @@ async def test_run_set_lyric_adopts_predominant_font_when_existing_is_outlier() 
     with patch("sibelius_websocket_cli.cli._client", return_value=mock_client_ctx), \
          patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()), \
          patch("sibelius_websocket_cli.cli._bridge", new=AsyncMock(return_value=staff_lyrics)), \
-         patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=0)) as mock_write:
+         patch("sibelius_websocket_cli.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
 
         res = await _run_set_lyric(args)
         assert res == 0
-        mock_write.assert_called_once_with(
-            args, "SetLyricText", [1, 2, 0, "\\fQuicksand\\\\s88\\hermosa"]
-        )
+        mock_write.assert_awaited_once()
+        assert mock_write.await_args.args[1] == {
+            "op": "set", "staff": 1, "bar": 2, "index": 0,
+            "type": "LyricItem", "prop": "Text", "value": "\\fQuicksand\\\\s88\\hermosa",
+        }
 
 
 async def test_run_set_lyric_explicit_font_overrides_predominant() -> None:
@@ -553,12 +557,14 @@ async def test_run_set_lyric_explicit_font_overrides_predominant() -> None:
         "--font", "Garamond", "--font-size", "96",
     ])
 
-    with patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=0)) as mock_write:
+    with patch("sibelius_websocket_cli.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
         res = await _run_set_lyric(args)
         assert res == 0
-        mock_write.assert_called_once_with(
-            args, "SetLyricText", [1, 2, 0, "\\fGaramond\\\\s96\\hermosa"]
-        )
+        mock_write.assert_awaited_once()
+        assert mock_write.await_args.args[1] == {
+            "op": "set", "staff": 1, "bar": 2, "index": 0,
+            "type": "LyricItem", "prop": "Text", "value": "\\fGaramond\\\\s96\\hermosa",
+        }
 
 
 async def test_run_set_lyric_adopts_score_default_font_and_size_when_unstyled() -> None:
@@ -589,14 +595,16 @@ async def test_run_set_lyric_adopts_score_default_font_and_size_when_unstyled() 
     with patch("sibelius_websocket_cli.cli._client", return_value=mock_client_ctx), \
          patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()), \
          patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge_side_effect), \
-         patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=0)) as mock_write:
+         patch("sibelius_websocket_cli.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
 
         res = await _run_set_lyric(args)
         assert res == 0
         # When unstyled, adopts score default font (Times New Roman) and standard 11pt size (110 tenths of a pt)
-        mock_write.assert_called_once_with(
-            args, "SetLyricText", [1, 2, 0, "\\fTimes New Roman\\\\s110\\hermosa"]
-        )
+        mock_write.assert_awaited_once()
+        assert mock_write.await_args.args[1] == {
+            "op": "set", "staff": 1, "bar": 2, "index": 0,
+            "type": "LyricItem", "prop": "Text", "value": "\\fTimes New Roman\\\\s110\\hermosa",
+        }
 
 
 async def test_run_set_barline() -> None:
