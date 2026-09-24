@@ -245,22 +245,27 @@ async def test_patch_layout_removes_redundant_clefs_from_installed_package(
                 {"type": "Clef", "index": 3, "position": 512, "styleId": "clef.treble"}
             ]
             return [{"barNumber": 1, "objects": objects}]
-        if method == "DeleteObject":
-            deleted.append(call_args or [])
-            return {"deleted": True}
         raise AssertionError(f"unexpected bridge call {method}")
+
+    async def apply_batch(unused_client: Any, batch: list[dict[str, Any]], dry_run: bool) -> dict[str, Any]:
+        del unused_client
+        assert dry_run is False
+        deleted.extend(batch)
+        return {"applied": len(batch), "results": []}
 
     with (
         patch("sibelius_websocket_cli.cli._client", return_value=context),
         patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._require_bridge", new=AsyncMock()),
         patch("sibelius_websocket_cli.cli._assert_expected_score", new=AsyncMock()),
         patch("sibelius_websocket_cli.cli._backup", new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"})),
         patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge_side_effect),
+        patch("sibelius_websocket_cli.cli._apply_batch", side_effect=apply_batch),
     ):
         assert await _run_patch_layout(args) == EXIT_OK
 
-    # The courtesy clef sits at the end of the 2/4 bar (tick 512).
-    assert deleted == [[1, 1, 3]]
+    # The courtesy clef sits at the end of the 2/4 bar (tick 512), guarded to a Clef.
+    assert deleted == [{"op": "delete", "staff": 1, "bar": 1, "index": 3, "type": "Clef"}]
     assert '"verified":1' in capsys.readouterr().out
 
 

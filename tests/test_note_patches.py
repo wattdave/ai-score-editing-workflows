@@ -6,7 +6,8 @@ import pytest
 
 from sibelius_websocket_cli.note_patches import (
     NotePatchError,
-    bridge_call,
+    batch_operations,
+    delete_voice_call,
     execution_order,
     load_note_patches,
 )
@@ -32,8 +33,8 @@ def test_execution_order_runs_edits_then_descending_deletes_then_voices(tmp_path
     assert [(op["op"], op.get("index")) for op in ordered] == [
         ("tie", 3), ("set-pitch", 0), ("delete", 5), ("delete", 1), ("delete-voice", None),
     ]
-    assert bridge_call(ordered[0]) == ("SetTie", [1, 4, 3, "false"])
-    assert bridge_call(ordered[-1]) == ("DeleteVoiceInPassage", [1, 3, 2, 2])
+    assert batch_operations(ordered)[0] == {"op": "tie", "staff": 1, "bar": 4, "index": 3, "remove": True}
+    assert delete_voice_call(ordered[-1]) == ("DeleteVoiceInPassage", [1, 3, 2, 2])
 
 
 @pytest.mark.parametrize(
@@ -53,14 +54,13 @@ def test_load_note_patches_rejects_invalid_operations(tmp_path, payload, message
         load_note_patches(_write(tmp_path, payload))
 
 
-def test_bracket_maps_to_set_bracketed(tmp_path) -> None:
+def test_bracket_maps_to_batch_bracket(tmp_path) -> None:
     ops = load_note_patches(_write(tmp_path, [
         {"op": "bracket", "staff": 1, "bar": 8, "index": 1},
         {"op": "bracket", "staff": 1, "bar": 8, "index": 2, "remove": True},
     ]))
 
-    assert bridge_call(ops[0]) == ("SetBracketed", [1, 8, 1, "true"])
-    assert bridge_call(ops[1]) == ("SetBracketed", [1, 8, 2, "false"])
+    assert [op["remove"] for op in batch_operations(ops)] == [False, True]
 
 
 def test_bracket_rejects_non_boolean_remove(tmp_path) -> None:
