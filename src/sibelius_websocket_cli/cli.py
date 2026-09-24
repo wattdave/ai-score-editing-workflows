@@ -9,6 +9,7 @@ import json
 import logging
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -839,6 +840,48 @@ async def _run_write(
             print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
     print(json.dumps(result, indent=2))
     return EXIT_OK
+
+
+async def _run_op(
+    args: argparse.Namespace,
+    operation: dict[str, Any],
+    legacy: Callable[[dict[str, Any]], Any],
+) -> int:
+    """Run one object edit as a one-operation ApplyBatch.
+
+    The operation is checked against the score before the backup, so a bad
+    address fails without saving anything. legacy() maps the batch result to
+    the command's historical output shape.
+    """
+    try:
+        batch = batch_ops.validate_batch([operation])
+    except batch_ops.BatchError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _require_bridge(client, BATCH_BRIDGE_VERSION, args.subcommand)
+        await _assert_expected_score(client, args)
+        checked = await _apply_batch(client, batch, True)
+        if "error" in checked:
+            raise BridgeError(checked["error"])
+        backup = await _backup(client, f"before {args.subcommand}")
+        print(f"backed up: {backup['copy']}", file=sys.stderr)
+        result = await _apply_batch(client, batch, False)
+        if "error" in result:
+            raise BridgeError(f"{result['error']}; restore from {backup.get('copy')}")
+        if getattr(args, "save", False):
+            saved = await _bridge(client, "Save")
+            print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
+    print(json.dumps(legacy(result["results"][0]), indent=2))
+    return EXIT_OK
+
+
+def _address(args: argparse.Namespace) -> dict[str, Any]:
+    return {"staff": args.staff, "bar": args.bar, "index": args.index}
+
+
+def _notes(description: dict[str, Any] | None) -> list[dict[str, Any]]:
+    return list((description or {}).get("notes", []))
 
 
 async def _run_save(args: argparse.Namespace) -> int:
@@ -1701,20 +1744,36 @@ async def _run_copy_passage(args: argparse.Namespace) -> int:
 
 
 async def _run_set_note(args: argparse.Namespace) -> int:
-    return await _run_write(
-        args, "SetNotePitch",
-        [args.staff, args.bar, args.index, args.old_pitch, args.new_pitch],
+    def legacy(result: dict[str, Any]) -> dict[str, Any]:
+        missing = {"name": "", "tied": False, "pitch": args.new_pitch}
+        old = next((n for n in _notes(result["before"]) if n["pitch"] == args.old_pitch), missing)
+        new = next((n for n in _notes(result["after"]) if n["pitch"] == args.new_pitch), missing)
+        return {
+            "oldPitch": args.old_pitch, "oldName": old["name"],
+            "newPitch": new["pitch"], "newName": new["name"], "tied": old["tied"],
+        }
+
+    return await _run_op(
+        args,
+        {"op": "set-pitch", **_address(args), "oldPitch": args.old_pitch, "newPitch": args.new_pitch},
+        legacy,
     )
 
 
 async def _run_tie(args: argparse.Namespace) -> int:
-    return await _run_write(
-        args, "SetTie", [args.staff, args.bar, args.index, "false" if args.remove else "true"]
+    return await _run_op(
+        args,
+        {"op": "tie", **_address(args), "remove": args.remove},
+        lambda result: {
+            **_address(args), "tied": not args.remove, "notes": len(_notes(result["after"])),
+        },
     )
 
 
 async def _run_delete_object(args: argparse.Namespace) -> int:
-    return await _run_write(args, "DeleteObject", [args.staff, args.bar, args.index])
+    return await _run_op(
+        args, {"op": "delete", **_address(args)}, lambda result: {"deleted": result["before"]}
+    )
 
 
 async def _run_delete_voice(args: argparse.Namespace) -> int:
@@ -1724,12 +1783,20 @@ async def _run_delete_voice(args: argparse.Namespace) -> int:
 
 
 async def _run_flip_stem(args: argparse.Namespace) -> int:
-    return await _run_write(args, "FlipStem", [args.staff, args.bar, args.index])
+    return await _run_op(
+        args,
+        {"op": "flip-stem", **_address(args)},
+        lambda result: {"flipped": True, **_address(args)},
+    )
 
 
 async def _run_bracket(args: argparse.Namespace) -> int:
-    return await _run_write(
-        args, "SetBracketed", [args.staff, args.bar, args.index, "false" if args.remove else "true"]
+    return await _run_op(
+        args,
+        {"op": "bracket", **_address(args), "remove": args.remove},
+        lambda result: {
+            **_address(args), "bracketed": not args.remove, "notes": len(_notes(result["after"])),
+        },
     )
 
 
@@ -1788,18 +1855,24 @@ async def _run_add_notes(args: argparse.Namespace) -> int:
         return EXIT_COMMAND_FAILED
     pitches = [music.parse_pitch(p.strip()) for p in args.pitches.split(",") if p.strip()]
     duration = music.parse_duration(args.duration)
-    return await _run_write(
+    position = getattr(args, "pos", 0)
+    voice = args.voice or 1
+    return await _run_op(
         args,
-        "AddNotes",
-        [
-            args.staff,
-            args.bar,
-            getattr(args, "pos", 0),
-            duration,
-            pitches,
-            args.voice,
-            bool(getattr(args, "tied", False)),
-        ],
+        {
+            "op": "add-note", "staff": args.staff, "bar": args.bar, "position": position,
+            "duration": duration, "pitches": pitches, "voice": voice,
+            "tied": bool(getattr(args, "tied", False)),
+        },
+        lambda result: {
+            "staff": args.staff, "bar": args.bar, "position": position,
+            "duration": duration, "voice": voice,
+            "notes": [
+                {"pitch": n["pitch"], "name": n["name"], "tied": n["tied"]}
+                for n in _notes(result["after"])
+                if n["pitch"] in pitches
+            ],
+        },
     )
 
 

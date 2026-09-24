@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from argparse import Namespace
 from pathlib import Path
 from typing import Any
@@ -26,7 +27,10 @@ from sibelius_websocket_cli.cli import (
     _run_reset_design,
     _run_set_lyric,
     _backup,
+    _run_add_notes,
     _run_bracket,
+    _run_flip_stem,
+    _run_set_note,
     _run_set_time,
     _run_tie,
     _run_write,
@@ -671,33 +675,22 @@ async def test_patch_lyrics_uses_one_connection_backup_and_verification(
     assert "saved /scores/a.sib" in output
 
 
-async def test_tie_passes_string_booleans_to_bridge() -> None:
+async def test_tie_sends_one_batch_operation() -> None:
     parser = build_parser()
-
-    # Test tie add passes "true"
-    tie_args = parser.parse_args(["tie", "--staff", "1", "--bar", "2", "--index", "3"])
-    with patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=EXIT_OK)) as run_write:
-        assert await _run_tie(tie_args) == EXIT_OK
-        run_write.assert_awaited_once_with(
-            tie_args, "SetTie", [1, 2, 3, "true"]
-        )
-
-    # Test tie remove passes "false"
-    untie_args = parser.parse_args(["tie", "--staff", "1", "--bar", "2", "--index", "3", "--remove"])
-    with patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=EXIT_OK)) as run_write:
-        assert await _run_tie(untie_args) == EXIT_OK
-        run_write.assert_awaited_once_with(
-            untie_args, "SetTie", [1, 2, 3, "false"]
-        )
+    for argv, remove in ((["tie"], False), (["tie", "--remove"], True)):
+        args = parser.parse_args([*argv, "--staff", "1", "--bar", "2", "--index", "3"])
+        with patch("sibelius_websocket_cli.cli._run_op", new=AsyncMock(return_value=EXIT_OK)) as run_op:
+            assert await _run_tie(args) == EXIT_OK
+        assert run_op.await_args.args[1] == {"op": "tie", "staff": 1, "bar": 2, "index": 3, "remove": remove}
 
 
-async def test_bracket_and_set_time_pass_string_booleans_to_bridge() -> None:
+async def test_bracket_batches_and_set_time_passes_string_boolean() -> None:
     parser = build_parser()
 
     bracket_args = parser.parse_args(["bracket", "--staff", "1", "--bar", "8", "--index", "1"])
-    with patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=EXIT_OK)) as run_write:
+    with patch("sibelius_websocket_cli.cli._run_op", new=AsyncMock(return_value=EXIT_OK)) as run_op:
         assert await _run_bracket(bracket_args) == EXIT_OK
-        run_write.assert_awaited_once_with(bracket_args, "SetBracketed", [1, 8, 1, "true"])
+    assert run_op.await_args.args[1] == {"op": "bracket", "staff": 1, "bar": 8, "index": 1, "remove": False}
 
     cut_args = parser.parse_args(["set-time", "--top", "2", "--bottom", "2", "--symbol", "cut"])
     with patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=EXIT_OK)) as run_write:
@@ -720,3 +713,63 @@ async def test_backup_refuses_imported_score_without_a_path() -> None:
     ):
         with pytest.raises(BridgeError, match="never been saved as a .sib"):
             await _backup(MagicMock(), "before set-time")
+
+
+async def test_run_op_checks_before_backup_and_prints_legacy_output(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    args = build_parser().parse_args(
+        ["set-note", "--staff", "1", "--bar", "2", "--index", "0", "--old-pitch", "76", "--new-pitch", "75"]
+    )
+    before = {"type": "NoteRest", "notes": [{"pitch": 76, "name": "E", "tied": True}]}
+    after = {"type": "NoteRest", "notes": [{"pitch": 75, "name": "Eb", "tied": True}]}
+    replies = [
+        {"applied": 0, "dryRun": True, "results": [{"i": 0, "before": before}]},
+        {"applied": 1, "results": [{"i": 0, "op": "set-pitch", "before": before, "after": after}]},
+    ]
+    context, _client = _client_context()
+    with (
+        patch("sibelius_websocket_cli.cli._client", return_value=context),
+        patch("sibelius_websocket_cli.cli._require_bridge", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._assert_expected_score", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._backup", new=AsyncMock(return_value={"copy": "/b.sib"})) as backup,
+        patch("sibelius_websocket_cli.cli._apply_batch", new=AsyncMock(side_effect=replies)) as apply_batch,
+    ):
+        assert await _run_set_note(args) == EXIT_OK
+
+    backup.assert_awaited_once()
+    assert [call.args[2] for call in apply_batch.await_args_list] == [True, False]
+    assert json.loads(capsys.readouterr().out) == {
+        "oldPitch": 76, "oldName": "E", "newPitch": 75, "newName": "Eb", "tied": True,
+    }
+
+
+async def test_run_op_refused_edit_skips_backup() -> None:
+    args = build_parser().parse_args(["flip-stem", "--staff", "1", "--bar", "1", "--index", "9"])
+    context, _client = _client_context()
+    refused = {"error": "op 0: no object at staff 1 bar 1 index 9", "applied": 0}
+    with (
+        patch("sibelius_websocket_cli.cli._client", return_value=context),
+        patch("sibelius_websocket_cli.cli._require_bridge", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._assert_expected_score", new=AsyncMock()),
+        patch("sibelius_websocket_cli.cli._backup", new=AsyncMock()) as backup,
+        patch("sibelius_websocket_cli.cli._apply_batch", new=AsyncMock(return_value=refused)),
+        pytest.raises(BridgeError, match="index 9"),
+    ):
+        await _run_flip_stem(args)
+    backup.assert_not_awaited()
+
+
+async def test_add_note_pitches_reports_only_added_notes(capsys: pytest.CaptureFixture[str]) -> None:
+    args = build_parser().parse_args(
+        ["add-note", "--staff", "2", "--bar", "2", "--pitches", "G3", "--duration", "whole"]
+    )
+    after = {"notes": [{"pitch": 50, "name": "D", "tied": False}, {"pitch": 55, "name": "G", "tied": False}]}
+    with patch(
+        "sibelius_websocket_cli.cli._run_op",
+        new=AsyncMock(side_effect=lambda a, op, legacy: print(json.dumps(legacy({"after": after}))) or EXIT_OK),
+    ) as run_op:
+        assert await _run_add_notes(args) == EXIT_OK
+    op = run_op.await_args.args[1]
+    assert op["op"] == "add-note" and op["pitches"] == [55] and op["duration"] == 1024
+    assert json.loads(capsys.readouterr().out)["notes"] == [{"pitch": 55, "name": "G", "tied": False}]
