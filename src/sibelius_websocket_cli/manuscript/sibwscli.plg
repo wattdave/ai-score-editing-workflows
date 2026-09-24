@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 44);
+		return CreateDictionary('version', 45);
 	}"
 
 	Echo "(value) {
@@ -1034,6 +1034,54 @@
 		return CreateDictionary(
 			'bar', barNum,
 			'breakType', '' & bar.BreakType);
+	}"
+
+	GetScoreStructure "(fromBar, toBar) {
+		// System-staff structure for bars fromBar-toBar. A key or time
+		// signature at the end of a bar takes effect in the next bar, which is
+		// what 'bar' reports; 'storedBar' is the bar that holds the object.
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		systemStaff = score.SystemStaff;
+		barCount = systemStaff.BarCount;
+		if (fromBar < 1 or toBar > barCount or fromBar > toBar) {
+			return CreateDictionary('error', 'bars ' & fromBar & '-' & toBar & ' are outside the score (' & barCount & ' bars)');
+		}
+		keySignatures = CreateSparseArray();
+		timeSignatures = CreateSparseArray();
+		barlines = CreateSparseArray();
+		breaks = CreateSparseArray();
+		for barNum = fromBar to toBar + 1 {
+			bar = systemStaff.NthBar(barNum);
+			for each KeySignature ks in bar {
+				effective = barNum;
+				if (ks.Position >= bar.Length) {
+					effective = barNum + 1;
+				}
+				keySignatures.Push(CreateDictionary('bar', effective, 'storedBar', barNum,
+					'name', ks.AsText, 'sharps', ks.Sharps, 'major', ks.Major));
+			}
+			for each TimeSignature ts in bar {
+				effective = barNum;
+				if (ts.Position >= bar.Length) {
+					effective = barNum + 1;
+				}
+				timeSignatures.Push(CreateDictionary('bar', effective, 'storedBar', barNum,
+					'numerator', ts.Numerator, 'denominator', ts.Denominator));
+			}
+			for each SpecialBarline sb in bar {
+				barlines.Push(CreateDictionary('bar', barNum, 'internalType', sb.BarlineInternalType,
+					'position', sb.Position));
+			}
+			if (bar.BreakType != Default) {
+				breaks.Push(CreateDictionary('bar', barNum, 'breakType', bar.BreakType));
+			}
+		}
+		return CreateDictionary('barCount', barCount, 'fromBar', fromBar, 'toBar', toBar,
+			'keySignatures', keySignatures, 'timeSignatures', timeSignatures,
+			'barlines', barlines, 'breaks', breaks);
 	}"
 
 	GetSpecialBarlines "(fromBar, toBar) {

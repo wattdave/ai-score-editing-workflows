@@ -199,3 +199,8 @@ def test_set_time_must_precede_key_break_and_barline() -> None:
             {"op": "set-barline", "bar": 2, "type": "double"},
             {"op": "set-time", "bar": 3, "numerator": 3, "denominator": 4},
         ])
+
+
+def test_barline_names_match_set_barline_types() -> None:
+    from sibelius_websocket_cli.batch_ops import BARLINE_NAMES, BARLINE_TYPES
+    assert set(BARLINE_NAMES) | {"none"} == BARLINE_TYPES

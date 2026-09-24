@@ -55,6 +55,18 @@ BARLINE_TYPES = {
     "double", "start_repeat", "end_repeat", "final", "dashed", "invisible",
     "between_staves", "normal", "tick", "short", "dotted", "triple", "thick", "none",
 }
+# SpecialBarline internal types 0-12, in order, as set-barline names.
+BARLINE_NAMES = [
+    "start_repeat", "end_repeat", "dashed", "double", "final", "invisible",
+    "between_staves", "normal", "tick", "short", "dotted", "triple", "thick",
+]
+# Bar.BreakType values other than Default (7), as set-break names where one
+# exists; the rest keep their ManuScript constant names.
+BREAK_NAMES = {
+    6: "system", 4: "page", 1: "MiddleOfSystem", 2: "EndOfSystem",
+    3: "MiddleOfPage", 5: "NotEndOfSystem", 8: "SpecialPageBreak",
+}
+
 # Selection.Transpose shows a modal dialog for out-of-range arguments
 # (SPEC.md 1.3.1). Interval types run 0-10; degrees are held to three octaves.
 MAX_TRANSPOSE_DEGREE = 21
@@ -345,3 +357,24 @@ def _str(operation: dict[str, Any], field: str, label: str) -> str:
     if not isinstance(value, str) or not value:
         raise BatchError(f"{label}.{field} must be a non-empty string")
     return value
+
+
+def name_structure(structure: dict[str, Any]) -> dict[str, Any]:
+    """Give GetScoreStructure's barlines and breaks the names apply_batch takes."""
+    named = dict(structure)
+    named["barlines"] = [
+        {"bar": b["bar"], "type": _barline_name(b["internalType"]), "position": b["position"]}
+        for b in structure.get("barlines", [])
+    ]
+    named["breaks"] = [
+        {"bar": b["bar"], "type": BREAK_NAMES.get(int(b["breakType"]), str(b["breakType"]))}
+        for b in structure.get("breaks", [])
+    ]
+    return named
+
+
+def _barline_name(internal_type: Any) -> str:
+    try:
+        return BARLINE_NAMES[int(internal_type)]
+    except (ValueError, IndexError):
+        return str(internal_type)

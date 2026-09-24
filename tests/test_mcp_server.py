@@ -121,3 +121,31 @@ async def test_undo_bounds_and_command() -> None:
             await mcp_server.undo(0)
         assert await mcp_server.undo(2) == {"undone": 2}
     assert client.calls == [("invokeCommands", ["undo", "undo"])]
+
+
+async def test_structure_names_barlines_and_breaks_and_defaults_to_all_bars() -> None:
+    client = FakeClient({
+        "GetBridgeVersion": {"version": 45},
+        "GetScoreInfo": {"barCount": 12},
+        "GetScoreStructure": {
+            "barCount": 12, "keySignatures": [{"bar": 2, "storedBar": 1, "name": "D"}],
+            "timeSignatures": [], "barlines": [{"bar": 4, "internalType": "3", "position": 1024}],
+            "breaks": [{"bar": 8, "breakType": 6}, {"bar": 9, "breakType": 4}],
+        },
+    })
+    with _use(client):
+        result = await mcp_server.score_structure()
+        assert ("GetScoreStructure", [1, 12]) in client.calls
+        assert result["barlines"] == [{"bar": 4, "type": "double", "position": 1024}]
+        assert result["breaks"] == [{"bar": 8, "type": "system"}, {"bar": 9, "type": "page"}]
+        assert result["keySignatures"][0]["bar"] == 2
+        await mcp_server.score_structure("5-")
+        assert ("GetScoreStructure", [5, 12]) in client.calls
+        await mcp_server.score_structure("7")
+        assert ("GetScoreStructure", [7, 7]) in client.calls
+
+
+async def test_structure_needs_bridge_45() -> None:
+    client = FakeClient({"GetBridgeVersion": {"version": 44}})
+    with _use(client), pytest.raises(ToolError, match="v45"):
+        await mcp_server.score_structure()
