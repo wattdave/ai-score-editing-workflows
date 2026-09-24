@@ -1,4 +1,4 @@
-"""Tests for redundant clef auditing in scripts/clean_clefs.py.
+"""Tests for redundant clef auditing in sibelius_websocket_cli.clefs.
 
 Clef cleanup is engraving proofreading, not playback repair -- see the
 "Engraving vs. Playback" note in the hanging-playback-note-repair skill.
@@ -6,16 +6,7 @@ Clef cleanup is engraving proofreading, not playback repair -- see the
 
 from __future__ import annotations
 
-import importlib.util
-from pathlib import Path
-
-ROOT_DIR = Path(__file__).resolve().parent.parent
-SCRIPT_PATH = ROOT_DIR / "scripts" / "clean_clefs.py"
-
-spec = importlib.util.spec_from_file_location("clean_clefs", SCRIPT_PATH)
-assert spec and spec.loader
-clean_clefs = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(clean_clefs)
+from sibelius_websocket_cli import clefs as clean_clefs
 
 
 def _clef_bar(bar_number: int, *clefs: tuple[int, int, str]) -> dict:

@@ -54,7 +54,7 @@ and verify once for the whole set.
   - `{"op":"delete-voice","staff":S,"fromBar":A,"toBar":B,"voice":V}`
 - `patch-layout --file PATH [--save] [--dry-run]`: JSON array of operations:
   - `{"op":"nudge","staff":S,"bar":B,"index":I,"dx":X,"dy":Y}`
-  - `{"op":"set-break","bar":B,"type":"system|page|none"}`
+  - `{"op":"set-break","bar":B,"type":"system|page|none"}` (`none` clears a break; it does not forbid one)
   - `{"op":"set-barline","bar":B,"type":"double|final|..."}`
   - `{"op":"set-time","bar":B,"top":N,"bottom":D[,"symbol":"cut|common"]}`
   - `{"op":"reset-design","lyrics":false}`

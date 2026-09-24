@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 36);
+		return CreateDictionary('version', 37);
 	}"
 
 	Echo "(value) {
@@ -1186,6 +1186,11 @@
 		}
 		if (breakType = 'page' or breakType = 'EndOfPage' or breakType = 4) {
 			bType = EndOfPage;
+		}
+		// Clearing a break means Default (bar can appear anywhere); MiddleOfSystem
+		// would instead forbid a break here and pile the score onto one system.
+		if (breakType = 'none' or breakType = 'Default' or breakType = 7) {
+			bType = Default;
 		}
 		bar.BreakType = bType;
 		return CreateDictionary(
