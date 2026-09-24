@@ -4,10 +4,10 @@ import json
 
 import pytest
 
+from sibelius_websocket_cli.batch_ops import validate_batch
 from sibelius_websocket_cli.note_patches import (
     NotePatchError,
     batch_operations,
-    delete_voice_call,
     execution_order,
     load_note_patches,
 )
@@ -34,7 +34,8 @@ def test_execution_order_runs_edits_then_descending_deletes_then_voices(tmp_path
         ("tie", 3), ("set-pitch", 0), ("delete", 5), ("delete", 1), ("delete-voice", None),
     ]
     assert batch_operations(ordered)[0] == {"op": "tie", "staff": 1, "bar": 4, "index": 3, "remove": True}
-    assert delete_voice_call(ordered[-1]) == ("DeleteVoiceInPassage", [1, 3, 2, 2])
+    batch = validate_batch(batch_operations(ordered))
+    assert batch[-1] == {"op": "delete-voice", "fromBar": 1, "toBar": 3, "staff": 2, "voice": 2}
 
 
 @pytest.mark.parametrize(

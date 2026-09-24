@@ -13,7 +13,7 @@ from sibelius_websocket_cli.batch_ops import (
     BatchError,
     validate_batch,
 )
-from sibelius_websocket_cli.note_patches import batch_operations
+from sibelius_websocket_cli.note_patches import batch_operations, execution_order
 
 PLUGIN = Path(__file__).parent.parent / "src/sibelius_websocket_cli/manuscript/sibwscli.plg"
 
@@ -96,8 +96,11 @@ def test_note_patches_translate_to_batch_operations() -> None:
         {"op": "delete-voice", "staff": 2, "fromBar": 1, "toBar": 3, "voice": 2},
         {"op": "flip-stem", "staff": 1, "bar": 3, "index": 0},
     ])
-    assert [op["op"] for op in batch] == ["set-pitch", "tie", "flip-stem"]
-    assert validate_batch(batch)[1]["tied"] is False
+    assert [op["op"] for op in batch] == ["set-pitch", "tie", "delete-voice", "flip-stem"]
+    with pytest.raises(BatchError, match="structural ops must come last"):
+        validate_batch(batch)
+    ordered = validate_batch(batch_operations(execution_order(batch)))
+    assert ordered[1]["tied"] is False and ordered[-1]["op"] == "delete-voice"
 
 
 def test_nudge_is_relative_and_defaults_to_zero() -> None:
