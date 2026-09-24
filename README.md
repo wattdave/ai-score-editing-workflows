@@ -129,6 +129,25 @@ if not running, default: true), `--launch-timeout` (seconds to wait for Sibelius
 Exit codes: `0` success, `1` the call failed (plug-in not found, bridge error),
 `2` could not connect to Sibelius.
 
+## MCP server
+
+`sibelius-mcp` exposes the open score to MCP clients over stdio. It keeps one
+Sibelius Connect session open and needs the bridge plug-in (v39+).
+
+| Tool | Does |
+|---|---|
+| `score_overview` | Score info, staves and selection |
+| `query_score` | Find bar objects by staff, bars, type, voice and property filters |
+| `apply_batch` | Apply a batch of edits as one undo step, after checking every operation (`dry_run` to check only) |
+| `undo` | Undo the last step(s); one batch is one step |
+| `save_score` | Save the score to its file |
+| `export_score` | Export as MusicXML, MXL, PDF, MIDI or PNG |
+
+This repository's `.mcp.json` registers it for Claude Code. For another
+client, run `uv run --directory /path/to/sibelius-websocket-cli sibelius-mcp`.
+`SIBELIUS_HOST` and `SIBELIUS_PORT` override the default `localhost:1898`.
+The first call shows Sibelius's connection approval dialog, as the CLI does.
+
 ## Multi-Agent Skills (Claude, Antigravity, Cursor)
 
 The canonical Sibelius skill lives in `.claude/skills/sibelius/`. Its concise

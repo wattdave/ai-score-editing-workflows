@@ -50,16 +50,16 @@ def parse_where(expression: str) -> dict[str, Any]:
     """
     match = _WHERE.match(expression)
     if not match:
-        raise QueryError(f"cannot parse --where {expression!r}; expected e.g. 'Pitch>=72'")
+        raise QueryError(f"cannot parse condition {expression!r}; expected e.g. 'Pitch>=72'")
     prop, op, raw = match.groups()
     if prop not in known_props():
-        raise QueryError(f"unknown property {prop!r} in --where; readable: {', '.join(sorted(known_props()))}")
+        raise QueryError(f"unknown property {prop!r} in where condition; readable: {', '.join(sorted(known_props()))}")
     return {"prop": prop, "op": op, "value": _parse_value(raw)}
 
 
 def _parse_value(raw: str) -> Any:
     if raw == "":
-        raise QueryError("missing value in --where")
+        raise QueryError("missing value in where condition")
     if raw.lower() in {"true", "false"}:
         return raw.lower() == "true"
     if re.fullmatch(r"-?\d+", raw):
