@@ -129,6 +129,10 @@ Probed on Sibelius 26.8 against a scratch score:
 - **Methods are parsed on first call, and parse errors are modal too.** A
   chained subscript (`where[i]['op']`) installs fine, then shows "Parse error
   near ''" the first time the method runs. `manuscript_linter.py` flags it.
+- **Menu commands on an empty selection are modal too.** `Sibelius.Execute('delete')`
+  after a voice filter that matched nothing shows "Please select something
+  and try again". `DeleteVoiceInPassage` counts the voice's objects first and
+  returns `objects: 0` without selecting when there are none.
 - **Bar-local objects only.** A staff's initial clef, key and time signature
   are not objects in bar 1, so `Query` does not return them.
 

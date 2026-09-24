@@ -49,28 +49,12 @@ def execution_order(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return edits + deletes + voices
 
 
-def bridge_call(operation: dict[str, Any]) -> tuple[str, list[Any]]:
-    """Return the bridge method and arguments for one validated operation."""
-    op = operation["op"]
-    if op == "set-pitch":
-        return "SetNotePitch", [
-            operation["staff"], operation["bar"], operation["index"],
-            operation["oldPitch"], operation["newPitch"],
-        ]
-    if op == "tie":
-        return "SetTie", [
-            operation["staff"], operation["bar"], operation["index"],
-            "false" if operation.get("remove", False) else "true",
-        ]
-    if op == "bracket":
-        return "SetBracketed", [
-            operation["staff"], operation["bar"], operation["index"],
-            "false" if operation.get("remove", False) else "true",
-        ]
-    if op == "flip-stem":
-        return "FlipStem", [operation["staff"], operation["bar"], operation["index"]]
-    if op == "delete":
-        return "DeleteObject", [operation["staff"], operation["bar"], operation["index"]]
+def delete_voice_call(operation: dict[str, Any]) -> tuple[str, list[Any]]:
+    """Return the bridge method and arguments for a delete-voice operation.
+
+    delete-voice works through a selection rather than an object address, so
+    it runs outside the ApplyBatch batch that carries every other operation.
+    """
     return "DeleteVoiceInPassage", [
         operation["fromBar"], operation["toBar"], operation["staff"], operation["voice"],
     ]
@@ -148,7 +132,7 @@ def batch_operations(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Translate addressed note operations into ApplyBatch operations.
 
     delete-voice works through a selection rather than an object address, so
-    it is not part of the batch; run it afterwards with bridge_call.
+    it is not part of the batch; run it afterwards with delete_voice_call.
     """
     batch: list[dict[str, Any]] = []
     for operation in operations:
