@@ -79,6 +79,10 @@ def test_resolve_staves_by_number_and_name() -> None:
         resolve_staves(["Alto"], STAVES)
 
 
+def test_resolve_staves_system_staff() -> None:
+    assert resolve_staves(["0", "System", "1"], STAVES) == [0, 0, 1]
+
+
 def test_build_selector() -> None:
     selector = build_selector(
         staves=[2], from_bar=12, to_bar=20, types=["NoteRest,Text"], voice=1,

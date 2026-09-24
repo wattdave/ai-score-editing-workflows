@@ -67,7 +67,22 @@ def test_validate_normalizes_each_operation() -> None:
         ({"op": "set", "staff": 1, "bar": 1, "index": 0, "prop": "Dx", "value": True}, "must be int"),
         ({"op": "set", "staff": 1, "bar": 1, "index": 0, "prop": "Hidden", "value": 1}, "must be bool"),
         ({"op": "set-pitch", "staff": 1, "bar": 1, "index": 0, "oldPitch": 60, "newPitch": 60}, "must change"),
-        ({"op": "delete", "staff": 0, "bar": 1, "index": 0}, "staff must be"),
+        ({"op": "delete", "staff": -1, "bar": 1, "index": 0}, "staff must be"),
+        ({"op": "tie", "staff": 0, "bar": 1, "index": 0}, "cannot target the system staff"),
+        ({"op": "add-lyric", "staff": 0, "bar": 1, "position": 0, "duration": 256, "text": "x"},
+         "cannot target the system staff"),
+        ({"op": "add-text", "staff": 0, "bar": 1, "position": 0, "text": "x", "voice": 1}, "no voices"),
+        ({"op": "add-text", "staff": 0, "bar": 1, "position": 0, "text": "x",
+          "styleId": "text.staff.expression"}, "text.system"),
+        ({"op": "add-text", "staff": 1, "bar": 1, "position": 0, "text": "x",
+          "styleId": "text.system.tempo"}, "text.staff"),
+        ({"op": "add-line", "staff": 0, "bar": 1, "position": 0, "duration": 256}, "styleId"),
+        ({"op": "add-line", "staff": 0, "bar": 1, "position": 0, "duration": 256,
+          "styleId": "line.staff.slur.up"}, "line.system"),
+        ({"op": "add-line", "staff": 1, "bar": 1, "position": 0, "duration": 256,
+          "styleId": "line.system.tempo.rall"}, "line.staff"),
+        ({"op": "add-line", "staff": 1, "bar": 1, "position": 0,
+          "styleId": "line.staff.hairpin.crescendo"}, "duration"),
         ({"op": "add-note", "staff": 1, "bar": 1, "position": 0, "duration": 256, "pitches": [128]}, "MIDI"),
         ({"op": "add-text", "staff": 1, "bar": 1, "position": 0, "text": "x", "styleId": "bogus"}, "styleId"),
         ({"op": "add-lyric", "staff": 1, "bar": 1, "position": 0, "duration": 256, "text": "x",
@@ -77,6 +92,34 @@ def test_validate_normalizes_each_operation() -> None:
 def test_validate_rejects(operation, message) -> None:
     with pytest.raises(BatchError, match=message):
         validate_batch([operation])
+
+
+def test_system_staff_takes_system_text_and_lines() -> None:
+    batch = validate_batch([
+        {"op": "delete", "staff": 0, "bar": 40, "index": 0, "type": "Text"},
+        {"op": "set", "staff": 0, "bar": 41, "index": 0, "prop": "Hidden", "value": False},
+        {"op": "add-text", "staff": 0, "bar": 1, "position": 0, "text": "Allegro"},
+        {"op": "add-line", "staff": 0, "bar": 40, "position": 512, "duration": 3584,
+         "styleId": "line.system.tempo.rall"},
+        {"op": "add-line", "staff": 2, "bar": 3, "position": 0, "duration": 512,
+         "styleId": "line.staff.hairpin.crescendo", "voice": 2},
+    ])
+    assert batch[2]["styleId"] == "text.system.tempo"
+    assert batch[3] == {"op": "add-line", "staff": 0, "bar": 40, "position": 512,
+                        "styleId": "line.system.tempo.rall", "duration": 3584}
+    assert batch[4]["voice"] == 2
+
+
+def test_system_staff_ops_need_bridge_48() -> None:
+    from sibelius_websocket_cli.cli import SYSTEM_STAFF_BRIDGE_VERSION, _batch_bridge_version
+
+    system_text = validate_batch([{"op": "delete", "staff": 0, "bar": 1, "index": 0}])
+    staff_line = validate_batch([{"op": "add-line", "staff": 1, "bar": 1, "position": 0,
+                                  "duration": 0, "styleId": "line.staff.hairpin.crescendo"}])
+    staff_text = validate_batch([{"op": "delete", "staff": 1, "bar": 1, "index": 0}])
+    assert _batch_bridge_version(system_text) == SYSTEM_STAFF_BRIDGE_VERSION
+    assert _batch_bridge_version(staff_line) == SYSTEM_STAFF_BRIDGE_VERSION
+    assert _batch_bridge_version(staff_text) < SYSTEM_STAFF_BRIDGE_VERSION
 
 
 def test_rejects_empty_batch_and_use_after_delete() -> None:

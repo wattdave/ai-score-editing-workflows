@@ -31,7 +31,10 @@ Batch reads (one session, compact output):
   filtered property never match. Use instead of reading bar ranges to hunt
   for objects, e.g. `query --staff Tenor --where 'Pitch>=67'` or
   `query --type Text --field Dx,Dy`. Output is capped at 500 objects; a
-  `truncated: true` result means narrow the query.
+  `truncated: true` result means narrow the query. `--staff 0` (or
+  `--staff system`) reads the system staff: tempo, metronome and other system
+  text, and system lines such as rit./rall. (bridge v48). It is only read
+  when asked for.
 - `verify-render [--format png|pdf] [--out PATH]`: export once and verify that
   rendered files exist, are non-empty, and optionally match page/hash checks.
 
@@ -73,7 +76,14 @@ and verify once for the whole set.
   - `{"op":"add-note","staff":S,"bar":B,"position":P,"duration":D,"pitches":[..][,"voice":V,"tied":true]}`
     (adds to an existing chord at that position)
   - `{"op":"add-text","staff":S,"bar":B,"position":P,"text":T[,"styleId":"text.staff.expression","voice":V]}`
+  - `{"op":"add-line","staff":S,"bar":B,"position":P,"duration":D,"styleId":"line.staff.hairpin.crescendo"[,"voice":V]}`
+    (bridge v48)
   - `{"op":"add-lyric","staff":S,"bar":B,"position":P,"duration":D,"text":T[,"syllableType":"middle","voice":V]}`
+  - Staff 0 is the system staff (bridge v48). It takes `set`, `delete`,
+    `nudge`, `add-text` and `add-line`, with system styles only and no voice:
+    `add-text` defaults to `text.system.tempo` there (or e.g.
+    `text.system.metronome`), and `add-line` takes `line.system.*` styles such
+    as `line.system.tempo.rall`. Every other staff takes only staff styles.
   - `{"op":"beam","staff":S,"bar":B,"firstIndex":I,"lastIndex":J}`: beam the
     NoteRests from I to J together (bridge v44)
 

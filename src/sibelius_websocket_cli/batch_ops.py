@@ -14,6 +14,11 @@ score before the batch; a set-time re-bars what follows it, so no later
 operation may name a bar after its bar. Re-barring also erased a special
 barline just before it (SPEC.md 1.3.1), so every set-time must come before any
 set-key, set-break or set-barline.
+
+Staff 0 is the system staff, which holds tempo and other system text and
+system lines such as rall. It takes only system styles (`text.system.*`,
+`line.system.*`), every other staff only staff styles, and it has no notes,
+lyrics or voices.
 """
 
 from __future__ import annotations
@@ -37,13 +42,17 @@ WRITABLE_PROPS: dict[str, dict[str, type]] = {
 }
 
 ADDRESSED = {"set", "set-pitch", "tie", "bracket", "flip-stem", "delete", "nudge"}
-ADDING = {"add-note", "add-text", "add-lyric"}
+ADDING = {"add-note", "add-text", "add-line", "add-lyric"}
 STRUCTURAL = {
     "transpose", "copy-passage", "set-key", "set-time", "set-break",
     "set-barline", "add-bars", "delete-voice",
 }
 OPERATIONS = ADDRESSED | ADDING | STRUCTURAL | {"beam"}
 DEFAULT_TEXT_STYLE = "text.staff.expression"
+DEFAULT_SYSTEM_TEXT_STYLE = "text.system.tempo"
+SYSTEM_STAFF = 0
+# Operations that make sense on the system staff, which has no notes or lyrics.
+SYSTEM_STAFF_OPS = {"set", "delete", "nudge", "add-text", "add-line"}
 
 # AddKeySignatureFromText turns an unknown name into C major without an error
 # (SPEC.md 1.3.1), so only the fifteen standard keys of each mode are allowed.
@@ -108,8 +117,11 @@ def _validate(operation: Any, i: int) -> dict[str, Any]:
     if op in STRUCTURAL:
         return _validate_structural(operation, op, label)
     out: dict[str, Any] = {"op": op}
-    out["staff"] = _int(operation, "staff", label, minimum=1)
+    out["staff"] = _int(operation, "staff", label, minimum=0)
     out["bar"] = _int(operation, "bar", label, minimum=1)
+    system = out["staff"] == SYSTEM_STAFF
+    if system and op not in SYSTEM_STAFF_OPS:
+        raise BatchError(f"{label}: {op} cannot target the system staff (staff 0)")
 
     if op == "beam":
         out["firstIndex"] = _int(operation, "firstIndex", label, minimum=0)
@@ -127,6 +139,8 @@ def _validate(operation: Any, i: int) -> dict[str, Any]:
     else:
         out["position"] = _int(operation, "position", label, minimum=0)
         if "voice" in operation:
+            if system:
+                raise BatchError(f"{label}: the system staff has no voices")
             out["voice"] = _int(operation, "voice", label, minimum=1, maximum=4)
 
     if op == "set":
@@ -169,10 +183,11 @@ def _validate(operation: Any, i: int) -> dict[str, Any]:
         out["tied"] = tied
     elif op == "add-text":
         out["text"] = _str(operation, "text", label)
-        style = operation.get("styleId", DEFAULT_TEXT_STYLE)
-        if not isinstance(style, str) or not style.startswith("text.staff."):
-            raise BatchError(f"{label}.styleId must be a staff text style id, e.g. {DEFAULT_TEXT_STYLE}")
-        out["styleId"] = style
+        default = DEFAULT_SYSTEM_TEXT_STYLE if system else DEFAULT_TEXT_STYLE
+        out["styleId"] = _style(operation, label, "text", system, default)
+    elif op == "add-line":
+        out["styleId"] = _style(operation, label, "line", system, None)
+        out["duration"] = _int(operation, "duration", label, minimum=0)
     elif op == "add-lyric":
         out["text"] = _str(operation, "text", label)
         out["duration"] = _int(operation, "duration", label, minimum=1)
@@ -331,6 +346,22 @@ def _is_type(value: Any, expected: type) -> bool:
     if expected is int:
         return isinstance(value, int) and not isinstance(value, bool)
     return isinstance(value, expected)
+
+
+def _style(
+    operation: dict[str, Any], label: str, kind: str, system: bool, default: str | None
+) -> str:
+    """A text or line style id matching the staff: system styles on staff 0 only.
+
+    Sibelius has no error for a style of the wrong family, so the family is
+    checked here.
+    """
+    style = operation.get("styleId", default)
+    family = f"{kind}.system." if system else f"{kind}.staff."
+    where = "the system staff (staff 0)" if system else "a staff"
+    if not isinstance(style, str) or not style.startswith(family) or style == family:
+        raise BatchError(f"{label}.styleId must be a {family}* style id on {where}")
+    return style
 
 
 def _int(

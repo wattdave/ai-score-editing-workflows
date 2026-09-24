@@ -80,9 +80,16 @@ def parse_fields(values: list[str]) -> list[str]:
 
 
 def resolve_staves(requested: list[str], staves: list[dict[str, Any]]) -> list[int]:
-    """Map staff numbers or instrument names (case-insensitive) to numbers."""
+    """Map staff numbers or instrument names (case-insensitive) to numbers.
+
+    "0" or "system" is the system staff, which holds tempo and other system
+    text and system lines.
+    """
     result: list[int] = []
     for item in requested:
+        if item == "0" or item.casefold() == "system":
+            result.append(0)
+            continue
         if item.isdigit():
             number = int(item)
             if not any(staff["staffNum"] == number for staff in staves):
