@@ -77,6 +77,11 @@ bogus command ID, and confirmed by the official docs: "the `invokeCommands`
 message always returns success"). Exit code 1 (`result: false`) may never
 occur in practice for command messages.
 
+**Use `invokeCommands`, not `command`, to execute a command ID** (verified
+2026-09-24 on Sibelius 26.8). `{"message": "command", "commandName":
+"add_bar_at_end"}` and `"undo"` returned `result: true` and changed nothing;
+the same IDs through `invokeCommands` added a bar and undid it.
+
 ### 1.3 Plug-in invocation (verified)
 
 ```json
@@ -100,6 +105,32 @@ such values to strings in the plug-in (`value & ''`) before returning them.
 This is the path to *reading* score state: a ManuScript plug-in (see
 `docs/manuscript-object-tree.md` for the object API) can return data, unlike
 fire-and-forget command IDs.
+
+### 1.3.1 ManuScript behaviour for generic query/batch (verified 2026-09-24)
+
+Probed on Sibelius 26.8 against a scratch score:
+
+- **Dynamic properties work.** `obj.@name` reads and writes a property named by
+  a string (`Dx`, `Hidden` round-tripped and persisted across calls).
+- **An unknown property name blocks Sibelius.** `obj.@NoSuchProp` raises a
+  modal "Cannot get field NoSuchProp" dialog instead of an error the plug-in
+  can catch. Until someone dismisses it, every Connect message, including the
+  handshake, gets `busyError`, and it takes a few seconds to clear afterwards.
+  Check every property name against an allow-list before any `@` access.
+- **One `invokePlugin` call is one undo step.** Two edits in one call were
+  reverted together by a single `invokeCommands ["undo"]`; no explicit undo
+  grouping is needed.
+- **Bar-object indices shift after edits; held references do not.** After
+  `AddText` at position 0, every existing object's index rose by one, but a
+  reference taken before the insert still read the right position and pitch.
+  Object equality (`obj = held`) never matched, so it cannot be used to
+  re-find an object. A batch therefore resolves every address to an object
+  before its first edit, then edits through those references.
+- **Methods are parsed on first call, and parse errors are modal too.** A
+  chained subscript (`where[i]['op']`) installs fine, then shows "Parse error
+  near ''" the first time the method runs. `manuscript_linter.py` flags it.
+- **Bar-local objects only.** A staff's initial clef, key and time signature
+  are not objects in bar 1, so `Query` does not return them.
 
 ### 1.4 Errors
 

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "sibelius": {
+      "command": "uv",
+      "args": ["run", "--directory", ".", "sibelius-mcp"]
+    }
+  }
+}

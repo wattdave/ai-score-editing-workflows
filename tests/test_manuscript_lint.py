@@ -149,3 +149,18 @@ def test_lint_unbalanced_braces() -> None:
 """
     issues = lint_manuscript(broken_code)
     assert any("Unbalanced braces" in i.message for i in issues)
+
+
+def test_lint_chained_subscript() -> None:
+    """Sibelius rejects a[i]['k'] with a modal parse error at call time."""
+    code = """
+{
+    Method "(where) {
+        op = where[0]['op'];
+        cond = where[0];
+        return cond['op'];
+    }"
+}
+"""
+    issues = [i for i in lint_manuscript(code) if "Chained subscript" in i.message]
+    assert [i.code_line.strip() for i in issues] == ["op = where[0]['op'];"]

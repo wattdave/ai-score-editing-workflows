@@ -15,6 +15,7 @@ from typing import Any
 from sibelius_websocket_cli import (
     abc_notation,
     agent_output,
+    batch_ops,
     batch_lyrics,
     launcher,
     layout,
@@ -160,6 +161,13 @@ def build_parser() -> argparse.ArgumentParser:
     patch_notes.add_argument("--file", required=True, help="JSON note operation array")
     patch_notes.add_argument("--save", action="store_true", help="save after all operations complete")
     patch_notes.add_argument("--dry-run", action="store_true", help="validate and report without connecting or mutating")
+    apply = sub.add_parser(
+        "apply",
+        help="apply a JSON batch of edits as one undo step (requires bridge plug-in)",
+    )
+    apply.add_argument("--file", required=True, help="JSON operation array; see the sibelius skill's command reference")
+    apply.add_argument("--save", action="store_true", help="save after the batch succeeds")
+    apply.add_argument("--dry-run", action="store_true", help="check every operation against the open score without changing it")
     read = sub.add_parser("read", help="read bar contents (requires bridge plug-in)")
     read.add_argument("--staff", type=int, default=1, help="staff number, from 1")
     read.add_argument("--from", dest="from_bar", type=int, help="first bar, from 1")
@@ -167,6 +175,17 @@ def build_parser() -> argparse.ArgumentParser:
     read.add_argument("--bar", type=int, help="specific bar number")
     read.add_argument("--bars", type=str, help="bar range, e.g. '1-3' or '5'")
     read.add_argument("--abc", action="store_true", help="format output as ABC notation with aligned lyrics")
+    query = sub.add_parser(
+        "query",
+        help="find bar objects by staff, bars, type, voice and property filters (requires bridge plug-in)",
+    )
+    query.add_argument("--staff", action="append", default=[], help="staff number or instrument name; repeatable (default: all)")
+    query.add_argument("--bars", type=str, help="bar range, e.g. '12-20' or '5' (default: all)")
+    query.add_argument("--type", action="append", default=[], help="object type, e.g. NoteRest, LyricItem, Text, Line, Slur; repeatable or comma-separated")
+    query.add_argument("--voice", type=int, help="voice 1-4")
+    query.add_argument("--where", action="append", default=[], help="property filter, e.g. 'Pitch>=72' or 'Hidden=true'; repeatable, all must match")
+    query.add_argument("--field", action="append", default=[], help="extra properties to return, e.g. Dx,Dy; repeatable or comma-separated")
+    query.add_argument("--limit", type=int, default=500, help="maximum objects to return (default: 500)")
     read_abc = sub.add_parser("read-abc", help="format bar contents as standard ABC notation")
     read_abc.add_argument("--staff", type=int, default=1, help="staff number, from 1")
     read_abc.add_argument("--from", dest="from_bar", type=int, help="first bar, from 1")
@@ -725,7 +744,9 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 37
+CURRENT_BRIDGE_VERSION = 39
+QUERY_BRIDGE_VERSION = 38
+BATCH_BRIDGE_VERSION = 39
 
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
@@ -734,6 +755,27 @@ async def _check_bridge_version(client: SibeliusClient) -> None:
         raise BridgeError(
             f"bridge v{MIN_BRIDGE_VERSION}+ required, got {info!r} — run install-plugin and restart Sibelius"
         )
+
+
+async def _require_bridge(client: SibeliusClient, version: int, feature: str) -> None:
+    info = await _bridge(client, "GetBridgeVersion")
+    if not (isinstance(info, dict) and info.get("version", 0) >= version):
+        raise BridgeError(
+            f"{feature} needs bridge v{version}+, got {info!r} — run install-plugin and restart Sibelius"
+        )
+
+
+async def _apply_batch(
+    client: SibeliusClient, operations: list[dict[str, Any]], dry_run: bool
+) -> dict[str, Any]:
+    """Run ApplyBatch; return its result, including any partial results on failure."""
+    response = await client.invoke_plugin(BRIDGE_PLUGIN, "ApplyBatch", [operations, dry_run])
+    if not protocol.is_success(response):
+        raise BridgeError(f"bridge plug-in not reachable. Response: {json.dumps(response)}")
+    value = protocol.plugin_return_value(response)
+    if not isinstance(value, dict):
+        raise BridgeError(f"unexpected ApplyBatch result: {value!r}")
+    return value
 
 
 async def _assert_expected_score(
@@ -1059,6 +1101,47 @@ async def _run_patch_layout(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+async def _run_apply(args: argparse.Namespace) -> int:
+    try:
+        operations = batch_ops.load_batch(args.file)
+    except batch_ops.BatchError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+
+    backup = None
+    saved = None
+    try:
+        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            await _require_bridge(client, BATCH_BRIDGE_VERSION, "apply")
+            await _assert_expected_score(client, args)
+            # Check first so a refused batch neither saves nor backs up.
+            result = await _apply_batch(client, operations, True)
+            if not args.dry_run and "error" not in result:
+                backup = await _backup(client, "before apply")
+                result = await _apply_batch(client, operations, False)
+            if args.save and not args.dry_run and "error" not in result:
+                saved = await _bridge(client, "Save")
+    except BridgeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+
+    summary: dict[str, Any] = {"operations": len(operations), **result}
+    if backup is not None:
+        summary["backup"] = backup.get("copy")
+    if saved is not None:
+        summary["saved"] = saved.get("fileName", "")
+    print(layout.compact_summary(summary))
+    if "error" in result:
+        applied = result.get("applied", 0)
+        hint = (
+            "nothing was changed" if not applied
+            else f"{applied} op(s) were applied as one undo step; run 'invoke undo' to revert them"
+        )
+        print(f"error: {result['error']} — {hint}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    return EXIT_OK
+
+
 async def _run_patch_notes(args: argparse.Namespace) -> int:
     try:
         operations = note_patches.load_note_patches(args.file)
@@ -1077,11 +1160,27 @@ async def _run_patch_notes(args: argparse.Namespace) -> int:
         return EXIT_OK
 
     results: list[dict[str, Any]] = []
+    batch = batch_ops.validate_batch(note_patches.batch_operations(ordered)) if any(
+        op["op"] != "delete-voice" for op in ordered
+    ) else []
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _check_bridge_version(client)
+        await _require_bridge(client, BATCH_BRIDGE_VERSION, "patch-notes")
         await _assert_expected_score(client, args)
         backup = await _backup(client, "before patch-notes")
+        if batch:
+            # One round trip and one undo step for every addressed operation.
+            outcome = await _apply_batch(client, batch, False)
+            if "error" in outcome:
+                raise BridgeError(
+                    f"patch-notes batch stopped: {outcome['error']} after "
+                    f"{outcome.get('applied', 0)} applied as one undo step; "
+                    f"restore from {backup.get('copy')}"
+                )
+            for operation, result in zip(batch, outcome.get("results", [])):
+                results.append({"op": operation["op"], "result": result})
         for operation in ordered:
+            if operation["op"] != "delete-voice":
+                continue
             method, call_args = note_patches.bridge_call(operation)
             try:
                 result = await _bridge(client, method, call_args)
@@ -1105,6 +1204,41 @@ async def _run_patch_notes(args: argparse.Namespace) -> int:
     if saved is not None:
         summary["saved"] = saved.get("fileName", "")
     print(layout.compact_summary(summary))
+    return EXIT_OK
+
+
+async def _run_query(args: argparse.Namespace) -> int:
+    from .query import QueryError, build_selector, resolve_staves
+
+    from_b, to_b = (None, None)
+    if args.bars:
+        from_b, to_b = parse_bar_range(bars=args.bars)
+    try:
+        # Validate everything but staff names before connecting.
+        selector = build_selector(
+            staves=[],
+            from_bar=from_b,
+            to_bar=to_b,
+            types=args.type,
+            voice=args.voice,
+            where=args.where,
+            fields=args.field,
+            limit=args.limit,
+        )
+        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            await _require_bridge(client, QUERY_BRIDGE_VERSION, "query")
+            if args.staff:
+                selector["staves"] = resolve_staves(args.staff, await _bridge(client, "GetStaves"))
+            result = await _bridge(client, "Query", [selector])
+    except QueryError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    except BridgeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    print(json.dumps(result, indent=None if args.json else 2))
+    if result.get("truncated"):
+        print(f"warning: truncated at {args.limit} objects; narrow the query or raise --limit", file=sys.stderr)
     return EXIT_OK
 
 
@@ -2049,6 +2183,8 @@ def main(argv: list[str] | None = None) -> int:
         "patch-notes": _run_patch_notes,
         "read": _run_read,
         "do": _run_do,
+        "query": _run_query,
+        "apply": _run_apply,
         "bridge-version": _run_bridge_version,
         "read-lyrics": _run_read_lyrics,
         "check-lyrics": _run_check_lyrics,
