@@ -745,10 +745,21 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 43
+CURRENT_BRIDGE_VERSION = 44
 QUERY_BRIDGE_VERSION = 38
 BATCH_BRIDGE_VERSION = 39
 NUDGE_BRIDGE_VERSION = 41
+STRUCTURAL_BRIDGE_VERSION = 44
+
+
+def _batch_bridge_version(operations: list[dict[str, Any]]) -> int:
+    """The oldest bridge that runs every operation in a validated batch."""
+    names = {operation["op"] for operation in operations}
+    if names & (batch_ops.STRUCTURAL | {"beam"}):
+        return STRUCTURAL_BRIDGE_VERSION
+    if "nudge" in names:
+        return NUDGE_BRIDGE_VERSION
+    return BATCH_BRIDGE_VERSION
 
 
 async def _check_bridge_version(client: SibeliusClient) -> None:
@@ -1178,7 +1189,7 @@ async def _run_apply(args: argparse.Namespace) -> int:
     saved = None
     try:
         async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-            await _require_bridge(client, BATCH_BRIDGE_VERSION, "apply")
+            await _require_bridge(client, _batch_bridge_version(operations), "apply")
             await _assert_expected_score(client, args)
             # Check first so a refused batch neither saves nor backs up.
             result = await _apply_batch(client, operations, True)

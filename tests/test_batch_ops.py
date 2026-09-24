@@ -8,6 +8,7 @@ import pytest
 from sibelius_websocket_cli.batch_ops import (
     COMMON_WRITABLE,
     DEFAULT_TEXT_STYLE,
+    STRUCTURAL,
     WRITABLE_PROPS,
     BatchError,
     validate_batch,
@@ -28,6 +29,13 @@ def test_python_writable_table_matches_plugin() -> None:
         for kind, props in re.findall(r"'(\w+)', CreateDictionary\(([^)]*)\)", types_part)
     }
     assert types == {kind: set(props) for kind, props in WRITABLE_PROPS.items()}
+
+
+def test_python_structural_ops_match_plugin() -> None:
+    source = PLUGIN.read_text()
+    start = source.index('BatchStructural "(opName) {')
+    body = source[start:source.index('}"', start)]
+    assert set(re.findall(r"opName = '([\w-]+)'", body)) == STRUCTURAL
 
 
 def test_validate_normalizes_each_operation() -> None:
@@ -97,3 +105,97 @@ def test_nudge_is_relative_and_defaults_to_zero() -> None:
     assert batch == [{"op": "nudge", "staff": 1, "bar": 2, "index": 0, "dx": -16, "dy": 0}]
     with pytest.raises(BatchError, match="dy must be an integer"):
         validate_batch([{"op": "nudge", "staff": 1, "bar": 2, "index": 0, "dy": 1.5}])
+
+
+def test_structural_ops_normalize() -> None:
+    batch = validate_batch([
+        {"op": "beam", "staff": 1, "bar": 2, "firstIndex": 0, "lastIndex": 3},
+        {"op": "transpose", "fromBar": 1, "toBar": 4, "topStaff": 1, "bottomStaff": 2,
+         "fromNote": "C", "toNote": "D", "direction": "up", "octaves": 1},
+        {"op": "transpose", "fromBar": 1, "toBar": 1, "topStaff": 1, "bottomStaff": 1,
+         "degree": -2, "intervalType": 4},
+        {"op": "copy-passage", "fromBar": 1, "toBar": 2, "topStaff": 1, "bottomStaff": 1,
+         "destStaff": 2, "destBar": 3},
+        {"op": "set-time", "bar": 4, "numerator": 2, "denominator": 2, "symbol": "cut"},
+        {"op": "set-key", "bar": 1, "key": "F#", "minor": True},
+        {"op": "set-break", "bar": 2, "type": "page"},
+        {"op": "set-barline", "bar": 4, "type": "final"},
+        {"op": "delete-voice", "fromBar": 1, "toBar": 4, "staff": 1, "voice": 2},
+        {"op": "add-bars", "count": 2},
+    ])
+    assert batch[1]["degree"] == 8 and batch[1]["intervalType"] == 5
+    assert batch[2] == {"op": "transpose", "fromBar": 1, "toBar": 1, "topStaff": 1, "bottomStaff": 1,
+                        "degree": -2, "intervalType": 4}
+    assert batch[3]["destPosition"] == 0
+    assert batch[4]["symbol"] is True
+    assert batch[5]["major"] is False
+
+
+BAR_RANGE = {"fromBar": 1, "toBar": 2, "topStaff": 1, "bottomStaff": 1}
+
+
+@pytest.mark.parametrize(
+    ("operation", "message"),
+    [
+        ({"op": "set-time", "bar": 1, "numerator": 0, "denominator": 4}, "numerator must be"),
+        ({"op": "set-time", "bar": 1, "numerator": 4, "denominator": 3}, "power of two"),
+        ({"op": "set-time", "bar": 1, "numerator": 3, "denominator": 4, "symbol": "common"}, "requires 4/4"),
+        ({"op": "set-key", "bar": 1, "key": "H#"}, "major key"),
+        ({"op": "set-key", "bar": 1, "key": "Db", "minor": True}, "minor key"),
+        ({"op": "transpose", **BAR_RANGE, "degree": 70, "intervalType": 5}, "degree must be"),
+        ({"op": "transpose", **BAR_RANGE, "degree": 1, "intervalType": 11}, "intervalType must be"),
+        ({"op": "transpose", **BAR_RANGE, "fromNote": "C", "toNote": "D"}, "direction"),
+        ({"op": "transpose", **BAR_RANGE, "fromNote": "C", "toNote": "D", "direction": "up",
+          "octaves": 3}, "octaves must be"),
+        ({"op": "copy-passage", **BAR_RANGE, "toBar": 0, "destStaff": 1, "destBar": 1}, "toBar must be"),
+        ({"op": "add-bars", "count": 0}, "count must be"),
+        ({"op": "set-break", "bar": 1, "type": "column"}, "type must be one of"),
+        ({"op": "set-barline", "bar": 1}, "type must be one of"),
+        ({"op": "beam", "staff": 1, "bar": 1, "firstIndex": 2, "lastIndex": 2}, "after firstIndex"),
+    ],
+)
+def test_structural_rejects(operation, message) -> None:
+    with pytest.raises(BatchError, match=message):
+        validate_batch([operation])
+
+
+def test_structural_ops_must_come_last() -> None:
+    with pytest.raises(BatchError, match="structural ops must come last"):
+        validate_batch([
+            {"op": "set-break", "bar": 2, "type": "system"},
+            {"op": "flip-stem", "staff": 1, "bar": 1, "index": 0},
+        ])
+    with pytest.raises(BatchError, match="structural ops must come last"):
+        validate_batch([
+            {"op": "add-bars", "count": 1},
+            {"op": "beam", "staff": 1, "bar": 1, "firstIndex": 0, "lastIndex": 1},
+        ])
+
+
+def test_no_bar_after_a_set_time_bar() -> None:
+    validate_batch([
+        {"op": "set-time", "bar": 3, "numerator": 3, "denominator": 4},
+        {"op": "set-barline", "bar": 3, "type": "double"},
+        {"op": "set-break", "bar": 2, "type": "system"},
+    ])
+    with pytest.raises(BatchError, match="earlier set-time re-bars"):
+        validate_batch([
+            {"op": "set-time", "bar": 3, "numerator": 3, "denominator": 4},
+            {"op": "delete-voice", "fromBar": 1, "toBar": 4, "staff": 1, "voice": 2},
+        ])
+
+
+def test_beam_rejects_a_deleted_object() -> None:
+    with pytest.raises(BatchError, match="earlier op deletes"):
+        validate_batch([
+            {"op": "delete", "staff": 1, "bar": 1, "index": 2},
+            {"op": "beam", "staff": 1, "bar": 1, "firstIndex": 0, "lastIndex": 3},
+        ])
+
+
+def test_set_time_must_precede_key_break_and_barline() -> None:
+    with pytest.raises(BatchError, match="set-time must come first"):
+        validate_batch([
+            {"op": "set-barline", "bar": 2, "type": "double"},
+            {"op": "set-time", "bar": 3, "numerator": 3, "denominator": 4},
+        ])
