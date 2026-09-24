@@ -24,8 +24,10 @@ READABLE_PROPS: dict[str, frozenset[str]] = {
     "TimeSignature": frozenset({"Numerator", "Denominator", "Text"}),
     "Tuplet": frozenset({"Text", "FullDuration"}),
 }
-# Matches any note of a NoteRest chord; handled specially by the bridge.
-PSEUDO_PROPS = frozenset({"Pitch"})
+# Note-level properties; match if any note of a NoteRest chord matches.
+# Handled specially by the bridge, and filter-only: results list every
+# note's pitch and bracketed state anyway.
+PSEUDO_PROPS = frozenset({"Pitch", "Bracketed"})
 OPERATORS = ("<=", ">=", "!=", "=", "<", ">")
 DEFAULT_LIMIT = 500
 

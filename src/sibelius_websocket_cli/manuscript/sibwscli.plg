@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 39);
+		return CreateDictionary('version', 40);
 	}"
 
 	Echo "(value) {
@@ -97,7 +97,8 @@
 				notes.Push(CreateDictionary(
 					'pitch', note.Pitch,
 					'name', note.Name,
-					'tied', note.Tied));
+					'tied', note.Tied,
+					'bracketed', note.Bracketed));
 			}
 			return CreateDictionary(
 				'index', index,
@@ -1718,14 +1719,18 @@
 			prop = cond['prop'];
 			op = cond['op'];
 			value = cond['value'];
-			if (prop = 'Pitch') {
-				// Pseudo-property: true if any note of the chord matches.
+			if (prop = 'Pitch' or prop = 'Bracketed') {
+				// Note-level pseudo-properties: true if any note of the chord matches.
 				if (kind != 'NoteRest') {
 					return False;
 				}
 				anyMatch = False;
 				for each note in obj {
-					if (QueryCompare(note.Pitch, op, value)) {
+					noteValue = note.Pitch;
+					if (prop = 'Bracketed') {
+						noteValue = note.Bracketed;
+					}
+					if (QueryCompare(noteValue, op, value)) {
 						anyMatch = True;
 					}
 				}
