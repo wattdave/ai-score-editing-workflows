@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 47);
+		return CreateDictionary('version', 48);
 	}"
 
 	Echo "(value) {
@@ -142,7 +142,7 @@
 				'index', index, 'type', obj.Type, 'position', obj.Position,
 				'styleId', obj.StyleId);
 		}
-		if (obj.Type = 'Text') {
+		if (obj.Type = 'Text' or obj.Type = 'SystemTextItem') {
 			return CreateDictionary(
 				'index', index, 'type', obj.Type, 'position', obj.Position,
 				'text', obj.Text, 'styleId', '' & obj.StyleId);
@@ -236,12 +236,24 @@
 		return lyrics;
 	}"
 
-	GetObjectAt "(staffNum, barNumber, index) {
-		score = Sibelius.ActiveScore;
+	StaffByNum "(score, staffNum) {
+		// Staff 0 is the system staff (tempo, rehearsal marks, system lines);
+		// null for a staff outside the score.
+		if (staffNum = 0) {
+			return score.SystemStaff;
+		}
 		if (staffNum < 1 or staffNum > score.StaffCount) {
 			return null;
 		}
-		staff = score.NthStaff(staffNum);
+		return score.NthStaff(staffNum);
+	}"
+
+	GetObjectAt "(staffNum, barNumber, index) {
+		score = Sibelius.ActiveScore;
+		staff = StaffByNum(score, staffNum);
+		if (staff = null) {
+			return null;
+		}
 		if (barNumber < 1 or barNumber > staff.BarCount) {
 			return null;
 		}
@@ -1230,8 +1242,12 @@
 	}"
 
 	QueryKind "(obj) {
+		// Text on the system staff is a SystemTextItem; both are kind Text.
 		if (obj.IsALine) {
 			return 'Line';
+		}
+		if (obj.Type = 'SystemTextItem') {
+			return 'Text';
 		}
 		return obj.Type;
 	}"
@@ -1372,10 +1388,10 @@
 		truncated = False;
 		for si = 0 to staves.Length {
 			staffNum = staves[si];
-			if (staffNum < 1 or staffNum > score.StaffCount) {
+			staff = StaffByNum(score, staffNum);
+			if (staff = null) {
 				return CreateDictionary('error', 'staff ' & staffNum & ' out of range');
 			}
-			staff = score.NthStaff(staffNum);
 			fromBar = selector['fromBar'];
 			if (fromBar = null or fromBar < 1) {
 				fromBar = 1;
@@ -1684,11 +1700,10 @@
 	}"
 
 	BatchBar "(score, op) {
-		staffNum = op['staff'];
-		if (staffNum < 1 or staffNum > score.StaffCount) {
+		staff = StaffByNum(score, op['staff']);
+		if (staff = null) {
 			return null;
 		}
-		staff = score.NthStaff(staffNum);
 		barNumber = op['bar'];
 		if (barNumber < 1 or barNumber > staff.BarCount) {
 			return null;
@@ -1881,11 +1896,26 @@
 			return DescribeObject(noteRest, -1);
 		}
 		if (opName = 'add-text') {
-			text = bar.AddText(op['position'], op['text'], op['styleId'], voice);
+			if (op['staff'] = 0) {
+				text = bar.AddText(op['position'], op['text'], op['styleId']);
+			} else {
+				text = bar.AddText(op['position'], op['text'], op['styleId'], voice);
+			}
 			if (text = null) {
 				return null;
 			}
 			return DescribeObject(text, -1);
+		}
+		if (opName = 'add-line') {
+			if (op['staff'] = 0) {
+				line = bar.AddLine(op['position'], op['duration'], op['styleId']);
+			} else {
+				line = bar.AddLine(op['position'], op['duration'], op['styleId'], 0, 0, voice);
+			}
+			if (line = null) {
+				return null;
+			}
+			return DescribeObject(line, -1);
 		}
 		if (opName = 'add-lyric') {
 			st = EndOfWord;

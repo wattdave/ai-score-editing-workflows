@@ -24,6 +24,7 @@ from sibelius_websocket_cli.cli import (
     EXPORT_FORMATS,
     QUERY_BRIDGE_VERSION,
     STRUCTURE_READ_BRIDGE_VERSION,
+    SYSTEM_STAFF_BRIDGE_VERSION,
     BridgeError,
     _apply_batch,
     _backup,
@@ -209,7 +210,9 @@ async def query_score(
 ) -> dict[str, Any]:
     """Find bar objects in the open score.
 
-    staves: staff numbers or instrument names (default all). bars: range such
+    staves: staff numbers or instrument names (default all instruments); 0 or
+    "system" is the system staff, with tempo and other system text and system
+    lines such as rall. (only when asked for). bars: range such
     as "12-20" or "5" (default all). types: NoteRest, LyricItem, Text, Clef,
     KeySignature, TimeSignature, Tuplet, Line (any line), or a specific line
     type such as Slur. voice: 1-4. where: conditions that must all hold, e.g.
@@ -239,6 +242,8 @@ async def query_score(
                 )
             except QueryError as exc:
                 raise ToolError(str(exc)) from exc
+            if 0 in selector["staves"]:
+                await _guarded(_require_bridge(client, SYSTEM_STAFF_BRIDGE_VERSION, "query_score of the system staff"))
         return await _call(client, "Query", [selector])
 
     return await session.run(action, retry=True)
@@ -267,7 +272,13 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
 
     - {"op":"add-note",...,"duration":D,"pitches":[..][,"voice":V,"tied":true]}
     - {"op":"add-text",...,"text":T[,"styleId":"text.staff.expression","voice":V]}
+    - {"op":"add-line",...,"duration":D,"styleId":"line.staff.hairpin.crescendo"[,"voice":V]}
     - {"op":"add-lyric",...,"duration":D,"text":T[,"syllableType":"middle","voice":V]}
+
+    Staff 0 is the system staff. It takes set, delete, nudge, add-text and
+    add-line, with system styles only and no voice: e.g. add-text with
+    "styleId":"text.system.tempo" (the default there) or
+    "text.system.metronome", add-line with "line.system.tempo.rall".
 
     Structural operations work on bar ranges or the whole score and must come
     after every operation above. Bars and staves refer to the score before the
