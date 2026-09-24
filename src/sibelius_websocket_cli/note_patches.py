@@ -49,17 +49,6 @@ def execution_order(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return edits + deletes + voices
 
 
-def delete_voice_call(operation: dict[str, Any]) -> tuple[str, list[Any]]:
-    """Return the bridge method and arguments for a delete-voice operation.
-
-    delete-voice works through a selection rather than an object address, so
-    it runs outside the ApplyBatch batch that carries every other operation.
-    """
-    return "DeleteVoiceInPassage", [
-        operation["fromBar"], operation["toBar"], operation["staff"], operation["voice"],
-    ]
-
-
 def _validate_operation(operation: Any, index: int) -> None:
     label = f"operation {index + 1}"
     if not isinstance(operation, dict):
@@ -129,15 +118,19 @@ def _pitch(operation: dict[str, Any], field: str, label: str) -> int:
 
 
 def batch_operations(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Translate addressed note operations into ApplyBatch operations.
+    """Translate note operations into ApplyBatch operations.
 
-    delete-voice works through a selection rather than an object address, so
-    it is not part of the batch; run it afterwards with delete_voice_call.
+    delete-voice is a structural operation, so it must come after every
+    addressed one; execution_order puts it last.
     """
     batch: list[dict[str, Any]] = []
     for operation in operations:
         op = operation["op"]
         if op == "delete-voice":
+            batch.append({
+                "op": op, "fromBar": operation["fromBar"], "toBar": operation["toBar"],
+                "staff": operation["staff"], "voice": operation["voice"],
+            })
             continue
         out = {"op": op, "staff": operation["staff"], "bar": operation["bar"], "index": operation["index"]}
         if op == "set-pitch":

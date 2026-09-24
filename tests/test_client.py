@@ -614,10 +614,14 @@ async def test_run_set_barline() -> None:
     parser = build_parser()
     args = parser.parse_args(["set-barline", "--bar", "71", "--type", "double"])
 
-    with patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=0)) as mock_write:
+    with patch("sibelius_websocket_cli.cli._run_op", new=AsyncMock(return_value=0)) as run_op:
         res = await _run_set_barline(args)
         assert res == 0
-        mock_write.assert_called_once_with(args, "SetSpecialBarline", [71, "double"])
+    assert run_op.await_args.args[1] == {"op": "set-barline", "bar": 71, "type": "double"}
+    legacy = run_op.await_args.args[2]
+    assert legacy({"after": {"bar": 71, "removed": 1, "barlineType": "-1"}}) == {
+        "bar": 71, "deleted": 1, "barlineType": "7",
+    }
 
 
 async def test_run_read_barlines() -> None:

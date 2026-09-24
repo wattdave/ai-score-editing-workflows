@@ -27,8 +27,13 @@ from sibelius_websocket_cli.cli import (
     _run_reset_design,
     _run_set_lyric,
     _backup,
+    _run_add_bars,
     _run_add_notes,
+    _run_beam,
     _run_bracket,
+    _run_copy_passage,
+    _run_delete_voice,
+    _run_transpose,
     _run_flip_stem,
     _run_set_note,
     _run_set_time,
@@ -205,7 +210,10 @@ async def test_patch_layout_uses_one_context_and_one_backup(
         patch("sibelius_websocket_cli.cli._require_bridge", new=AsyncMock()),
         patch(
             "sibelius_websocket_cli.cli._apply_batch",
-            new=AsyncMock(return_value={"applied": 1, "results": [{"i": 0, "after": {"newDx": 8}}]}),
+            new=AsyncMock(return_value={"applied": 2, "results": [
+                {"i": 0, "after": {"newDx": 8}},
+                {"i": 1, "after": {"bar": 20, "removed": 0, "barlineType": "1"}},
+            ]}),
         ) as apply_batch,
         patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge_side_effect) as bridge,
     ):
@@ -214,8 +222,8 @@ async def test_patch_layout_uses_one_context_and_one_backup(
     assert context.__aenter__.call_count == 1
     backup.assert_awaited_once()
     apply_batch.assert_awaited_once()
-    assert [op["op"] for op in apply_batch.await_args.args[1]] == ["nudge"]
-    assert [call.args[1] for call in bridge.call_args_list] == ["SetSpecialBarline", "Save"]
+    assert [op["op"] for op in apply_batch.await_args.args[1]] == ["nudge", "set-barline"]
+    assert [call.args[1] for call in bridge.call_args_list] == ["Save"]
     output = capsys.readouterr().out.strip()
     assert '"operations":2' in output
     assert '"verified":2' in output
@@ -269,7 +277,7 @@ async def test_patch_layout_removes_redundant_clefs_from_installed_package(
     assert '"verified":1' in capsys.readouterr().out
 
 
-async def test_patch_notes_sends_one_batch_then_voice_deletes(
+async def test_patch_notes_sends_one_batch_with_voice_deletes_last(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     patch_file = tmp_path / "notes.json"
@@ -290,7 +298,7 @@ async def test_patch_notes_sends_one_batch_then_voice_deletes(
             return {"fileName": "/scores/a.sib"}
         return {"changed": True}
 
-    batch_result = {"applied": 3, "results": [{"i": 0}, {"i": 1}, {"i": 2}]}
+    batch_result = {"applied": 4, "results": [{"i": 0}, {"i": 1}, {"i": 2}, {"i": 3}]}
     with (
         patch("sibelius_websocket_cli.cli._client", return_value=context),
         patch("sibelius_websocket_cli.cli._require_bridge", new=AsyncMock()),
@@ -310,11 +318,9 @@ async def test_patch_notes_sends_one_batch_then_voice_deletes(
         {"op": "tie", "staff": 2, "bar": 5, "index": 0, "tied": False},
         {"op": "delete", "staff": 1, "bar": 4, "index": 3},
         {"op": "delete", "staff": 1, "bar": 4, "index": 1},
+        {"op": "delete-voice", "fromBar": 1, "toBar": 2, "staff": 2, "voice": 2},
     ]
-    assert [(call.args[1], call.args[2] if len(call.args) > 2 else None) for call in bridge.call_args_list] == [
-        ("DeleteVoiceInPassage", [1, 2, 2, 2]),
-        ("Save", None),
-    ]
+    assert [call.args[1] for call in bridge.call_args_list] == ["Save"]
     assert '"applied":4' in capsys.readouterr().out.strip()
 
 
@@ -696,7 +702,7 @@ async def test_tie_sends_one_batch_operation() -> None:
         assert run_op.await_args.args[1] == {"op": "tie", "staff": 1, "bar": 2, "index": 3, "remove": remove}
 
 
-async def test_bracket_batches_and_set_time_passes_string_boolean() -> None:
+async def test_bracket_and_set_time_run_as_batch_ops() -> None:
     parser = build_parser()
 
     bracket_args = parser.parse_args(["bracket", "--staff", "1", "--bar", "8", "--index", "1"])
@@ -705,9 +711,14 @@ async def test_bracket_batches_and_set_time_passes_string_boolean() -> None:
     assert run_op.await_args.args[1] == {"op": "bracket", "staff": 1, "bar": 8, "index": 1, "remove": False}
 
     cut_args = parser.parse_args(["set-time", "--top", "2", "--bottom", "2", "--symbol", "cut"])
-    with patch("sibelius_websocket_cli.cli._run_write", new=AsyncMock(return_value=EXIT_OK)) as run_write:
+    with patch("sibelius_websocket_cli.cli._run_op", new=AsyncMock(return_value=EXIT_OK)) as run_op:
         assert await _run_set_time(cut_args) == EXIT_OK
-        run_write.assert_awaited_once_with(cut_args, "SetTimeSignature", [1, 2, 2, "true"])
+    assert run_op.await_args.args[1] == {
+        "op": "set-time", "bar": 1, "numerator": 2, "denominator": 2, "symbol": "cut",
+    }
+    legacy = run_op.await_args.args[2]
+    after = {"bar": 1, "numerator": 2, "denominator": 2, "barCount": 8}
+    assert legacy({"after": after}) == {"bar": 1, "numerator": 2, "denominator": 2, "style": "cut"}
 
 
 async def test_set_time_rejects_symbol_contradicting_meter() -> None:
@@ -787,7 +798,7 @@ async def test_add_note_pitches_reports_only_added_notes(capsys: pytest.CaptureF
     assert json.loads(capsys.readouterr().out)["notes"] == [{"pitch": 55, "name": "G", "tied": False}]
 
 
-async def test_patch_layout_batches_consecutive_nudges_in_order(tmp_path: Path) -> None:
+async def test_patch_layout_batches_runs_split_by_ordering_rules(tmp_path: Path) -> None:
     patch_file = tmp_path / "layout.json"
     patch_file.write_text(json.dumps([
         {"op": "nudge", "staff": 1, "bar": 1, "index": 0, "dx": 8},
@@ -801,8 +812,11 @@ async def test_patch_layout_batches_consecutive_nudges_in_order(tmp_path: Path) 
 
     async def apply_batch(unused_client: Any, batch: list[dict[str, Any]], dry_run: bool) -> dict[str, Any]:
         del unused_client, dry_run
-        calls.append(f"batch{len(batch)}")
-        return {"applied": len(batch), "results": [{"i": i, "after": {}} for i in range(len(batch))]}
+        calls.append("+".join(op["op"] for op in batch))
+        barline = {"bar": 2, "removed": 0, "barlineType": "3"}
+        return {"applied": len(batch), "results": [
+            {"i": i, "after": barline if op["op"] == "set-barline" else {}} for i, op in enumerate(batch)
+        ]}
 
     async def bridge(unused_client: Any, method: str, call_args: list[Any] | None = None) -> Any:
         del unused_client, call_args
@@ -820,4 +834,65 @@ async def test_patch_layout_batches_consecutive_nudges_in_order(tmp_path: Path) 
     ):
         assert await _run_patch_layout(args) == EXIT_OK
 
-    assert calls == ["batch2", "SetSpecialBarline", "batch1"]
+    # A nudge cannot follow a structural op in the same batch, so it starts a new one.
+    assert calls == ["nudge+nudge+set-barline", "nudge"]
+
+
+async def _captured_op(runner: Any, argv: list[str]) -> tuple[Any, Any]:
+    """Run a command with _run_op mocked; return its operation and legacy mapper."""
+    args = build_parser().parse_args(argv)
+    with patch("sibelius_websocket_cli.cli._run_op", new=AsyncMock(return_value=EXIT_OK)) as run_op:
+        assert await runner(args) == EXIT_OK
+    return run_op.await_args.args[1], run_op.await_args.args[2]
+
+
+async def test_transpose_defaults_to_whole_score_and_keeps_output() -> None:
+    build, legacy = await _captured_op(
+        _run_transpose, ["transpose", "--from-note", "C", "--to-note", "D", "--up", "--octaves", "1"]
+    )
+    with patch("sibelius_websocket_cli.cli._bridge", new=AsyncMock(return_value={"barCount": 12, "staffCount": 4})):
+        operation = await build(AsyncMock())
+    assert operation == {"op": "transpose", "fromBar": 1, "toBar": 12, "topStaff": 1, "bottomStaff": 4,
+                         "degree": 8, "intervalType": 5}
+    # The batch reports bars and interval only; the staves come from the built operation.
+    after = {"fromBar": 1, "toBar": 12, "degree": 8, "intervalType": 5}
+    assert legacy({"after": after}) == {**after, "topStaff": 1, "bottomStaff": 4}
+
+
+async def test_range_commands_keep_their_output() -> None:
+    operation, legacy = await _captured_op(
+        _run_delete_voice, ["delete-voice", "--from-bar", "2", "--to-bar", "5", "--staff", "3", "--voice", "2"]
+    )
+    assert operation == {"op": "delete-voice", "fromBar": 2, "toBar": 5, "staff": 3, "voice": 2}
+    assert legacy({"after": {"staff": 3, "voice": 2, "objects": 7}}) == {
+        "fromBar": 2, "toBar": 5, "staff": 3, "deletedVoice": 2, "objects": 7,
+    }
+
+    operation, legacy = await _captured_op(_run_add_bars, ["add-bars", "--count", "3"])
+    assert operation == {"op": "add-bars", "count": 3}
+    assert legacy({"after": {"addedBars": 3, "barCount": 15}}) == {"addedBars": 3, "totalBars": 15}
+
+    operation, legacy = await _captured_op(
+        _run_copy_passage,
+        ["copy-passage", "--from-bar", "1", "--to-bar", "2", "--top-staff", "1",
+         "--dest-staff", "2", "--dest-bar", "5"],
+    )
+    assert operation["bottomStaff"] == 1 and operation["destPosition"] == 0
+    assert legacy({"after": {}}) == {k: v for k, v in operation.items() if k != "op"}
+
+    operation, legacy = await _captured_op(
+        _run_beam, ["beam", "--staff", "1", "--bar", "3", "--from-index", "0", "--to-index", "3"]
+    )
+    assert operation == {"op": "beam", "staff": 1, "bar": 3, "firstIndex": 0, "lastIndex": 3}
+
+
+async def test_patch_layout_rejects_an_unbatchable_value_before_backup(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    patch_file = tmp_path / "layout.json"
+    patch_file.write_text('[{"op":"set-time","bar":1,"top":65,"bottom":4}]')
+    args = build_parser().parse_args(["patch-layout", "--file", str(patch_file)])
+    with patch("sibelius_websocket_cli.cli._client") as client:
+        assert await _run_patch_layout(args) == EXIT_COMMAND_FAILED
+    client.assert_not_called()
+    assert "numerator must be" in capsys.readouterr().err

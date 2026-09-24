@@ -104,16 +104,21 @@ and verify once for the whole set.
   `{staff, bar, index, text[, font, fontSize]}`. Use for two or more lyric
   changes.
 - `patch-notes --file PATH [--save] [--dry-run]`: JSON array of note edits.
-  All addresses refer to the score as read before the batch. Everything but
-  `delete-voice` runs as one `apply` batch (one undo step); voice deletions
-  follow as separate steps:
+  All addresses refer to the score as read before the batch. The whole file
+  runs as one `apply` batch (one undo step), with voice deletions last:
   - `{"op":"set-pitch","staff":S,"bar":B,"index":I,"oldPitch":P,"newPitch":Q}`
   - `{"op":"tie","staff":S,"bar":B,"index":I[,"remove":true]}`
   - `{"op":"bracket","staff":S,"bar":B,"index":I[,"remove":true]}` (parenthesize a note/chord)
   - `{"op":"flip-stem","staff":S,"bar":B,"index":I}`
   - `{"op":"delete","staff":S,"bar":B,"index":I}`
   - `{"op":"delete-voice","staff":S,"fromBar":A,"toBar":B,"voice":V}`
-- `patch-layout --file PATH [--save] [--dry-run]`: JSON array of operations:
+- `patch-layout --file PATH [--save] [--dry-run]`: JSON array of operations.
+  Runs of `nudge`, `set-break`, `set-barline` and `set-time` go as `apply`
+  batches, one undo step each; a new batch starts where the `apply` ordering
+  rules require it (a nudge after a structural op, a `set-time` after a key,
+  break or barline). Put `set-time` first: in a later batch it can still
+  erase a barline just before it. `reset-design` and `remove-redundant-clefs`
+  are separate steps.
   - `{"op":"nudge","staff":S,"bar":B,"index":I,"dx":X,"dy":Y}`
   - `{"op":"set-break","bar":B,"type":"system|page|none"}` (`none` clears a break; it does not forbid one)
   - `{"op":"set-barline","bar":B,"type":"double|final|..."}`
@@ -133,7 +138,11 @@ Single-object writes:
 - Editing: `set-note`, `set-lyric`, `set-lyric-style`, `tie`, `delete-object`,
   `delete-voice`, `transpose`, `set-key`, `set-time`, `bracket`, `copy-passage`, `flip-stem`, `nudge`,
   `reset-design`. `transpose` and `delete-voice` take ranges; use one ranged
-  call instead of per-bar calls.
+  call instead of per-bar calls. Each structural write (`transpose`,
+  `copy-passage`, `set-key`, `set-time`, `set-break`, `set-barline`, `beam`,
+  `add-bars`, `delete-voice`) runs as a one-operation `apply` batch, checked
+  before the backup; `set-key` takes only the 15 standard keys per mode and
+  `transpose --octaves` at most 2.
 - Persistence: `save` and `backup`. Prefer `--save` on the final write over a
   separate `save`.
 - Export: `export --format musicxml|mxl|pdf|midi|png [--out PATH] [--file SCORE]`.

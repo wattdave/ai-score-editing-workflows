@@ -9,7 +9,7 @@ import json
 import logging
 import sys
 import tempfile
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
@@ -745,12 +745,13 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 45
+CURRENT_BRIDGE_VERSION = 46
 QUERY_BRIDGE_VERSION = 38
 BATCH_BRIDGE_VERSION = 39
 NUDGE_BRIDGE_VERSION = 41
 STRUCTURAL_BRIDGE_VERSION = 44
 STRUCTURE_READ_BRIDGE_VERSION = 45
+BEAM_RESULT_BRIDGE_VERSION = 46
 
 
 def _batch_bridge_version(operations: list[dict[str, Any]]) -> int:
@@ -857,23 +858,33 @@ async def _run_write(
 
 async def _run_op(
     args: argparse.Namespace,
-    operation: dict[str, Any],
+    operation: dict[str, Any] | Callable[[SibeliusClient], Awaitable[dict[str, Any]]],
     legacy: Callable[[dict[str, Any]], Any],
     min_bridge: int = BATCH_BRIDGE_VERSION,
 ) -> int:
-    """Run one object edit as a one-operation ApplyBatch.
+    """Run one edit as a one-operation ApplyBatch.
 
     The operation is checked against the score before the backup, so a bad
     address fails without saving anything. legacy() maps the batch result to
-    the command's historical output shape.
+    the command's historical output shape. An operation that depends on the
+    score (such as defaults of "the whole score") is passed as an async
+    builder, called once connected.
     """
-    try:
-        batch = batch_ops.validate_batch([operation])
-    except batch_ops.BatchError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return EXIT_COMMAND_FAILED
+    batch: list[dict[str, Any]] = []
+    if isinstance(operation, dict):
+        try:
+            batch = batch_ops.validate_batch([operation])
+        except batch_ops.BatchError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_COMMAND_FAILED
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _require_bridge(client, min_bridge, args.subcommand)
+        if not batch:
+            try:
+                batch = batch_ops.validate_batch([await operation(client)])
+            except batch_ops.BatchError as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return EXIT_COMMAND_FAILED
+        await _require_bridge(client, max(min_bridge, _batch_bridge_version(batch)), args.subcommand)
         await _assert_expected_score(client, args)
         checked = await _apply_batch(client, batch, True)
         if "error" in checked:
@@ -1078,6 +1089,41 @@ async def _run_proofread(args: argparse.Namespace) -> int:
     return EXIT_COMMAND_FAILED if report["errors"] else EXIT_OK
 
 
+_LAYOUT_BATCHED = {"nudge", "set-break", "set-barline", "set-time"}
+
+
+def _layout_batch_op(operation: dict[str, Any]) -> dict[str, Any]:
+    """Translate a patch-layout operation into an ApplyBatch operation."""
+    op = operation["op"]
+    if op == "nudge":
+        return {"op": op, "staff": operation["staff"], "bar": operation["bar"],
+                "index": operation["index"], "dx": operation.get("dx", 0), "dy": operation.get("dy", 0)}
+    if op == "set-break":
+        return {"op": op, "bar": operation["bar"], "type": operation.get("type", "system")}
+    if op == "set-barline":
+        return {"op": op, "bar": operation["bar"], "type": operation.get("type", "double")}
+    out = {"op": op, "bar": operation["bar"], "numerator": operation["top"], "denominator": operation["bottom"]}
+    if operation.get("symbol"):
+        out["symbol"] = operation["symbol"]
+    return out
+
+
+def _legacy_layout(operation: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+    """Map a batch result to what the retired single-purpose handlers returned."""
+    if operation["op"] == "set-barline":
+        barline = after["barlineType"]
+        # SetSpecialBarline reported 'none' and 'normal' as SpecialBarlineNormal.
+        return {"bar": after["bar"], "deleted": after["removed"], "barlineType": "7" if barline == "-1" else barline}
+    if operation["op"] == "set-time":
+        meter = (after["numerator"], after["denominator"])
+        style = "numeric"
+        if operation.get("symbol"):
+            style = {(4, 4): "common", (2, 2): "cut"}.get(meter, "numeric")
+        return {"bar": after["bar"], "numerator": after["numerator"],
+                "denominator": after["denominator"], "style": style}
+    return after
+
+
 async def _run_patch_layout(args: argparse.Namespace) -> int:
     try:
         operations = layout.load_layout_patches(args.file)
@@ -1090,52 +1136,54 @@ async def _run_patch_layout(args: argparse.Namespace) -> int:
         return EXIT_OK
 
     results: list[dict[str, Any]] = []
+    batchable = [_layout_batch_op(o) for o in operations if o["op"] in _LAYOUT_BATCHED]
+    try:
+        for operation in batchable:
+            batch_ops.validate_batch([operation])
+    except batch_ops.BatchError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         await _check_bridge_version(client)
-        ops = {operation["op"] for operation in operations}
-        if "nudge" in ops:
-            await _require_bridge(client, NUDGE_BRIDGE_VERSION, "patch-layout nudge")
-        elif "remove-redundant-clefs" in ops:
+        if batchable:
+            await _require_bridge(client, _batch_bridge_version(batchable), "patch-layout")
+        elif any(operation["op"] == "remove-redundant-clefs" for operation in operations):
             await _require_bridge(client, BATCH_BRIDGE_VERSION, "patch-layout remove-redundant-clefs")
         await _assert_expected_score(client, args)
         backup = await _backup(client, "before patch-layout")
         pending: list[dict[str, Any]] = []
 
-        async def flush_nudges() -> None:
-            # A run of consecutive nudges is one checked batch and one undo step.
+        async def flush() -> None:
+            # A run of batchable operations is one checked batch and one undo
+            # step; a new batch starts where the ordering rules require it.
             if not pending:
                 return
-            batch = batch_ops.validate_batch([
-                {"op": "nudge", "staff": n["staff"], "bar": n["bar"], "index": n["index"],
-                 "dx": n.get("dx", 0), "dy": n.get("dy", 0)}
-                for n in pending
-            ])
+            batch = batch_ops.validate_batch(pending)
             outcome = await _apply_batch(client, batch, False)
             if "error" in outcome:
                 raise BridgeError(
-                    f"nudge batch failed: {outcome['error']}; restore from {backup.get('copy')}"
+                    f"patch-layout batch failed: {outcome['error']}; restore from {backup.get('copy')}"
                 )
-            for result in outcome["results"]:
-                results.append({"op": "nudge", "result": result["after"], "verified": True})
+            for operation, result in zip(batch, outcome["results"]):
+                results.append({
+                    "op": operation["op"], "result": _legacy_layout(operation, result["after"]),
+                    "verified": True,
+                })
             pending.clear()
 
         for operation in operations:
             op = operation["op"]
             operation_verified = True
-            if op == "nudge":
-                pending.append(operation)
+            if op in _LAYOUT_BATCHED:
+                candidate = _layout_batch_op(operation)
+                try:
+                    batch_ops.validate_batch([*pending, candidate])
+                except batch_ops.BatchError:
+                    await flush()
+                pending.append(candidate)
                 continue
-            await flush_nudges()
-            if op == "set-break":
-                result = await _bridge(client, "SetBarBreak", [operation["bar"], operation.get("type", "system")])
-            elif op == "set-barline":
-                result = await _bridge(client, "SetSpecialBarline", [operation["bar"], operation.get("type", "double")])
-            elif op == "set-time":
-                result = await _bridge(client, "SetTimeSignature", [
-                    operation["bar"], operation["top"], operation["bottom"],
-                    "true" if operation.get("symbol") else "false",
-                ])
-            elif op == "remove-redundant-clefs":
+            await flush()
+            if op == "remove-redundant-clefs":
                 from .clefs import delete_redundant_clefs, find_redundant_clefs
 
                 target_staff = operation.get("staff")
@@ -1161,7 +1209,7 @@ async def _run_patch_layout(args: argparse.Namespace) -> int:
                     raise BridgeError(f"reset-design failed: {json.dumps(response)}")
                 result = {"commands": commands, "ok": True}
             results.append({"op": op, "result": result, "verified": operation_verified})
-        await flush_nudges()
+        await flush()
 
         saved = None
         if args.save:
@@ -1238,36 +1286,21 @@ async def _run_patch_notes(args: argparse.Namespace) -> int:
         return EXIT_OK
 
     results: list[dict[str, Any]] = []
-    batch = batch_ops.validate_batch(note_patches.batch_operations(ordered)) if any(
-        op["op"] != "delete-voice" for op in ordered
-    ) else []
+    batch = batch_ops.validate_batch(note_patches.batch_operations(ordered))
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _require_bridge(client, BATCH_BRIDGE_VERSION, "patch-notes")
+        await _require_bridge(client, _batch_bridge_version(batch), "patch-notes")
         await _assert_expected_score(client, args)
         backup = await _backup(client, "before patch-notes")
-        if batch:
-            # One round trip and one undo step for every addressed operation.
-            outcome = await _apply_batch(client, batch, False)
-            if "error" in outcome:
-                raise BridgeError(
-                    f"patch-notes batch stopped: {outcome['error']} after "
-                    f"{outcome.get('applied', 0)} applied as one undo step; "
-                    f"restore from {backup.get('copy')}"
-                )
-            for operation, result in zip(batch, outcome.get("results", [])):
-                results.append({"op": operation["op"], "result": result})
-        for operation in ordered:
-            if operation["op"] != "delete-voice":
-                continue
-            method, call_args = note_patches.delete_voice_call(operation)
-            try:
-                result = await _bridge(client, method, call_args)
-            except BridgeError as exc:
-                raise BridgeError(
-                    f"patch-notes stopped at {json.dumps(operation)} after "
-                    f"{len(results)} applied; restore from {backup.get('copy')}: {exc}"
-                ) from exc
-            results.append({"op": operation["op"], "args": call_args, "result": result})
+        # One round trip and one undo step for the whole file.
+        outcome = await _apply_batch(client, batch, False)
+        if "error" in outcome:
+            raise BridgeError(
+                f"patch-notes batch stopped: {outcome['error']} after "
+                f"{outcome.get('applied', 0)} applied as one undo step; "
+                f"restore from {backup.get('copy')}"
+            )
+        for operation, result in zip(batch, outcome.get("results", [])):
+            results.append({"op": operation["op"], "result": result})
 
         saved = None
         if args.save:
@@ -1686,44 +1719,44 @@ async def _run_set_lyric_style(args: argparse.Namespace) -> int:
 
 
 async def _run_transpose(args: argparse.Namespace) -> int:
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _check_bridge_version(client)
+    degree, interval_type = compute_transposition(args.from_note, args.to_note, bool(args.up))
+    degree += 7 * args.octaves * (1 if args.up else -1)
+
+    built: dict[str, Any] = {}
+
+    async def build(client: SibeliusClient) -> dict[str, Any]:
         info = await _bridge(client, "GetScoreInfo")
-        await _assert_expected_score(client, args, info)
-        from_bar = args.from_bar or 1
-        to_bar = args.to_bar or info["barCount"]
-        top = args.top_staff or 1
-        bottom = args.bottom_staff or info["staffCount"]
-        degree, interval_type = compute_transposition(
-            args.from_note, args.to_note, bool(args.up)
+        built.update(
+            op="transpose",
+            fromBar=args.from_bar or 1, toBar=args.to_bar or info["barCount"],
+            topStaff=args.top_staff or 1, bottomStaff=args.bottom_staff or info["staffCount"],
+            degree=degree, intervalType=interval_type,
         )
-        degree += 7 * args.octaves * (1 if args.up else -1)
-        backup = await _backup(client, "before transpose")
-        print(f"backed up: {backup['copy']}", file=sys.stderr)
-        result = await _bridge(
-            client,
-            "TransposePassage",
-            [from_bar, to_bar, top, bottom, degree, interval_type],
-        )
-        if getattr(args, "save", False):
-            saved = await _bridge(client, "Save")
-            print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
-    print(json.dumps(result, indent=2))
-    return EXIT_OK
+        return dict(built)
+
+    def legacy(result: dict[str, Any]) -> dict[str, Any]:
+        return {key: built[key] for key in (
+            "degree", "intervalType", "fromBar", "toBar", "topStaff", "bottomStaff",
+        )}
+
+    return await _run_op(args, build, legacy)
 
 
 async def _run_set_key(args: argparse.Namespace) -> int:
-    return await _run_write(args, "SetKeySignature", [args.bar, args.key, not args.minor])
+    key = args.key[:1].upper() + args.key[1:]
+    return await _run_op(
+        args,
+        {"op": "set-key", "bar": args.bar, "key": key, "minor": args.minor},
+        lambda result: result["after"],
+    )
 
 
 async def _run_set_time(args: argparse.Namespace) -> int:
-    try:
-        layout.validate_time_signature(args.top, args.bottom, args.symbol)
-    except layout.LayoutPatchError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return EXIT_COMMAND_FAILED
-    return await _run_write(
-        args, "SetTimeSignature", [args.bar, args.top, args.bottom, "true" if args.symbol else "false"]
+    operation = {"op": "set-time", "bar": args.bar, "numerator": args.top, "denominator": args.bottom}
+    if args.symbol:
+        operation["symbol"] = args.symbol
+    return await _run_op(
+        args, operation, lambda result: _legacy_layout({"op": "set-time", "symbol": args.symbol}, result["after"])
     )
 
 
@@ -1755,11 +1788,17 @@ async def _run_set_score_info(args: argparse.Namespace) -> int:
 
 
 async def _run_set_break(args: argparse.Namespace) -> int:
-    return await _run_write(args, "SetBarBreak", [args.bar, args.type])
+    return await _run_op(
+        args, {"op": "set-break", "bar": args.bar, "type": args.type}, lambda result: result["after"]
+    )
 
 
 async def _run_set_barline(args: argparse.Namespace) -> int:
-    return await _run_write(args, "SetSpecialBarline", [args.bar, args.type])
+    return await _run_op(
+        args,
+        {"op": "set-barline", "bar": args.bar, "type": args.type},
+        lambda result: _legacy_layout({"op": "set-barline"}, result["after"]),
+    )
 
 
 async def _run_read_barlines(args: argparse.Namespace) -> int:
@@ -1777,12 +1816,13 @@ async def _run_read_barlines(args: argparse.Namespace) -> int:
 
 
 async def _run_copy_passage(args: argparse.Namespace) -> int:
-    bottom = args.bottom_staff or args.top_staff
-    return await _run_write(
-        args,
-        "CopyPassage",
-        [args.from_bar, args.to_bar, args.top_staff, bottom,
-         args.dest_staff, args.dest_bar, args.dest_pos],
+    operation = {
+        "op": "copy-passage", "fromBar": args.from_bar, "toBar": args.to_bar,
+        "topStaff": args.top_staff, "bottomStaff": args.bottom_staff or args.top_staff,
+        "destStaff": args.dest_staff, "destBar": args.dest_bar, "destPosition": args.dest_pos,
+    }
+    return await _run_op(
+        args, operation, lambda result: {k: v for k, v in operation.items() if k != "op"}
     )
 
 
@@ -1820,8 +1860,14 @@ async def _run_delete_object(args: argparse.Namespace) -> int:
 
 
 async def _run_delete_voice(args: argparse.Namespace) -> int:
-    return await _run_write(
-        args, "DeleteVoiceInPassage", [args.from_bar, args.to_bar, args.staff, args.voice]
+    return await _run_op(
+        args,
+        {"op": "delete-voice", "fromBar": args.from_bar, "toBar": args.to_bar,
+         "staff": args.staff, "voice": args.voice},
+        lambda result: {
+            "fromBar": args.from_bar, "toBar": args.to_bar, "staff": args.staff,
+            "deletedVoice": args.voice, "objects": result["after"]["objects"],
+        },
     )
 
 
@@ -1844,8 +1890,12 @@ async def _run_bracket(args: argparse.Namespace) -> int:
 
 
 async def _run_beam(args: argparse.Namespace) -> int:
-    return await _run_write(
-        args, "SetBeamGroup", [args.staff, args.bar, args.from_index, args.to_index]
+    return await _run_op(
+        args,
+        {"op": "beam", "staff": args.staff, "bar": args.bar,
+         "firstIndex": args.from_index, "lastIndex": args.to_index},
+        lambda result: result["after"],
+        BEAM_RESULT_BRIDGE_VERSION,
     )
 
 
@@ -1887,7 +1937,11 @@ async def _run_add_staff(args: argparse.Namespace) -> int:
 
 async def _run_add_bars(args: argparse.Namespace) -> int:
     count = getattr(args, "count", 1)
-    return await _run_write(args, "AddBars", [count])
+    return await _run_op(
+        args,
+        {"op": "add-bars", "count": count},
+        lambda result: {"addedBars": result["after"]["addedBars"], "totalBars": result["after"]["barCount"]},
+    )
 
 
 async def _run_add_notes(args: argparse.Namespace) -> int:
