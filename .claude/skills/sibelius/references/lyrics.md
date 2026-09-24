@@ -92,16 +92,17 @@ adopt those definitions.
   (e.g. `text.staff.space.hypen.lyrics.verse1` through `verse5`), not by an
   argument to `AddLyric`.
 
-### Safe reverse-order batch lyric deletion
+### Batch lyric deletion
 
-- When clearing, replacing, or re-flowing lyrics in a bar, query `ReadBars` or
-  `read-lyrics`, collect all `LyricItem` indices in that bar, and delete them in
-  **strict descending index order** (`sorted(indices, reverse=True)`) using
-  `DeleteObject(staff, bar, idx)`. From the CLI, one `patch-notes` file of
-  `delete` ops does this ordering for you.
-- Deleting in ascending order causes remaining object indices in the bar to shift
-  down with each deletion, corrupting subsequent target addresses and leading to
-  index-out-of-range errors or wrong objects being removed.
+- When clearing, replacing, or re-flowing lyrics in a bar, find them with
+  `query --staff S --bars B --type LyricItem` and delete them in one `apply`
+  batch of `{"op":"delete","staff":S,"bar":B,"index":I,"type":"LyricItem"}`
+  operations. The batch resolves every address before the first delete, so
+  order does not matter, and the `type` guard refuses the whole batch if an
+  index no longer points at a lyric.
+- Separate `delete-object` commands are not protected this way: each deletion
+  shifts the indices of later objects in the bar. If you must use them, go in
+  **strict descending index order**.
 
 ### Lower-voice lyric duplication for playback
 

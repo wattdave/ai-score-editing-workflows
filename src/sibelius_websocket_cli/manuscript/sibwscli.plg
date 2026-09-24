@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 41);
+		return CreateDictionary('version', 43);
 	}"
 
 	Echo "(value) {
@@ -256,23 +256,6 @@
 		return null;
 	}"
 
-	SetLyricText "(staffNum, barNumber, index, newText) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		obj = GetObjectAt(staffNum, barNumber, index);
-		if (obj = null) {
-			return CreateDictionary('error', 'no object at that address');
-		}
-		if (obj.Type != 'LyricItem') {
-			return CreateDictionary('error', 'object at address is a ' & obj.Type & ', not a LyricItem');
-		}
-		oldText = obj.Text;
-		obj.Text = newText;
-		return CreateDictionary('oldText', oldText, 'newText', obj.Text);
-	}"
-
 	TransposePassage "(fromBar, toBar, topStaff, bottomStaff, degree, intervalType) {
 		score = RequireScore();
 		if (score = null) {
@@ -339,31 +322,6 @@
 		}
 		return CreateDictionary(
 			'bar', barNumber, 'numerator', ts.Numerator, 'denominator', ts.Denominator, 'style', style);
-	}"
-
-	SetBracketed "(staffNum, barNumber, index, bracketed) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		obj = GetObjectAt(staffNum, barNumber, index);
-		if (obj = null or obj.Type != 'NoteRest') {
-			return CreateDictionary('error', 'bracket target must be a NoteRest object');
-		}
-		if (obj.NoteCount < 1) {
-			return CreateDictionary('error', 'cannot bracket a rest');
-		}
-		newBracketed = True;
-		if (bracketed != null and bracketed = False) {
-			newBracketed = False;
-		}
-		changed = 0;
-		for each note in obj {
-			note.Bracketed = newBracketed;
-			changed = changed + 1;
-		}
-		return CreateDictionary(
-			'staff', staffNum, 'bar', barNumber, 'index', index, 'bracketed', newBracketed, 'notes', changed);
 	}"
 
 	InsertIrregularBar "(barNumber, length) {
@@ -496,50 +454,6 @@
 		return CreateDictionary(
 			'addedBars', count,
 			'totalBars', score.SystemStaff.BarCount);
-	}"
-
-	AddNotes "(staffNum, barNumber, position, duration, pitches, voice, tied) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		if (staffNum < 1 or staffNum > score.StaffCount) {
-			return CreateDictionary('error', 'staffNum out of range');
-		}
-		staff = score.NthStaff(staffNum);
-		if (barNumber < 1 or barNumber > staff.BarCount) {
-			return CreateDictionary('error', 'barNumber out of range');
-		}
-		if (pitches = null or pitches.Length < 1) {
-			return CreateDictionary('error', 'pitches is empty');
-		}
-		v = 1;
-		if (voice != null and voice >= 1 and voice <= 4) {
-			v = voice;
-		}
-		isTied = False;
-		if (tied != null and tied = True) {
-			isTied = True;
-		}
-		bar = staff.NthBar(barNumber);
-		added = CreateSparseArray();
-		firstNote = bar.AddNote(position, pitches[0], duration, isTied, v);
-		if (firstNote = null) {
-			return CreateDictionary('error', 'AddNote failed');
-		}
-		added.Push(CreateDictionary('pitch', firstNote.Pitch, 'name', firstNote.Name, 'tied', firstNote.Tied));
-		noteRest = firstNote.ParentNoteRest;
-		if (pitches.Length > 1) {
-			for i = 1 to pitches.Length {
-				note = noteRest.AddNote(pitches[i], isTied);
-				if (note != null) {
-					added.Push(CreateDictionary('pitch', note.Pitch, 'name', note.Name, 'tied', note.Tied));
-				}
-			}
-		}
-		return CreateDictionary(
-			'staff', staffNum, 'bar', barNumber, 'position', position,
-			'duration', duration, 'voice', v, 'notes', added);
 	}"
 
 	AddNoteSequence "(staffNum, barNumber, startPosition, sequence, voice) {
@@ -795,20 +709,6 @@
 		return CreateDictionary('copied', copied);
 	}"
 
-	DeleteObject "(staffNum, barNumber, index) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		obj = GetObjectAt(staffNum, barNumber, index);
-		if (obj = null) {
-			return CreateDictionary('error', 'no object at that address');
-		}
-		deleted = DescribeObject(obj, index);
-		obj.Delete();
-		return CreateDictionary('deleted', deleted);
-	}"
-
 	DeleteSystemTimeSignature "(barNumber) {
 		score = RequireScore();
 		if (score = null) {
@@ -886,63 +786,6 @@
 			'destStaff', destStaff, 'destBar', destBar, 'destPosition', destPosition);
 	}"
 
-	SetNotePitch "(staffNum, barNumber, index, oldPitch, newPitch) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		obj = GetObjectAt(staffNum, barNumber, index);
-		if (obj = null) {
-			return CreateDictionary('error', 'no object at that address');
-		}
-		if (obj.Type != 'NoteRest') {
-			return CreateDictionary('error', 'object at address is a ' & obj.Type & ', not a NoteRest');
-		}
-		oldNote = null;
-		for each note in obj {
-			if (note.Pitch = oldPitch) {
-				oldNote = note;
-			}
-		}
-		if (oldNote = null) {
-			return CreateDictionary('error', 'no note with pitch ' & oldPitch & ' at that address');
-		}
-		wasTied = oldNote.Tied;
-		oldName = oldNote.Name;
-		newNote = obj.AddNote(newPitch, wasTied);
-		if (newNote = null) {
-			return CreateDictionary('error', 'AddNote failed for pitch ' & newPitch);
-		}
-		obj.RemoveNote(oldNote);
-		return CreateDictionary(
-			'oldPitch', oldPitch, 'oldName', oldName,
-			'newPitch', newNote.Pitch, 'newName', newNote.Name, 'tied', wasTied);
-	}"
-
-	SetTie "(staffNum, barNumber, index, tied) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		obj = GetObjectAt(staffNum, barNumber, index);
-		if (obj = null or obj.Type != 'NoteRest') {
-			return CreateDictionary('error', 'tie target must be a NoteRest object');
-		}
-		if (obj.NoteCount < 1) {
-			return CreateDictionary('error', 'cannot tie a rest');
-		}
-		newTied = True;
-		if (tied != null and tied = False) {
-			newTied = False;
-		}
-		changed = 0;
-		for each note in obj {
-			note.Tied = newTied;
-			changed = changed + 1;
-		}
-		return CreateDictionary('staff', staffNum, 'bar', barNumber, 'index', index, 'tied', newTied, 'notes', changed);
-	}"
-
 	DeleteVoiceInPassage "(fromBar, toBar, staffNum, voice) {
 		score = RequireScore();
 		if (score = null) {
@@ -957,29 +800,30 @@
 		if (voice < 1 or voice > 4) {
 			return CreateDictionary('error', 'voice must be 1-4');
 		}
+		// With nothing in the voice, the filter leaves an empty selection and
+		// 'delete' raises a modal 'Please select something' dialog.
+		staff = score.NthStaff(staffNum);
+		found = 0;
+		for barNum = fromBar to toBar + 1 {
+			for each obj in staff.NthBar(barNum) {
+				if (obj.VoiceNumber = voice) {
+					found = found + 1;
+				}
+			}
+		}
+		if (found = 0) {
+			return CreateDictionary(
+				'fromBar', fromBar, 'toBar', toBar, 'staff', staffNum, 'deletedVoice', voice,
+				'objects', 0);
+		}
 		selection = score.Selection;
 		selection.SelectPassage(fromBar, toBar, staffNum, staffNum);
 		Sibelius.Execute('filter_voice' & voice & '_only');
 		Sibelius.Execute('delete');
 		selection.Clear();
 		return CreateDictionary(
-			'fromBar', fromBar, 'toBar', toBar, 'staff', staffNum, 'deletedVoice', voice);
-	}"
-
-	FlipStem "(staffNum, barNumber, index) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		obj = GetObjectAt(staffNum, barNumber, index);
-		if (obj = null) {
-			return CreateDictionary('error', 'no object at that address');
-		}
-		if (obj.Type != 'NoteRest') {
-			return CreateDictionary('error', 'object at address is a ' & obj.Type & ', not a NoteRest');
-		}
-		obj.FlipStem();
-		return CreateDictionary('flipped', True, 'staff', staffNum, 'bar', barNumber, 'index', index);
+			'fromBar', fromBar, 'toBar', toBar, 'staff', staffNum, 'deletedVoice', voice,
+			'objects', found);
 	}"
 
 	SetBeamGroup "(staffNum, barNumber, firstIndex, lastIndex) {
@@ -1023,24 +867,6 @@
 			'staff', staffNum, 'bar', barNumber,
 			'firstIndex', firstIndex, 'lastIndex', lastIndex,
 			'noteCount', noteCount, 'firstBeam', first.Beam, 'lastBeam', last.Beam);
-	}"
-
-	NudgeObject "(staffNum, barNumber, index, dx, dy) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		obj = GetObjectAt(staffNum, barNumber, index);
-		if (obj = null) {
-			return CreateDictionary('error', 'no object at that address');
-		}
-		oldDx = obj.Dx;
-		oldDy = obj.Dy;
-		obj.Dx = oldDx + dx;
-		obj.Dy = oldDy + dy;
-		return CreateDictionary(
-			'type', obj.Type, 'oldDx', oldDx, 'newDx', obj.Dx,
-			'oldDy', oldDy, 'newDy', obj.Dy);
 	}"
 
 	OpenScore "(fileName) {

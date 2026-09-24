@@ -745,7 +745,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 41
+CURRENT_BRIDGE_VERSION = 43
 QUERY_BRIDGE_VERSION = 38
 BATCH_BRIDGE_VERSION = 39
 NUDGE_BRIDGE_VERSION = 41
@@ -1080,8 +1080,11 @@ async def _run_patch_layout(args: argparse.Namespace) -> int:
     results: list[dict[str, Any]] = []
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         await _check_bridge_version(client)
-        if any(operation["op"] == "nudge" for operation in operations):
+        ops = {operation["op"] for operation in operations}
+        if "nudge" in ops:
             await _require_bridge(client, NUDGE_BRIDGE_VERSION, "patch-layout nudge")
+        elif "remove-redundant-clefs" in ops:
+            await _require_bridge(client, BATCH_BRIDGE_VERSION, "patch-layout remove-redundant-clefs")
         await _assert_expected_score(client, args)
         backup = await _backup(client, "before patch-layout")
         pending: list[dict[str, Any]] = []
@@ -1244,7 +1247,7 @@ async def _run_patch_notes(args: argparse.Namespace) -> int:
         for operation in ordered:
             if operation["op"] != "delete-voice":
                 continue
-            method, call_args = note_patches.bridge_call(operation)
+            method, call_args = note_patches.delete_voice_call(operation)
             try:
                 result = await _bridge(client, method, call_args)
             except BridgeError as exc:

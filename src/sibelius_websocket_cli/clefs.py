@@ -15,10 +15,9 @@ deletion candidate.
 
 from __future__ import annotations
 
-from collections import defaultdict
 from typing import Any, Mapping
 
-from sibelius_websocket_cli import cli
+from sibelius_websocket_cli import batch_ops, cli
 
 
 # Sibelius expresses object positions in ticks, where a quarter note is 256.
@@ -217,16 +216,20 @@ async def find_redundant_clefs(client: Any, staff: int | None = None) -> list[di
 
 
 async def delete_redundant_clefs(client: Any, findings: list[dict[str, Any]]) -> int:
-    """Delete findings in reverse index order and return the deletion count."""
-    grouped: dict[int, dict[int, list[int]]] = defaultdict(lambda: defaultdict(list))
-    for finding in findings:
-        grouped[finding["staff"]][finding["bar"]].append(finding["index"])
+    """Delete findings as one checked batch and return the deletion count.
 
-    deleted_count = 0
-    for staff in sorted(grouped):
-        for bar in sorted(grouped[staff]):
-            for index in sorted(grouped[staff][bar], reverse=True):
-                result = await cli._bridge(client, "DeleteObject", [staff, bar, index])
-                if "deleted" in result:
-                    deleted_count += 1
-    return deleted_count
+    Each delete is guarded to a Clef, so a stale finding fails the whole batch
+    before anything changes. Addresses are resolved before the first delete,
+    so their order does not matter.
+    """
+    addresses = sorted({(f["staff"], f["bar"], f["index"]) for f in findings})
+    if not addresses:
+        return 0
+    batch = batch_ops.validate_batch([
+        {"op": "delete", "staff": staff, "bar": bar, "index": index, "type": "Clef"}
+        for staff, bar, index in addresses
+    ])
+    outcome = await cli._apply_batch(client, batch, False)
+    if "error" in outcome:
+        raise cli.BridgeError(f"clef deletion refused: {outcome['error']}")
+    return int(outcome.get("applied", 0))
