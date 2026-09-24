@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 46);
+		return CreateDictionary('version', 47);
 	}"
 
 	Echo "(value) {
@@ -256,74 +256,6 @@
 		return null;
 	}"
 
-	TransposePassage "(fromBar, toBar, topStaff, bottomStaff, degree, intervalType) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		if (fromBar < 1 or toBar > score.SystemStaff.BarCount or fromBar > toBar) {
-			return CreateDictionary('error', 'bar range out of range');
-		}
-		if (topStaff < 1 or bottomStaff > score.StaffCount or topStaff > bottomStaff) {
-			return CreateDictionary('error', 'staff range out of range');
-		}
-		selection = score.Selection;
-		selection.SelectPassage(fromBar, toBar, topStaff, bottomStaff);
-		selection.Transpose(degree, intervalType, True, True);
-		selection.Clear();
-		return CreateDictionary(
-			'degree', degree, 'intervalType', intervalType,
-			'fromBar', fromBar, 'toBar', toBar,
-			'topStaff', topStaff, 'bottomStaff', bottomStaff);
-	}"
-
-	SetKeySignature "(barNumber, keyName, major) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		systemStaff = score.SystemStaff;
-		if (barNumber < 1 or barNumber > systemStaff.BarCount) {
-			return CreateDictionary('error', 'barNumber out of range');
-		}
-		bar = systemStaff.NthBar(barNumber);
-		ks = bar.AddKeySignatureFromText(0, keyName, major);
-		if (ks = null) {
-			return CreateDictionary('error', 'AddKeySignatureFromText failed for ' & keyName);
-		}
-		return CreateDictionary('bar', barNumber, 'name', ks.AsText, 'sharps', ks.Sharps, 'major', ks.Major);
-	}"
-
-	SetTimeSignature "(barNumber, top, bottom, useSymbol) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		systemStaff = score.SystemStaff;
-		if (barNumber < 1 or barNumber > systemStaff.BarCount) {
-			return CreateDictionary('error', 'barNumber out of range');
-		}
-		bar = systemStaff.NthBar(barNumber);
-		symbol = False;
-		if (useSymbol != null and useSymbol = True) {
-			symbol = True;
-		}
-		err = bar.AddTimeSignature(top, bottom, True, True, symbol);
-		if (err != '') {
-			return CreateDictionary('error', err);
-		}
-		ts = systemStaff.CurrentTimeSignature(barNumber);
-		style = 'numeric';
-		if (ts.Text = CommonTimeString) {
-			style = 'common';
-		}
-		if (ts.Text = AllaBreveTimeString) {
-			style = 'cut';
-		}
-		return CreateDictionary(
-			'bar', barNumber, 'numerator', ts.Numerator, 'denominator', ts.Denominator, 'style', style);
-	}"
-
 	InsertIrregularBar "(barNumber, length) {
 		score = RequireScore();
 		if (score = null) {
@@ -440,20 +372,6 @@
 			'instrumentName', stave.InstrumentName,
 			'barCount', stave.BarCount,
 			'totalStaves', score.StaffCount);
-	}"
-
-	AddBars "(count) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		if (count = null or count < 1) {
-			return CreateDictionary('error', 'count must be at least 1');
-		}
-		score.AddBars(count);
-		return CreateDictionary(
-			'addedBars', count,
-			'totalBars', score.SystemStaff.BarCount);
 	}"
 
 	AddNoteSequence "(staffNum, barNumber, startPosition, sequence, voice) {
@@ -755,120 +673,6 @@
 		return CreateDictionary('name', name, 'versionCount', versions.NumChildren);
 	}"
 
-	CopyPassage "(fromBar, toBar, topStaff, bottomStaff, destStaff, destBar, destPosition) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		if (fromBar < 1 or toBar > score.SystemStaff.BarCount or fromBar > toBar) {
-			return CreateDictionary('error', 'source bar range out of range');
-		}
-		if (topStaff < 1 or bottomStaff > score.StaffCount or topStaff > bottomStaff) {
-			return CreateDictionary('error', 'source staff range out of range');
-		}
-		if (destStaff < 1 or destStaff > score.StaffCount) {
-			return CreateDictionary('error', 'destStaff out of range');
-		}
-		if (destBar < 1 or destBar > score.SystemStaff.BarCount) {
-			return CreateDictionary('error', 'destBar out of range');
-		}
-		selection = score.Selection;
-		selection.SelectPassage(fromBar, toBar, topStaff, bottomStaff);
-		selection.Copy();
-		ok = selection.PasteToPosition(destStaff, destBar, destPosition);
-		selection.Clear();
-		if (ok != True) {
-			return CreateDictionary('error', 'PasteToPosition failed');
-		}
-		return CreateDictionary(
-			'fromBar', fromBar, 'toBar', toBar,
-			'topStaff', topStaff, 'bottomStaff', bottomStaff,
-			'destStaff', destStaff, 'destBar', destBar, 'destPosition', destPosition);
-	}"
-
-	DeleteVoiceInPassage "(fromBar, toBar, staffNum, voice) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		if (fromBar < 1 or toBar > score.SystemStaff.BarCount or fromBar > toBar) {
-			return CreateDictionary('error', 'bar range out of range');
-		}
-		if (staffNum < 1 or staffNum > score.StaffCount) {
-			return CreateDictionary('error', 'staffNum out of range');
-		}
-		if (voice < 1 or voice > 4) {
-			return CreateDictionary('error', 'voice must be 1-4');
-		}
-		// With nothing in the voice, the filter leaves an empty selection and
-		// 'delete' raises a modal 'Please select something' dialog.
-		staff = score.NthStaff(staffNum);
-		found = 0;
-		for barNum = fromBar to toBar + 1 {
-			for each obj in staff.NthBar(barNum) {
-				if (obj.VoiceNumber = voice) {
-					found = found + 1;
-				}
-			}
-		}
-		if (found = 0) {
-			return CreateDictionary(
-				'fromBar', fromBar, 'toBar', toBar, 'staff', staffNum, 'deletedVoice', voice,
-				'objects', 0);
-		}
-		selection = score.Selection;
-		selection.SelectPassage(fromBar, toBar, staffNum, staffNum);
-		Sibelius.Execute('filter_voice' & voice & '_only');
-		Sibelius.Execute('delete');
-		selection.Clear();
-		return CreateDictionary(
-			'fromBar', fromBar, 'toBar', toBar, 'staff', staffNum, 'deletedVoice', voice,
-			'objects', found);
-	}"
-
-	SetBeamGroup "(staffNum, barNumber, firstIndex, lastIndex) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		if (firstIndex > lastIndex) {
-			return CreateDictionary('error', 'firstIndex must not exceed lastIndex');
-		}
-		first = GetObjectAt(staffNum, barNumber, firstIndex);
-		last = GetObjectAt(staffNum, barNumber, lastIndex);
-		if (first = null or last = null) {
-			return CreateDictionary('error', 'no object at a beam endpoint');
-		}
-		if (first.Type != 'NoteRest' or last.Type != 'NoteRest') {
-			return CreateDictionary('error', 'beam endpoints must be NoteRest objects');
-		}
-		staff = score.NthStaff(staffNum);
-		bar = staff.NthBar(barNumber);
-		noteCount = 0;
-		for i = firstIndex to lastIndex + 1 {
-			obj = GetObjectAt(staffNum, barNumber, i);
-			if (obj != null and obj.Type = 'NoteRest') {
-				noteCount = noteCount + 1;
-				if (i = firstIndex) {
-					obj.Beam = StartBeam;
-				} else {
-					if (i = lastIndex) {
-						obj.Beam = SingleBeam;
-					} else {
-						obj.Beam = ContinueBeam;
-					}
-				}
-			}
-		}
-		if (noteCount < 2) {
-			return CreateDictionary('error', 'beam group must contain at least two NoteRest objects');
-		}
-		return CreateDictionary(
-			'staff', staffNum, 'bar', barNumber,
-			'firstIndex', firstIndex, 'lastIndex', lastIndex,
-			'noteCount', noteCount, 'firstBeam', first.Beam, 'lastBeam', last.Beam);
-	}"
-
 	OpenScore "(fileName) {
 		ok = Sibelius.Open(fileName, True);
 		if (ok != True) {
@@ -1008,34 +812,6 @@
 			'lyricist', score.Lyricist);
 	}"
 
-	SetBarBreak "(barNum, breakType) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		systemStaff = score.SystemStaff;
-		if (barNum < 1 or barNum > systemStaff.BarCount) {
-			return CreateDictionary('error', 'barNum out of range');
-		}
-		bar = systemStaff.NthBar(barNum);
-		bType = MiddleOfSystem;
-		if (breakType = 'system' or breakType = 'EndOfSystemOrPage' or breakType = 6) {
-			bType = EndOfSystemOrPage;
-		}
-		if (breakType = 'page' or breakType = 'EndOfPage' or breakType = 4) {
-			bType = EndOfPage;
-		}
-		// Clearing a break means Default (bar can appear anywhere); MiddleOfSystem
-		// would instead forbid a break here and pile the score onto one system.
-		if (breakType = 'none' or breakType = 'Default' or breakType = 7) {
-			bType = Default;
-		}
-		bar.BreakType = bType;
-		return CreateDictionary(
-			'bar', barNum,
-			'breakType', '' & bar.BreakType);
-	}"
-
 	GetScoreStructure "(fromBar, toBar) {
 		// System-staff structure for bars fromBar-toBar. A key or time
 		// signature at the end of a bar takes effect in the next bar, which is
@@ -1105,79 +881,6 @@
 			}
 		}
 		return results;
-	}"
-
-	SetSpecialBarline "(barNum, barlineType) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		systemStaff = score.SystemStaff;
-		if (barNum < 1 or barNum > systemStaff.BarCount) {
-			return CreateDictionary('error', 'barNum out of range');
-		}
-		bar = systemStaff.NthBar(barNum);
-		toDelete = CreateSparseArray();
-		for each SpecialBarline sb in bar {
-			toDelete.Push(sb);
-		}
-		deleted = 0;
-		if (toDelete.Length > 0) {
-			for i = 0 to toDelete.Length {
-				target = toDelete[i];
-				if (target != null) {
-					target.Delete();
-					deleted = deleted + 1;
-				}
-			}
-		}
-		bType = -1;
-		if (barlineType = 'start_repeat' or barlineType = 'StartRepeat' or barlineType = 0 or barlineType = '0') {
-			bType = SpecialBarlineStartRepeat;
-		}
-		if (barlineType = 'end_repeat' or barlineType = 'EndRepeat' or barlineType = 1 or barlineType = '1') {
-			bType = SpecialBarlineEndRepeat;
-		}
-		if (barlineType = 'dashed' or barlineType = 'Dashed' or barlineType = 2 or barlineType = '2') {
-			bType = SpecialBarlineDashed;
-		}
-		if (barlineType = 'double' or barlineType = 'Double' or barlineType = 3 or barlineType = '3') {
-			bType = SpecialBarlineDouble;
-		}
-		if (barlineType = 'final' or barlineType = 'Final' or barlineType = 4 or barlineType = '4') {
-			bType = SpecialBarlineFinal;
-		}
-		if (barlineType = 'invisible' or barlineType = 'Invisible' or barlineType = 5 or barlineType = '5') {
-			bType = SpecialBarlineInvisible;
-		}
-		if (barlineType = 'between_staves' or barlineType = 'BetweenStaves' or barlineType = 6 or barlineType = '6') {
-			bType = SpecialBarlineBetweenStaves;
-		}
-		if (barlineType = 'normal' or barlineType = 'Normal' or barlineType = 7 or barlineType = '7' or barlineType = 'none') {
-			bType = SpecialBarlineNormal;
-		}
-		if (barlineType = 'tick' or barlineType = 'Tick' or barlineType = 8 or barlineType = '8') {
-			bType = SpecialBarlineTick;
-		}
-		if (barlineType = 'short' or barlineType = 'Short' or barlineType = 9 or barlineType = '9') {
-			bType = SpecialBarlineShort;
-		}
-		if (barlineType = 'dotted' or barlineType = 'Dotted' or barlineType = 10 or barlineType = '10') {
-			bType = SpecialBarlineDotted;
-		}
-		if (barlineType = 'triple' or barlineType = 'Triple' or barlineType = 11 or barlineType = '11') {
-			bType = SpecialBarlineTriple;
-		}
-		if (barlineType = 'thick' or barlineType = 'Thick' or barlineType = 12 or barlineType = '12') {
-			bType = SpecialBarlineThick;
-		}
-		if (bType >= 0 and bType != SpecialBarlineNormal) {
-			bar.AddSpecialBarline(bType);
-		}
-		return CreateDictionary(
-			'bar', barNum,
-			'deleted', deleted,
-			'barlineType', '' & bType);
 	}"
 
 	SetLyricStyle "(staffNum, barNumber, index, styleId) {
