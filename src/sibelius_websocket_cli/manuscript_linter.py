@@ -345,6 +345,19 @@ class ManuScriptLinter:
 
             current_scope = scope_stack[-1]
 
+            # Sibelius cannot parse chained subscripts (a[i]['k']); it raises
+            # a modal parse error only when the method is first called.
+            if "][" in stripped.replace(" ", ""):
+                self.issues.append(LintIssue(
+                    line=line_no,
+                    column=1,
+                    severity="error",
+                    method_name=method_name,
+                    message="Chained subscript is a ManuScript parse error",
+                    code_line=raw_line,
+                    hint="Assign the first subscript to a variable, then index that",
+                ))
+
             # 1. Detect assignments from known factory functions / properties
             # score = RequireScore(); or score = Sibelius.ActiveScore;
             m_score = re.search(r'\b([A-Za-z0-9_]+)\s*=\s*(?:RequireScore\(\)|Sibelius\.ActiveScore)\b', line, re.IGNORECASE)

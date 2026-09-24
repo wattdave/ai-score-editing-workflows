@@ -142,3 +142,23 @@ def _pitch(operation: dict[str, Any], field: str, label: str) -> int:
     if not 0 <= value <= 127:
         raise NotePatchError(f"{label}.{field} must be a MIDI pitch from 0 to 127")
     return value
+
+
+def batch_operations(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Translate addressed note operations into ApplyBatch operations.
+
+    delete-voice works through a selection rather than an object address, so
+    it is not part of the batch; run it afterwards with bridge_call.
+    """
+    batch: list[dict[str, Any]] = []
+    for operation in operations:
+        op = operation["op"]
+        if op == "delete-voice":
+            continue
+        out = {"op": op, "staff": operation["staff"], "bar": operation["bar"], "index": operation["index"]}
+        if op == "set-pitch":
+            out.update(oldPitch=operation["oldPitch"], newPitch=operation["newPitch"])
+        elif op in {"tie", "bracket"}:
+            out["remove"] = operation.get("remove", False)
+        batch.append(out)
+    return batch
