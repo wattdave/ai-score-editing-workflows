@@ -174,12 +174,16 @@ async def score_overview() -> dict[str, Any]:
 @server.tool(annotations=READ_ONLY)
 async def score_structure(bars: str | None = None) -> dict[str, Any]:
     """Read the score's structure: key and time signatures, special barlines
-    and system/page breaks, for bars such as "1-40" (default all).
+    and system/page breaks, for bars such as "1-40" (default all), plus the
+    score's page layout and staff spacing.
 
     Key and time signatures report the bar they take effect in (a change is
     stored at the end of the bar before; storedBar says which). Barline and
     break types use the names apply_batch's set-barline and set-break take;
-    a barline or break at bar B sits at the end of bar B.
+    a barline or break at bar B sits at the end of bar B. layout (page size,
+    orientation, staff size, margins and stave gaps in mm, page count) and
+    engraving (spaces between staves and systems) use the names set-layout
+    takes.
     """
     try:
         from_bar, to_bar = parse_bar_range(bars=bars) if bars else (None, None)
@@ -260,7 +264,7 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
 
     - {"op":"set","staff":S,"bar":B,"index":I,"prop":P,"value":V}: Dx, Dy
       (int), Hidden, CueSize (bool) on anything; Beam, RestPosition on
-      NoteRest; Text, Duration on LyricItem; Text on Text; Duration, RhDx on
+      NoteRest; Text, Duration, NumNotes (melisma span) on LyricItem; Text on Text; Duration, RhDx on
       lines.
     - {"op":"set-pitch",...,"oldPitch":P,"newPitch":Q}
     - {"op":"tie"|"bracket",...[,"remove":true]}
@@ -282,8 +286,8 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
 
     Structural operations work on bar ranges or the whole score and must come
     after every operation above. Bars and staves refer to the score before the
-    batch; no operation may name a bar after an earlier set-time's bar, and
-    every set-time must come before any set-key, set-break or set-barline.
+    batch; no operation may name a bar after an earlier set-time's bar or
+    at or after an earlier add-bars' insertion bar, and every set-time must come before any set-key, set-break or set-barline.
 
     - {"op":"beam","staff":S,"bar":B,"firstIndex":I,"lastIndex":J}: beam the
       NoteRests from I to J together (may sit among the operations above)
@@ -299,7 +303,16 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
     - {"op":"set-break","bar":B,"type":"system"|"page"|"none"}
     - {"op":"set-barline","bar":B,"type":"double"|"final"|"start_repeat"|
       "end_repeat"|"dashed"|"dotted"|"thick"|...|"none"}
-    - {"op":"add-bars","count":N}: appends bars at the end
+    - {"op":"add-bars","count":N[,"bar":B,"length":L]}: appends bars at the
+      end, or inserts them before bar B; length makes them irregular bars of
+      L (1/256 quarters)
+    - {"op":"set-bar-number","bar":B,"number":N[,"skip":true]}: renumber
+      from bar B; skip leaves bar B itself unnumbered
+    - {"op":"set-layout", any of "pageSize":"a4"|"letter"|..., "orientation":
+      "portrait"|"landscape", "staffSize", "topMargin", "bottomMargin",
+      "leftMargin", "rightMargin", "aboveTopStaveGap", "belowBottomStaveGap"
+      (mm), "spacesBetweenStaves", "extraSpacesBelowVocalStaves",
+      "spacesBetweenSystems" (staff spaces)}: only the given settings change
     - {"op":"delete-voice","fromBar":A,"toBar":B,"staff":S,"voice":V}
 
     Returns each operation's before/after description and the number applied.

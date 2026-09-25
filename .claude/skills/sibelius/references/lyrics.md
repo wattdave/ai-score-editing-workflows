@@ -88,6 +88,9 @@ adopt those definitions.
 - In ManuScript, `Bar.AddLyric(position, duration, text, syllableType, numNotes, voiceNumber)`
   takes `numNotes` (the melisma note span count) as its 5th argument, **not**
   the lyric verse line number.
+- To change an existing lyric's melisma span, `set` its `NumNotes`
+  (bridge v50; `query --field NumNotes` reads it). ManuScript documents that
+  `Duration` should match, so check the extender after changing it.
 - Lyric line/verse assignment is controlled exclusively by `LyricItem.StyleId`
   (e.g. `text.staff.space.hypen.lyrics.verse1` through `verse5`), not by an
   argument to `AddLyric`.

@@ -120,6 +120,11 @@ Probed on Sibelius 26.8 against a scratch score:
 - **One `invokePlugin` call is one undo step.** Two edits in one call were
   reverted together by a single `invokeCommands ["undo"]`; no explicit undo
   grouping is needed.
+- **A 0 reads as null.** `op['x'] != null` is false when `x` is 0, so a
+  plug-in test for a missing field silently skips zero values (set-layout's
+  Letter page size, portrait orientation and zero margins were all dropped
+  until it named its settings explicitly; verified 2026-09-24, bridge v50).
+  Test presence by name, never by comparing a numeric value with null.
 - **Bar-object indices shift after edits; held references do not.** After
   `AddText` at position 0, every existing object's index rose by one, but a
   reference taken before the insert still read the right position and pitch.
