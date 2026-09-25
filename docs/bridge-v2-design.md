@@ -3,7 +3,8 @@
 Goal: let an LLM-driven client describe score changes in natural language and
 apply them safely — e.g. "fix lyric spelling errors" or "transpose into
 D major" — over Sibelius Connect. All ManuScript API references below are
-verified against `docs/manuscript-object-tree.md`.
+verified against the ManuScript Language Guide's Object Reference
+(see `docs/avid-reference.md`).
 
 Because every plug-in change requires a Sibelius restart to load, v2 is
 designed as one complete API and shipped once.

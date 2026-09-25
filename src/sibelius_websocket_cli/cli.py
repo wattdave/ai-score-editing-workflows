@@ -711,7 +711,7 @@ EXPORT_FORMATS = {
     "png": ("PNG", ".png"),
 }
 
-# Curated friendly names -> ManuScript command IDs (see docs/commands.md).
+# Curated friendly names -> ManuScript command IDs (see docs/avid-reference.md).
 # Note these are fire-and-forget: Sibelius acknowledges receipt but never
 # reports whether the command did anything (SPEC.md 1.2).
 NAMED_OPERATIONS = {

@@ -222,3 +222,10 @@ output/
 tmp/
 thoughts/
 .claude/config/
+
+# Transcriptions of Avid's ManuScript Language Guide (Avid's copyright);
+# see docs/avid-reference.md
+docs/manuscript-object-tree.md
+docs/manuscript-constants.md
+docs/commands.md
+docs/sibelius-connect.md

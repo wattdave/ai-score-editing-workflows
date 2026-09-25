@@ -221,7 +221,7 @@ confirm `score-snapshot` reports `no score open`, and then open from disk.
 
 - `do undo` invokes the named built-in command.
 - `invoke` accepts raw command IDs. Successful responses are fire-and-forget;
-  see `docs/commands.md` for the available IDs.
+  see the Command IDs chapter linked from `docs/avid-reference.md`.
 - `plugin sibwscli <Method> --args '<json>'` calls a bridge method directly.
 
 Use escape hatches only when a purpose-built command does not cover the task,
