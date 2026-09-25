@@ -314,6 +314,8 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
       (mm), "spacesBetweenStaves", "extraSpacesBelowVocalStaves",
       "spacesBetweenSystems" (staff spaces)}: only the given settings change
     - {"op":"delete-voice","fromBar":A,"toBar":B,"staff":S,"voice":V}
+    - {"op":"hide-empty-staves","fromBar":A,"toBar":B}: hide staves with
+      nothing in bars A-B, then optimize staff spacing there
 
     Returns each operation's before/after description and the number applied.
     """
