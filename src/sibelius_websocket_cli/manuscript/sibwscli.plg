@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 52);
+		return CreateDictionary('version', 53);
 	}"
 
 	Echo "(value) {
@@ -717,20 +717,6 @@
 			'index', index,
 			'oldStyleId', oldStyleId,
 			'newStyleId', '' & obj.StyleId);
-	}"
-
-	HideEmptyStaves "(startBar, endBar) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		if (startBar < 1 or endBar > score.SystemStaff.BarCount or startBar > endBar) {
-			return CreateDictionary('error', 'bar range out of range');
-		}
-		score.HideEmptyStaves(1, score.StaffCount, startBar, endBar);
-		score.OptimizeStaffSpacing(1, score.StaffCount, startBar, endBar);
-		score.Redraw = True;
-		return CreateDictionary('startBar', startBar, 'endBar', endBar, 'pageCount', score.PageCount);
 	}"
 
 	ConvertVerse6ToRoman "(staffNum, fromBar, toBar) {
