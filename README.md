@@ -277,3 +277,14 @@ Sources: `src/sibelius_websocket_cli/` — `protocol.py` (message builders),
 `client.py` (async client with token/approval handling), `launcher.py` (Sibelius
 process detection and launch), `token_store.py`, `cli.py`, and the bundled bridge plug-in
 under `manuscript/`.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports and skill requests are
+welcome as GitHub issues.
+
+## License
+
+[Apache License 2.0](LICENSE). Sibelius, Sibelius Connect and ManuScript are
+products of Avid Technology; this project is not affiliated with or endorsed
+by Avid.
