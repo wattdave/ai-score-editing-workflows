@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 50);
+		return CreateDictionary('version', 51);
 	}"
 
 	Echo "(value) {
@@ -266,38 +266,6 @@
 			i = i + 1;
 		}
 		return null;
-	}"
-
-	InsertIrregularBar "(barNumber, length) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		if (barNumber < 1 or barNumber > score.SystemStaff.BarCount + 1) {
-			return CreateDictionary('error', 'barNumber out of range');
-		}
-		if (length < 1) {
-			return CreateDictionary('error', 'length must be positive');
-		}
-		score.InsertBars(1, barNumber, length);
-		return CreateDictionary('inserted', 1, 'bar', barNumber, 'length', length);
-	}"
-
-	SetBarNumber "(barNumber, newNumber, skipThisBar) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		if (barNumber < 1 or barNumber > score.SystemStaff.BarCount) {
-			return CreateDictionary('error', 'barNumber out of range');
-		}
-		skip = False;
-		if (skipThisBar = True or skipThisBar = 1 or skipThisBar = 'true') {
-			skip = True;
-		}
-		bar = score.SystemStaff.NthBar(barNumber);
-		bar.AddBarNumber(newNumber, 0, '', False, skip);
-		return CreateDictionary('bar', barNumber, 'number', newNumber, 'skipThisBar', skip);
 	}"
 
 	CreateStaff "(styleId, position, fullName, shortName) {
@@ -751,46 +719,6 @@
 			'newStyleId', '' & obj.StyleId);
 	}"
 
-	GetLayoutInfo "() {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		setup = score.DocumentSetup;
-		return CreateDictionary(
-			'pageCount', score.PageCount,
-			'pageSize', setup.PageSize,
-			'orientation', setup.Orientation,
-			'pageWidth', setup.PageWidth,
-			'pageHeight', setup.PageHeight,
-			'staffSize', setup.StaffSize,
-			'pageTopMargin', setup.PageTopMargin,
-			'pageBottomMargin', setup.PageBottomMargin,
-			'pageLeftMargin', setup.PageLeftMargin,
-			'pageRightMargin', setup.PageRightMargin,
-			'aboveTopStaveGap', setup.AboveTopStaveGap,
-			'belowBottomStaveGap', setup.BelowBottomStaveGap);
-	}"
-
-	SetDocumentLayout "(pageSize, orientation, staffSize, pageMargin, verticalStaveGap) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		setup = score.DocumentSetup;
-		setup.PageSize = pageSize;
-		setup.Orientation = orientation;
-		setup.PageTopMargin = pageMargin;
-		setup.PageBottomMargin = pageMargin;
-		setup.PageLeftMargin = pageMargin;
-		setup.PageRightMargin = pageMargin;
-		setup.StaffSize = staffSize;
-		setup.AboveTopStaveGap = verticalStaveGap;
-		setup.BelowBottomStaveGap = verticalStaveGap;
-		score.Redraw = True;
-		return GetLayoutInfo();
-	}"
-
 	HideEmptyStaves "(startBar, endBar) {
 		score = RequireScore();
 		if (score = null) {
@@ -803,70 +731,6 @@
 		score.OptimizeStaffSpacing(1, score.StaffCount, startBar, endBar);
 		score.Redraw = True;
 		return CreateDictionary('startBar', startBar, 'endBar', endBar, 'pageCount', score.PageCount);
-	}"
-
-	SetLyricSpan "(staffNum, barNumber, index, numNotes) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		if (numNotes < 1) {
-			return CreateDictionary('error', 'numNotes must be at least 1');
-		}
-		obj = GetObjectAt(staffNum, barNumber, index);
-		if (obj = null) {
-			return CreateDictionary('error', 'no object at that address');
-		}
-		if (obj.Type != 'LyricItem') {
-			return CreateDictionary('error', 'object at address is a ' & obj.Type & ', not a LyricItem');
-		}
-		oldNumNotes = obj.NumNotes;
-		oldDuration = obj.Duration;
-		obj.NumNotes = numNotes;
-		score.Redraw = True;
-		return CreateDictionary(
-			'staff', staffNum,
-			'bar', barNumber,
-			'index', index,
-			'text', obj.Text,
-			'oldNumNotes', oldNumNotes,
-			'newNumNotes', obj.NumNotes,
-			'oldDuration', oldDuration,
-			'newDuration', obj.Duration);
-	}"
-
-	GetEngravingRules "() {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		rules = score.EngravingRules;
-		return CreateDictionary(
-			'spacesBetweenStaves', rules.SpacesBetweenStaves,
-			'extraSpacesBelowVocalStaves', rules.ExtraSpacesBelowVocalStaves,
-			'spacesBetweenSystems', rules.SpacesBetweenSystems);
-	}"
-
-	SetStaffSpacing "(spacesBetweenStaves, extraSpacesBelowVocal, spacesBetweenSystems) {
-		score = RequireScore();
-		if (score = null) {
-			return CreateDictionary('error', 'no score open');
-		}
-		rules = score.EngravingRules;
-		if (spacesBetweenStaves > 0) {
-			rules.SpacesBetweenStaves = spacesBetweenStaves;
-		}
-		if (extraSpacesBelowVocal >= 0) {
-			rules.ExtraSpacesBelowVocalStaves = extraSpacesBelowVocal;
-		}
-		if (spacesBetweenSystems > 0) {
-			rules.SpacesBetweenSystems = spacesBetweenSystems;
-		}
-		score.Redraw = True;
-		return CreateDictionary(
-			'spacesBetweenStaves', rules.SpacesBetweenStaves,
-			'extraSpacesBelowVocal', rules.ExtraSpacesBelowVocalStaves,
-			'spacesBetweenSystems', rules.SpacesBetweenSystems);
 	}"
 
 	ConvertVerse6ToRoman "(staffNum, fromBar, toBar) {
