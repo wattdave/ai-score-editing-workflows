@@ -1288,7 +1288,7 @@ A normal stave or the system staff (the system staff holds objects that apply to
 - `ScaleFactorChange(StaveScaleFactor, startBarNum, endBarNum)` — Sets the Staff Size property: NormalSize (0), MediumSize (1), SmallSize (2), ExtraSmallSize (3).
 - `SetSound(styleID[,set SoundStage])` — Changes the initial playback sound to the default for the instrument styleID; optionally leaves SoundStage unchanged.
 - `SetSoundID(soundID)` — Changes the initial playback sound to the given soundID.
-- `SoundIDAtPosition([bar number,[position,[nth repeat]]])` — Returns a new SoundInfo at the location (defaults: bar 1, bar start, first pass).
+- `SoundInfoAtPosition([bar number,[position,[nth repeat]]])` — Returns a new SoundInfo at the location (defaults: bar 1, bar start, first pass). (The guide lists this as `SoundIDAtPosition`, which does not exist: calling it raises a "Method SoundIDAtPosition not found" dialog. Verified 2026-09-24.)
 - `Staff[array element]` — Returns the nth bar (counting from 1), e.g. `Staff[1]`.
 
 ### Variables
