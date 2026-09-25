@@ -3,6 +3,14 @@
 This repository contains a Python CLI for driving Sibelius through Sibelius
 Connect and the bundled `sibwscli` ManuScript bridge plug-in.
 
+## New users
+
+Many people using this repository are new to Claude Code and to the
+terminal. At the start of a session, if the user seems new, asks how to get
+started, or a command fails because a tool is missing, use the `setup` skill
+(also `/setup`). It checks and installs Homebrew, git, uv, Python 3.13,
+ffmpeg, the project packages, and the Sibelius bridge plug-in.
+
 ## Commands
 
 The project requires Python 3.13 or newer and is managed with `uv`.
