@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [
-    { name = "David Watt", email = "dave.watt@autodesk.com" }
+    { name = "David Watt", email = "sibelius-ai-workflows@dave.wattlink.net" }
 ]
 requires-python = ">=3.13"
 dependencies = [
