@@ -1,0 +1,8 @@
+[mcp_servers.sibelius]
+command = "uv"
+args = [
+    "run",
+    "--directory",
+    ".",
+    "sibelius-mcp",
+]

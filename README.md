@@ -7,21 +7,87 @@ read score structure and note content back out.
 
 ## Getting started with Claude Code
 
-You do not need to install anything by hand. You need a Mac and Sibelius
-Ultimate 2026.6 or later.
+You do not need to install anything by hand. You need a Mac, Sibelius
+Ultimate 2026.6 or later, and a paid Claude account: Claude Code needs a
+Pro, Max, Team or Enterprise plan, or a Console (API) account. The free
+Claude plan does not include Claude Code; see
+[Setting up without Claude](#setting-up-without-claude) instead.
 
-1. Install Claude Code: open the **Terminal** app and paste
-   `curl -fsSL https://claude.ai/install.sh | bash`, then follow the
-   prompts to sign in.
+1. Install Claude Code: open the **Terminal** app (Cmd+Space, type
+   Terminal, press Return) and paste
+   `curl -fsSL https://claude.ai/install.sh | bash`.
 2. Get this folder: on GitHub, click **Code → Download ZIP** and unzip it
    (or `git clone` it if you already have git).
 3. In Terminal, type `cd ` (with a trailing space), drag the folder onto the
-   Terminal window, press Return, then type `claude` and press Return.
+   Terminal window, press Return, then type `claude` and press Return. The
+   first time, it opens your browser to sign in to your Claude account, then
+   asks whether to trust this folder and approve its `sibelius` tool server;
+   say yes to both.
 4. Type `/setup`. Claude explains what is missing (Homebrew, git, uv,
    Python 3.13, ffmpeg, the Sibelius plug-in), asks whether to install it
    all at once or one item at a time, and does the work.
 
 `scripts/setup_check.sh` shows what is installed at any time.
+
+## Using Codex or Antigravity instead
+
+The skills in this folder also work in OpenAI Codex and Google Antigravity,
+which both read the skills in `.agents/skills/` (Codex also reads
+`AGENTS.md`). Instead of `/setup`, type `$setup` in Codex, or in either tool just ask "help me set up this project".
+
+- **Codex** (install it following OpenAI's Codex docs) works with a
+  ChatGPT account. OpenAI lists Codex on the Free plan for "quick coding
+  tasks", but whether the Free plan includes the Codex command-line tool has
+  not been tested with this project; paid ChatGPT plans include it.
+  When Codex asks whether to trust this folder, say yes: that lets it load
+  `.codex/config.toml`, which connects the `sibelius` tool server.
+- **Antigravity** has a free Individual plan with weekly usage limits. It
+  does not load this folder's `sibelius` tool server automatically, but the
+  skills can run the `sibelius-websocket-cli` commands directly instead.
+
+Free tiers have low limits. Setup fits easily; a long editing session may
+run out partway.
+
+## Setting up without Claude
+
+The same steps by hand, in Terminal, from this folder:
+
+1. See what is missing (this changes nothing):
+
+   ```bash
+   scripts/setup_check.sh
+   ```
+
+2. Install [Homebrew](https://brew.sh). It asks for your Mac password;
+   nothing appears as you type, which is normal. Follow the "Next steps" it
+   prints at the end so new Terminal windows can find `brew`.
+
+   ```bash
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   ```
+
+3. Install the tools, Python and this project's packages:
+
+   ```bash
+   brew install git uv ffmpeg
+   uv python install 3.13
+   uv sync
+   ```
+
+4. Open Sibelius once and quit it, then install the bridge plug-in:
+
+   ```bash
+   uv run sibelius-websocket-cli install-plugin
+   ```
+
+5. In Sibelius, turn on Sibelius Connect (Sibelius menu → Preferences →
+   Input Devices, port 1898) and restart Sibelius.
+6. With Sibelius open, check everything, and click OK when Sibelius asks to
+   allow the connection:
+
+   ```bash
+   scripts/setup_check.sh --connect
+   ```
 
 ## Requirements
 
