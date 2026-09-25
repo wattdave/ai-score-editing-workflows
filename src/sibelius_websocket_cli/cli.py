@@ -745,7 +745,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 49
+CURRENT_BRIDGE_VERSION = 50
 QUERY_BRIDGE_VERSION = 38
 BATCH_BRIDGE_VERSION = 39
 NUDGE_BRIDGE_VERSION = 41
@@ -753,11 +753,18 @@ STRUCTURAL_BRIDGE_VERSION = 44
 STRUCTURE_READ_BRIDGE_VERSION = 45
 BEAM_RESULT_BRIDGE_VERSION = 46
 SYSTEM_STAFF_BRIDGE_VERSION = 48
+LAYOUT_BATCH_BRIDGE_VERSION = 50
 
 
 def _batch_bridge_version(operations: list[dict[str, Any]]) -> int:
     """The oldest bridge that runs every operation in a validated batch."""
     names = {operation["op"] for operation in operations}
+    if names & {"set-bar-number", "set-layout"} or any(
+        operation.get("prop") == "NumNotes"
+        or (operation["op"] == "add-bars" and ("bar" in operation or "length" in operation))
+        for operation in operations
+    ):
+        return LAYOUT_BATCH_BRIDGE_VERSION
     if "add-line" in names or any(operation.get("staff") == batch_ops.SYSTEM_STAFF for operation in operations):
         return SYSTEM_STAFF_BRIDGE_VERSION
     if names & (batch_ops.STRUCTURAL | {"beam"}):

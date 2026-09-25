@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 49);
+		return CreateDictionary('version', 50);
 	}"
 
 	Echo "(value) {
@@ -677,7 +677,8 @@
 		}
 		return CreateDictionary('barCount', barCount, 'fromBar', fromBar, 'toBar', toBar,
 			'keySignatures', keySignatures, 'timeSignatures', timeSignatures,
-			'barlines', barlines, 'breaks', breaks);
+			'barlines', barlines, 'breaks', breaks,
+			'layout', LayoutRead(score), 'engraving', EngravingRead(score));
 	}"
 
 	GetSpecialBarlines "(fromBar, toBar) {
@@ -916,7 +917,7 @@
 				'Duration', True, 'NoteCount', True, 'Beam', True, 'GraceNote', True,
 				'StemFlipped', True, 'CrossStaff', True, 'RestPosition', True),
 			'LyricItem', CreateDictionary(
-				'Duration', True, 'Text', True, 'StyleId', True, 'StyleAsText', True),
+				'Duration', True, 'NumNotes', True, 'Text', True, 'StyleId', True, 'StyleAsText', True),
 			'Text', CreateDictionary(
 				'Text', True, 'StyleId', True, 'StyleAsText', True),
 			'Line', CreateDictionary(
@@ -1143,7 +1144,7 @@
 		common = CreateDictionary('Dx', True, 'Dy', True, 'Hidden', True, 'CueSize', True);
 		types = CreateDictionary(
 			'NoteRest', CreateDictionary('Beam', True, 'RestPosition', True),
-			'LyricItem', CreateDictionary('Text', True, 'Duration', True),
+			'LyricItem', CreateDictionary('Text', True, 'Duration', True, 'NumNotes', True),
 			'Text', CreateDictionary('Text', True),
 			'Line', CreateDictionary('Duration', True, 'RhDx', True));
 		return CreateDictionary('common', common, 'types', types);
@@ -1168,7 +1169,10 @@
 		if (opName = 'set-key' or opName = 'set-time' or opName = 'set-break') {
 			return True;
 		}
-		if (opName = 'set-barline' or opName = 'add-bars') {
+		if (opName = 'set-barline' or opName = 'add-bars' or opName = 'set-bar-number') {
+			return True;
+		}
+		if (opName = 'set-layout') {
 			return True;
 		}
 		return False;
@@ -1251,6 +1255,25 @@
 		if (opName = 'add-bars') {
 			if (op['count'] < 1 or op['count'] > 1000) {
 				return 'count must be 1-1000';
+			}
+			if (op['length'] != null) {
+				if (op['length'] < 1 or op['length'] > 16384) {
+					return 'length must be 1-16384';
+				}
+			}
+		}
+		if (opName = 'set-bar-number') {
+			if (op['number'] < 1) {
+				return 'number must be at least 1';
+			}
+		}
+		if (opName = 'set-layout') {
+			// Settings are range-checked by batch_ops.py; a zero staff size
+			// would leave nothing to draw.
+			if (BatchHasSetting(op, 'staffSize')) {
+				if (op['staffSize'] <= 0) {
+					return 'staffSize must be positive';
+				}
 			}
 		}
 		return '';
@@ -1341,10 +1364,30 @@
 			return CreateDictionary('staff', op['staff'], 'voice', voice, 'objects', found);
 		}
 		if (opName = 'add-bars') {
-			score.AddBars(op['count']);
+			if (op['bar'] = null and op['length'] = null) {
+				score.AddBars(op['count']);
+			} else {
+				// No bar appends; InsertBars takes one past the last bar.
+				before = systemStaff.BarCount + 1;
+				if (op['bar'] != null) {
+					before = op['bar'];
+				}
+				if (op['length'] = null) {
+					score.InsertBars(op['count'], before);
+				} else {
+					score.InsertBars(op['count'], before, op['length']);
+				}
+			}
 			return CreateDictionary('addedBars', op['count'], 'barCount', systemStaff.BarCount);
 		}
+		if (opName = 'set-layout') {
+			return BatchSetLayout(score, op);
+		}
 		bar = systemStaff.NthBar(op['bar']);
+		if (opName = 'set-bar-number') {
+			bar.AddBarNumber(op['number'], 0, '', False, op['skip']);
+			return CreateDictionary('bar', op['bar'], 'number', op['number'], 'skip', op['skip']);
+		}
 		if (opName = 'set-key') {
 			ks = bar.AddKeySignatureFromText(0, op['key'], op['major']);
 			if (ks = null) {
@@ -1389,6 +1432,87 @@
 			return CreateDictionary('bar', op['bar'], 'removed', existing.Length, 'barlineType', '' & bType);
 		}
 		return null;
+	}"
+
+	BatchSetLayout "(score, op) {
+		// Page size before orientation, which swaps the margins, and both
+		// before the margins themselves. A 0 reads as null in ManuScript, so
+		// op['settings'] names the settings to change.
+		setup = score.DocumentSetup;
+		if (BatchHasSetting(op, 'pageSize')) {
+			setup.PageSize = op['pageSize'];
+		}
+		if (BatchHasSetting(op, 'orientation')) {
+			setup.Orientation = op['orientation'];
+		}
+		if (BatchHasSetting(op, 'staffSize')) {
+			setup.StaffSize = op['staffSize'];
+		}
+		if (BatchHasSetting(op, 'topMargin')) {
+			setup.PageTopMargin = op['topMargin'];
+		}
+		if (BatchHasSetting(op, 'bottomMargin')) {
+			setup.PageBottomMargin = op['bottomMargin'];
+		}
+		if (BatchHasSetting(op, 'leftMargin')) {
+			setup.PageLeftMargin = op['leftMargin'];
+		}
+		if (BatchHasSetting(op, 'rightMargin')) {
+			setup.PageRightMargin = op['rightMargin'];
+		}
+		if (BatchHasSetting(op, 'aboveTopStaveGap')) {
+			setup.AboveTopStaveGap = op['aboveTopStaveGap'];
+		}
+		if (BatchHasSetting(op, 'belowBottomStaveGap')) {
+			setup.BelowBottomStaveGap = op['belowBottomStaveGap'];
+		}
+		rules = score.EngravingRules;
+		if (BatchHasSetting(op, 'spacesBetweenStaves')) {
+			rules.SpacesBetweenStaves = op['spacesBetweenStaves'];
+		}
+		if (BatchHasSetting(op, 'extraSpacesBelowVocalStaves')) {
+			rules.ExtraSpacesBelowVocalStaves = op['extraSpacesBelowVocalStaves'];
+		}
+		if (BatchHasSetting(op, 'spacesBetweenSystems')) {
+			rules.SpacesBetweenSystems = op['spacesBetweenSystems'];
+		}
+		score.Redraw = True;
+		return CreateDictionary('layout', LayoutRead(score), 'engraving', EngravingRead(score));
+	}"
+
+	BatchHasSetting "(op, name) {
+		settings = op['settings'];
+		for i = 0 to settings.Length {
+			if (settings[i] = name) {
+				return True;
+			}
+		}
+		return False;
+	}"
+
+	LayoutRead "(score) {
+		setup = score.DocumentSetup;
+		return CreateDictionary(
+			'pageCount', score.PageCount,
+			'pageSize', setup.PageSize,
+			'orientation', setup.Orientation,
+			'pageWidth', setup.PageWidth,
+			'pageHeight', setup.PageHeight,
+			'staffSize', setup.StaffSize,
+			'topMargin', setup.PageTopMargin,
+			'bottomMargin', setup.PageBottomMargin,
+			'leftMargin', setup.PageLeftMargin,
+			'rightMargin', setup.PageRightMargin,
+			'aboveTopStaveGap', setup.AboveTopStaveGap,
+			'belowBottomStaveGap', setup.BelowBottomStaveGap);
+	}"
+
+	EngravingRead "(score) {
+		rules = score.EngravingRules;
+		return CreateDictionary(
+			'spacesBetweenStaves', rules.SpacesBetweenStaves,
+			'extraSpacesBelowVocalStaves', rules.ExtraSpacesBelowVocalStaves,
+			'spacesBetweenSystems', rules.SpacesBetweenSystems);
 	}"
 
 	BatchBar "(score, op) {

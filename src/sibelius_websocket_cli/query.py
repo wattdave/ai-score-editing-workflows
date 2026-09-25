@@ -16,7 +16,7 @@ READABLE_PROPS: dict[str, frozenset[str]] = {
     "NoteRest": frozenset(
         {"Duration", "NoteCount", "Beam", "GraceNote", "StemFlipped", "CrossStaff", "RestPosition"}
     ),
-    "LyricItem": frozenset({"Duration", "Text", "StyleId", "StyleAsText"}),
+    "LyricItem": frozenset({"Duration", "NumNotes", "Text", "StyleId", "StyleAsText"}),
     "Text": frozenset({"Text", "StyleId", "StyleAsText"}),
     "Line": frozenset({"Duration", "EndBarNumber", "EndPosition", "StyleId", "StyleAsText", "RhDx"}),
     "Clef": frozenset({"StyleId", "ConcertClefStyleId"}),

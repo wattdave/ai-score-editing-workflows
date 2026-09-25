@@ -7,11 +7,12 @@ The bridge resolves every address before the first edit and applies the
 whole batch as one undo step. Operations run in file order.
 
 Structural operations (transpose, copy-passage, key and time signatures,
-breaks, barlines, add-bars, delete-voice) work on bar ranges or the whole
-score. They can replace or renumber the objects an address points at, so they
+breaks, barlines, bar numbers, add-bars, delete-voice, set-layout) work on bar
+ranges or the whole score. They can replace or renumber the objects an address points at, so they
 must come after every object operation. Their bars are checked against the
-score before the batch; a set-time re-bars what follows it, so no later
-operation may name a bar after its bar. Re-barring also erased a special
+score before the batch; a set-time re-bars what follows it, and an add-bars
+with a bar inserts before it, so no later operation may name a bar that either
+has moved. Re-barring also erased a special
 barline just before it (SPEC.md 1.3.1), so every set-time must come before any
 set-key, set-break or set-barline.
 
@@ -36,7 +37,7 @@ from .intervals import compute_transposition
 COMMON_WRITABLE: dict[str, type] = {"Dx": int, "Dy": int, "Hidden": bool, "CueSize": bool}
 WRITABLE_PROPS: dict[str, dict[str, type]] = {
     "NoteRest": {"Beam": int, "RestPosition": int},
-    "LyricItem": {"Text": str, "Duration": int},
+    "LyricItem": {"Text": str, "Duration": int, "NumNotes": int},
     "Text": {"Text": str},
     "Line": {"Duration": int, "RhDx": int},
 }
@@ -45,7 +46,7 @@ ADDRESSED = {"set", "set-pitch", "tie", "bracket", "flip-stem", "delete", "nudge
 ADDING = {"add-note", "add-text", "add-line", "add-lyric"}
 STRUCTURAL = {
     "transpose", "copy-passage", "set-key", "set-time", "set-break",
-    "set-barline", "add-bars", "delete-voice",
+    "set-barline", "set-bar-number", "add-bars", "delete-voice", "set-layout",
 }
 OPERATIONS = ADDRESSED | ADDING | STRUCTURAL | {"beam"}
 DEFAULT_TEXT_STYLE = "text.staff.expression"
@@ -80,6 +81,32 @@ BREAK_NAMES = {
 # (SPEC.md 1.3.1). Interval types run 0-10; degrees are held to three octaves.
 MAX_TRANSPOSE_DEGREE = 21
 MAX_ADD_BARS = 1000
+# An irregular bar's length, in 1/256 quarters: up to sixteen whole notes.
+MAX_BAR_LENGTH = 16384
+
+# DocumentSetup.PageSize values 0-17, in order, as set-layout names.
+# PageSizeCustom (18) cannot be set.
+PAGE_SIZES = [
+    "letter", "tabloid", "a5", "b5", "a4", "b4", "a3", "us-band", "statement",
+    "hymn", "octavo", "executive", "quarto", "concert", "folio", "legal",
+    "9.5x12.5", "10x13",
+]
+ORIENTATIONS = ["portrait", "landscape"]
+# set-layout's numeric fields: DocumentSetup (millimetres) and EngravingRules
+# (staff spaces) properties, with the range each accepts. Out-of-range values
+# are refused here rather than sent to Sibelius.
+LAYOUT_NUMBERS: dict[str, tuple[str, float, float]] = {
+    "staffSize": ("DocumentSetup", 1, 30),
+    "topMargin": ("DocumentSetup", 0, 200),
+    "bottomMargin": ("DocumentSetup", 0, 200),
+    "leftMargin": ("DocumentSetup", 0, 200),
+    "rightMargin": ("DocumentSetup", 0, 200),
+    "aboveTopStaveGap": ("DocumentSetup", 0, 200),
+    "belowBottomStaveGap": ("DocumentSetup", 0, 200),
+    "spacesBetweenStaves": ("EngravingRules", 1, 50),
+    "extraSpacesBelowVocalStaves": ("EngravingRules", 0, 50),
+    "spacesBetweenSystems": ("EngravingRules", 1, 50),
+}
 
 
 class BatchError(ValueError):
@@ -206,7 +233,7 @@ def _validate_structural(operation: dict[str, Any], op: str, label: str) -> dict
     if op in {"transpose", "copy-passage"}:
         out["topStaff"] = _int(operation, "topStaff", label, minimum=1)
         out["bottomStaff"] = _int(operation, "bottomStaff", label, minimum=out["topStaff"])
-    if op in {"set-key", "set-time", "set-break", "set-barline"}:
+    if op in {"set-key", "set-time", "set-break", "set-barline", "set-bar-number"}:
         out["bar"] = _int(operation, "bar", label, minimum=1)
 
     if op == "transpose":
@@ -245,8 +272,47 @@ def _validate_structural(operation: dict[str, Any], op: str, label: str) -> dict
         out["type"] = _choice(operation, "type", label, BREAK_TYPES)
     elif op == "set-barline":
         out["type"] = _choice(operation, "type", label, BARLINE_TYPES)
+    elif op == "set-bar-number":
+        out["number"] = _int(operation, "number", label, minimum=1)
+        skip = operation.get("skip", False)
+        if not isinstance(skip, bool):
+            raise BatchError(f"{label}.skip must be boolean")
+        out["skip"] = skip
     elif op == "add-bars":
         out["count"] = _int(operation, "count", label, minimum=1, maximum=MAX_ADD_BARS)
+        # Without a bar the bars are appended; without a length they are
+        # regular bars of the time signature in force.
+        if "bar" in operation:
+            out["bar"] = _int(operation, "bar", label, minimum=1)
+        if "length" in operation:
+            out["length"] = _int(operation, "length", label, minimum=1, maximum=MAX_BAR_LENGTH)
+    elif op == "set-layout":
+        out.update(_layout(operation, label))
+    return out
+
+
+def _layout(operation: dict[str, Any], label: str) -> dict[str, Any]:
+    """Validate set-layout: any of its settings, and at least one."""
+    known = {"op", "pageSize", "orientation", *LAYOUT_NUMBERS}
+    if unknown := sorted(operation.keys() - known):
+        raise BatchError(f"{label}: unknown set-layout fields {unknown}; allowed: {', '.join(sorted(known - {'op'}))}")
+    out: dict[str, Any] = {}
+    if "pageSize" in operation:
+        out["pageSize"] = PAGE_SIZES.index(_choice(operation, "pageSize", label, set(PAGE_SIZES)))
+    if "orientation" in operation:
+        out["orientation"] = ORIENTATIONS.index(_choice(operation, "orientation", label, set(ORIENTATIONS)))
+    for field, (_, low, high) in LAYOUT_NUMBERS.items():
+        if field not in operation:
+            continue
+        value = operation[field]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
+            raise BatchError(f"{label}.{field} must be a number from {low} to {high}")
+        out[field] = value
+    if not out:
+        raise BatchError(f"{label}: set-layout needs at least one setting")
+    # ManuScript reads a 0 as null, so the plug-in cannot tell "letter",
+    # "portrait" or a zero margin from a missing setting; name them instead.
+    out["settings"] = list(out)
     return out
 
 
@@ -292,7 +358,8 @@ def _check_structural_order(operations: list[dict[str, Any]]) -> None:
             first_structural = i
         if rebarred_after is not None and any(b > rebarred_after for b in _bars_named(operation)):
             raise BatchError(
-                f"op {i} names a bar after bar {rebarred_after}, which an earlier set-time re-bars"
+                f"op {i} names a bar after bar {rebarred_after}, which an earlier set-time "
+                "or add-bars moves"
             )
         if operation["op"] in {"set-key", "set-break", "set-barline"}:
             marked = i
@@ -301,9 +368,14 @@ def _check_structural_order(operations: list[dict[str, Any]]) -> None:
                 f"op {i} (set-time) comes after op {marked} ({operations[marked]['op']}); "
                 "re-barring can erase key signatures, breaks and barlines, so set-time must come first"
             )
+        moved_after = None
         if operation["op"] == "set-time":
-            bar = operation["bar"]
-            rebarred_after = bar if rebarred_after is None else min(rebarred_after, bar)
+            moved_after = operation["bar"]
+        elif operation["op"] == "add-bars" and "bar" in operation:
+            # Inserting before a bar moves that bar and every one after it.
+            moved_after = operation["bar"] - 1
+        if moved_after is not None:
+            rebarred_after = moved_after if rebarred_after is None else min(rebarred_after, moved_after)
 
 
 def _reject_use_after_delete(operations: list[dict[str, Any]]) -> None:
@@ -401,7 +473,24 @@ def name_structure(structure: dict[str, Any]) -> dict[str, Any]:
         {"bar": b["bar"], "type": BREAK_NAMES.get(int(b["breakType"]), str(b["breakType"]))}
         for b in structure.get("breaks", [])
     ]
+    if layout := structure.get("layout"):
+        named["layout"] = {
+            **layout,
+            "pageSize": _indexed_name(PAGE_SIZES, layout.get("pageSize"), "custom"),
+            "orientation": _indexed_name(ORIENTATIONS, layout.get("orientation"), None),
+        }
     return named
+
+
+def _indexed_name(names: list[str], value: Any, beyond: str | None) -> str:
+    """The set-layout name of a DocumentSetup constant, or its value as text."""
+    try:
+        index = int(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if 0 <= index < len(names):
+        return names[index]
+    return beyond if beyond is not None and index == len(names) else str(value)
 
 
 def _barline_name(internal_type: Any) -> str:

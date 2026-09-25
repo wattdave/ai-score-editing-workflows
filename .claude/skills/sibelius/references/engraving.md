@@ -45,6 +45,16 @@ rather than the page bottom margin. Keep page margins intact unless the user
 explicitly wants a smaller printable margin, and use the separate first-page
 value when Document Setup provides one.
 
+Read the current Document Setup and staff spacing from `score_structure`
+(`layout`: page size, orientation, staff size, margins and stave gaps in mm;
+`engraving`: spaces between staves and systems). Change them with one
+`set-layout` batch operation (bridge v50), which changes only the settings
+it names, e.g. `{"op":"set-layout","belowBottomStaveGap":5}` or
+`{"op":"set-layout","spacesBetweenSystems":10,"extraSpacesBelowVocalStaves":2}`.
+Setting `orientation` swaps the margins, so set margins in the same op
+(they are applied after it) or re-read afterwards. The first-page stave
+margin is not settable yet.
+
 To reset a freshly imported score whose systems overlap, reset positions and
 spacing across the whole score, then hide empty staves:
 
