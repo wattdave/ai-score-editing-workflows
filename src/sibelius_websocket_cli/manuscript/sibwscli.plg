@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 53);
+		return CreateDictionary('version', 55);
 	}"
 
 	Echo "(value) {
@@ -478,6 +478,69 @@
 		score.SaveAs(fileName, format);
 		return CreateDictionary('exportedTo', fileName, 'format', format,
 			'stillOpen', score.FileName & '');
+	}"
+
+	GetPlaybackSounds "() {
+		// Each staff's playback sound: the Mixer override, if any, and the
+		// sound at the start plus every change after it. MoveToNext steps
+		// through bars as played, repeats included, so only changes of sound
+		// are kept, and the guard allows for repeated passes.
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		staves = CreateSparseArray();
+		for each Staff staff in score {
+			changes = CreateSparseArray();
+			info = staff.SoundInfoAtPosition(1, 0, 1);
+			last = '';
+			more = True;
+			guard = 8 * (staff.BarCount + 1);
+			while (more and guard > 0) {
+				key = info.SoundSetName & '|' & info.PatchName & '|' & info.ActualSoundId;
+				if (key != last) {
+					changes.Push(CreateDictionary(
+						'bar', info.BarNum, 'soundSet', info.SoundSetName & '',
+						'patch', info.PatchName & '',
+						'requestedSoundId', info.RequestedSoundId & '',
+						'actualSoundId', info.ActualSoundId & ''));
+					last = key;
+				}
+				more = info.MoveToNext();
+				guard = guard - 1;
+			}
+			staves.Push(CreateDictionary(
+				'staffNum', staff.StaffNum, 'name', staff.FullInstrumentName & '',
+				'override', staff.SoundIdOverrideIfAny & '', 'complete', not more,
+				'sounds', changes));
+		}
+		return staves;
+	}"
+
+	ExportAudio "(fileName, staffNum) {
+		// Lossless audio (AIFF on a Mac) of the whole score from the start:
+		// every staff for staffNum 0, otherwise only that staff, by selecting
+		// it and turning off 'include all staves'. The selection is cleared.
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 0 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		selection = score.Selection;
+		selection.Clear();
+		allStaves = True;
+		if (staffNum > 0) {
+			selection.SelectPassage(1, score.SystemStaff.BarCount, staffNum, staffNum);
+			allStaves = False;
+		}
+		ok = score.SaveAsAudio(fileName, allStaves, True);
+		selection.Clear();
+		if (ok != True) {
+			return CreateDictionary('error', 'Sibelius refused the audio export');
+		}
+		return CreateDictionary('exportedTo', fileName, 'staff', staffNum);
 	}"
 
 	Save "() {

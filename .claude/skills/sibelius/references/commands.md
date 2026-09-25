@@ -171,6 +171,24 @@ Single-object writes:
 - Persistence: `save` and `backup`. Prefer `--save` on the final write over a
   separate `save`.
 - Export: `export --format musicxml|mxl|pdf|midi|png [--out PATH] [--file SCORE]`.
+- Rehearsal audio: `rehearsal-mixes --out DIR [--file SCORE] [--name 1=Soprano]
+  [--bitrate 192k] [--keep-stems]` (bridge v54, needs ffmpeg). Exports one
+  audio stem per staff and writes `<score> - All voices.mp3`, then
+  `<voice> only` (that voice plus accompaniment) and `<voice> louder` (that
+  voice at 3x amplitude) for each staff with lyrics. Voices are first
+  equalized to one loudness; accompaniment keeps its Sibelius level. Every
+  file is then gained as a whole to one integrated loudness (`--loudness`,
+  default -16 LUFS, lowered if a file would peak above -1 dBFS), so balance
+  within a file is exact and all files play at the same level. Name unnamed staves with
+  `--name`. The score is not changed. Each staff is exported twice (the first
+  copy warms the sound up: an export's opening otherwise carries the previous
+  staff's voice), so allow about 10 seconds per staff. It prints each staff's playback sound
+  first; `--require-sound Cantai` refuses to export unless every voice plays
+  a sound set containing that name.
+- Playback sounds: `playback-sounds [--require SOUND_SET]` (bridge v55) lists
+  each staff's sound set, patch and sound ID at the start and at every later
+  sound change, plus any Mixer override. `--require` exits non-zero if any
+  staff's sound set does not contain the name.
 
 Read a command's `--help` before composing a new invocation rather than
 inferring omitted arguments.

@@ -164,3 +164,18 @@ def test_lint_chained_subscript() -> None:
 """
     issues = [i for i in lint_manuscript(code) if "Chained subscript" in i.message]
     assert [i.code_line.strip() for i in issues] == ["op = where[0]['op'];"]
+
+
+def test_lint_double_quote_in_method_body() -> None:
+    """A " in a method body, even in a comment, ends the method in Sibelius."""
+    code = '''
+{
+    Method "() {
+        // turn off "include all staves"
+        return 1;
+    }"
+}
+'''
+    issues = lint_manuscript(code)
+    assert any("double quote" in i.message and i.line == 4 for i in issues)
+    assert not lint_manuscript(code.replace('"include all staves"', "'include all staves'"))

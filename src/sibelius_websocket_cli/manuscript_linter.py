@@ -177,8 +177,9 @@ OBJECT_MODEL: dict[str, dict[str, set[str]]] = {
             "initialclefstyleid", "initialinstrumenttype", "initialkeysignature",
             "initialstyleid", "instrumentname", "issystemstaff", "isvocalstaff",
             "parentscore", "shortinstrumentname", "shortstaffname", "staffnum",
+            "soundidoverrideifany",
         },
-        "methods": {"nthbar"},
+        "methods": {"nthbar", "soundinfoatposition"},
         "bases": set(),
     },
     "SystemStaff": {
@@ -320,8 +321,33 @@ class ManuScriptLinter:
         line = re.sub(r'"[^"]*"', '""', line)
         return line
 
+    def _check_body_quotes(self, method_name: str, lines: list[tuple[int, str]]) -> None:
+        """A method body is one double-quoted string, so a " anywhere inside it,
+        comments included, ends the method early: Sibelius then reports a parse
+        error in a dialog. Only the opening "( and the closing }" may use one."""
+        last = len(lines) - 1
+        for i, (line_no, raw_line) in enumerate(lines):
+            body = raw_line
+            if i == 0:
+                body = body.replace('"(', "(", 1)
+            if i == last:
+                body = re.sub(r'\}"\s*;?\s*$', "}", body)
+            column = body.find('"')
+            if column >= 0:
+                self.issues.append(
+                    LintIssue(
+                        line=line_no,
+                        column=column + 1,
+                        severity="error",
+                        method_name=method_name,
+                        message='double quote inside a method body ends the method; use single quotes',
+                        code_line=raw_line.strip(),
+                    )
+                )
+
     def _lint_method(self, method_name: str, lines: list[tuple[int, str]]) -> None:
         """Analyze a single method for type guards and invalid member accesses."""
+        self._check_body_quotes(method_name, lines)
         # Scope stack: list of dicts mapping variable_name -> type_name
         scope_stack: list[dict[str, str]] = [{}]
 
