@@ -67,7 +67,8 @@ and verify once for the whole set.
   and reports each target without changing anything.
   - `{"op":"set","staff":S,"bar":B,"index":I,"prop":P,"value":V}`: writable
     `Dx`, `Dy` (int), `Hidden`, `CueSize` (bool) on anything; `Beam`,
-    `RestPosition` on NoteRest; `Text`, `Duration` on LyricItem; `Text` on
+    `RestPosition` on NoteRest; `Text`, `Duration`, `NumNotes` (melisma span,
+    bridge v50) on LyricItem; `Text` on
     Text; `Duration`, `RhDx` on lines.
   - `{"op":"nudge","staff":S,"bar":B,"index":I,"dx":X,"dy":Y}`: move by
     relative offsets (1/32 space); unlike `set` `Dx`, adds to the current value.
@@ -91,7 +92,8 @@ and verify once for the whole set.
   They must come **after every operation above**, since they can replace or
   renumber the objects an address points at. Bars and staves refer to the
   score before the batch. A `set-time` re-bars what follows it, so no later
-  operation may name a bar after its bar, and every `set-time` must come
+  operation may name a bar after its bar; likewise an `add-bars` with a `bar`
+  moves that bar and every later one. Every `set-time` must come
   before any `set-key`, `set-break` or `set-barline` (re-barring erased a
   barline just before it).
   - `{"op":"transpose","fromBar":A,"toBar":B,"topStaff":T,"bottomStaff":U,"fromNote":"C","toNote":"D","direction":"up"[,"octaves":N]}`,
@@ -104,7 +106,18 @@ and verify once for the whole set.
   - `{"op":"set-break","bar":B,"type":"system"|"page"|"none"}`
   - `{"op":"set-barline","bar":B,"type":T}`: types as in `set-barline`;
     replaces any special barline already there
-  - `{"op":"add-bars","count":N}`: appends N bars at the end
+  - `{"op":"add-bars","count":N[,"bar":B,"length":L]}`: appends N bars at the
+    end, or inserts them before bar B; `length` (1/256 quarters) makes them
+    irregular bars (`bar`/`length` bridge v50)
+  - `{"op":"set-bar-number","bar":B,"number":N[,"skip":true]}`: restart bar
+    numbering at bar B; `skip` leaves bar B itself unnumbered (bridge v50)
+  - `{"op":"set-layout", ...}`: any of `pageSize` (`a4`, `letter`, `a3`,
+    `tabloid`, `concert`, ...), `orientation` (`portrait`/`landscape`),
+    `staffSize`, `topMargin`, `bottomMargin`, `leftMargin`, `rightMargin`,
+    `aboveTopStaveGap`, `belowBottomStaveGap` (mm), `spacesBetweenStaves`,
+    `extraSpacesBelowVocalStaves`, `spacesBetweenSystems` (staff spaces).
+    Only the given settings change; `score_structure` reports the current
+    values as `layout` and `engraving` (bridge v50).
   - `{"op":"delete-voice","fromBar":A,"toBar":B,"staff":S,"voice":V}`
 
   Typical flow: `query` to find targets, write the operations with the

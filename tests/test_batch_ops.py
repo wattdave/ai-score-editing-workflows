@@ -10,6 +10,7 @@ from sibelius_websocket_cli.batch_ops import (
     DEFAULT_TEXT_STYLE,
     STRUCTURAL,
     WRITABLE_PROPS,
+    name_structure,
     BatchError,
     validate_batch,
 )
@@ -224,7 +225,7 @@ def test_no_bar_after_a_set_time_bar() -> None:
         {"op": "set-barline", "bar": 3, "type": "double"},
         {"op": "set-break", "bar": 2, "type": "system"},
     ])
-    with pytest.raises(BatchError, match="earlier set-time re-bars"):
+    with pytest.raises(BatchError, match="earlier set-time or add-bars moves"):
         validate_batch([
             {"op": "set-time", "bar": 3, "numerator": 3, "denominator": 4},
             {"op": "delete-voice", "fromBar": 1, "toBar": 4, "staff": 1, "voice": 2},
@@ -250,3 +251,64 @@ def test_set_time_must_precede_key_break_and_barline() -> None:
 def test_barline_names_match_set_barline_types() -> None:
     from sibelius_websocket_cli.batch_ops import BARLINE_NAMES, BARLINE_TYPES
     assert set(BARLINE_NAMES) | {"none"} == BARLINE_TYPES
+
+
+def test_layout_batch_ops_validate_and_need_bridge_50() -> None:
+    from sibelius_websocket_cli.cli import LAYOUT_BATCH_BRIDGE_VERSION, _batch_bridge_version
+
+    batch = validate_batch([
+        {"op": "set", "staff": 1, "bar": 2, "index": 1, "prop": "NumNotes", "value": 3},
+        {"op": "set-bar-number", "bar": 5, "number": 1, "skip": True},
+        {"op": "set-layout", "pageSize": "letter", "orientation": "landscape",
+         "staffSize": 6.5, "spacesBetweenSystems": 10},
+        {"op": "add-bars", "count": 1, "bar": 3, "length": 256},
+    ])
+    assert batch[1] == {"op": "set-bar-number", "bar": 5, "number": 1, "skip": True}
+    assert batch[2] == {"op": "set-layout", "pageSize": 0, "orientation": 1,
+                        "staffSize": 6.5, "spacesBetweenSystems": 10,
+                        "settings": ["pageSize", "orientation", "staffSize", "spacesBetweenSystems"]}
+    assert batch[3] == {"op": "add-bars", "count": 1, "bar": 3, "length": 256}
+    for ops in ([batch[0]], [batch[1]], [batch[2]], [batch[3]]):
+        assert _batch_bridge_version(ops) == LAYOUT_BATCH_BRIDGE_VERSION
+    plain = validate_batch([{"op": "add-bars", "count": 2}])
+    assert plain == [{"op": "add-bars", "count": 2}]
+    assert _batch_bridge_version(plain) < LAYOUT_BATCH_BRIDGE_VERSION
+
+
+@pytest.mark.parametrize(("op", "match"), [
+    ({"op": "set-layout"}, "at least one setting"),
+    ({"op": "set-layout", "pageSize": "custom"}, "pageSize must be one of"),
+    ({"op": "set-layout", "staffSize": 0}, "staffSize must be a number"),
+    ({"op": "set-layout", "topMargin": True}, "topMargin must be a number"),
+    ({"op": "set-layout", "margin": 10}, "unknown set-layout fields"),
+    ({"op": "set-bar-number", "bar": 1, "number": 0}, "number"),
+    ({"op": "set-bar-number", "bar": 1, "number": 2, "skip": 1}, "skip must be boolean"),
+    ({"op": "add-bars", "count": 1, "length": 0}, "length"),
+])
+def test_layout_batch_ops_reject_bad_values(op: dict, match: str) -> None:
+    with pytest.raises(BatchError, match=match):
+        validate_batch([op])
+
+
+def test_no_bar_at_or_after_an_insertion() -> None:
+    insert = {"op": "add-bars", "count": 1, "bar": 4}
+    validate_batch([insert, {"op": "set-break", "bar": 3, "type": "system"}])
+    with pytest.raises(BatchError, match="add-bars moves"):
+        validate_batch([insert, {"op": "set-break", "bar": 4, "type": "system"}])
+    validate_batch([{"op": "add-bars", "count": 1}, {"op": "set-break", "bar": 40, "type": "system"}])
+
+
+def test_structure_names_layout_constants() -> None:
+    named = name_structure({"layout": {"pageSize": 4, "orientation": 0, "staffSize": 7},
+                            "engraving": {"spacesBetweenStaves": 4}})
+    assert named["layout"] == {"pageSize": "a4", "orientation": "portrait", "staffSize": 7}
+    assert name_structure({"layout": {"pageSize": 18, "orientation": 1}})["layout"]["pageSize"] == "custom"
+
+
+def test_set_layout_names_zero_valued_settings() -> None:
+    # ManuScript reads 0 as null, so "letter", "portrait" and zero margins
+    # must reach the plug-in by name.
+    [op] = validate_batch([{"op": "set-layout", "pageSize": "letter", "orientation": "portrait",
+                            "topMargin": 0}])
+    assert op["settings"] == ["pageSize", "orientation", "topMargin"]
+    assert (op["pageSize"], op["orientation"], op["topMargin"]) == (0, 0, 0)
