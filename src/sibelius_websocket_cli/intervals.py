@@ -1,7 +1,7 @@
 """Interval math for ManuScript's Transpose(degree, interval type).
 
 Degree is 0-based diatonic steps, signed for direction. Interval type is the
-quality constant from docs/manuscript-constants.md: 5 = major/perfect
+quality constant from the ManuScript guide's Global Constants: 5 = major/perfect
 (reference), each semitone of narrowing/widening subtracts/adds 1 (4 = minor
 or diminished, 6 = augmented, ...), valid range 0-10.
 """

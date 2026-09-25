@@ -167,7 +167,7 @@ uv run sibelius-websocket-cli do undo             # curated friendly names:
                                                   # play, play-stop, transpose-dialog
 uv run sibelius-websocket-cli invoke select_all delete
                                                   # raw command IDs, batched;
-                                                  # see docs/commands.md for all 627
+                                                  # see the guide's Command IDs chapter
 ```
 
 Splitting MusicXML is performed locally and deterministically (no score is
@@ -251,12 +251,11 @@ python scripts/sync_skills.py --check  # check for drift without modifying files
 - [`SPEC.md`](SPEC.md) — the empirically verified Sibelius Connect wire
   protocol (one-step handshake, silent token reconnect, `invokePlugin`
   semantics and gotchas) and the CLI design
-- [`docs/sibelius-connect.md`](docs/sibelius-connect.md) — the official
-  protocol chapter from the ManuScript Language Guide
-- [`docs/commands.md`](docs/commands.md) — all 627 command IDs
-- [`docs/manuscript-object-tree.md`](docs/manuscript-object-tree.md) — the
-  full ManuScript object reference, for extending the bridge plug-in
-  (`src/sibelius_websocket_cli/manuscript/sibwscli.plg`)
+- [`docs/avid-reference.md`](docs/avid-reference.md) — links to Avid's
+  ManuScript Language Guide (Sibelius Connect protocol, all 627 command IDs,
+  and the object reference for extending the bridge plug-in in
+  `src/sibelius_websocket_cli/manuscript/sibwscli.plg`), plus the places
+  where the guide is wrong
 
 ## Development
 
@@ -277,3 +276,14 @@ Sources: `src/sibelius_websocket_cli/` — `protocol.py` (message builders),
 `client.py` (async client with token/approval handling), `launcher.py` (Sibelius
 process detection and launch), `token_store.py`, `cli.py`, and the bundled bridge plug-in
 under `manuscript/`.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports and skill requests are
+welcome as GitHub issues.
+
+## License
+
+[Apache License 2.0](LICENSE). Sibelius, Sibelius Connect and ManuScript are
+products of Avid Technology; this project is not affiliated with or endorsed
+by Avid.

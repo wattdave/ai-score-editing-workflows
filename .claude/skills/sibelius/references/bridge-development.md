@@ -12,12 +12,13 @@ version mismatch.
   restart to the user unless a save/discard choice requires their direction.
 - Batch plug-in edits together and update `GetBridgeVersion` when the bridge
   contract changes, because every plug-in update requires that restart.
-- Use `docs/manuscript-object-tree.md`, `docs/manuscript-constants.md`,
-  `docs/commands.md`, and `SPEC.md` as the local API authority. Known guide
-  discrepancies include `utils.CalculateDegree` and `return_value` versus
-  `returnValue`.
-- A method lives on the object whose section lists it in
-  `docs/manuscript-object-tree.md` (for example `CurrentTimeSignature` is on
+- Use Avid's ManuScript Language Guide and `SPEC.md` as the API authority.
+  `docs/avid-reference.md` links the guide, maps chapters to the gitignored
+  local transcriptions (`docs/manuscript-object-tree.md` and others; use
+  them when present), and lists where the guide is wrong, including
+  `utils.CalculateDegree` and `return_value` versus `returnValue`.
+- A method lives on the object whose section lists it in the guide's
+  Object Reference (for example `CurrentTimeSignature` is on
   `SystemStaff`, not `Score`). The lint test does not check receivers, and a
   wrong one fails only at runtime with "Unknown method".
 - A timeout followed by `busyError` usually means a ManuScript runtime error

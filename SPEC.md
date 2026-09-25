@@ -42,7 +42,7 @@ v0.1.0's `connect_to_sibelius` fails against a healthy Sibelius).
 Approval is **per-token, not per-`clientName`** (verified: reconnecting with
 the same client name but no token re-prompts the user). Persisting the token is
 therefore the only way to avoid a dialog on every invocation. Per the official
-docs (`docs/sibelius-connect.md`), a token **is valid only as long as Sibelius
+docs (the guide's Sibelius Connect chapter; see `docs/avid-reference.md`), a token **is valid only as long as Sibelius
 runs** — expect one approval dialog per Sibelius launch. Handle rejection or
 expiry by falling back to a tokenless connect.
 
@@ -69,7 +69,7 @@ is accepted and returns `result: true` — useful as a keepalive/ping).
 
 The valid command IDs are the snake_case ManuScript command IDs (e.g. `undo`,
 `add_bar_at_end`) documented in the ManuScript Language Guide chapter 5 — all
-627 are extracted verbatim to `docs/commands.md`. The same IDs are what
+627 are listed there (see `docs/avid-reference.md`). The same IDs are what
 ManuScript's `Sibelius.Execute()` takes.
 
 **`result: true` only acknowledges receipt, not execution** (verified with a
@@ -102,8 +102,8 @@ Gotcha: some ManuScript property values are not directly JSON-translatable and
 arrive as `null` (observed with `Score.FileName` on a saved score). Coerce
 such values to strings in the plug-in (`value & ''`) before returning them.
 
-This is the path to *reading* score state: a ManuScript plug-in (see
-`docs/manuscript-object-tree.md` for the object API) can return data, unlike
+This is the path to *reading* score state: a ManuScript plug-in (see the
+guide's Object Reference, linked from `docs/avid-reference.md`) can return data, unlike
 fire-and-forget command IDs.
 
 ### 1.3.1 ManuScript behaviour for generic query/batch (verified 2026-09-24)
@@ -161,7 +161,7 @@ Probed on Sibelius 26.8 against a scratch score:
 - **Out-of-range transpose arguments are modal.** `Selection.Transpose(70, 11,
   True, True)` showed "Method Transpose not found", whether called as a
   statement or for its value; `Transpose(1, 5, True, True)` works. Interval type
-  must be 0-10 (docs/manuscript-constants.md) and the degree kept small; which
+  must be 0-10 (the guide's Global Constants chapter) and the degree kept small; which
   of the two arguments triggered it was not isolated.
 - **`AddBars(0)` is a harmless no-op.** No error, no dialog, bar count
   unchanged.
@@ -254,7 +254,7 @@ Global options: `--host` (default `localhost`), `--port` (default `1898`),
 1. **M1 — client core**: `protocol.py`, `client.py`, `token_store.py`; `ping`
    and `command` subcommands; tests with a fake WebSocket server.
 2. **M2 — exploration tools**: `raw`, `invoke`, `repl`; discover and document
-   useful ManuScript command IDs in `docs/commands.md`.
+   useful ManuScript command IDs.
 3. **M3 — plug-in bridge** (done): `invokePlugin` support (client method,
    `plugins` list in connect, tokens bound to their declared plug-in list,
    `plugin`/`score-info`/`install-plugin` subcommands); bundled `sibwscli.plg`
