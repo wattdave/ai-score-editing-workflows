@@ -119,6 +119,8 @@ and verify once for the whole set.
     Only the given settings change; `score_structure` reports the current
     values as `layout` and `engraving` (bridge v50).
   - `{"op":"delete-voice","fromBar":A,"toBar":B,"staff":S,"voice":V}`
+  - `{"op":"hide-empty-staves","fromBar":A,"toBar":B}`: hides every staff
+    with nothing in bars A-B, then optimizes staff spacing there (bridge v52)
 
   Typical flow: `query` to find targets, write the operations with the
   returned addresses plus `type`/`position` guards, `apply --dry-run`, then

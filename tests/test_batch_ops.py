@@ -312,3 +312,13 @@ def test_set_layout_names_zero_valued_settings() -> None:
                             "topMargin": 0}])
     assert op["settings"] == ["pageSize", "orientation", "topMargin"]
     assert (op["pageSize"], op["orientation"], op["topMargin"]) == (0, 0, 0)
+
+
+def test_hide_empty_staves_validates_a_bar_range_and_needs_bridge_52() -> None:
+    from sibelius_websocket_cli.cli import HIDE_EMPTY_STAVES_BRIDGE_VERSION, _batch_bridge_version
+
+    batch = validate_batch([{"op": "hide-empty-staves", "fromBar": 1, "toBar": 43}])
+    assert batch == [{"op": "hide-empty-staves", "fromBar": 1, "toBar": 43}]
+    assert _batch_bridge_version(batch) == HIDE_EMPTY_STAVES_BRIDGE_VERSION
+    with pytest.raises(BatchError, match="toBar"):
+        validate_batch([{"op": "hide-empty-staves", "fromBar": 5, "toBar": 4}])

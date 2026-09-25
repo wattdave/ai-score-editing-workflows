@@ -62,11 +62,11 @@ spacing across the whole score, then hide empty staves:
 uv run sibelius-websocket-cli invoke select_all reset_position \
   reset_space_above_staff reset_space_below_staff reset_note_spacing \
   reset_stems_and_beam_positions
-uv run sibelius-websocket-cli plugin sibwscli HideEmptyStaves --args '[1, LAST_BAR]'
 uv run sibelius-websocket-cli command escape
 ```
 
-`HideEmptyStaves` also optimizes staff spacing. If systems still collide,
+then run `apply` with `[{"op":"hide-empty-staves","fromBar":1,"toBar":LAST_BAR}]`
+(bridge v52). It also optimizes staff spacing. If systems still collide,
 check for system and page breaks carried over from MusicXML `<print>`
 elements: breaks copied from a printed page can force more systems onto a page
 than fit once staves are added. Clear them with `set-break` `"type": "none"`
