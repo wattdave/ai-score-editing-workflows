@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 51);
+		return CreateDictionary('version', 52);
 	}"
 
 	Echo "(value) {
@@ -1036,7 +1036,7 @@
 		if (opName = 'set-barline' or opName = 'add-bars' or opName = 'set-bar-number') {
 			return True;
 		}
-		if (opName = 'set-layout') {
+		if (opName = 'set-layout' or opName = 'hide-empty-staves') {
 			return True;
 		}
 		return False;
@@ -1246,6 +1246,13 @@
 		}
 		if (opName = 'set-layout') {
 			return BatchSetLayout(score, op);
+		}
+		if (opName = 'hide-empty-staves') {
+			// Hiding changes which staves each system shows, so respace them.
+			score.HideEmptyStaves(1, score.StaffCount, op['fromBar'], op['toBar']);
+			score.OptimizeStaffSpacing(1, score.StaffCount, op['fromBar'], op['toBar']);
+			score.Redraw = True;
+			return CreateDictionary('fromBar', op['fromBar'], 'toBar', op['toBar'], 'pageCount', score.PageCount);
 		}
 		bar = systemStaff.NthBar(op['bar']);
 		if (opName = 'set-bar-number') {

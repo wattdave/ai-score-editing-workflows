@@ -7,8 +7,8 @@ The bridge resolves every address before the first edit and applies the
 whole batch as one undo step. Operations run in file order.
 
 Structural operations (transpose, copy-passage, key and time signatures,
-breaks, barlines, bar numbers, add-bars, delete-voice, set-layout) work on bar
-ranges or the whole score. They can replace or renumber the objects an address points at, so they
+breaks, barlines, bar numbers, add-bars, delete-voice, hide-empty-staves,
+set-layout) work on bar ranges or the whole score. They can replace or renumber the objects an address points at, so they
 must come after every object operation. Their bars are checked against the
 score before the batch; a set-time re-bars what follows it, and an add-bars
 with a bar inserts before it, so no later operation may name a bar that either
@@ -47,6 +47,7 @@ ADDING = {"add-note", "add-text", "add-line", "add-lyric"}
 STRUCTURAL = {
     "transpose", "copy-passage", "set-key", "set-time", "set-break",
     "set-barline", "set-bar-number", "add-bars", "delete-voice", "set-layout",
+    "hide-empty-staves",
 }
 OPERATIONS = ADDRESSED | ADDING | STRUCTURAL | {"beam"}
 DEFAULT_TEXT_STYLE = "text.staff.expression"
@@ -227,7 +228,7 @@ def _validate(operation: Any, i: int) -> dict[str, Any]:
 
 def _validate_structural(operation: dict[str, Any], op: str, label: str) -> dict[str, Any]:
     out: dict[str, Any] = {"op": op}
-    if op in {"transpose", "copy-passage", "delete-voice"}:
+    if op in {"transpose", "copy-passage", "delete-voice", "hide-empty-staves"}:
         out["fromBar"] = _int(operation, "fromBar", label, minimum=1)
         out["toBar"] = _int(operation, "toBar", label, minimum=out["fromBar"])
     if op in {"transpose", "copy-passage"}:
