@@ -5,9 +5,27 @@ WebSocket server built into Sibelius 2024.3+ (Ultimate tier). It can fire any
 of Sibelius's ~627 command IDs, and — via a bundled ManuScript bridge plug-in —
 read score structure and note content back out.
 
+## Getting started with Claude Code
+
+You do not need to install anything by hand. You need a Mac and Sibelius
+Ultimate 2026.6 or later.
+
+1. Install Claude Code: open the **Terminal** app and paste
+   `curl -fsSL https://claude.ai/install.sh | bash`, then follow the
+   prompts to sign in.
+2. Get this folder: on GitHub, click **Code → Download ZIP** and unzip it
+   (or `git clone` it if you already have git).
+3. In Terminal, type `cd ` (with a trailing space), drag the folder onto the
+   Terminal window, press Return, then type `claude` and press Return.
+4. Type `/setup`. Claude explains what is missing (Homebrew, git, uv,
+   Python 3.13, ffmpeg, the Sibelius plug-in), asks whether to install it
+   all at once or one item at a time, and does the work.
+
+`scripts/setup_check.sh` shows what is installed at any time.
+
 ## Requirements
 
-- Sibelius Ultimate 2024.3 or later, running on the same machine
+- Sibelius Ultimate 2026.6 or later, running on the same machine
 - Python 3.13+ and [uv](https://docs.astral.sh/uv/)
 
 ## Setup
