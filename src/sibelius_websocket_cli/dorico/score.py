@@ -50,6 +50,8 @@ CLEFS = {"treble", "bass", "percussion", "tab", "tab.4"}
 #: Ops that select a note and run one Dorico command on it.
 NOTE_COMMAND_OPS = {"add-dynamic", "set-articulation", "add-slur", "add-tempo", "add-rehearsal-mark"}
 COMMAND_OPS = {"set-break", "add-lyrics", "set-time", "set-key", "set-barline"} | NOTE_COMMAND_OPS
+#: Resolved forms of set-pitch/delete/transpose on notes read from dump().
+ROUTED_COMMAND_OPS = {"repitch", "delete-by-id"}
 #: set-articulation names and NoteInput.SetArticulation values (checked 2026-09-27).
 ARTICULATIONS = {
     "accent": "kAccent", "marcato": "kMarcato", "staccato": "kStaccato",
@@ -291,11 +293,12 @@ def prepare_batch(
             out.append(item)
     if not out:
         raise DoricoBatchError("the batch changes nothing (a transpose range may hold no notes)")
-    kinds = {o["op"] in COMMAND_OPS for o in operations}
+    kinds = {o["op"] in COMMAND_OPS | ROUTED_COMMAND_OPS or o["op"] == "delete" and o.get("type") == "BreakEvent"
+             for o in out}
     if len(kinds) > 1:
         raise DoricoBatchError(
-            "set-break, set-time, set-key, set-barline and add-lyrics run as Dorico commands "
-            "(several undo steps), so they cannot "
+            "command ops (set-break, set-time, set-key, set-barline, add-lyrics, notation ops, and "
+            "edits to notes on staves with lyrics) take several undo steps, so they cannot "
             "share a batch with other operations; send them as their own batch"
         )
     return out
@@ -321,11 +324,7 @@ def _addressed(
             f"{label}: staff {event['staff']} was read from a MusicXML export (Dorico's scripting cannot "
             "read staves with lyrics), so its existing notes cannot be changed or deleted; adding works"
         )
-    if event.get("source") == "dump" and op != "lookup":
-        raise DoricoBatchError(
-            f"{label}: event {event['id']} is on a staff Dorico's scripting can only list (lyrics or "
-            "tempo marks), so it cannot be changed or deleted from a script; adding works"
-        )
+    dumped = event.get("source") == "dump"
     if "type" in operation and event["type"] not in _types([_str(operation, "type", label)]):
         raise DoricoBatchError(f"{label}: the object there is a {event['type']}, not a {operation['type']}")
     if "position" in operation and event["position"] != operation["position"]:
@@ -345,6 +344,12 @@ def _addressed(
             raise DoricoBatchError(f"{label}: the note there has pitch {event.get('pitch')}, not {old}")
         spelling = operation.get("spelling")
         out.update(oldPitch=old, newPitch=new, letter=spelling_letter(new, spelling if spelling else None))
+    if dumped and op in ("set-pitch", "delete"):
+        # No Lua object for this note (its staff has lyrics or tempo marks):
+        # use Dorico's commands on its id instead (docs/dorico.md).
+        out["op"] = "repitch" if op == "set-pitch" else "delete-by-id"
+        out["select"] = {"id": event["id"], "stream": event["stream"]}
+        out["name"] = event.get("name")
     return out
 
 
@@ -614,19 +619,22 @@ def _transpose(operation: dict[str, Any], label: str, located: list[dict[str, An
     for event in located:
         if event["type"] not in TYPE_ALIASES["Note"] or not first <= event["bar"] <= last or not top <= event["staff"] <= bottom:
             continue
-        if "id" not in event or event.get("source") == "dump":
+        if "id" not in event:
             raise DoricoBatchError(
-                f"{label}: staff {event['staff']} has lyrics or tempo marks, which Dorico's scripting cannot "
-                "read, so its notes cannot be transposed"
+                f"{label}: staff {event['staff']} was read from a MusicXML export, so its notes have no ids "
+                "and cannot be transposed"
             )
         try:
             pitch, letter = transpose_spelled(event.get("name"), event["pitch"], steps, semitones)
         except DoricoBatchError as exc:
             raise DoricoBatchError(f"{label}: event {event['id']}: {exc}") from exc
-        out.append({
+        item = {
             "op": "set-pitch", "stream": event["stream"], "id": event["id"], "type": event["type"],
             "position": event["flowPosition"], "oldPitch": event["pitch"], "newPitch": pitch, "letter": letter,
-        })
+        }
+        if event.get("source") == "dump":
+            item.update(op="repitch", select={"id": event["id"], "stream": event["stream"]}, name=event.get("name"))
+        out.append(item)
     return out
 
 

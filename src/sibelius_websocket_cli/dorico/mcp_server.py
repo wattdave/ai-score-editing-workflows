@@ -184,6 +184,9 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
     - {"op":"set-pitch",...,"oldPitch":P,"newPitch":Q[,"spelling":"Bb"]}:
       replaces the note, spelled as given (default C# Eb F# Ab Bb)
     - {"op":"delete",...}
+    On staves with lyrics (objects with "source": "dump"), set-pitch, delete
+    and transpose run as Dorico commands on the note's id: the note keeps its
+    id and lyric, and the batch counts as a command batch (undoSteps).
 
     Adding operations take staff, bar and position (or flowPosition), and
     an optional voice (default 1; only voices that already exist):

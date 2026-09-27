@@ -625,18 +625,19 @@ DUMPED = EVENTS + [
 ]
 
 
-@pytest.mark.parametrize(
-    "operation",
-    [
-        {"op": "delete", "id": 60},
-        {"op": "set-pitch", "id": 60, "oldPitch": 60, "newPitch": 62},
-        {"op": "add-lyrics", "id": 60, "text": "la"},
-        {"op": "transpose", "fromBar": 3, "toBar": 3, "topStaff": 1, "bottomStaff": 1, "semitones": 2},
-    ],
-)
-def test_lua_ops_refuse_notes_read_from_dump(operation: dict[str, Any]) -> None:
-    with pytest.raises(DoricoBatchError, match="lyrics"):
-        prepare_batch([operation], locate_events(DUMPED, BARS), STAVES, BARS)
+def test_edits_to_notes_read_from_dump_become_commands() -> None:
+    located = locate_events(DUMPED, BARS)
+    ops = prepare_batch([{"op": "delete", "id": 60}], located, STAVES, BARS)
+    assert ops[0]["op"] == "delete-by-id" and ops[0]["select"] == {"id": 60, "stream": 2}
+    ops = prepare_batch([{"op": "set-pitch", "id": 60, "oldPitch": 60, "newPitch": 62}], located, STAVES, BARS)
+    assert (ops[0]["op"], ops[0]["newPitch"], ops[0]["letter"]) == ("repitch", 62, "D")
+    ops = prepare_batch([{"op": "transpose", "fromBar": 3, "toBar": 3, "topStaff": 1, "bottomStaff": 1,
+                          "fromNote": "C", "toNote": "E", "direction": "up"}], located, STAVES, BARS)
+    assert [(o["op"], o["newPitch"], o["letter"]) for o in ops] == [("repitch", 64, "E")]
+    with pytest.raises(DoricoBatchError, match="cannot share a batch"):
+        prepare_batch([{"op": "delete", "id": 60}, {"op": "delete", "id": 3}], located, STAVES, BARS)
+    with pytest.raises(DoricoBatchError, match="already has lyrics"):
+        prepare_batch([{"op": "add-lyrics", "id": 60, "text": "la"}], located, STAVES, BARS)
 
 
 def test_command_ops_can_select_notes_read_from_dump() -> None:
