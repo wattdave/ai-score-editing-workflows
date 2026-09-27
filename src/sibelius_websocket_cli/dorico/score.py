@@ -47,7 +47,25 @@ ADDING = {"add-note", "add-rest", "add-text", "add-clef"}
 CLEFS = {"treble", "bass", "percussion", "tab", "tab.4"}
 #: Ops that run as Dorico commands, one undo step each, so they cannot share
 #: a batch with the Lua ops (one batch, one undo step).
-COMMAND_OPS = {"set-break", "add-lyrics"}
+COMMAND_OPS = {"set-break", "add-lyrics", "set-time", "set-key", "set-barline"}
+#: Popover definitions Dorico's create commands take (logged from the popovers).
+BARLINE_DEFINITIONS = {"double": "||", "final": "|]", "start_repeat": "|:", "end_repeat": ":|"}
+MAJOR_KEYS = {"C", "G", "D", "A", "E", "B", "F#", "C#", "F", "Bb", "Eb", "Ab", "Db", "Gb", "Cb"}
+MINOR_KEYS = {"A", "E", "B", "F#", "C#", "G#", "D#", "A#", "D", "G", "C", "F", "Bb", "Eb", "Ab"}
+#: Characters a command parameter cannot carry (untested or line-based).
+UNSAFE_PARAMETER = set("\\\n\r")
+
+
+def command_value(text: str) -> str:
+    """A value for a Dorico command parameter.
+
+    Dorico splits parameters on "&" and also on ",", and does not URL-decode,
+    but a backslash escapes either: "well\\," arrives as "well,", "rock\\&roll"
+    as "rock&roll" (checked 2026-09-27). Backslashes and line breaks are refused.
+    """
+    if UNSAFE_PARAMETER & set(text):
+        raise DoricoBatchError(f"{text!r} cannot contain a backslash or a line break")
+    return text.replace(",", "\\,").replace("&", "\\&")
 OPERATIONS = ADDRESSED | ADDING | COMMAND_OPS | {"transpose"}
 BREAK_TYPES = {"system", "none"}
 
@@ -246,6 +264,8 @@ def prepare_batch(
             resolved = [_set_break(operation, label, located, bars)]
         elif op == "add-lyrics":
             resolved = [_add_lyrics(operation, label, by_id, by_address)]
+        elif op in {"set-time", "set-key", "set-barline"}:
+            resolved = [_signature(operation, op, label, located, bars)]
         elif op in ADDRESSED:
             resolved = [_addressed(operation, op, label, by_id, by_address)]
         else:
@@ -263,7 +283,8 @@ def prepare_batch(
     kinds = {o["op"] in COMMAND_OPS for o in operations}
     if len(kinds) > 1:
         raise DoricoBatchError(
-            "set-break and add-lyrics run as Dorico commands (several undo steps), so they cannot "
+            "set-break, set-time, set-key, set-barline and add-lyrics run as Dorico commands "
+            "(several undo steps), so they cannot "
             "share a batch with other operations; send them as their own batch"
         )
     return out
@@ -309,6 +330,60 @@ def _addressed(
         spelling = operation.get("spelling")
         out.update(oldPitch=old, newPitch=new, letter=spelling_letter(new, spelling if spelling else None))
     return out
+
+
+def _signature(
+    operation: dict[str, Any], op: str, label: str, located: list[dict[str, Any]], bars: BarMap
+) -> dict[str, Any]:
+    """A time signature, key signature or barline at the start of a bar.
+
+    Selects an item that starts exactly at the bar (Dorico puts a signature
+    at the selected item's position, mid-bar if it is not at the start) and
+    runs NoteInput.CreateTimeSignature / CreateKeySignature / CreateBarLine
+    with the popover's text as Definition, sent unencoded (Dorico does not
+    URL-decode parameters). Bar 1 cannot be changed this way: the edit-in-
+    place commands do nothing (docs/dorico.md).
+    """
+    bar = _int(operation, "bar", label, 2)
+    if op == "set-time":
+        top = _int(operation, "numerator", label, 1, 64)
+        bottom = _int(operation, "denominator", label, 1, 64)
+        if bottom & (bottom - 1):
+            raise DoricoBatchError(f"{label}.denominator must be a power of two up to 64")
+        definition, command, expect = f"{top}/{bottom}", "NoteInput.CreateTimeSignature", "BarDivisionEvent"
+    elif op == "set-key":
+        key = _str(operation, "key", label)
+        minor = operation.get("minor", False)
+        if not isinstance(minor, bool):
+            raise DoricoBatchError(f"{label}.minor must be boolean")
+        keys = MINOR_KEYS if minor else MAJOR_KEYS
+        if key not in keys:
+            raise DoricoBatchError(f"{label}.key must be a {'minor' if minor else 'major'} key: {', '.join(sorted(keys))}")
+        # The key popover takes a capital letter for major, lower case for minor.
+        definition = key[0].lower() + key[1:] if minor else key
+        command, expect = "NoteInput.CreateKeySignature", "TonalityDivisionEvent"
+    else:
+        kind = operation.get("type")
+        if kind not in BARLINE_DEFINITIONS:
+            raise DoricoBatchError(f"{label}.type must be one of: {', '.join(sorted(BARLINE_DEFINITIONS))}")
+        definition, command, expect = BARLINE_DEFINITIONS[kind], "NoteInput.CreateBarLine", "BarDivisionEvent"
+    try:
+        position = bars.position(bar, 0)
+    except Exception as exc:
+        raise DoricoBatchError(f"{label}: {exc}") from exc
+    candidates = [
+        e for e in located
+        if e["bar"] == bar and e["position"] == 0 and e["staff"] >= 1 and "id" in e
+        and e["type"] in TYPE_ALIASES["NoteRest"] and e.get("voice")
+    ]
+    if not candidates:
+        raise DoricoBatchError(
+            f"{label}: bar {bar} has no note or rest the bridge can select at its first beat "
+            "(Dorico places the change at the selected item)"
+        )
+    target = min(candidates, key=lambda e: (e["staff"], e["id"]))
+    return {"op": op, "bar": bar, "position": position, "command": command, "definition": definition,
+            "expect": expect, "select": {"id": target["id"], "stream": target["stream"]}}
 
 
 def _set_break(
@@ -398,6 +473,8 @@ def _add_lyrics(
     if verse != 1:
         raise DoricoBatchError(f"{label}: only verse 1 is supported so far")
     text = operation.get("text")
+    if isinstance(text, str) and UNSAFE_PARAMETER & set(text):
+        raise DoricoBatchError(f"{label}.text cannot contain a backslash or a line break")
     if not isinstance(text, str):
         raise DoricoBatchError(f"{label}.text must be a string of words, e.g. \"ma-king lyr-ics\"")
     event = by_id[target["id"]]

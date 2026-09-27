@@ -149,9 +149,10 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | (Dorico only) `read_lyrics`, `edit_lyrics` | ⚠️ | a player's verse as text through the Edit Lyrics dialog; edits must keep the syllable count |
 | `add-lyric` → `add-lyrics` | ⚠️ | verse 1, typed through the lyric popover by command (see gaps); staff must have no lyrics yet |
 | `copy-passage` | ❌ | `copyRange(from, to, stream, dest, 0)` runs but copies nothing |
-| `set-key`, `set-time` | 🔜/❌ | create calls exist but need elements Lua cannot construct |
+| `set-key`, `set-time` | ⚠️ | by command at the start of a bar ≥ 2 with a note or rest on its first beat; 2 undo steps each (see gaps) |
 | `set-break` | ⚠️ | system breaks via `Edit.CreateSystemBreak` on a selected note (2 undo steps each); bars without a note or rest of their own are refused |
-| `set-barline`, `set-bar-number`, `add-bars`, `set-layout`, `hide-empty-staves`, `delete-voice` | ❌ | not exposed |
+| `set-barline` | ⚠️ | double, final, start/end repeat, by command like set-time |
+| `set-bar-number`, `add-bars`, `set-layout`, `hide-empty-staves`, `delete-voice` | ❌ | not exposed |
 | `undo` | ✅ | stops when Dorico has nothing to undo |
 | (Dorico only) `project_info`, `set_project_info` | ✅ | project-level Project Info fields through the Project Info dialog (typed); not per-flow |
 | `save_score` | ⚠️ | saves a copy to a given `.dorico` path; the project keeps its own file |
@@ -322,6 +323,29 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   values are typed; Cmd-A is Dorico's Select All, so a field is cleared by
   deleting each character. The dialog's Project/flow list does not respond
   to accessibility, so only project-level fields are handled.
+
+- **Time signatures, keys and barlines (2026-09-27).** Entered through
+  the popovers (Shift+K `D`, Shift+B `||`) Dorico logs
+  `NoteInput.CreateKeySignature?Definition=D&UseLocalOverride=0` and
+  `NoteInput.CreateBarLine?Definition=||&UseLocalOverride=0`; with a note
+  selected, `NoteInput.CreateTimeSignature?Definition=3/4`,
+  `CreateKeySignature?Definition=d` (lower case = minor) and `CreateBarLine`
+  with `|]`, `final`, `:|`, `|:`, `||` all work. **Parameters must not be
+  URL-encoded**: Dorico does not decode them (`%7C%5D` did nothing), so
+  values are sent raw. Dorico also splits parameters on **commas** (a
+  lyric "well," arrived as "well"), but a **backslash escapes** both:
+  `well\,` -> "well,", `rock\&roll` -> "rock&roll"; apostrophes need
+  nothing. `score.command_value` escapes them and refuses backslashes and
+  line breaks. Key changes are
+  `TonalityDivisionEvent`s and time signatures and barlines
+  `BarDivisionEvent`s in the global timebase (a barline at the same bar
+  replaces the time signature's event, which then carries both). Dorico
+  places the change at the *selected item's position*, so the item must
+  start at the bar (a note half a beat in made a short bar first).
+  `EventEdit.EditExistingTimeSignature` / `…KeySignature` with an event id
+  and `Text` are accepted but change nothing, so bar 1 cannot be changed.
+  Keystroke-driven popovers are fragile: a leftover lyric popover took a
+  Shift+M. The ops send the commands directly.
 
 ## Safety rules
 

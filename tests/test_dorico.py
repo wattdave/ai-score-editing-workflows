@@ -574,3 +574,44 @@ async def test_set_project_info_validates_before_opening_the_dialog(fields: dict
 
     with pytest.raises(DoricoError, match=message):
         await project_info.set_project_info(None, fields)  # type: ignore[arg-type]
+
+
+# ------------------------------------------------------------------ set-time / set-key / set-barline
+
+def test_signature_ops_select_a_first_beat_note_and_use_popover_definitions() -> None:
+    located = locate_events(EVENTS, BARS)
+    ops = prepare_batch([
+        {"op": "set-key", "bar": 2, "key": "Bb", "minor": True},
+        {"op": "set-time", "bar": 2, "numerator": 6, "denominator": 8},
+        {"op": "set-barline", "bar": 2, "type": "final"},
+    ], located, STAVES, BARS)
+    assert [(o["command"], o["definition"], o["expect"]) for o in ops] == [
+        ("NoteInput.CreateKeySignature", "bb", "TonalityDivisionEvent"),
+        ("NoteInput.CreateTimeSignature", "6/8", "BarDivisionEvent"),
+        ("NoteInput.CreateBarLine", "|]", "BarDivisionEvent"),
+    ]
+    assert ops[0]["select"] == {"id": 7, "stream": 2} and ops[0]["position"] == 1024
+
+
+@pytest.mark.parametrize(
+    ("operation", "message"),
+    [
+        ({"op": "set-key", "bar": 1, "key": "D"}, "bar must be"),
+        ({"op": "set-key", "bar": 2, "key": "H"}, "major key"),
+        ({"op": "set-time", "bar": 2, "numerator": 3, "denominator": 3}, "power of two"),
+        ({"op": "set-barline", "bar": 2, "type": "dashed"}, "type must be one of"),
+        ({"op": "set-time", "bar": 3, "numerator": 3, "denominator": 4}, "first beat"),
+        ({"op": "add-lyrics", "id": 3, "text": "back\\slash"}, "cannot contain"),
+    ],
+)
+def test_signature_and_lyric_refusals(operation: dict[str, Any], message: str) -> None:
+    with pytest.raises(DoricoBatchError, match=message):
+        prepare_batch([operation], locate_events(EVENTS, BARS), STAVES, BARS)
+
+
+def test_command_values_escape_commas_and_ampersands() -> None:
+    from sibelius_websocket_cli.dorico.score import command_value
+
+    assert command_value("well, you'll & more") == "well\\, you'll \\& more"
+    with pytest.raises(DoricoBatchError):
+        command_value("a\\b")
