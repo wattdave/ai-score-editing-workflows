@@ -681,3 +681,38 @@ def test_note_command_ops_resolve_to_commands() -> None:
 def test_note_command_refusals(operation: dict[str, Any], message: str) -> None:
     with pytest.raises(DoricoBatchError, match=message):
         prepare_batch([operation], locate_events(EVENTS, BARS), STAVES, BARS)
+
+
+# ------------------------------------------------------------------ copy-passage
+
+def test_copy_passage_anchors_at_the_first_note_offset() -> None:
+    events = [note(3, 128, 60, "C4"), note(4, 512, 62, "D4")]  # bar 1: first note half a beat in
+    located = locate_events(events, BARS)
+    ops = prepare_batch([{"op": "copy-passage", "fromBar": 1, "toBar": 1, "topStaff": 1, "bottomStaff": 1,
+                          "destStaff": 1, "destBar": 3}], located, STAVES, BARS)
+    op = ops[0]
+    assert op["select"] == {"id": 3, "stream": 2} and op["extendBars"] == 0
+    assert op["anchorPosition"] == 2048 + 128
+    assert op["tempRest"] == {"stream": 2, "position": 2176, "duration": 256}
+    assert op["expect"] == [(0, 60), (384, 62)]
+
+
+@pytest.mark.parametrize(
+    ("operation", "message"),
+    [
+        ({"fromBar": 1, "toBar": 2, "destBar": 2}, "overlaps"),
+        ({"fromBar": 3, "toBar": 3, "destBar": 5}, "no notes to copy"),
+        ({"fromBar": 1, "toBar": 1, "destBar": 3, "destPosition": 256}, "destPosition"),
+    ],
+)
+def test_copy_passage_refusals(operation: dict[str, Any], message: str) -> None:
+    base = {"op": "copy-passage", "topStaff": 1, "bottomStaff": 1, "destStaff": 1}
+    with pytest.raises(DoricoBatchError, match=message):
+        prepare_batch([{**base, **operation}], locate_events(EVENTS, BARS), STAVES, BARS)
+
+
+def test_copy_passage_refuses_a_note_over_the_paste_point() -> None:
+    events = [note(3, 128, 60, "C4"), note(9, 2048, 55, "G3", duration=512)]  # a half note from bar 3's start
+    with pytest.raises(DoricoBatchError, match="covers the paste point"):
+        prepare_batch([{"op": "copy-passage", "fromBar": 1, "toBar": 1, "topStaff": 1, "bottomStaff": 1,
+                        "destStaff": 1, "destBar": 3}], locate_events(events, BARS), STAVES, BARS)

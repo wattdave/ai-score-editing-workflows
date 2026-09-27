@@ -251,16 +251,20 @@ async def _apply_commands(
     commands = [op for op in prepared if op["op"] != "delete"]
     blocks = snap.raw.get("blocks") or {}
     for op in commands:
-        block = blocks.get(str(op["select"]["stream"]))
-        if block is None:
-            raise DoricoError(f"cannot find the event block of stream {op['select']['stream']}; nothing was changed")
-        op["select"]["block"] = block
+        for key in ("select", "anchor"):
+            if key in op:
+                block = blocks.get(str(op[key]["stream"]))
+                if block is None:
+                    raise DoricoError(f"cannot find the event block of stream {op[key]['stream']}; nothing was changed")
+                op[key]["block"] = block
     if removals:
         checked = await bridge.apply(removals, flow, dry_run=True)
         if "error" in checked:
             raise DoricoError(f"{checked['error']}; nothing was changed")
     planned = (1 if removals else 0) + sum(
-        1 + len(op["syllables"]) if op["op"] == "add-lyrics" else 2
+        1 + len(op["syllables"]) if op["op"] == "add-lyrics"
+        else COPY_STEPS + op["extendBars"] + ("tempRest" in op) if op["op"] == "copy-passage"
+        else 2
         for op in commands
     )  # every other command op is its selection plus one command (repitch may add respells)
     if dry_run:
@@ -281,6 +285,11 @@ async def _apply_commands(
     for op in commands:
         target = op["select"]
         try:
+            if op["op"] == "copy-passage":
+                done, result = await _copy_passage(bridge, op, flow, flow_id, blocks)
+                steps += done
+                results.append(result)
+                continue
             if op["op"] == "delete-by-id":
                 await bridge.client.command(
                     f"EventEdit.Delete?FlowID={flow_id}&EventID={target['id']}&EventBlockID={target['block']}"
@@ -333,6 +342,52 @@ async def _apply_commands(
 
 
 LETTERS = "CDEFGAB"
+#: Undo steps of one copy-passage staff before extension and temporary rest:
+#: select, SelectMore, select anchor, paste (measured 2026-09-27).
+COPY_STEPS = 4
+
+
+async def _copy_passage(
+    bridge: DoricoBridge, op: dict[str, Any], flow: int, flow_id: Any, blocks: dict[str, Any]
+) -> tuple[int, dict[str, Any]]:
+    """Copy one staff's bars by selection, Edit.Copy and Edit.Paste; check the notes."""
+    client = bridge.client
+    steps = 0
+    anchor = op.get("anchor")
+    if anchor is None:
+        rest = op["tempRest"]
+        made = await bridge.apply([{"op": "add-rest", **rest}], flow)
+        if "error" in made:
+            raise DoricoError(f"could not place the paste anchor: {made['error']}")
+        steps += 1
+        anchor = {"id": made["results"][0]["after"]["id"], "stream": rest["stream"],
+                  "block": blocks.get(str(rest["stream"]))}
+    source = op["select"]
+    await client.command(f"EventEdit.Select?FlowID={flow_id}&EventID={source['id']}&EventBlockID={source['block']}")
+    await client.command("Edit.SelectMore")
+    for _ in range(op["extendBars"]):
+        await client.command("EventEdit.NavigateRightExtendBar")
+    await client.command("Edit.Copy")
+    mode = (await client.status()).get("noteInputMode")
+    await client.command(f"EventEdit.Select?FlowID={flow_id}&EventID={anchor['id']}&EventBlockID={anchor['block']}")
+    if mode != "kOverwrite":
+        await client.command("NoteInput.Mode?NoteInputMode=kOverwrite")
+    try:
+        await client.command("Edit.Paste")
+    finally:
+        if mode and mode != "kOverwrite":
+            await client.command(f"NoteInput.Mode?NoteInputMode={mode}")
+    steps += COPY_STEPS + op["extendBars"]
+    events, _ = await bridge.read_partial(flow)
+    start = op["anchorPosition"]
+    span = max(p for p, _ in op["expect"]) + 1
+    pasted = sorted(
+        (e["position"] - start, e.get("pitch")) for e in events
+        if e.get("stream") == anchor["stream"] and e["type"] in ("NoteEvent", "GraceNoteEvent") and start <= e["position"] < start + span
+    )
+    ok = pasted == sorted(op["expect"])
+    return steps, {"op": "copy-passage", "staff": op["staff"], "destStaff": op["destStaff"],
+                   "notes": len(op["expect"]), "verified": ok, **({} if ok else {"found": pasted})}
 
 
 async def _repitch(bridge: DoricoBridge, op: dict[str, Any], flow: int) -> tuple[int, dict[str, Any]]:

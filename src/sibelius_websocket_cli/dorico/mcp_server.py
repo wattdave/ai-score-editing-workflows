@@ -220,6 +220,11 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       {"op":"add-rehearsal-mark",...}: at a note addressed like set-pitch
       (works on staves with lyrics too). Two undo steps each; slurs cannot be
       checked afterwards (verified: false).
+    - {"op":"copy-passage","fromBar":A,"toBar":B,"topStaff":T,"bottomStaff":U,
+      "destStaff":S,"destBar":D}: copies each staff's notes by Dorico's copy
+      and paste (overwriting at the destination), anchored so the notes keep
+      their places in the bar; checked afterwards. Needs a note in bar A on
+      each staff with notes; refuses a destination under a sustained note.
     - {"op":"add-lyrics","staff":S,"bar":B,"index":I (or "id"),"text":"ma-king lyr-ics _ now"}:
       verse-1 lyrics typed into Dorico's lyric popover from that note on
       (spaces separate words, hyphens syllables, "_" continues a melisma).
