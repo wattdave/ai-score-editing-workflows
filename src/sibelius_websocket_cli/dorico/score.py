@@ -45,7 +45,11 @@ ADDRESSED = {"set-pitch", "delete"}
 ADDING = {"add-note", "add-rest", "add-text", "add-clef"}
 #: Clef library entities in a new Dorico project (score.libraries.clefs).
 CLEFS = {"treble", "bass", "percussion", "tab", "tab.4"}
-OPERATIONS = ADDRESSED | ADDING | {"transpose"}
+#: Ops that run as Dorico commands, one undo step each, so they cannot share
+#: a batch with the Lua ops (one batch, one undo step).
+COMMAND_OPS = {"set-break"}
+OPERATIONS = ADDRESSED | ADDING | COMMAND_OPS | {"transpose"}
+BREAK_TYPES = {"system", "none"}
 
 
 class DoricoBatchError(ValueError):
@@ -238,6 +242,8 @@ def prepare_batch(
             raise DoricoBatchError(f"{label}.op must be one of: {', '.join(sorted(OPERATIONS))}")
         if op == "transpose":
             resolved = _transpose(operation, label, located)
+        elif op == "set-break":
+            resolved = [_set_break(operation, label, located, bars)]
         elif op in ADDRESSED:
             resolved = [_addressed(operation, op, label, by_id, by_address)]
         else:
@@ -252,6 +258,12 @@ def prepare_batch(
             out.append(item)
     if not out:
         raise DoricoBatchError("the batch changes nothing (a transpose range may hold no notes)")
+    kinds = {o["op"] == "set-break" for o in operations}
+    if len(kinds) > 1:
+        raise DoricoBatchError(
+            "set-break runs as Dorico commands (one undo step each), so it cannot share a batch "
+            "with other operations; send it as its own batch"
+        )
     return out
 
 
@@ -295,6 +307,46 @@ def _addressed(
         spelling = operation.get("spelling")
         out.update(oldPitch=old, newPitch=new, letter=spelling_letter(new, spelling if spelling else None))
     return out
+
+
+def _set_break(
+    operation: dict[str, Any], label: str, located: list[dict[str, Any]], bars: BarMap
+) -> dict[str, Any]:
+    """A system break at the start of a bar ("system"), or its removal ("none").
+
+    Adding selects the bar's first note or rest (by id) and runs
+    Edit.CreateSystemBreak: Lua-made breaks are ignored by the layout
+    (docs/dorico.md). Removing deletes the BreakEvent through Lua.
+    """
+    bar = _int(operation, "bar", label, 2)
+    kind = operation.get("type")
+    if kind not in BREAK_TYPES:
+        raise DoricoBatchError(f"{label}.type must be one of: {', '.join(sorted(BREAK_TYPES))}")
+    try:
+        position = bars.position(bar, 0)
+    except Exception as exc:
+        raise DoricoBatchError(f"{label}: {exc}") from exc
+    existing = [e for e in located if e["type"] == "BreakEvent" and e["flowPosition"] == position]
+    if kind == "none":
+        if not existing:
+            raise DoricoBatchError(f"{label}: there is no break at bar {bar}")
+        e = existing[0]
+        return {"op": "delete", "stream": e["stream"], "id": e["id"], "type": "BreakEvent", "position": position}
+    if existing:
+        raise DoricoBatchError(f"{label}: bar {bar} already has a break")
+    candidates = [
+        e for e in located
+        if e["bar"] == bar and e["staff"] >= 1 and "id" in e
+        and e["type"] in TYPE_ALIASES["NoteRest"] and e.get("voice")
+    ]
+    if not candidates:
+        raise DoricoBatchError(
+            f"{label}: bar {bar} has no note or rest the bridge can select (staves with lyrics "
+            "have no ids), so Dorico cannot be told where to break"
+        )
+    target = min(candidates, key=lambda e: (e["position"], e["staff"], e["id"]))
+    return {"op": "set-break", "type": "system", "bar": bar, "position": position,
+            "select": {"id": target["id"], "stream": target["stream"]}}
 
 
 def _stream_for(staff: int, voice: int, staves: list[dict[str, Any]], label: str) -> int:

@@ -191,6 +191,13 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       "fromNote":"C","toNote":"D","direction":"up"|"down"[,"octaves":N]}
       (or "semitones":N[,"steps":D]): respells every note in range.
 
+    - {"op":"set-break","bar":B,"type":"system"|"none"}: add or remove a
+      system break at the start of bar B. Must be the only kind of op in
+      its batch: each added break selects a note in bar B and runs a Dorico
+      command, two undo steps (the result's undoSteps says how many to undo;
+      the user's selection in Dorico changes). Adding needs a note or rest
+      that starts in bar B, and the project must be Dorico's active one.
+
     No operation may target an event another operation already changes.
     Returns each operation's before/after events and the number applied.
     """

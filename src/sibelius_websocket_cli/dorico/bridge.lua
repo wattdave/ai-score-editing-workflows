@@ -188,7 +188,15 @@ local function raw_layout(score, flow)
       instruments[#instruments + 1] = { id = iid, name = names[iid], voiceStreams = voices }
     end
   end
-  return { staves = staves, instruments = instruments }
+  -- Each stream's event block, which EventEdit.Select needs; only streams
+  -- with a single block instance (the usual case) are listed.
+  local blocks = {}
+  for _, stream in ipairs(list(field(flow, 'allStreams'))) do
+    local instances = list(field(stream, 'blockInstances'))
+    local block = #instances == 1 and field(instances[1], 'block') or nil
+    if block ~= nil then blocks[tostring(field(stream, 'id'))] = field(block, 'id') end
+  end
+  return { staves = staves, instruments = instruments, blocks = blocks }
 end
 
 -- Events read from a stream report the base class Event to class_info, so

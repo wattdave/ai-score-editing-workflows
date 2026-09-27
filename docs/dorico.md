@@ -148,7 +148,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `add-line`, `add-lyric` | ❌ | no line or lyric classes exposed |
 | `copy-passage` | ❌ | `copyRange(from, to, stream, dest, 0)` runs but copies nothing |
 | `set-key`, `set-time` | 🔜/❌ | create calls exist but need elements Lua cannot construct |
-| `set-break` | 🔜 | `createSystemBreak(0, pos)` makes a `BreakEvent`, but the render broke at a different bar; meaning of the int unknown |
+| `set-break` | ⚠️ | system breaks via `Edit.CreateSystemBreak` on a selected note (2 undo steps each); bars without a note or rest of their own are refused |
 | `set-barline`, `set-bar-number`, `add-bars`, `set-layout`, `hide-empty-staves`, `delete-voice` | ❌ | not exposed |
 | `undo` | ✅ | stops when Dorico has nothing to undo |
 | `save_score` | ⚠️ | saves a copy to a given `.dorico` path; the project keeps its own file |
@@ -221,6 +221,30 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   / Skip this file); moving the old folder aside first avoids them.
   AppleScript must use `get role of e` / `get name of e` explicitly on
   Dorico's Qt elements, or comparisons silently fail.
+
+- **System breaks (2026-09-27).** A break made with the menu is
+  `EventEdit.Select?FlowID=0&EventID=<a note at the bar>&EventBlockID=<block>`
+  then `Edit.CreateSystemBreak`: a `BreakEvent` in the global timebase at
+  the bar's start (`kBreakType` 1, a `kBreakLayoutID` Lua cannot read), and
+  the full score starts a system there. `createSystemBreak(n, pos)` from Lua
+  makes a `BreakEvent` with the same readable properties, but with n = 0 or
+  1 the full score ignores it. So set-break would go through the command,
+  which needs a note or rest (with an id) starting in that bar, and the
+  project to be Dorico's active score. Deleting the `BreakEvent` removes a
+  break. `set-break` does exactly this; bars with no event of their own
+  (empty bars, or only a note tied in from the bar before) are refused.
+  Dorico's implied rests are not events, and `Edit.GoToLocation` /
+  `GoToRhythmicPosition` do not select anything. A temporary rest to select
+  worked but was dropped as too fragile to undo.
+- **Selections are undo steps.** `EventEdit.Select` adds an entry to
+  Dorico's undo history, so select-then-command costs two undo steps; an
+  undo count that ignores this reverts the wrong thing (seen twice on
+  2026-09-27). Every Lua script, even a read, also clears the redo stack.
+- **Active score.** `ScriptHost().currentScore` and every command follow
+  Dorico's active project, which changes only when a window really gets
+  focus. Raising a window by script works with System Events: set the
+  process `frontmost`, then `perform action "AXRaise"` on the window
+  ("Flow 1 in sample"); clicking the Window menu item alone did not.
 
 ## Safety rules
 
