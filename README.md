@@ -233,6 +233,26 @@ client, run `uv run --directory /path/to/sibelius-websocket-cli sibelius-mcp`.
 `SIBELIUS_HOST` and `SIBELIUS_PORT` override the default `localhost:1898`.
 The first call shows Sibelius's connection approval dialog, as the CLI does.
 
+## Dorico (experimental)
+
+`dorico-mcp` offers the same tools for the project open in Dorico 6.2+,
+through Dorico's Remote Control API and a Lua bridge that Dorico runs
+(`src/sibelius_websocket_cli/dorico/bridge.lua`). `dorico-cli` exposes them
+on the command line:
+
+```bash
+uv run dorico-cli overview
+uv run dorico-cli query --bars 1-4 --type Note
+uv run dorico-cli apply --file batch.json --dry-run
+uv run dorico-cli undo
+```
+
+The first connection shows an approval prompt in Dorico. Addresses, units
+and batches follow the Sibelius tools; Dorico's scripting exposes less
+(no lyrics, lines, layout or key signature contents, and only a first-page
+preview export). [docs/dorico.md](docs/dorico.md) has the parity table, the
+gaps and how the bridge works.
+
 ## Multi-Agent Skills (Claude, Antigravity, Cursor)
 
 The canonical Sibelius skill lives in `.claude/skills/sibelius/`. Its concise
