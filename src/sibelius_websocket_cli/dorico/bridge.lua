@@ -161,49 +161,34 @@ local function flow_at(score, index)
   return flow, #flows
 end
 
--- Staves are the flow's stave streams in id order. flow.instruments has one
--- entry per stave in the same order, naming the instrument and listing its
--- voice streams; a two-stave instrument lists the same voices on both
--- entries, so its voices are given to its first stave. (Assigning voices by
--- id order failed on an imported score, where every voice id came after
--- every stave id.)
-local function layout_streams(score, flow)
-  local staves = by_id(list(field(flow, 'staveStreams')))
+-- The flow's layout as Dorico's Lua exposes it, without guessing: stave
+-- streams in id order, and instruments (in order) with their voice streams.
+-- Lua has no link from a voice to its stave (docs/dorico.md), so
+-- dorico/layout.py assigns voices to staves, from MusicXML when needed.
+-- flow.instruments has one entry per voice, each listing all of that
+-- instrument's voices, so entries are merged by instrument id.
+local function raw_layout(score, flow)
   local names = {}
   for _, player in ipairs(list(field(score, 'players'))) do
     for _, instrument in ipairs(list(field(player, 'instruments'))) do
       names[field(instrument, 'id')] = str(player)
     end
   end
-  local entries = list(field(flow, 'instruments'))
-  if #entries ~= #staves then
-    error('flow has ' .. #staves .. ' staves but ' .. #entries .. ' instrument entries; cannot map voices', 0)
+  local staves = array()
+  for _, stave in ipairs(by_id(list(field(flow, 'staveStreams')))) do
+    staves[#staves + 1] = { stream = field(stave, 'id') }
   end
-  -- How many staves each instrument has, and which of them each stave is.
-  local stave_count, stave_index = {}, {}
-  for i, entry in ipairs(entries) do
+  local instruments, seen = array(), {}
+  for _, entry in ipairs(list(field(flow, 'instruments'))) do
     local iid = field(entry, 'id')
-    stave_count[iid] = (stave_count[iid] or 0) + 1
-    stave_index[i] = stave_count[iid]
-  end
-  local result, claimed = {}, {}
-  for i, stave in ipairs(staves) do
-    local entry = entries[i]
-    local iid = field(entry, 'id')
-    local item = { staff = i, stream = stave, streamId = field(stave, 'id'), voices = {}, name = names[iid] }
-    local voices = by_id(list(field(entry, 'streams')))
-    if stave_count[iid] > 1 and #voices == stave_count[iid] then
-      -- One voice per stave (e.g. an imported two-stave Tenor part), in order.
-      item.voices[1] = voices[stave_index[i]]
-    else
-      for _, voice in ipairs(voices) do
-        local vid = field(voice, 'id')
-        if not claimed[vid] then claimed[vid] = true item.voices[#item.voices + 1] = voice end
-      end
+    if not seen[iid] then
+      seen[iid] = true
+      local voices = array()
+      for _, v in ipairs(by_id(list(field(entry, 'streams')))) do voices[#voices + 1] = field(v, 'id') end
+      instruments[#instruments + 1] = { id = iid, name = names[iid], voiceStreams = voices }
     end
-    result[i] = item
   end
-  return result
+  return { staves = staves, instruments = instruments }
 end
 
 -- Events read from a stream report the base class Event to class_info, so
@@ -268,12 +253,6 @@ end
 function actions.overview(request)
   local score = current_score()
   local flow, flow_count = flow_at(score, request.flow)
-  local staves = array()
-  for _, s in ipairs(layout_streams(score, flow)) do
-    local voices = array()
-    for _, v in ipairs(s.voices) do voices[#voices + 1] = field(v, 'id') end
-    staves[#staves + 1] = { staff = s.staff, name = s.name, stream = s.streamId, voiceStreams = voices }
-  end
   local players = array()
   for _, p in ipairs(list(field(score, 'players'))) do players[#players + 1] = str(p) end
   local layouts = array()
@@ -285,7 +264,7 @@ function actions.overview(request)
     flow = request.flow or 1,
     flowCount = flow_count,
     players = players,
-    staves = staves,
+    layout = raw_layout(score, flow),
     layouts = layouts,
   }
 end
@@ -305,10 +284,10 @@ function actions.read(request)
     if not ok then unreadable[#unreadable + 1] = { stream = field(stream, 'id'), staff = staff, voice = voice } end
   end
   for _, tb in ipairs(list(field(flow, 'timebaseStreams'))) do add_stream(tb, 0, nil) end
-  for _, s in ipairs(layout_streams(score, flow)) do
-    add_stream(s.stream, s.staff, nil)
-    for v, voice in ipairs(s.voices) do add_stream(voice, s.staff, v) end
-  end
+  -- Stave-stream events get their stave's index; voice-stream events get
+  -- none, since layout.py assigns voices to staves.
+  for i, stave in ipairs(by_id(list(field(flow, 'staveStreams')))) do add_stream(stave, i, nil) end
+  for _, voice in ipairs(by_id(list(field(flow, 'voiceStreams')))) do add_stream(voice, nil, nil) end
   return { flow = request.flow or 1, events = sort_events(events), unreadable = unreadable }
 end
 
@@ -328,9 +307,10 @@ function actions.bars(request)
     end
   end
   table.sort(divisions, function(a, b) return a.position < b.position end)
+  -- Only voices Lua can read: a stream with lyrics cannot be measured in.
   local voices = {}
-  for _, s in ipairs(layout_streams(score, flow)) do
-    for _, v in ipairs(s.voices) do voices[#voices + 1] = v end
+  for _, v in ipairs(list(field(flow, 'voiceStreams'))) do
+    if pcall(stream_list, v) then voices[#voices + 1] = v end
   end
   -- An empty voice is the least disturbing place for a temporary bar rest.
   table.sort(voices, function(a, b) return #stream_list(a) < #stream_list(b) end)

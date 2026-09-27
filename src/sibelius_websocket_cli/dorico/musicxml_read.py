@@ -112,7 +112,7 @@ def read(path: str | Path) -> dict[str, Any]:
                 bar_lengths.append(_units(length))
             flow += length
         for staff_in_part in range(1, staff_count + 1):
-            staves.append({"staff": first_staff + staff_in_part - 1, "name": names.get(part.get("id"), "")})
+            staves.append({"staff": first_staff + staff_in_part - 1, "name": names.get(part.get("id"), ""), "part": part.get("id")})
         first_staff += staff_count
     divisions_map: list[tuple[int, int]] = []
     position = 0
