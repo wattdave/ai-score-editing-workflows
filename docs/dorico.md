@@ -153,6 +153,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `set-break` | ⚠️ | system breaks via `Edit.CreateSystemBreak` on a selected note (2 undo steps each); bars without a note or rest of their own are refused |
 | `set-barline`, `set-bar-number`, `add-bars`, `set-layout`, `hide-empty-staves`, `delete-voice` | ❌ | not exposed |
 | `undo` | ✅ | stops when Dorico has nothing to undo |
+| (Dorico only) `project_info`, `set_project_info` | ✅ | project-level Project Info fields through the Project Info dialog (typed); not per-flow |
 | `save_score` | ⚠️ | saves a copy to a given `.dorico` path; the project keeps its own file |
 | `export_score` | ✅ | `pdf` (all pages, via Print mode), `musicxml` (full score, via the export window), first-page previews |
 
@@ -310,6 +311,17 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   Generate Notes From Chord Symbols, Edit Instrument Families, …). The
   dialogs driven here (Edit Lyrics, Export MusicXML) are not among them:
   they are Qt Widgets, which is why macOS accessibility reaches them.
+
+- **Project Info and tokens (2026-09-27).** Text tokens such as
+  `{@projectComposer@}` resolve in page frames (title pages, headers), not
+  in staff text items: a Lua-created text shows the token literally.
+  `score.title` is read-only in Lua. `File.ScoreInfo` opens the Project
+  Info dialog (Qt Widgets, named text fields plus Apply/Close), which
+  `dorico/project_info.py` drives. Setting a field's value through
+  accessibility shows the text but Apply ignores it (Qt sees no edit), so
+  values are typed; Cmd-A is Dorico's Select All, so a field is cleared by
+  deleting each character. The dialog's Project/flow list does not respond
+  to accessibility, so only project-level fields are handled.
 
 ## Safety rules
 
