@@ -258,6 +258,12 @@ function actions.version()
   return { bridge = BRIDGE_VERSION, lua = _VERSION }
 end
 
+-- The active window's layout (DoApp's currentLayoutID) and Dorico's build.
+function actions.window()
+  local app = DoApp.DoApp()
+  return { layoutID = field(app, 'currentLayoutID'), version = field(app, 'versionString') }
+end
+
 function actions.overview(request)
   local score = current_score()
   local flow, flow_count = flow_at(score, request.flow)

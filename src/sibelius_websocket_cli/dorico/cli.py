@@ -15,7 +15,7 @@ from typing import Any
 
 from sibelius_websocket_cli.cli import parse_bar_range
 
-from . import service
+from . import lyrics_dialog, service
 from .bridge import DoricoBridge
 from .client import DEFAULT_PORT, DoricoClient, DoricoError
 from .score import DoricoBatchError
@@ -42,6 +42,13 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("--file")
     source.add_argument("--json")
     apply.add_argument("--dry-run", action="store_true")
+    lyrics = sub.add_parser("lyrics", help="read a player's line of lyrics")
+    lyrics.add_argument("player")
+    lyrics.add_argument("--verse", type=int, default=1)
+    edit_lyrics = sub.add_parser("edit-lyrics", help="replace a player's line of lyrics (same syllable count)")
+    edit_lyrics.add_argument("player")
+    edit_lyrics.add_argument("text")
+    edit_lyrics.add_argument("--verse", type=int, default=1)
     undo = sub.add_parser("undo")
     undo.add_argument("--steps", type=int, default=1)
     save = sub.add_parser("save", help="save the project to a .dorico file")
@@ -69,6 +76,10 @@ async def run(args: argparse.Namespace) -> Any:
         if args.command == "apply":
             text = Path(args.file).expanduser().read_text() if args.file else args.json
             return await service.apply(bridge, json.loads(text), flow=args.flow, dry_run=args.dry_run)
+        if args.command == "lyrics":
+            return await lyrics_dialog.read_lyrics(bridge, args.player, args.verse)
+        if args.command == "edit-lyrics":
+            return await lyrics_dialog.edit_lyrics(bridge, args.player, args.text, args.verse)
         if args.command == "undo":
             return await service.undo(bridge, args.steps)
         if args.command == "save":
