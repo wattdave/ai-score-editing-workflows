@@ -199,13 +199,19 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       the user's selection in Dorico changes). Adding needs a note or rest
       that starts in bar B, and the project must be Dorico's active one.
 
+    - {"op":"set-time","bar":B,"numerator":N,"denominator":D},
+      {"op":"set-key","bar":B,"key":"Bb"[,"minor":true]},
+      {"op":"set-barline","bar":B,"type":"double"|"final"|"start_repeat"|"end_repeat"}:
+      at the start of bar B (not bar 1); needs a note or rest with an id on
+      B's first beat. Two undo steps each (selection + command).
     - {"op":"add-lyrics","staff":S,"bar":B,"index":I (or "id"),"text":"ma-king lyr-ics _ now"}:
       verse-1 lyrics typed into Dorico's lyric popover from that note on
       (spaces separate words, hyphens syllables, "_" continues a melisma).
       The staff must not have lyrics yet. One undo step for the selection
       plus one per syllable; Dorico is brought to the front while it types,
       and the result's lyricsCheck compares a MusicXML export with the text.
-      Command ops only (set-break, add-lyrics) in such a batch.
+      Command ops only (set-break, set-time, set-key, set-barline,
+      add-lyrics) in such a batch.
 
     No operation may target an event another operation already changes.
     Returns each operation's before/after events and the number applied.

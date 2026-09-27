@@ -199,7 +199,7 @@ class DoricoBridge:
         result = await self.call("bars", flow=flow)
         if result.get("created"):
             await self.client.command("Edit.Undo")
-            after = await self.read(flow)
+            after, _ = await self.read_partial(flow)
             if fingerprint(after) != fingerprint(events):
                 await self.client.command("Edit.Redo")
                 raise DoricoError(

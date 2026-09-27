@@ -35,6 +35,12 @@ the terminal needs Accessibility permission). Those staves' objects have
 delete, re-pitch or transpose their existing notes. Say so rather than
 trying.
 
+## Signatures and barlines
+
+`set-time`, `set-key`, `set-barline` and `set-break` change bar 2 onwards
+and need a note or rest (with an id) starting the bar; they cannot share a
+batch with other ops and report `undoSteps`. Bar 1 cannot be changed.
+
 ## Project Info
 
 `project_info` / `set_project_info` read and set the project's title,

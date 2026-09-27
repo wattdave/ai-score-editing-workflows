@@ -13,7 +13,6 @@ import tempfile
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import quote
 from typing import Any
 
 from . import layout, musicxml_read, score
@@ -232,7 +231,7 @@ async def _apply_commands(
         if "error" in checked:
             raise DoricoError(f"{checked['error']}; nothing was changed")
     planned = (1 if removals else 0) + sum(
-        2 if op["op"] == "set-break" else 1 + len(op["syllables"]) for op in commands
+        1 + len(op["syllables"]) if op["op"] == "add-lyrics" else 2 for op in commands
     )
     if dry_run:
         return {"dryRun": True, "operations": prepared, "undoSteps": planned}
@@ -264,6 +263,16 @@ async def _apply_commands(
                     raise DoricoError(f"Dorico made no break at bar {op['bar']}")
                 steps += 1
                 results.append({"op": "set-break", "type": "system", "bar": op["bar"], "id": made[0]["id"]})
+            elif op["op"] in {"set-time", "set-key", "set-barline"}:
+                before = {e["id"] for e in (await bridge.read_partial(flow))[0]}
+                await bridge.client.command(f"{op['command']}?Definition={op['definition']}")
+                events, _ = await bridge.read_partial(flow)
+                made = [e for e in events if e["id"] not in before and e["type"] == op["expect"]
+                        and e["position"] == op["position"]]
+                if not made:
+                    raise DoricoError(f"Dorico made no {op['op'][4:]} change at bar {op['bar']} ({op['definition']})")
+                steps += 1
+                results.append({"op": op["op"], "bar": op["bar"], "definition": op["definition"], "id": made[0]["id"]})
             else:
                 steps += await _type_lyrics(bridge, op["syllables"])
                 lyrics.append(op)
@@ -290,7 +299,7 @@ async def _type_lyrics(bridge: DoricoBridge, syllables: list[list[str]]) -> int:
     await asyncio.sleep(POPOVER_OPEN_DELAY)
     for text, kind in syllables:
         await bridge.client.command(
-            f"NoteInput.AcceptCurrentLyricInput?LyricText={quote(text)}&LyricsEntryAdvanceType={kind}"
+            f"NoteInput.AcceptCurrentLyricInput?LyricText={score.command_value(text)}&LyricsEntryAdvanceType={kind}"
         )
         await asyncio.sleep(SYLLABLE_DELAY)
         if kind != score.END_INPUT:
