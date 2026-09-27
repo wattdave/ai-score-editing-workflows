@@ -41,6 +41,7 @@ class Snapshot:
     export: Path | None = None
     unreadable_staves: list[int] = field(default_factory=list)
     unplaced_voices: list[int] = field(default_factory=list)
+    raw: dict[str, Any] = field(default_factory=dict)
 
 
 async def snapshot(bridge: DoricoBridge, flow: int = 1) -> Snapshot:
@@ -55,7 +56,7 @@ async def snapshot(bridge: DoricoBridge, flow: int = 1) -> Snapshot:
     if staves is not None:
         placed = layout.assign(events, staves)
         bars = await bridge.bars(flow, events)
-        return Snapshot(staves, score.locate_events(placed, bars), bars)
+        return Snapshot(staves, score.locate_events(placed, bars), bars, raw=raw)
 
     path = await export_musicxml(bridge.client, flow)
     xml = musicxml_read.read(path)
@@ -84,7 +85,7 @@ async def snapshot(bridge: DoricoBridge, flow: int = 1) -> Snapshot:
         key = (item["staff"], item["bar"])
         item["index"] = counters.get(key, 0)
         counters[key] = item["index"] + 1
-    return Snapshot(staves, located, xml["bars"], xml, path, bad, sorted(all_voices - placed_streams))
+    return Snapshot(staves, located, xml["bars"], xml, path, bad, sorted(all_voices - placed_streams), raw)
 
 
 def _last_bar(located: list[dict[str, Any]], bars: BarMap) -> int:
@@ -188,6 +189,8 @@ async def apply(
     status = await bridge.client.status()
     if not dry_run and status.get("notReadOnly") is False:
         raise DoricoError("the score is read-only")
+    if any(op["op"] == "set-break" for op in operations if isinstance(op, dict)):
+        return await _apply_breaks(bridge, prepared, snap, flow, dry_run)
     checked = await bridge.apply(prepared, flow, dry_run=True)
     if "error" in checked:
         raise DoricoError(f"{checked['error']}; nothing was changed")
@@ -201,6 +204,60 @@ async def apply(
             "Call undo once to revert them."
         )
     return {"applied": result.get("applied"), "results": result.get("results")}
+
+
+async def _apply_breaks(
+    bridge: DoricoBridge, prepared: list[dict[str, Any]], snap: Snapshot, flow: int, dry_run: bool
+) -> dict[str, Any]:
+    """Run a set-break batch: removals as one Lua step, each addition as a command.
+
+    Each added break is two undo steps: selecting its note (Dorico records
+    selection changes made by EventEdit.Select) and the break itself. The
+    result reports how many steps to undo.
+    """
+    removals = [op for op in prepared if op["op"] == "delete"]
+    additions = [op for op in prepared if op["op"] == "set-break"]
+    blocks = snap.raw.get("blocks") or {}
+    for op in additions:
+        block = blocks.get(str(op["select"]["stream"]))
+        if block is None:
+            raise DoricoError(f"cannot find the event block of stream {op['select']['stream']}; nothing was changed")
+        op["select"]["block"] = block
+    if removals:
+        checked = await bridge.apply(removals, flow, dry_run=True)
+        if "error" in checked:
+            raise DoricoError(f"{checked['error']}; nothing was changed")
+    if dry_run:
+        return {"dryRun": True, "operations": prepared, "undoSteps": 2 * len(additions) + (1 if removals else 0)}
+    steps = 0
+    results = []
+    if removals:
+        result = await bridge.apply(removals, flow)
+        if "error" in result:
+            raise DoricoError(f"{result['error']}; call undo once to revert the removals")
+        steps += 1
+        results += [{"op": "set-break", "type": "none", "position": op["position"]} for op in removals]
+    flows = await bridge.client.flows()
+    if additions and not 1 <= flow <= len(flows):
+        raise DoricoError(f"Dorico lists {len(flows)} flow(s), not flow {flow}")
+    flow_id = flows[flow - 1]["flowID"] if additions else None
+    for op in additions:
+        target = op["select"]
+        await bridge.client.command(
+            f"EventEdit.Select?FlowID={flow_id}&EventID={target['id']}&EventBlockID={target['block']}"
+        )
+        steps += 1  # the selection is an undo step of its own
+        await bridge.client.command("Edit.CreateSystemBreak")
+        breaks = [e for e in await bridge.read(flow) if e["type"] == "BreakEvent"]
+        made = [e for e in breaks if e["position"] == op["position"]]
+        if not made:
+            raise DoricoError(
+                f"Dorico made no break at bar {op['bar']}; {steps} earlier step(s) were applied "
+                "(undo that many to revert)"
+            )
+        steps += 1
+        results.append({"op": "set-break", "type": "system", "bar": op["bar"], "id": made[0]["id"]})
+    return {"applied": len(results), "undoSteps": steps, "results": results}
 
 
 async def undo(bridge: DoricoBridge, steps: int = 1) -> dict[str, Any]:

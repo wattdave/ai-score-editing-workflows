@@ -482,3 +482,29 @@ def test_layout_extra_voice_needs_musicxml_and_is_placed_by_its_notes() -> None:
     assert [s["voiceStreams"] for s in staves] == [[2, 7], [4]]  # empty voice 6 left out
     placed = layout.assign([{"stream": 7, "staff": None, "voice": None}, {"stream": 6, "staff": None}], staves)
     assert placed == [{"stream": 7, "staff": 1, "voice": 2}]
+
+
+# ------------------------------------------------------------------ set-break
+
+def test_set_break_selects_a_note_in_the_bar_and_removes_via_lua() -> None:
+    located = locate_events(EVENTS + [
+        {"id": 50, "type": "BreakEvent", "stream": 0, "staff": 0, "position": 2048, "duration": 0},
+    ], BarMap([(0, 1024)]))
+    ops = prepare_batch([{"op": "set-break", "bar": 2, "type": "system"},
+                         {"op": "set-break", "bar": 3, "type": "none"}], located, STAVES, BARS)
+    assert ops[0] == {"op": "set-break", "type": "system", "bar": 2, "position": 1024,
+                      "select": {"id": 7, "stream": 2}}
+    assert ops[1] == {"op": "delete", "stream": 0, "id": 50, "type": "BreakEvent", "position": 2048}
+
+
+@pytest.mark.parametrize(
+    ("batch", "message"),
+    [
+        ([{"op": "set-break", "bar": 5, "type": "system"}], "no note or rest"),
+        ([{"op": "set-break", "bar": 2, "type": "none"}], "no break at bar 2"),
+        ([{"op": "set-break", "bar": 2, "type": "system"}, {"op": "delete", "id": 3}], "cannot share a batch"),
+    ],
+)
+def test_set_break_refusals(batch: list[dict[str, Any]], message: str) -> None:
+    with pytest.raises(DoricoBatchError, match=message):
+        prepare_batch(batch, locate_events(EVENTS, BARS), STAVES, BARS)
