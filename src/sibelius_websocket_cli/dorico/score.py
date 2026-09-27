@@ -47,7 +47,16 @@ ADDING = {"add-note", "add-rest", "add-text", "add-clef"}
 CLEFS = {"treble", "bass", "percussion", "tab", "tab.4"}
 #: Ops that run as Dorico commands, one undo step each, so they cannot share
 #: a batch with the Lua ops (one batch, one undo step).
-COMMAND_OPS = {"set-break", "add-lyrics", "set-time", "set-key", "set-barline"}
+#: Ops that select a note and run one Dorico command on it.
+NOTE_COMMAND_OPS = {"add-dynamic", "set-articulation", "add-slur", "add-tempo", "add-rehearsal-mark"}
+COMMAND_OPS = {"set-break", "add-lyrics", "set-time", "set-key", "set-barline"} | NOTE_COMMAND_OPS
+#: set-articulation names and NoteInput.SetArticulation values (checked 2026-09-27).
+ARTICULATIONS = {
+    "accent": "kAccent", "marcato": "kMarcato", "staccato": "kStaccato",
+    "staccatissimo": "kStaccatissimo", "tenuto": "kTenuto", "staccato-tenuto": "kStaccatoTenuto",
+    "stress": "kStress", "unstress": "kUnstress",
+}
+DYNAMICS = {"pppp", "ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "ffff", "sfz", "sf", "fp", "sfp", "rfz", "fz"}
 #: Popover definitions Dorico's create commands take (logged from the popovers).
 BARLINE_DEFINITIONS = {"double": "||", "final": "|]", "start_repeat": "|:", "end_repeat": ":|"}
 MAJOR_KEYS = {"C", "G", "D", "A", "E", "B", "F#", "C#", "F", "Bb", "Eb", "Ab", "Db", "Gb", "Cb"}
@@ -266,6 +275,8 @@ def prepare_batch(
             resolved = [_add_lyrics(operation, label, by_id, by_address)]
         elif op in {"set-time", "set-key", "set-barline"}:
             resolved = [_signature(operation, op, label, located, bars)]
+        elif op in NOTE_COMMAND_OPS:
+            resolved = [_note_command(operation, op, label, by_id, by_address)]
         elif op in ADDRESSED:
             resolved = [_addressed(operation, op, label, by_id, by_address)]
         else:
@@ -334,6 +345,46 @@ def _addressed(
             raise DoricoBatchError(f"{label}: the note there has pitch {event.get('pitch')}, not {old}")
         spelling = operation.get("spelling")
         out.update(oldPitch=old, newPitch=new, letter=spelling_letter(new, spelling if spelling else None))
+    return out
+
+
+def _note_command(
+    operation: dict[str, Any], op: str, label: str,
+    by_id: dict[int, dict[str, Any]], by_address: dict[tuple[int, int, int], dict[str, Any]],
+) -> dict[str, Any]:
+    """A notation added at a note by selecting it and running one command.
+
+    Works on notes read from dump() too (only the id is needed). What each
+    op creates, and how it is checked afterwards, is in docs/dorico.md.
+    """
+    target = _addressed({**operation, "op": "lookup"}, "lookup", label, by_id, by_address)
+    event = by_id[target["id"]]
+    if event["type"] not in TYPE_ALIASES["NoteRest"]:
+        raise DoricoBatchError(f"{label}: {op} needs a note or rest, not a {event['type']}")
+    out: dict[str, Any] = {"op": op, "staff": event["staff"], "position": event["flowPosition"],
+                           "select": {"id": target["id"], "stream": target["stream"]}}
+    if op == "add-dynamic":
+        dynamic = _str(operation, "dynamic", label)
+        if dynamic not in DYNAMICS:
+            raise DoricoBatchError(f"{label}.dynamic must be one of: {', '.join(sorted(DYNAMICS))}")
+        out.update(command="NoteInput.CreateDynamic", parameters={"Definition": dynamic}, expect="DynamicGroupEvent")
+    elif op == "set-articulation":
+        name = _str(operation, "articulation", label)
+        if name not in ARTICULATIONS:
+            raise DoricoBatchError(f"{label}.articulation must be one of: {', '.join(sorted(ARTICULATIONS))}")
+        if event["type"] not in TYPE_ALIASES["Note"]:
+            raise DoricoBatchError(f"{label}: articulations go on notes, not a {event['type']}")
+        out.update(command="NoteInput.SetArticulation", parameters={"Value": ARTICULATIONS[name]},
+                   articulation=name, checkable=event.get("source") != "dump")
+    elif op == "add-slur":
+        if event["type"] not in TYPE_ALIASES["Note"]:
+            raise DoricoBatchError(f"{label}: slurs start on a note, not a {event['type']}")
+        out.update(command="NoteInput.SlurStart", parameters={})
+    elif op == "add-tempo":
+        out.update(command="NoteInput.CreateTempo", parameters={"Definition": command_value(_str(operation, "text", label))},
+                   expect="ImmediateTempoChangeEvent")
+    else:
+        out.update(command="NoteInput.CreateRehearsalMark", parameters={}, expect="RehearsalMarkEvent")
     return out
 
 

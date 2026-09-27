@@ -210,14 +210,21 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       {"op":"set-barline","bar":B,"type":"double"|"final"|"start_repeat"|"end_repeat"}:
       at the start of bar B (not bar 1); needs a note or rest with an id on
       B's first beat. Two undo steps each (selection + command).
+    - {"op":"add-dynamic",...,"dynamic":"p"|"mf"|...}, {"op":"set-articulation",
+      ...,"articulation":"accent"|"marcato"|"staccato"|"staccatissimo"|
+      "tenuto"|"staccato-tenuto"|"stress"|"unstress"}, {"op":"add-slur",...}
+      (to the next note), {"op":"add-tempo",...,"text":"Allegro"|"q=120"},
+      {"op":"add-rehearsal-mark",...}: at a note addressed like set-pitch
+      (works on staves with lyrics too). Two undo steps each; slurs cannot be
+      checked afterwards (verified: false).
     - {"op":"add-lyrics","staff":S,"bar":B,"index":I (or "id"),"text":"ma-king lyr-ics _ now"}:
       verse-1 lyrics typed into Dorico's lyric popover from that note on
       (spaces separate words, hyphens syllables, "_" continues a melisma).
       The staff must not have lyrics yet. One undo step for the selection
       plus one per syllable; Dorico is brought to the front while it types,
       and the result's lyricsCheck compares a MusicXML export with the text.
-      Command ops only (set-break, set-time, set-key, set-barline,
-      add-lyrics) in such a batch.
+      Command ops (set-break, set-time, set-key, set-barline, add-lyrics,
+      the notation ops above) cannot share a batch with the others.
 
     No operation may target an event another operation already changes.
     Returns each operation's before/after events and the number applied.

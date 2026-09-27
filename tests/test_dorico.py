@@ -650,3 +650,33 @@ def test_attach_lyrics_matches_notes_by_staff_position_and_pitch() -> None:
     service._attach_lyrics(located, [{"staff": 1, "flowPosition": 0, "pitch": 62,
                                       "lyrics": [{"verse": 1, "text": "Oh", "syllabic": "single"}]}])
     assert located[0]["lyrics"][0]["text"] == "Oh" and "lyrics" not in located[1]
+
+
+# ------------------------------------------------------------------ notation command ops
+
+def test_note_command_ops_resolve_to_commands() -> None:
+    ops = prepare_batch([
+        {"op": "add-dynamic", "id": 4, "dynamic": "mf"},
+        {"op": "set-articulation", "id": 4, "articulation": "tenuto"},
+        {"op": "add-slur", "id": 3},
+        {"op": "add-tempo", "id": 5, "text": "Allegro, ma non troppo"},
+        {"op": "add-rehearsal-mark", "id": 6},
+    ], locate_events(EVENTS, BARS), STAVES, BARS)
+    assert [(o["command"], o["parameters"], o.get("expect")) for o in ops] == [
+        ("NoteInput.CreateDynamic", {"Definition": "mf"}, "DynamicGroupEvent"),
+        ("NoteInput.SetArticulation", {"Value": "kTenuto"}, None),
+        ("NoteInput.SlurStart", {}, None),
+        ("NoteInput.CreateTempo", {"Definition": "Allegro\\, ma non troppo"}, "ImmediateTempoChangeEvent"),
+        ("NoteInput.CreateRehearsalMark", {}, "RehearsalMarkEvent"),
+    ]
+    assert ops[1]["checkable"] is True
+
+
+@pytest.mark.parametrize(
+    ("operation", "message"),
+    [({"op": "add-dynamic", "id": 4, "dynamic": "loud"}, "dynamic must be"),
+     ({"op": "set-articulation", "id": 4, "articulation": "spiccato"}, "articulation must be")],
+)
+def test_note_command_refusals(operation: dict[str, Any], message: str) -> None:
+    with pytest.raises(DoricoBatchError, match=message):
+        prepare_batch([operation], locate_events(EVENTS, BARS), STAVES, BARS)
