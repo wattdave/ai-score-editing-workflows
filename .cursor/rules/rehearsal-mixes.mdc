@@ -22,19 +22,48 @@ score is not changed.
    first to build a playback copy.
 4. **Staff names.** Voices are the staves with lyrics; file names come from
    staff names. Name unnamed staves with `--name 1=Soprano` (repeatable).
+   For an instrumental score, `--all-parts` makes every staff a part.
+5. **One score open.** `--file` does not bring a score that is already open
+   to the front, so a batch can silently export the wrong score. Ask the user
+   to close other scores, and always pass the global `--expect-file SCORE`
+   so a mismatch stops the export.
+
+## Cantai
+
+Cantai is set up by the user in Sibelius, not by the CLI:
+
+- **Assign voices in the Mixer.** The playback configuration alone leaves
+  singers on the default sounds; the user picks a Cantai voice on each
+  staff's Mixer strip. `playback-sounds` then shows `Cantai / ...` with
+  `[Mixer override ...]`. Save the score so the choice is kept.
+- **One language at a time.** Cantai sings one language (English, Latin or
+  Spanish) and re-renders every voice when it changes. Group pieces by
+  language and let the user switch between groups; export nothing while it
+  re-renders.
+- **Give every staff a different sound.** Two staves with the same sound
+  share one playback channel, and Cantai then sings only one of them live,
+  for example Soprano I and II. Use a different Cantai voice for each
+  (Soprano and "Ottetto: Sopranos"), and check the channel numbers differ.
+- **Keep instrument changes to a minimum.** Repeated `set-initial-instrument`
+  calls on a Cantai score left one staff rendering an instrument sound even
+  in export. A fresh import with voices set once in the Mixer fixed it.
+- `--require-sound Cantai` only checks the sound set name, not that each
+  staff has the right voice: read the `playback-sounds` list.
 
 ## Export
 
 ```bash
 uv run sibelius-websocket-cli playback-sounds
-uv run sibelius-websocket-cli rehearsal-mixes --out DIR \
-  [--file SCORE] [--name 1=Soprano] [--require-sound Cantai] \
+uv run sibelius-websocket-cli --expect-file SCORE rehearsal-mixes --out DIR \
+  [--file SCORE] [--name 1=Soprano] [--all-parts] [--require-sound Cantai] \
   [--bitrate 192k] [--loudness -16] [--keep-stems]
 ```
 
 Allow about 10 seconds per staff: each staff is exported twice, because an
 export's opening otherwise carries the previous staff's voice. Read
-`--help` before composing unusual invocations.
+`--help` before composing unusual invocations. Quote `--name` values that
+contain spaces (`--name "2=Contra I"`). Importing MusicXML shows an options
+dialog every time; the user must click OK before the import continues.
 
 ## Output
 
