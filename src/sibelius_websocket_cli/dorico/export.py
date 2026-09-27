@@ -271,3 +271,8 @@ async def export_pdf(client: DoricoClient, log: Path = APPLICATION_LOG) -> Path:
         if time.monotonic() > deadline:
             raise DoricoError("Dorico did not report exporting a PDF")
         await asyncio.sleep(0.3)
+
+
+def bring_to_front() -> None:
+    """Make Dorico the frontmost app; its lyric popover needs it."""
+    _osascript('tell application "System Events" to tell process "%(process)s" to set frontmost to true')

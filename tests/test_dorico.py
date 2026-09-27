@@ -508,3 +508,30 @@ def test_set_break_selects_a_note_in_the_bar_and_removes_via_lua() -> None:
 def test_set_break_refusals(batch: list[dict[str, Any]], message: str) -> None:
     with pytest.raises(DoricoBatchError, match=message):
         prepare_batch(batch, locate_events(EVENTS, BARS), STAVES, BARS)
+
+
+# ------------------------------------------------------------------ add-lyrics
+
+def test_parse_lyrics_words_hyphens_and_melismas() -> None:
+    from sibelius_websocket_cli.dorico.score import parse_lyrics
+
+    assert parse_lyrics("ma-king lyr-ics _ now") == [
+        ("ma", "kHyphenateCurrentWord"), ("king", "kEndOrExtendCurrentWord"),
+        ("lyr", "kHyphenateCurrentWord"), ("ics", "kEndOrExtendCurrentWord"),
+        ("", "kEndOrExtendCurrentWord"), ("now", "kEndInput"),
+    ]
+    with pytest.raises(DoricoBatchError):
+        parse_lyrics("   ")
+
+
+def test_add_lyrics_resolves_first_note_and_refuses_the_rest() -> None:
+    located = locate_events(EVENTS, BARS)
+    ops = prepare_batch([{"op": "add-lyrics", "staff": 1, "bar": 1, "index": 0, "text": "Oh fare-well"}],
+                        located, STAVES, BARS)
+    assert ops == [{"op": "add-lyrics", "staff": 1, "position": 0, "select": {"id": 3, "stream": 2},
+                    "syllables": [["Oh", "kEndOrExtendCurrentWord"], ["fare", "kHyphenateCurrentWord"],
+                                  ["well", "kEndInput"]]}]
+    with pytest.raises(DoricoBatchError, match="only verse 1"):
+        prepare_batch([{"op": "add-lyrics", "id": 3, "text": "x", "verse": 2}], located, STAVES, BARS)
+    with pytest.raises(DoricoBatchError, match="cannot share a batch"):
+        prepare_batch([{"op": "add-lyrics", "id": 3, "text": "x"}, {"op": "delete", "id": 4}], located, STAVES, BARS)

@@ -47,7 +47,7 @@ ADDING = {"add-note", "add-rest", "add-text", "add-clef"}
 CLEFS = {"treble", "bass", "percussion", "tab", "tab.4"}
 #: Ops that run as Dorico commands, one undo step each, so they cannot share
 #: a batch with the Lua ops (one batch, one undo step).
-COMMAND_OPS = {"set-break"}
+COMMAND_OPS = {"set-break", "add-lyrics"}
 OPERATIONS = ADDRESSED | ADDING | COMMAND_OPS | {"transpose"}
 BREAK_TYPES = {"system", "none"}
 
@@ -244,6 +244,8 @@ def prepare_batch(
             resolved = _transpose(operation, label, located)
         elif op == "set-break":
             resolved = [_set_break(operation, label, located, bars)]
+        elif op == "add-lyrics":
+            resolved = [_add_lyrics(operation, label, by_id, by_address)]
         elif op in ADDRESSED:
             resolved = [_addressed(operation, op, label, by_id, by_address)]
         else:
@@ -258,11 +260,11 @@ def prepare_batch(
             out.append(item)
     if not out:
         raise DoricoBatchError("the batch changes nothing (a transpose range may hold no notes)")
-    kinds = {o["op"] == "set-break" for o in operations}
+    kinds = {o["op"] in COMMAND_OPS for o in operations}
     if len(kinds) > 1:
         raise DoricoBatchError(
-            "set-break runs as Dorico commands (one undo step each), so it cannot share a batch "
-            "with other operations; send it as its own batch"
+            "set-break and add-lyrics run as Dorico commands (several undo steps), so they cannot "
+            "share a batch with other operations; send them as their own batch"
         )
     return out
 
@@ -347,6 +349,63 @@ def _set_break(
     target = min(candidates, key=lambda e: (e["position"], e["staff"], e["id"]))
     return {"op": "set-break", "type": "system", "bar": bar, "position": position,
             "select": {"id": target["id"], "stream": target["stream"]}}
+
+
+#: How AcceptCurrentLyricInput leaves each syllable (logged from the popover).
+HYPHENATE = "kHyphenateCurrentWord"
+END_WORD = "kEndOrExtendCurrentWord"
+END_INPUT = "kEndInput"
+
+
+def parse_lyrics(text: str) -> list[tuple[str, str]]:
+    """Syllables and how each ends: "ma-king lyr-ics _ now" ->
+    [("ma", hyphen), ("king", end), ("lyr", hyphen), ("ics", end), ("", end), ("now", end input)].
+
+    Spaces separate words, a hyphen splits a word into syllables, and "_"
+    continues the previous syllable over the next note (a melisma).
+    """
+    syllables: list[tuple[str, str]] = []
+    for word in text.split():
+        if word == "_":
+            syllables.append(("", END_WORD))
+            continue
+        parts = [p for p in word.split("-") if p]
+        if not parts:
+            raise DoricoBatchError(f"lyric word {word!r} has no syllables")
+        syllables += [(p, HYPHENATE) for p in parts[:-1]] + [(parts[-1], END_WORD)]
+    if not syllables:
+        raise DoricoBatchError("lyrics text is empty")
+    last_text, _ = syllables[-1]
+    syllables[-1] = (last_text, END_INPUT)
+    return syllables
+
+
+def _add_lyrics(
+    operation: dict[str, Any], label: str,
+    by_id: dict[int, dict[str, Any]], by_address: dict[tuple[int, int, int], dict[str, Any]],
+) -> dict[str, Any]:
+    """Lyrics typed into Dorico's lyric popover from a first note onwards.
+
+    Runs NoteInput.StartLyricInput and one AcceptCurrentLyricInput per
+    syllable, as the popover does (docs/dorico.md). Dorico moves to the next
+    note itself, so only the first note needs an id: the staff must not
+    have lyrics yet (Lua cannot read a staff that has them).
+    """
+    target = _addressed({**operation, "op": "delete"}, "delete", label, by_id, by_address)
+    if target["type"] not in TYPE_ALIASES["Note"]:
+        raise DoricoBatchError(f"{label}: lyrics start on a note, not a {target['type']}")
+    verse = operation.get("verse", 1)
+    if verse != 1:
+        raise DoricoBatchError(f"{label}: only verse 1 is supported so far")
+    text = operation.get("text")
+    if not isinstance(text, str):
+        raise DoricoBatchError(f"{label}.text must be a string of words, e.g. \"ma-king lyr-ics\"")
+    event = by_id[target["id"]]
+    return {
+        "op": "add-lyrics", "staff": event["staff"], "position": event["flowPosition"],
+        "select": {"id": target["id"], "stream": target["stream"]},
+        "syllables": [list(s) for s in parse_lyrics(text)],
+    }
 
 
 def _stream_for(staff: int, voice: int, staves: list[dict[str, Any]], label: str) -> int:

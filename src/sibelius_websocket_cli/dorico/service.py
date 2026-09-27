@@ -7,17 +7,19 @@ export. See docs/dorico.md for what Dorico's scripting does not expose.
 
 from __future__ import annotations
 
+import asyncio
 import shutil
 import tempfile
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import quote
 from typing import Any
 
 from . import layout, musicxml_read, score
 from .bridge import BarMap, DoricoBridge
 from .client import DoricoError
-from .export import export_musicxml, export_pdf
+from .export import bring_to_front, export_musicxml, export_pdf
 
 #: Formats export_score takes: pdf through Print mode, previews from a saved copy.
 PREVIEWS = {"preview-pdf": "preview.pdf", "preview-png": "preview.png"}
@@ -189,8 +191,8 @@ async def apply(
     status = await bridge.client.status()
     if not dry_run and status.get("notReadOnly") is False:
         raise DoricoError("the score is read-only")
-    if any(op["op"] == "set-break" for op in operations if isinstance(op, dict)):
-        return await _apply_breaks(bridge, prepared, snap, flow, dry_run)
+    if any(op["op"] in score.COMMAND_OPS for op in operations if isinstance(op, dict)):
+        return await _apply_commands(bridge, prepared, snap, flow, dry_run)
     checked = await bridge.apply(prepared, flow, dry_run=True)
     if "error" in checked:
         raise DoricoError(f"{checked['error']}; nothing was changed")
@@ -206,19 +208,21 @@ async def apply(
     return {"applied": result.get("applied"), "results": result.get("results")}
 
 
-async def _apply_breaks(
+async def _apply_commands(
     bridge: DoricoBridge, prepared: list[dict[str, Any]], snap: Snapshot, flow: int, dry_run: bool
 ) -> dict[str, Any]:
-    """Run a set-break batch: removals as one Lua step, each addition as a command.
+    """Run a batch of command ops (set-break, add-lyrics) in order.
 
-    Each added break is two undo steps: selecting its note (Dorico records
-    selection changes made by EventEdit.Select) and the break itself. The
-    result reports how many steps to undo.
+    Break removals go first, as one Lua step. Each added break is two undo
+    steps (selecting its note, which Dorico records, and the break); each
+    add-lyrics is one step for the selection plus one per syllable. The
+    result reports how many steps to undo. Lyrics are checked afterwards
+    against a MusicXML export, since Lua cannot read a staff with lyrics.
     """
     removals = [op for op in prepared if op["op"] == "delete"]
-    additions = [op for op in prepared if op["op"] == "set-break"]
+    commands = [op for op in prepared if op["op"] != "delete"]
     blocks = snap.raw.get("blocks") or {}
-    for op in additions:
+    for op in commands:
         block = blocks.get(str(op["select"]["stream"]))
         if block is None:
             raise DoricoError(f"cannot find the event block of stream {op['select']['stream']}; nothing was changed")
@@ -227,10 +231,13 @@ async def _apply_breaks(
         checked = await bridge.apply(removals, flow, dry_run=True)
         if "error" in checked:
             raise DoricoError(f"{checked['error']}; nothing was changed")
+    planned = (1 if removals else 0) + sum(
+        2 if op["op"] == "set-break" else 1 + len(op["syllables"]) for op in commands
+    )
     if dry_run:
-        return {"dryRun": True, "operations": prepared, "undoSteps": 2 * len(additions) + (1 if removals else 0)}
+        return {"dryRun": True, "operations": prepared, "undoSteps": planned}
     steps = 0
-    results = []
+    results: list[dict[str, Any]] = []
     if removals:
         result = await bridge.apply(removals, flow)
         if "error" in result:
@@ -238,26 +245,74 @@ async def _apply_breaks(
         steps += 1
         results += [{"op": "set-break", "type": "none", "position": op["position"]} for op in removals]
     flows = await bridge.client.flows()
-    if additions and not 1 <= flow <= len(flows):
+    if commands and not 1 <= flow <= len(flows):
         raise DoricoError(f"Dorico lists {len(flows)} flow(s), not flow {flow}")
-    flow_id = flows[flow - 1]["flowID"] if additions else None
-    for op in additions:
+    flow_id = flows[flow - 1]["flowID"] if commands else None
+    lyrics = []
+    for op in commands:
         target = op["select"]
-        await bridge.client.command(
-            f"EventEdit.Select?FlowID={flow_id}&EventID={target['id']}&EventBlockID={target['block']}"
-        )
-        steps += 1  # the selection is an undo step of its own
-        await bridge.client.command("Edit.CreateSystemBreak")
-        breaks = [e for e in await bridge.read(flow) if e["type"] == "BreakEvent"]
-        made = [e for e in breaks if e["position"] == op["position"]]
-        if not made:
-            raise DoricoError(
-                f"Dorico made no break at bar {op['bar']}; {steps} earlier step(s) were applied "
-                "(undo that many to revert)"
+        try:
+            await bridge.client.command(
+                f"EventEdit.Select?FlowID={flow_id}&EventID={target['id']}&EventBlockID={target['block']}"
             )
-        steps += 1
-        results.append({"op": "set-break", "type": "system", "bar": op["bar"], "id": made[0]["id"]})
-    return {"applied": len(results), "undoSteps": steps, "results": results}
+            steps += 1  # the selection is an undo step of its own
+            if op["op"] == "set-break":
+                await bridge.client.command("Edit.CreateSystemBreak")
+                events, _ = await bridge.read_partial(flow)
+                made = [e for e in events if e["type"] == "BreakEvent" and e["position"] == op["position"]]
+                if not made:
+                    raise DoricoError(f"Dorico made no break at bar {op['bar']}")
+                steps += 1
+                results.append({"op": "set-break", "type": "system", "bar": op["bar"], "id": made[0]["id"]})
+            else:
+                steps += await _type_lyrics(bridge, op["syllables"])
+                lyrics.append(op)
+                results.append({"op": "add-lyrics", "staff": op["staff"], "syllables": len(op["syllables"])})
+        except DoricoError as exc:
+            raise DoricoError(f"{exc}; {steps} undo step(s) were applied (undo that many to revert)") from exc
+    outcome: dict[str, Any] = {"applied": len(results), "undoSteps": steps, "results": results}
+    if lyrics:
+        outcome["lyricsCheck"] = await _check_lyrics(bridge, lyrics, flow)
+    return outcome
+
+
+# Dorico's lyric popover is part of its UI: it needs Dorico frontmost and a
+# moment to open, and each accepted syllable about 120 ms. Sent faster, the
+# accepts run without effect (checked 2026-09-27).
+POPOVER_OPEN_DELAY = 0.8
+SYLLABLE_DELAY = 0.3
+
+
+async def _type_lyrics(bridge: DoricoBridge, syllables: list[list[str]]) -> int:
+    """Type syllables into the lyric popover at the selected note; return undo steps."""
+    bring_to_front()
+    await bridge.client.command("NoteInput.StartLyricInput")
+    await asyncio.sleep(POPOVER_OPEN_DELAY)
+    for text, kind in syllables:
+        await bridge.client.command(
+            f"NoteInput.AcceptCurrentLyricInput?LyricText={quote(text)}&LyricsEntryAdvanceType={kind}"
+        )
+        await asyncio.sleep(SYLLABLE_DELAY)
+        if kind != score.END_INPUT:
+            await bridge.client.command("NoteInput.AdvanceLyricInput")
+            await asyncio.sleep(SYLLABLE_DELAY)
+    return len(syllables)
+
+
+async def _check_lyrics(bridge: DoricoBridge, ops: list[dict[str, Any]], flow: int) -> dict[str, Any]:
+    """Compare the typed syllables with a MusicXML export of the staff."""
+    xml = musicxml_read.read(await export_musicxml(bridge.client, flow))
+    checks = []
+    for op in ops:
+        wanted = [text for text, _ in op["syllables"] if text]
+        found = [
+            lyric["text"]
+            for e in sorted(xml["events"], key=lambda e: e["flowPosition"])
+            if e["staff"] == op["staff"] and e["flowPosition"] >= op["position"]
+            for lyric in e.get("lyrics", []) if lyric["verse"] == 1 and lyric["text"]
+        ][: len(wanted)]
+        checks.append({"staff": op["staff"], "ok": found == wanted, "expected": wanted, "found": found})
+    return {"ok": all(c["ok"] for c in checks), "staves": checks}
 
 
 async def undo(bridge: DoricoBridge, steps: int = 1) -> dict[str, Any]:

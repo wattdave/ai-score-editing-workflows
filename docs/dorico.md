@@ -145,7 +145,8 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | (Dorico only) `add-clef` | ✅ | treble, bass, percussion, tab, tab.4 from the score's clef library |
 | `transpose` | ✅ | per-note, respelled diatonically |
 | `set` (Dx, Dy, Hidden, ...), `tie`, `bracket`, `flip-stem`, `nudge`, `beam` | ❌ | not in the Lua model |
-| `add-line`, `add-lyric` | ❌ | no line or lyric classes exposed |
+| `add-line` | ❌ | no line classes exposed |
+| `add-lyric` → `add-lyrics` | ⚠️ | verse 1, typed through the lyric popover by command (see gaps); staff must have no lyrics yet |
 | `copy-passage` | ❌ | `copyRange(from, to, stream, dest, 0)` runs but copies nothing |
 | `set-key`, `set-time` | 🔜/❌ | create calls exist but need elements Lua cannot construct |
 | `set-break` | ⚠️ | system breaks via `Edit.CreateSystemBreak` on a selected note (2 undo steps each); bars without a note or rest of their own are refused |
@@ -245,6 +246,24 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   focus. Raising a window by script works with System Events: set the
   process `frontmost`, then `perform action "AXRaise"` on the window
   ("Flow 1 in sample"); clicking the Window menu item alone did not.
+
+- **Adding lyrics (2026-09-27).** Logged from the lyric popover and
+  replayed over the WebSocket: `EventEdit.Select` the first note,
+  `NoteInput.StartLyricInput` (which posts its own `AdvanceLyricInput`),
+  then per syllable `NoteInput.AcceptCurrentLyricInput?LyricText=<url-encoded>&LyricsEntryAdvanceType=`
+  `kHyphenateCurrentWord` (mid-word) / `kEndOrExtendCurrentWord` (end of
+  word; with empty text, a melisma) / `kEndInput` (last), each followed by
+  `NoteInput.AdvanceLyricInput` except the last. The popover needs Dorico
+  frontmost and time: about 0.8 s after opening and 0.3 s between
+  commands; sent faster, the accepts run in ~15 ms and do nothing. One undo
+  step per syllable, plus the selection. Editing an existing lyric logs
+  `NoteInput.EnterAtPoint?X=..&Y=..` (a double-click by page position) and
+  an accept with `kEndInput`, so it can only be reached by pixel position.
+  A selected lyric's `getproperties` gives its syllable type, verse, and
+  placement values, but never its text.
+- **Qt.** Dorico 6.2.30 is built on Qt 6.10.1 (universal, Apple LLVM 15),
+  with QtLabs QML modules; dialogs are reachable through macOS
+  accessibility, the score canvas is not.
 
 ## Safety rules
 
