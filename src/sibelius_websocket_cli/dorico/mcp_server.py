@@ -216,11 +216,14 @@ async def save_score(path: str) -> dict[str, Any]:
 
 
 @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-async def export_score(path: str, format: str = "preview-pdf") -> dict[str, Any]:
-    """Export the first page of the full score as preview-pdf or preview-png.
+async def export_score(path: str, format: str = "pdf") -> dict[str, Any]:
+    """Export the open project to path as pdf, musicxml, preview-pdf or preview-png.
 
-    Full PDF and MusicXML export need Dorico's export dialog, which the
-    bridge cannot drive.
+    pdf: the layout in Dorico's active window, every page, with Print mode's
+    settings; Dorico also keeps its own copy next to the project and
+    overwrites an earlier one. musicxml: the full score of flow 1, through
+    Dorico's export window (opens and closes by itself; needs Accessibility
+    permission). preview-*: the first page only.
     """
     return await session.run(lambda b: service.export(b, format, path), retry=True)
 

@@ -42,8 +42,7 @@ trying.
 - Reading bars makes and undoes a temporary edit, which clears Dorico's redo
   history. Say so if the user may want to redo.
 - Refuse or explain requests the back end cannot do (lyrics, slurs and
-  other lines, dynamics, layout, key or time signature changes, full PDF or
-  MusicXML export) instead of approximating them.
+  other lines, dynamics, layout, key or time signature changes) instead of approximating them.
 - If a call says Dorico did not answer, a dialog is open in Dorico: ask the
   user to dismiss it; do not retry.
 - The first connection needs the user to accept Dorico's approval prompt.
