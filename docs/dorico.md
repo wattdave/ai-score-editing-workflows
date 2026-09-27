@@ -149,7 +149,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | (Dorico only) `add-dynamic`, `set-articulation`, `add-slur`, `add-tempo`, `add-rehearsal-mark` | ✅ | by command at a note; slurs cannot be read back |
 | (Dorico only) `read_lyrics`, `edit_lyrics` | ⚠️ | a player's verse as text through the Edit Lyrics dialog; edits must keep the syllable count |
 | `add-lyric` → `add-lyrics` | ⚠️ | verse 1, typed through the lyric popover by command (see gaps); staff must have no lyrics yet |
-| `copy-passage` | ❌ | `copyRange(from, to, stream, dest, 0)` runs but copies nothing |
+| `copy-passage` | ✅ | by selection + `Edit.Copy` / `Edit.Paste` (see gaps); destPosition 0 only |
 | `set-key`, `set-time` | ⚠️ | by command at the start of a bar ≥ 2 with a note or rest on its first beat; 2 undo steps each (see gaps) |
 | `set-break` | ⚠️ | system breaks via `Edit.CreateSystemBreak` on a selected note (2 undo steps each); bars without a note or rest of their own are refused |
 | `set-barline` | ⚠️ | double, final, start/end repeat, by command like set-time |
@@ -401,6 +401,20 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   `…Below` until the letter matches (B♭4). The note keeps its id, lyric and
   anything attached. Undo steps: selection + move + each respell. Checked
   live: the verse text was unchanged throughout.
+
+- **copy-passage (2026-09-27).** `Edit.SelectMore` from a *note* selects
+  its whole bar on that staff (from a rest it does not), and
+  `EventEdit.NavigateRightExtendBar` then adds exactly one bar per call. What
+  `Edit.Copy` takes starts at the range's first note, not the barline, and
+  `Edit.Paste` lines that note up with the selected destination item, so the
+  op anchors the paste at destination bar start + that note's offset: an
+  existing item there, or a temporary rest it creates (overwritten by the
+  paste). Paste inserts if Dorico is in Insert mode, so the op forces
+  `NoteInput.Mode?NoteInputMode=kOverwrite` and restores the user's mode.
+  The jump bar's go-to-bar logs no command (it is internal to the UI), and
+  `Edit.GoTo` / `Edit.GoToLocation` only move the view. Measured undo steps
+  per staff: temporary rest (if any) + select + SelectMore + one per extra
+  bar + select anchor + paste.
 
 ## Safety rules
 

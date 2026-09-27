@@ -49,7 +49,7 @@ CLEFS = {"treble", "bass", "percussion", "tab", "tab.4"}
 #: a batch with the Lua ops (one batch, one undo step).
 #: Ops that select a note and run one Dorico command on it.
 NOTE_COMMAND_OPS = {"add-dynamic", "set-articulation", "add-slur", "add-tempo", "add-rehearsal-mark"}
-COMMAND_OPS = {"set-break", "add-lyrics", "set-time", "set-key", "set-barline"} | NOTE_COMMAND_OPS
+COMMAND_OPS = {"set-break", "add-lyrics", "set-time", "set-key", "set-barline", "copy-passage"} | NOTE_COMMAND_OPS
 #: Resolved forms of set-pitch/delete/transpose on notes read from dump().
 ROUTED_COMMAND_OPS = {"repitch", "delete-by-id"}
 #: set-articulation names and NoteInput.SetArticulation values (checked 2026-09-27).
@@ -279,6 +279,8 @@ def prepare_batch(
             resolved = [_signature(operation, op, label, located, bars)]
         elif op in NOTE_COMMAND_OPS:
             resolved = [_note_command(operation, op, label, by_id, by_address)]
+        elif op == "copy-passage":
+            resolved = _copy_passage(operation, label, located, staves, bars)
         elif op in ADDRESSED:
             resolved = [_addressed(operation, op, label, by_id, by_address)]
         else:
@@ -390,6 +392,78 @@ def _note_command(
                    expect="ImmediateTempoChangeEvent")
     else:
         out.update(command="NoteInput.CreateRehearsalMark", parameters={}, expect="RehearsalMarkEvent")
+    return out
+
+
+def _copy_passage(
+    operation: dict[str, Any], label: str, located: list[dict[str, Any]],
+    staves: list[dict[str, Any]], bars: BarMap,
+) -> list[dict[str, Any]]:
+    """Copy bars fromBar-toBar of staves top-bottom to destBar of destStaff on.
+
+    Dorico copies what Edit.SelectMore (from a note) and NavigateRightExtendBar
+    select, which starts at the range's first *note*, not the barline, and
+    pastes it at the selected item. So the paste anchor is the destination
+    bar start plus that note's offset: an existing item there, or a
+    temporary rest (overwritten by the paste). One resolved op per staff.
+    """
+    first = _int(operation, "fromBar", label, 1)
+    last = _int(operation, "toBar", label, first)
+    top = _int(operation, "topStaff", label, 1)
+    bottom = _int(operation, "bottomStaff", label, top)
+    dest_staff = _int(operation, "destStaff", label, 1)
+    dest_bar = _int(operation, "destBar", label, 1)
+    if operation.get("destPosition", 0) != 0:
+        raise DoricoBatchError(f"{label}: copy-passage pastes at the start of destBar only (destPosition 0)")
+    if dest_staff + (bottom - top) > len(staves):
+        raise DoricoBatchError(f"{label}: the destination runs past the last staff")
+    try:
+        source_start = bars.position(first, 0)
+        source_end = bars.position(last, 0) + bars.bar_length(last)
+        dest_start = bars.position(dest_bar, 0)
+    except Exception as exc:
+        raise DoricoBatchError(f"{label}: {exc}") from exc
+    if dest_bar <= last and dest_bar + (last - first) >= first and dest_staff <= bottom and dest_staff + (bottom - top) >= top:
+        raise DoricoBatchError(f"{label}: the destination overlaps the source")
+    out = []
+    for offset_staff in range(bottom - top + 1):
+        staff, target_staff = top + offset_staff, dest_staff + offset_staff
+        notes = sorted(
+            (e for e in located if e["staff"] == staff and e["type"] in TYPE_ALIASES["Note"] and "id" in e
+             and source_start <= e["flowPosition"] < source_end),
+            key=lambda e: (e["flowPosition"], e.get("voice") or 0),
+        )
+        if not notes:
+            continue  # nothing to copy on this staff
+        in_first_bar = [e for e in notes if e["bar"] == first]
+        if not in_first_bar:
+            raise DoricoBatchError(f"{label}: staff {staff} has no note in bar {first} to start the selection from")
+        offset = notes[0]["flowPosition"] - source_start
+        anchor_position = dest_start + offset
+        voices = next(s for s in staves if s["staff"] == target_staff).get("voiceStreams") or []
+        if not voices:
+            raise DoricoBatchError(f"{label}: staff {target_staff} has no voice to paste into")
+        dest_events = [e for e in located if e["staff"] == target_staff and "id" in e and e["type"] in TYPE_ALIASES["NoteRest"]]
+        covering = [e for e in dest_events if e["flowPosition"] < anchor_position < e["flowPosition"] + (e.get("duration") or 0)]
+        if covering:
+            raise DoricoBatchError(f"{label}: a note on staff {target_staff} covers the paste point; clear it first")
+        at_anchor = [e for e in dest_events if e["flowPosition"] == anchor_position]
+        resolved: dict[str, Any] = {
+            "op": "copy-passage", "staff": staff, "destStaff": target_staff,
+            "select": {"id": in_first_bar[0]["id"], "stream": in_first_bar[0]["stream"]},
+            "extendBars": last - first,
+            "expect": [(e["flowPosition"] - notes[0]["flowPosition"], e.get("pitch")) for e in notes],
+            "anchorPosition": anchor_position,
+        }
+        if at_anchor:
+            resolved["anchor"] = {"id": at_anchor[0]["id"], "stream": at_anchor[0]["stream"]}
+        else:
+            later = [e["flowPosition"] for e in dest_events if e["stream"] == voices[0] and e["flowPosition"] > anchor_position]
+            room = min(later + [anchor_position + 256]) - anchor_position
+            resolved["tempRest"] = {"stream": voices[0], "position": anchor_position, "duration": min(room, 256)}
+        out.append(resolved)
+    if not out:
+        raise DoricoBatchError(f"{label}: there are no notes to copy in bars {first}-{last}")
     return out
 
 
