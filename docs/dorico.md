@@ -1,5 +1,8 @@
 # Dorico back end
 
+After installing a new Dorico, run the checks in
+[dorico-upgrade-checklist.md](dorico-upgrade-checklist.md).
+
 `dorico-mcp` and `dorico-cli` drive the project open in Dorico the way
 `sibelius-mcp` and `sibelius-websocket-cli` drive Sibelius: the same tool
 names, staff/bar/index addresses, 1/256-quarter units and MIDI pitches, and

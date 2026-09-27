@@ -333,6 +333,14 @@ function actions.window()
   return { layoutID = field(app, 'currentLayoutID'), version = field(app, 'versionString') }
 end
 
+-- The luabind classes Dorico registers (for the upgrade check).
+function actions.classes()
+  local names = array()
+  for _, name in pairs(class_names()) do names[#names + 1] = str(name) end
+  table.sort(names)
+  return { classes = names }
+end
+
 function actions.overview(request)
   local score = current_score()
   local flow, flow_count = flow_at(score, request.flow)
