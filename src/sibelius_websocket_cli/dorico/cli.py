@@ -15,7 +15,7 @@ from typing import Any
 
 from sibelius_websocket_cli.cli import parse_bar_range
 
-from . import lyrics_dialog, service
+from . import lyrics_dialog, project_info, service
 from .bridge import DoricoBridge
 from .client import DEFAULT_PORT, DoricoClient, DoricoError
 from .score import DoricoBatchError
@@ -49,6 +49,9 @@ def build_parser() -> argparse.ArgumentParser:
     edit_lyrics.add_argument("player")
     edit_lyrics.add_argument("text")
     edit_lyrics.add_argument("--verse", type=int, default=1)
+    sub.add_parser("info", help="read the Project Info fields")
+    set_info = sub.add_parser("set-info", help="set Project Info fields, e.g. Composer=Traditional")
+    set_info.add_argument("fields", nargs="+", metavar="NAME=VALUE")
     undo = sub.add_parser("undo")
     undo.add_argument("--steps", type=int, default=1)
     save = sub.add_parser("save", help="save the project to a .dorico file")
@@ -80,6 +83,13 @@ async def run(args: argparse.Namespace) -> Any:
             return await lyrics_dialog.read_lyrics(bridge, args.player, args.verse)
         if args.command == "edit-lyrics":
             return await lyrics_dialog.edit_lyrics(bridge, args.player, args.text, args.verse)
+        if args.command == "info":
+            return await project_info.read_project_info(bridge)
+        if args.command == "set-info":
+            pairs = [f.split("=", 1) for f in args.fields]
+            if any(len(p) != 2 for p in pairs):
+                raise ValueError("fields must be NAME=VALUE")
+            return await project_info.set_project_info(bridge, dict(pairs))
         if args.command == "undo":
             return await service.undo(bridge, args.steps)
         if args.command == "save":

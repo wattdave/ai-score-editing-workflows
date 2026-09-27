@@ -21,6 +21,7 @@ from mcp.types import ToolAnnotations
 from sibelius_websocket_cli.cli import parse_bar_range
 
 from . import lyrics_dialog, service
+from . import project_info as project_info_mod
 from .bridge import DoricoBridge
 from .client import DEFAULT_PORT, DoricoClient, DoricoError
 from .score import DoricoBatchError
@@ -236,6 +237,23 @@ async def edit_lyrics(player: str, text: str, verse: int = 1) -> dict[str, Any]:
     that has none.
     """
     return await session.run(lambda b: lyrics_dialog.edit_lyrics(b, player, text, verse), retry=False)
+
+
+@server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+async def project_info() -> dict[str, Any]:
+    """The project's Project Info fields (Title, Subtitle, Composer, Lyricist,
+    Arranger, Copyright, ...), read from Dorico's Project Info dialog. These
+    are what title pages and headers show through Dorico's text tokens."""
+    return await session.run(lambda b: project_info_mod.read_project_info(b), retry=True)
+
+
+@server.tool(annotations=WRITE)
+async def set_project_info(fields: dict[str, str]) -> dict[str, Any]:
+    """Set Project Info fields by name, e.g. {"Composer": "Traditional",
+    "Arranger": "D. Watt"}; "" clears a field. Typed into Dorico's Project
+    Info dialog (Dorico comes to the front), applied, and read back.
+    Project-level fields only, not per-flow ones."""
+    return await session.run(lambda b: project_info_mod.set_project_info(b, fields), retry=False)
 
 
 @server.tool(annotations=WRITE)

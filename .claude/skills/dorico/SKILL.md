@@ -35,6 +35,12 @@ the terminal needs Accessibility permission). Those staves' objects have
 delete, re-pitch or transpose their existing notes. Say so rather than
 trying.
 
+## Project Info
+
+`project_info` / `set_project_info` read and set the project's title,
+composer, lyricist, arranger, copyright and similar fields; title pages
+and headers show them. Dorico comes to the front while they are typed.
+
 ## Rules
 
 - Never call `undo` unless the last change was yours and a read-back shows

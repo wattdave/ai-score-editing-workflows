@@ -561,3 +561,16 @@ async def test_part_layout_is_found_by_player_name() -> None:
     assert (await _part_layout(Bridge(), "alto i"))["layoutID"] == 3  # type: ignore[arg-type]
     with pytest.raises(DoricoError, match="parts: Alto I"):
         await _part_layout(Bridge(), "Bass")  # type: ignore[arg-type]
+
+
+# ------------------------------------------------------------------ project info
+
+@pytest.mark.parametrize(
+    ("fields", "message"),
+    [({"Composr": "x"}, "unknown Project Info fields"), ({}, "no fields"), ({"Title": "a\nb"}, "single-line")],
+)
+async def test_set_project_info_validates_before_opening_the_dialog(fields: dict[str, str], message: str) -> None:
+    from sibelius_websocket_cli.dorico import project_info
+
+    with pytest.raises(DoricoError, match=message):
+        await project_info.set_project_info(None, fields)  # type: ignore[arg-type]
