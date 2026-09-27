@@ -153,6 +153,13 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   (`delete`, `set-pitch`, `transpose`), which look events up first.
   **Adding works**: `createNote` into Alto I (with lyrics) added a G5 as a
   chord with the existing note, lyrics intact, one undo step (2026-09-27).
+  **`deleteEventsInRange` works too, but takes the lyric with it**: deleting
+  flow range ½-2 quarters on Alto I removed the D4 *and* its lyric "fare"
+  (rests filled the gap; neighbouring notes and lyrics untouched; one
+  undo restored both). Lyrics are events at the note's position in the same
+  voice stream, and a range takes every event in it (a whole chord, not one
+  note). So a pitch change there would lose the lyric (Lua cannot create
+  lyrics), and a delete could only mean "clear this position, lyric and all".
 
 - **Bar numbers.** A time signature's content (`kBarDivisionTimeSignatures`)
   is a Variant Lua cannot convert, so bar lengths are measured: a bar rest
