@@ -320,3 +320,93 @@ async def test_undo_stops_when_nothing_is_left() -> None:
 def test_bridge_lua_ships_with_the_package() -> None:
     script = bridge_mod.bridge_script()
     assert script.exists() and "BRIDGE_VERSION" in script.read_text()
+
+
+# ------------------------------------------------------------------ MusicXML fallback
+
+MUSICXML = """<?xml version="1.0"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Alto</part-name></score-part>
+    <score-part id="P2"><part-name>Tenor</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="0" implicit="yes">
+      <attributes><divisions>2</divisions><key><fifths>1</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice>
+        <lyric number="1"><syllabic>single</syllabic><text>Oh</text></lyric></note>
+    </measure>
+    <measure number="1">
+      <note><pitch><step>F</step><alter>1</alter><octave>4</octave></pitch><duration>4</duration><voice>1</voice>
+        <lyric number="1"><syllabic>begin</syllabic><text>fare</text></lyric></note>
+      <note><chord/><pitch><step>A</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice></note>
+      <note><rest/><duration>4</duration><voice>1</voice></note>
+    </measure>
+  </part>
+  <part id="P2">
+    <measure number="0" implicit="yes">
+      <attributes><divisions>2</divisions><staves>2</staves></attributes>
+      <note><rest/><duration>1</duration><voice>1</voice><staff>1</staff></note>
+      <backup><duration>1</duration></backup>
+      <note><rest/><duration>1</duration><voice>5</voice><staff>2</staff></note>
+    </measure>
+    <measure number="1">
+      <note><rest measure="yes"/><duration>8</duration><voice>1</voice><staff>1</staff></note>
+      <backup><duration>8</duration></backup>
+      <note><pitch><step>B</step><alter>-1</alter><octave>2</octave></pitch><duration>8</duration><voice>5</voice><staff>2</staff></note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+
+def test_musicxml_read_staves_bars_lyrics(tmp_path: Path) -> None:
+    from sibelius_websocket_cli.dorico import musicxml_read
+
+    path = tmp_path / "s.musicxml"
+    path.write_text(MUSICXML)
+    data = musicxml_read.read(path)
+    assert [s["name"] for s in data["staves"]] == ["Alto", "Tenor", "Tenor"]
+    assert data["bars"].segments() == [(1, 0, 128), (2, 128, 1024)]
+    assert data["keySignatures"] == [{"bar": 1, "fifths": 1, "key": "G", "minor": False}]
+    alto = [e for e in data["events"] if e["staff"] == 1]
+    assert [(e["bar"], e["index"], e["position"], e.get("name"), e["flowPosition"]) for e in alto] == [
+        (1, 0, 0, "D4", 0), (2, 0, 0, "F#4", 128), (2, 1, 0, "A4", 128), (2, 2, 512, None, 640),
+    ]
+    assert alto[1]["lyrics"] == [{"verse": 1, "text": "fare", "syllabic": "begin"}]
+    bass = [e for e in data["events"] if e["staff"] == 3]
+    assert [(e["type"], e.get("name"), e["voice"]) for e in bass] == [("RestEvent", None, 1), ("NoteEvent", "Bb2", 1)]
+
+
+async def test_snapshot_fills_unreadable_staves_from_musicxml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "s.musicxml"
+    path.write_text(MUSICXML)
+
+    async def fake_export(client: Any, flow: int = 1) -> Path:
+        return path
+
+    monkeypatch.setattr(service, "export_musicxml", fake_export)
+
+    class Bridge:
+        client = None
+
+        async def read_partial(self, flow: int) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+            tenor_note = note(40, 128, 46, "Bb2", duration=1024, stream=9, staff=3)
+            return [tenor_note], [{"stream": 5, "staff": 1, "voice": 1}]
+
+        async def overview(self, flow: int) -> dict[str, Any]:
+            return {"staves": [{"staff": 1}, {"staff": 2}, {"staff": 3}]}
+
+    snap = await service.snapshot(Bridge(), 1)  # type: ignore[arg-type]
+    assert snap.unreadable_staves == [1]
+    alto = [e for e in snap.located if e["staff"] == 1]
+    assert all(e["source"] == "musicxml" and "id" not in e for e in alto)
+    tenor = [e for e in snap.located if e["staff"] == 3]
+    assert [(e["id"], e["bar"], e["position"]) for e in tenor] == [(40, 2, 0)]  # Lua event, MusicXML bars
+    with pytest.raises(DoricoBatchError, match="read from a MusicXML export"):
+        prepare_batch([{"op": "delete", "staff": 1, "bar": 2, "index": 0}], snap.located,
+                      [{"staff": 1, "voiceStreams": [5]}], snap.bars)
+    ops = prepare_batch([{"op": "add-note", "staff": 1, "bar": 2, "position": 256, "duration": 256, "pitches": [62]}],
+                        snap.located, [{"staff": 1, "voiceStreams": [5]}], snap.bars)
+    assert ops[0]["position"] == 384

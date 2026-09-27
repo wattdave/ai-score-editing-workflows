@@ -296,12 +296,20 @@ function actions.read(request)
   local score = current_score()
   local flow = flow_at(score, request.flow)
   local events = {}
-  for _, tb in ipairs(list(field(flow, 'timebaseStreams'))) do stream_events(tb, 0, nil, events) end
-  for _, s in ipairs(layout_streams(score, flow)) do
-    stream_events(s.stream, s.staff, nil, events)
-    for v, voice in ipairs(s.voices) do stream_events(voice, s.staff, v, events) end
+  local unreadable = array()
+  -- With skipUnreadable, streams Dorico cannot read (lyrics) are listed
+  -- instead of failing the read, so bridge.py can fill them from MusicXML.
+  local function add_stream(stream, staff, voice)
+    if not request.skipUnreadable then return stream_events(stream, staff, voice, events) end
+    local ok, problem = pcall(stream_events, stream, staff, voice, events)
+    if not ok then unreadable[#unreadable + 1] = { stream = field(stream, 'id'), staff = staff, voice = voice } end
   end
-  return { flow = request.flow or 1, events = sort_events(events) }
+  for _, tb in ipairs(list(field(flow, 'timebaseStreams'))) do add_stream(tb, 0, nil) end
+  for _, s in ipairs(layout_streams(score, flow)) do
+    add_stream(s.stream, s.staff, nil)
+    for v, voice in ipairs(s.voices) do add_stream(voice, s.staff, v) end
+  end
+  return { flow = request.flow or 1, events = sort_events(events), unreadable = unreadable }
 end
 
 -- Bar lengths cannot be read (the time signature property does not convert),

@@ -177,6 +177,11 @@ class DoricoBridge:
     async def read(self, flow: int = 1) -> list[dict[str, Any]]:
         return (await self.call("read", flow=flow))["events"]
 
+    async def read_partial(self, flow: int = 1) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """(events, unreadable streams): what Lua can read, and what it cannot."""
+        result = await self.call("read", flow=flow, skipUnreadable=True)
+        return result["events"], result.get("unreadable") or []
+
     async def bars(self, flow: int = 1, events: list[dict[str, Any]] | None = None) -> BarMap:
         """The flow's bar map, measured once per set of bar divisions.
 

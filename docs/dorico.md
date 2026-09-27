@@ -27,6 +27,23 @@ Dorico has two automation surfaces:
 
 The bridge uses the WebSocket to run Lua, and for undo, redo and status.
 
+### Staves with lyrics: the MusicXML fallback
+
+Dorico's Lua cannot read a voice stream that holds lyrics. When a read hits
+one (`read` with `skipUnreadable` lists them), `service.snapshot` exports
+the flow as MusicXML (`dorico/export.py`, UI scripting, below) and reads it
+with `dorico/musicxml_read.py`:
+
+- staves Lua can read keep their Dorico events and ids;
+- staves it cannot read come from the export (`"source": "musicxml"`, no
+  id, with `lyrics`);
+- bars, time signatures (numerator/denominator) and keys come from the
+  export, so no bar measurement edit is made.
+
+Adding to a lyric staff works; `delete`, `set-pitch` and `transpose` refuse
+its existing notes, which have no id to address. Each such read triggers an
+export, so it takes several seconds and needs Accessibility permission.
+
 ### Connecting
 
 The client sends `connect` with a client name. Dorico shows an approval
@@ -106,8 +123,8 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | Sibelius tool / op | Dorico | Notes |
 |---|---|---|
 | `score_overview` | ✅ | title, flows, players, staves with voice streams, layouts, selection |
-| `score_structure` | ⚠️ | bar lengths and key signature positions only (see gaps) |
-| `query_score` | ✅ | staves, bars, types (Sibelius names or Dorico's), voice, `where` |
+| `score_structure` | ⚠️ | from a MusicXML export when any staff has lyrics (full time/key info); otherwise bar lengths and key positions only |
+| `query_score` | ✅ | staves, bars, types (Sibelius names or Dorico's), voice, `where`; lyric staves via MusicXML (no ids) |
 | `apply_batch` + `dry_run` | ✅ | every op checked first; one undo step |
 | `set-pitch` | ✅ | replaces the note, spelled as asked; new id reported |
 | `delete` | ✅ | |

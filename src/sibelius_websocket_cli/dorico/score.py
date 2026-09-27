@@ -225,7 +225,7 @@ def prepare_batch(
     """Validate a batch and resolve it into bridge.lua operations."""
     if not isinstance(operations, list) or not operations:
         raise DoricoBatchError("a batch must be a non-empty JSON array")
-    by_id = {e["id"]: e for e in located}
+    by_id = {e["id"]: e for e in located if "id" in e}
     by_address = {(e["staff"], e["bar"], e["index"]): e for e in located}
     out: list[dict[str, Any]] = []
     targeted: dict[int, int] = {}
@@ -270,6 +270,11 @@ def _addressed(
         event = by_address.get(address)
         if event is None:
             raise DoricoBatchError(f"{label}: nothing at staff {address[0]} bar {address[1]} index {address[2]}")
+    if "id" not in event:
+        raise DoricoBatchError(
+            f"{label}: staff {event['staff']} was read from a MusicXML export (Dorico's scripting cannot "
+            "read staves with lyrics), so its existing notes cannot be changed or deleted; adding works"
+        )
     if "type" in operation and event["type"] not in _types([_str(operation, "type", label)]):
         raise DoricoBatchError(f"{label}: the object there is a {event['type']}, not a {operation['type']}")
     if "position" in operation and event["position"] != operation["position"]:
@@ -362,6 +367,11 @@ def _transpose(operation: dict[str, Any], label: str, located: list[dict[str, An
     for event in located:
         if event["type"] not in TYPE_ALIASES["Note"] or not first <= event["bar"] <= last or not top <= event["staff"] <= bottom:
             continue
+        if "id" not in event:
+            raise DoricoBatchError(
+                f"{label}: staff {event['staff']} has lyrics, which Dorico's scripting cannot read, so its "
+                "notes cannot be transposed"
+            )
         try:
             pitch, letter = transpose_spelled(event.get("name"), event["pitch"], steps, semitones)
         except DoricoBatchError as exc:

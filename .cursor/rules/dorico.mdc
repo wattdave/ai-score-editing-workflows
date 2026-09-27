@@ -27,6 +27,15 @@ bar (`flowPosition` from the flow start), MIDI pitches. `set-pitch` and
 result. Give `spelling`/`spellings` when the default (C# Eb F# Ab Bb) is
 wrong for the key.
 
+## Staves with lyrics
+
+Dorico's scripting cannot read staves with lyrics, so reads of such a score
+export MusicXML behind the scenes (Dorico's export window opens and closes;
+the terminal needs Accessibility permission). Those staves' objects have
+`"source": "musicxml"`, lyrics, and no `id`: you can add to them, but not
+delete, re-pitch or transpose their existing notes. Say so rather than
+trying.
+
 ## Rules
 
 - Never call `undo` unless the last change was yours and a read-back shows

@@ -10,20 +10,60 @@ from __future__ import annotations
 import shutil
 import tempfile
 import zipfile
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import score
+from . import musicxml_read, score
 from .bridge import BarMap, DoricoBridge
 from .client import DoricoError
+from .export import export_musicxml
 
 EXPORT_FORMATS = {"preview-pdf": "preview.pdf", "preview-png": "preview.png"}
 
 
-async def _located(bridge: DoricoBridge, flow: int) -> tuple[list[dict[str, Any]], BarMap]:
-    events = await bridge.read(flow)
-    bars = await bridge.bars(flow, events)
-    return score.locate_events(events, bars), bars
+@dataclass
+class Snapshot:
+    """A flow as the back end sees it: located events and the bar map.
+
+    Events Dorico's Lua can read carry their Dorico id. Staves it cannot
+    read (lyrics) come from a MusicXML export instead, without ids; then
+    bars, time and key signatures come from the export too.
+    """
+
+    located: list[dict[str, Any]]
+    bars: BarMap
+    musicxml: dict[str, Any] | None = None
+    export: Path | None = None
+    unreadable_staves: list[int] = field(default_factory=list)
+
+
+async def snapshot(bridge: DoricoBridge, flow: int = 1) -> Snapshot:
+    events, unreadable = await bridge.read_partial(flow)
+    if not unreadable:
+        bars = await bridge.bars(flow, events)
+        return Snapshot(score.locate_events(events, bars), bars)
+    path = await export_musicxml(bridge.client, flow)
+    xml = musicxml_read.read(path)
+    staves = (await bridge.overview(flow))["staves"]
+    if len(xml["staves"]) != len(staves):
+        raise DoricoError(
+            f"the MusicXML export has {len(xml['staves'])} staves but the flow has {len(staves)}; "
+            "cannot combine them"
+        )
+    bad = sorted({u["staff"] for u in unreadable if u.get("staff")})
+    lua_located = [e for e in score.locate_events(events, xml["bars"]) if e["staff"] not in bad]
+    from_xml = [dict(e, source="musicxml") for e in xml["events"] if e["staff"] in bad]
+    located = sorted(
+        lua_located + from_xml,
+        key=lambda e: (e["staff"], e["bar"], e["position"], e.get("voice") or 0, e.get("pitch") or 0),
+    )
+    counters: dict[tuple[int, int], int] = {}
+    for item in located:
+        key = (item["staff"], item["bar"])
+        item["index"] = counters.get(key, 0)
+        counters[key] = item["index"] + 1
+    return Snapshot(located, xml["bars"], xml, path, bad)
 
 
 def _last_bar(located: list[dict[str, Any]], bars: BarMap) -> int:
@@ -36,17 +76,17 @@ def _last_bar(located: list[dict[str, Any]], bars: BarMap) -> int:
 
 async def overview(bridge: DoricoBridge, flow: int = 1) -> dict[str, Any]:
     info = await bridge.overview(flow)
-    located, bars = await _located(bridge, flow)
+    snap = await snapshot(bridge, flow)
     status = await bridge.client.status()
     app = await bridge.client.app_info()
-    return {
+    result = {
         "dorico": app.get("number"),
         "score": {
             "title": info.get("title"),
             "flow": flow,
             "flowCount": info.get("flowCount"),
             "flows": await bridge.client.flows(),
-            "lastBarWithMusic": _last_bar(located, bars),
+            "lastBarWithMusic": _last_bar(snap.located, snap.bars),
             "players": info.get("players"),
         },
         "staves": info.get("staves"),
@@ -54,17 +94,31 @@ async def overview(bridge: DoricoBridge, flow: int = 1) -> dict[str, Any]:
         "selection": {"hasSelection": status.get("hasSelection"), "type": status.get("selectedEventType")},
         "bridge": info.get("bridge"),
     }
+    if snap.unreadable_staves:
+        result["readFromMusicXML"] = {"staves": snap.unreadable_staves, "file": str(snap.export)}
+    return result
 
 
 async def structure(bridge: DoricoBridge, flow: int = 1) -> dict[str, Any]:
-    located, bars = await _located(bridge, flow)
+    snap = await snapshot(bridge, flow)
+    if snap.musicxml is not None:
+        return {
+            "timeSignatures": snap.musicxml["timeSignatures"],
+            "keySignatures": snap.musicxml["keySignatures"],
+            "bars": [
+                {"bar": first, "barLength": length, "flowPosition": start}
+                for first, start, length in snap.bars.segments()
+            ],
+            "barCount": snap.musicxml["barCount"],
+            "source": str(snap.export),
+        }
     time_signatures = [
         {"bar": first, "position": 0, "barLength": length, "flowPosition": start}
-        for first, start, length in bars.segments()
+        for first, start, length in snap.bars.segments()
     ]
     keys = [
         {"bar": e["bar"], "position": e["position"], "flowPosition": e["flowPosition"], "id": e["id"]}
-        for e in located if e["type"] == "TonalityDivisionEvent"
+        for e in snap.located if e["type"] == "TonalityDivisionEvent"
     ]
     return {
         "timeSignatures": time_signatures,
@@ -74,7 +128,7 @@ async def structure(bridge: DoricoBridge, flow: int = 1) -> dict[str, Any]:
             "signature's key; barLength (1/256 quarters) is measured, and key signatures report only "
             "where they are."
         ),
-        "lastBarWithMusic": _last_bar(located, bars),
+        "lastBarWithMusic": _last_bar(snap.located, snap.bars),
     }
 
 
@@ -90,7 +144,7 @@ async def query(
     where: list[str] | None = None,
     limit: int = 200,
 ) -> dict[str, Any]:
-    located, _ = await _located(bridge, flow)
+    located = (await snapshot(bridge, flow)).located
     wanted = None
     if staves:
         wanted = score.resolve_staves(staves, (await bridge.overview(flow))["staves"])
@@ -104,9 +158,9 @@ async def apply(
     bridge: DoricoBridge, operations: list[dict[str, Any]], *, flow: int = 1, dry_run: bool = False
 ) -> dict[str, Any]:
     """Apply a batch as one undo step; nothing changes unless every op checks out."""
-    located, bars = await _located(bridge, flow)
+    snap = await snapshot(bridge, flow)
     staves = (await bridge.overview(flow))["staves"]
-    prepared = score.prepare_batch(operations, located, staves, bars)
+    prepared = score.prepare_batch(operations, snap.located, staves, snap.bars)
     status = await bridge.client.status()
     if not dry_run and status.get("notReadOnly") is False:
         raise DoricoError("the score is read-only")
