@@ -15,6 +15,7 @@ Anything unexpected is cancelled rather than guessed at.
 from __future__ import annotations
 
 import asyncio
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -229,3 +230,44 @@ async def export_musicxml(client: DoricoClient, flow: int = 1) -> Path:
         if time.monotonic() > deadline:
             raise DoricoError(f"no new full-score MusicXML appeared under {root}")
         await asyncio.sleep(0.5)
+
+
+APPLICATION_LOG = Path.home() / "Library/Application Support/Steinberg/Dorico 6/application.log"
+_EXPORTING_PDF = re.compile(r"Exporting PDF to (.+\.pdf)\s*$", re.MULTILINE)
+
+
+def _answer_pdf_prompts() -> bool:
+    """Choose Overwrite in Dorico's "output files already exist" prompt."""
+    answered = False
+    for line in _osascript(_DIALOGS).splitlines():
+        index, _, text = line.partition("\t")
+        if "output files already exist" in text:
+            _osascript(_CLICK_IN_DIALOG, index, "Overwrite")
+            answered = True
+    return answered
+
+
+async def export_pdf(client: DoricoClient, log: Path = APPLICATION_LOG) -> Path:
+    """Export the current layout as a PDF with Print mode's settings.
+
+    Print.ExportCurrentLayoutAsPDF writes "<project folder>/<nn> - <layout> -
+    <title>.pdf" with no dialog, unless the file exists; then Dorico asks
+    Overwrite / Create New, and Overwrite is chosen. The path is only in
+    Dorico's log ("Exporting PDF to ..."), so it is read from there.
+    """
+    offset = log.stat().st_size if log.exists() else 0
+    await client.command("Print.ExportCurrentLayoutAsPDF")
+    deadline = time.monotonic() + EXPORT_TIMEOUT
+    while True:
+        _answer_pdf_prompts()
+        with log.open("rb") as handle:
+            handle.seek(offset)
+            recent = handle.read().decode("utf-8", "replace")
+        found = _EXPORTING_PDF.findall(recent)
+        if found and "notifyPostCommandExecute: Print.ExportCurrentLayoutAsPDF" in recent:
+            path = Path(found[-1])
+            if path.exists():
+                return path
+        if time.monotonic() > deadline:
+            raise DoricoError("Dorico did not report exporting a PDF")
+        await asyncio.sleep(0.3)

@@ -139,7 +139,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `set-barline`, `set-bar-number`, `add-bars`, `set-layout`, `hide-empty-staves`, `delete-voice` | ❌ | not exposed |
 | `undo` | ✅ | stops when Dorico has nothing to undo |
 | `save_score` | ⚠️ | saves a copy to a given `.dorico` path; the project keeps its own file |
-| `export_score` | ⚠️ | first-page preview PDF/PNG only |
+| `export_score` | ✅ | `pdf` (all pages, via Print mode), `musicxml` (full score, via the export window), first-page previews |
 
 ## Gaps and workarounds
 
@@ -177,6 +177,13 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   `ScriptHost:save` returns false. The open project keeps its own file
   (checked 2026-09-27: after several saves to scratch paths, Save As still
   offered the project's usual folder), so Cmd-S is unaffected.
+- **PDF export (works, 2026-09-27).** `Print.ExportCurrentLayoutAsPDF`
+  writes the active window's layout, every page, with Print mode's current
+  settings, to `<project folder>/<nn> - <layout> - <title>.pdf`: no dialog
+  the first time. If that file exists Dorico asks "One or more output files
+  already exist" (Overwrite / Create New); `export_pdf` answers Overwrite.
+  The path appears only in the log ("Exporting PDF to ..."), so it is read
+  from `application.log`. Checked: 11-page SATB score, every page exported.
 - **Export.** Every save embeds `supplementary_data/preview/preview.pdf`
   and `preview.png` (first page of the full score); `export_score` extracts
   them. Full PDF and MusicXML export go through dialogs

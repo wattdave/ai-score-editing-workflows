@@ -17,9 +17,11 @@ from typing import Any
 from . import musicxml_read, score
 from .bridge import BarMap, DoricoBridge
 from .client import DoricoError
-from .export import export_musicxml
+from .export import export_musicxml, export_pdf
 
-EXPORT_FORMATS = {"preview-pdf": "preview.pdf", "preview-png": "preview.png"}
+#: Formats export_score takes: pdf through Print mode, previews from a saved copy.
+PREVIEWS = {"preview-pdf": "preview.pdf", "preview-png": "preview.png"}
+EXPORT_FORMATS = ["pdf", "musicxml", *PREVIEWS]
 
 
 @dataclass
@@ -201,20 +203,26 @@ async def save(bridge: DoricoBridge, path: str) -> dict[str, Any]:
 
 
 async def export(bridge: DoricoBridge, format: str, path: str) -> dict[str, Any]:
-    """Export the preview Dorico embeds in a saved project (the first page).
+    """Export the open project and copy the result to path.
 
-    Full PDF and MusicXML export go through Dorico's export dialogs, which a
-    script cannot drive (docs/dorico.md).
+    pdf: the current layout, all pages, with Print mode's settings.
+    musicxml: the full score of flow 1 through the Export MusicXML window.
+    preview-pdf / preview-png: the first page Dorico embeds in a saved copy.
     """
     if format not in EXPORT_FORMATS:
         raise DoricoError(f"format must be one of: {', '.join(EXPORT_FORMATS)}")
     target = Path(path).expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
+    if format in ("pdf", "musicxml"):
+        produced = await (export_pdf(bridge.client) if format == "pdf" else export_musicxml(bridge.client))
+        if produced.resolve() != target:
+            shutil.copyfile(produced, target)
+        return {"files": [str(target)], "exportedBy": str(produced)}
     with tempfile.TemporaryDirectory() as tmp:
         copy = Path(tmp) / "export.dorico"
         await bridge.save(copy)
         with zipfile.ZipFile(copy) as archive:
-            member = f"supplementary_data/preview/{EXPORT_FORMATS[format]}"
+            member = f"supplementary_data/preview/{PREVIEWS[format]}"
             with archive.open(member) as source, target.open("wb") as sink:
                 shutil.copyfileobj(source, sink)
     return {"files": [str(target)], "note": "first page of the full score only"}

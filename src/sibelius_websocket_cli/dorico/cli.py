@@ -46,9 +46,9 @@ def build_parser() -> argparse.ArgumentParser:
     undo.add_argument("--steps", type=int, default=1)
     save = sub.add_parser("save", help="save the project to a .dorico file")
     save.add_argument("path")
-    export = sub.add_parser("export", help="export the first-page preview")
+    export = sub.add_parser("export", help="export as pdf, musicxml or a first-page preview")
     export.add_argument("path")
-    export.add_argument("--format", choices=sorted(service.EXPORT_FORMATS), default="preview-pdf")
+    export.add_argument("--format", choices=service.EXPORT_FORMATS, default="pdf")
     return parser
 
 

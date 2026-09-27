@@ -410,3 +410,33 @@ async def test_snapshot_fills_unreadable_staves_from_musicxml(tmp_path: Path, mo
     ops = prepare_batch([{"op": "add-note", "staff": 1, "bar": 2, "position": 256, "duration": 256, "pitches": [62]}],
                         snap.located, [{"staff": 1, "voiceStreams": [5]}], snap.bars)
     assert ops[0]["position"] == 384
+
+
+async def test_export_pdf_answers_overwrite_and_reads_path_from_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from sibelius_websocket_cli.dorico import export
+
+    log = tmp_path / "application.log"
+    log.write_text("old line\n")
+    pdf = tmp_path / "01 - Full score - Song.pdf"
+    clicked: list[tuple[str, ...]] = []
+
+    def fake_osascript(script: str, *args: str) -> str:
+        if script is export._DIALOGS:
+            return "" if clicked else "2\tOne or more output files already exist. Do you want to overwrite them?"
+        clicked.append(args)
+        pdf.write_bytes(b"%PDF")
+        with log.open("a") as handle:
+            handle.write(f"[info] Exporting PDF to {pdf}\n[info] notifyPostCommandExecute: Print.ExportCurrentLayoutAsPDF (4 ms)\n")
+        return "clicked"
+
+    class Client:
+        commands: list[str] = []
+
+        async def command(self, command: str) -> None:
+            self.commands.append(command)
+
+    monkeypatch.setattr(export, "_osascript", fake_osascript)
+    client = Client()
+    assert await export.export_pdf(client, log) == pdf  # type: ignore[arg-type]
+    assert client.commands == ["Print.ExportCurrentLayoutAsPDF"]
+    assert clicked == [("2", "Overwrite")]
