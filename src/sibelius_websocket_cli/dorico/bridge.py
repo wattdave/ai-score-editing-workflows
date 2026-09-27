@@ -208,6 +208,10 @@ class DoricoBridge:
                 )
         if result.get("error"):
             raise DoricoError(f"could not measure bars: {result['error']}")
+        if any(not d.get("length") or d["length"] <= 0 for d in result["divisions"]):
+            # A pickup bar measures as length 0 (10,000 Miles); a bad length
+            # would break every bar number, so treat it as unmeasurable.
+            raise DoricoError("could not measure the bars (a pickup bar?)")
         bar_map = BarMap([(d["position"], d["length"]) for d in result["divisions"]])
         self._bars[key] = bar_map
         return bar_map

@@ -45,30 +45,43 @@ class Snapshot:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-async def snapshot(bridge: DoricoBridge, flow: int = 1, lyrics: bool = False) -> Snapshot:
+async def snapshot(bridge: DoricoBridge, flow: int = 1, lyrics: bool = False, probe: bool = True) -> Snapshot:
     """Read a flow, exporting MusicXML only when Lua's view is not enough.
 
     Streams Lua cannot take events from (lyrics, tempo marks) are read from
-    Dorico's dump() and keep their ids (source "dump"). MusicXML is exported
-    when the voice layout needs it, a stream cannot even be dumped, bars
-    cannot be measured, or `lyrics` asks for lyric text.
+    Dorico's dump() and keep their ids (source "dump"). When the voice layout
+    cannot be settled from Lua, voices are placed by probing (probe_placements);
+    MusicXML is exported only if that fails, a stream cannot even be dumped,
+    bars cannot be measured, or `lyrics` asks for lyric text.
     """
     raw = (await bridge.overview(flow))["layout"]
     events, unreadable = await bridge.read_partial(flow)
     staves = None
+    bars = None
     if not unreadable and not lyrics:
+        # Bars first: if they cannot be measured the export is needed anyway,
+        # and no probe edits should be spent.
+        try:
+            bars = await bridge.bars(flow, events)
+        except DoricoError:
+            bars = None
+    if bars is not None:
         try:
             staves = layout.resolve(raw, events)
         except layout.NeedsMusicXML:
             staves = None
-    if staves is not None:
+        if staves is None and probe:
+            try:
+                placements = await probe_placements(bridge, raw, events, flow)
+                staves = layout.resolve(raw, events, placements=placements)
+            except (layout.NeedsMusicXML, DoricoError):
+                staves = None
+    if staves is not None and bars is not None:
         placed = layout.assign(events, staves)
-        try:
-            bars = await bridge.bars(flow, events)
-        except DoricoError:
-            bars = None  # e.g. no voice Lua can measure in: use the export
-        if bars is not None:
-            return Snapshot(staves, score.locate_events(placed, bars), bars, raw=raw)
+        placed_streams = {v for s in staves for v in s["voiceStreams"]}
+        all_voices = {v for i in raw["instruments"] for v in i.get("voiceStreams") or []}
+        return Snapshot(staves, score.locate_events(placed, bars), bars,
+                        unplaced_voices=sorted(all_voices - placed_streams), raw=raw)
 
     path = await export_musicxml(bridge.client, flow)
     xml = musicxml_read.read(path)
@@ -100,6 +113,44 @@ async def snapshot(bridge: DoricoBridge, flow: int = 1, lyrics: bool = False) ->
         item["index"] = counters.get(key, 0)
         counters[key] = item["index"] + 1
     return Snapshot(staves, located, xml["bars"], xml, path, bad, sorted(all_voices - placed_streams), raw)
+
+
+async def probe_placements(
+    bridge: DoricoBridge, raw: dict[str, Any], events: list[dict[str, Any]], flow: int
+) -> dict[int, int]:
+    """The staff each voice's notes are on, found by probing.
+
+    Lua has no link from a voice to its staff, but a dynamic created at a
+    note goes into that staff's stave stream. So for each voice with a note:
+    select the note, NoteInput.CreateDynamic, see which staff's stream got
+    the new dynamic, and undo it. Like bar measurement, this edits the score
+    briefly: each probe leaves its selection on the undo stack and clears
+    the redo history.
+    """
+    client = bridge.client
+    blocks = raw.get("blocks") or {}
+    flows = await client.flows()
+    flow_id = flows[flow - 1]["flowID"]
+    voices = [v for instrument in raw["instruments"] for v in instrument.get("voiceStreams") or []]
+    placements: dict[int, int] = {}
+    for voice in voices:
+        note = next((e for e in events if e.get("stream") == voice and e["type"] == "NoteEvent" and "id" in e), None)
+        block = blocks.get(str(voice))
+        if note is None or block is None:
+            continue
+        before = {e["id"] for e in events if e["type"] == "DynamicGroupEvent"}
+        await client.command(f"EventEdit.Select?FlowID={flow_id}&EventID={note['id']}&EventBlockID={block}")
+        await client.command("NoteInput.CreateDynamic?Definition=p")
+        after, _ = await bridge.read_partial(flow)
+        made = [e for e in after if e["type"] == "DynamicGroupEvent" and e["id"] not in before]
+        if not made:
+            raise DoricoError(f"the probe dynamic for voice {voice} was not created")
+        await client.command("Edit.Undo")
+        check, _ = await bridge.read_partial(flow)
+        if any(e.get("id") == made[0]["id"] for e in check):
+            raise DoricoError("the probe dynamic could not be undone; check the score")
+        placements[voice] = made[0]["staff"]
+    return placements
 
 
 def _attach_lyrics(located: list[dict[str, Any]], xml_events: list[dict[str, Any]]) -> None:

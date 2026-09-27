@@ -416,6 +416,20 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   per staff: temporary rest (if any) + select + SelectMore + one per extra
   bar + select anchor + paste.
 
+- **Placing voices by probe (2026-09-27).** A dynamic created at a note
+  goes into the stave stream of the staff the note is on, so
+  `service.probe_placements` finds each ambiguous voice's staff by
+  selecting one of its notes, `NoteInput.CreateDynamic?Definition=p`,
+  reading which staff's stream got it, and undoing it. `layout.resolve`
+  then derives each instrument's staves (contiguous, in order) and the
+  voice placements without a MusicXML export; voices with no notes stay
+  unplaced. Like bar measurement this edits the score briefly (selections
+  stay on the undo stack; redo is cleared). Bars are measured first, and a
+  measured length of 0 (a pickup bar, as in 10,000 Miles) counts as
+  unmeasurable, so such scores still read from MusicXML. Bar measurement
+  now also works when every voice has lyrics (Lua can create in and delete
+  from a stream it can only dump).
+
 ## Safety rules
 
 - Never follow a Lua write with `Edit.Undo` unless the script is known to

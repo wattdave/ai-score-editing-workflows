@@ -33,10 +33,17 @@ def resolve(
     raw: dict[str, Any],
     events: list[dict[str, Any]],
     musicxml: dict[str, Any] | None = None,
+    placements: dict[int, int] | None = None,
 ) -> list[dict[str, Any]]:
-    """Staves as [{staff, name, stream, voiceStreams}], staff numbers from 1."""
+    """Staves as [{staff, name, stream, voiceStreams}], staff numbers from 1.
+
+    placements maps voice streams to the staff a probe found their notes on
+    (service.probe_placements); with them the MusicXML export is not needed.
+    """
     staves = [s["stream"] for s in raw["staves"]]
     instruments = raw["instruments"]
+    if placements:
+        return _from_placements(raw, staves, instruments, placements)
     counts = _staves_per_instrument(len(staves), instruments, musicxml)
     result: list[dict[str, Any]] = []
     first = 0
@@ -60,6 +67,35 @@ def resolve(
                     result[staff - 1]["voiceStreams"].append(voice)
     if first != len(staves):
         raise DoricoError(f"the instruments account for {first} staves but the flow has {len(staves)}")
+    return result
+
+
+def _from_placements(
+    raw: dict[str, Any], staves: list[int], instruments: list[dict[str, Any]], placements: dict[int, int]
+) -> list[dict[str, Any]]:
+    """Staves and voices from probed placements.
+
+    An instrument's staves are contiguous and in order, so its range runs
+    from the staff after the previous instrument's to its highest probed
+    staff (the last instrument takes the rest). Voices go to their probed
+    staff; unprobed voices (no notes) stay unplaced.
+    """
+    result = []
+    start = 1
+    for k, instrument in enumerate(instruments):
+        probed = [placements[v] for v in instrument.get("voiceStreams") or [] if v in placements]
+        if not probed and k != len(instruments) - 1:
+            raise NeedsMusicXML(f"{instrument.get('name')} has no notes to probe")
+        end = len(staves) if k == len(instruments) - 1 else max(probed)
+        if probed and (min(probed) < start or end < start):
+            raise NeedsMusicXML(f"probed staves for {instrument.get('name')} are out of order")
+        for staff in range(start, end + 1):
+            result.append({"staff": staff, "name": instrument.get("name"), "stream": staves[staff - 1],
+                           "voiceStreams": sorted(v for v in instrument.get("voiceStreams") or []
+                                                  if placements.get(v) == staff)})
+        start = end + 1
+    if len(result) != len(staves):
+        raise NeedsMusicXML("probed placements do not account for every staff")
     return result
 
 

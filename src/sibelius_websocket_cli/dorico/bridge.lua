@@ -397,14 +397,21 @@ function actions.bars(request)
     end
   end
   table.sort(divisions, function(a, b) return a.position < b.position end)
-  -- Only voices Lua can read: a stream with lyrics cannot be measured in.
-  local voices = {}
+  -- Prefer a voice Lua can read; if every voice has lyrics, use one read
+  -- from dump(): Lua can still create in it and delete what it created.
+  -- The emptiest voice is the least disturbing place for a temporary rest.
+  local readable, dumped = {}, {}
   for _, v in ipairs(list(field(flow, 'voiceStreams'))) do
-    if pcall(stream_list, v) then voices[#voices + 1] = v end
+    local ok, events = pcall(stream_list, v)
+    if ok then readable[#readable + 1] = { stream = v, count = #events }
+    else
+      local okd, items = pcall(dump_items, v, nil, nil)
+      if okd then dumped[#dumped + 1] = { stream = v, count = #items } end
+    end
   end
-  -- An empty voice is the least disturbing place for a temporary bar rest.
-  table.sort(voices, function(a, b) return #stream_list(a) < #stream_list(b) end)
-  local probe = voices[1]
+  local voices = #readable > 0 and readable or dumped
+  table.sort(voices, function(a, b) return a.count < b.count end)
+  local probe = voices[1] and voices[1].stream
   if probe == nil then error('the flow has no voices to measure bars in') end
   local created = 0
   local out = array()
