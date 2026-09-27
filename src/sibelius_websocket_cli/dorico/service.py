@@ -259,7 +259,7 @@ async def _apply_commands(
             raise DoricoError(f"{checked['error']}; nothing was changed")
     planned = (1 if removals else 0) + sum(
         1 + len(op["syllables"]) if op["op"] == "add-lyrics" else 2 for op in commands
-    )
+    )  # every other command op is its selection plus one command
     if dry_run:
         return {"dryRun": True, "operations": prepared, "undoSteps": planned}
     steps = 0
@@ -300,6 +300,9 @@ async def _apply_commands(
                     raise DoricoError(f"Dorico made no {op['op'][4:]} change at bar {op['bar']} ({op['definition']})")
                 steps += 1
                 results.append({"op": op["op"], "bar": op["bar"], "definition": op["definition"], "id": made[0]["id"]})
+            elif op["op"] in score.NOTE_COMMAND_OPS:
+                results.append(await _run_note_command(bridge, op, flow))
+                steps += 1
             else:
                 steps += await _type_lyrics(bridge, op["syllables"])
                 lyrics.append(op)
@@ -310,6 +313,28 @@ async def _apply_commands(
     if lyrics:
         outcome["lyricsCheck"] = await _check_lyrics(bridge, lyrics, flow)
     return outcome
+
+
+async def _run_note_command(bridge: DoricoBridge, op: dict[str, Any], flow: int) -> dict[str, Any]:
+    """Run a note command on the selected note and check what can be checked."""
+    before = {e["id"] for e in (await bridge.read_partial(flow))[0]}
+    query = "&".join(f"{k}={v}" for k, v in op["parameters"].items())
+    await bridge.client.command(op["command"] + (f"?{query}" if query else ""))
+    events, _ = await bridge.read_partial(flow)
+    result: dict[str, Any] = {"op": op["op"], "note": op["select"]["id"]}
+    if "expect" in op:
+        made = [e for e in events if e["id"] not in before and e["type"] == op["expect"] and e["position"] == op["position"]]
+        if not made:
+            raise DoricoError(f"Dorico made no {op['expect']} at the note ({op['op']})")
+        result["id"] = made[0]["id"]
+    elif op["op"] == "set-articulation" and op.get("checkable"):
+        note = next((e for e in events if e.get("id") == op["select"]["id"]), {})
+        if op["articulation"] not in (note.get("articulations") or []):
+            raise DoricoError(f"the note does not show {op['articulation']} after SetArticulation")
+        result["articulations"] = note.get("articulations")
+    else:
+        result["verified"] = False  # slurs, and articulations on dump-read notes, are not visible to Lua
+    return result
 
 
 # Dorico's lyric popover is part of its UI: it needs Dorico frontmost and a

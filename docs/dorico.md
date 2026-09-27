@@ -145,7 +145,8 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | (Dorico only) `add-clef` | ✅ | treble, bass, percussion, tab, tab.4 from the score's clef library |
 | `transpose` | ✅ | per-note, respelled diatonically |
 | `set` (Dx, Dy, Hidden, ...), `tie`, `bracket`, `flip-stem`, `nudge`, `beam` | ❌ | not in the Lua model |
-| `add-line` | ❌ | no line classes exposed |
+| `add-line` | ⚠️ | only slurs, note to next note (`add-slur`); hairpins and other lines not explored |
+| (Dorico only) `add-dynamic`, `set-articulation`, `add-slur`, `add-tempo`, `add-rehearsal-mark` | ✅ | by command at a note; slurs cannot be read back |
 | (Dorico only) `read_lyrics`, `edit_lyrics` | ⚠️ | a player's verse as text through the Edit Lyrics dialog; edits must keep the syllable count |
 | `add-lyric` → `add-lyrics` | ⚠️ | verse 1, typed through the lyric popover by command (see gaps); staff must have no lyrics yet |
 | `copy-passage` | ❌ | `copyRange(from, to, stream, dest, 0)` runs but copies nothing |
@@ -355,7 +356,16 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
     `kStaccato`; they become note properties (`kArticulationForce`,
     `kArticulationDuration`), readable from Lua.
   - S logs `NoteInput.SlurStart`; with one note selected it slurs to the
-    next note. The slur is in no stream Lua can see.
+    next note. The slur is in no stream Lua can see. `SlurStop` on a later
+    note did not extend it; `SlurStart` on a selection extended with
+    `EventEdit.NavigateRightExtend` spans it, but each step stops on every
+    note and rest, implied rests included, so the count is not knowable and
+    `add-slur` only slurs a note to the next.
+  - `SetArticulation` values: kAccent / kMarcato set `kArticulationForce`
+    0/1; kStaccatissimo / kStaccato / kStaccatoTenuto / kTenuto set
+    `kArticulationDuration` 0-3; kStress / kUnstress set
+    `kArticulationStress` 0/1 (kSpiccato, kStrongAccent do nothing). Reads
+    report them as a note's `articulations`.
   - `NoteInput.CreateTempo?Definition=Allegro` and `…=q=120` and
     `NoteInput.CreateRehearsalMark` work (a second tempo at the same
     position replaced the first), but they make the **global timebase

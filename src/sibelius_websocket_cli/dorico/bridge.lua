@@ -199,6 +199,14 @@ local function raw_layout(score, flow)
   return { staves = staves, instruments = instruments, blocks = blocks }
 end
 
+-- Note articulation properties and the names their values stand for
+-- (from NoteInput.SetArticulation?Value=kAccent, kMarcato, ... ; docs/dorico.md).
+local ARTICULATION_PROPERTIES = {
+  kArticulationForce = { [0] = 'accent', [1] = 'marcato' },
+  kArticulationDuration = { [0] = 'staccatissimo', [1] = 'staccato', [2] = 'staccato-tenuto', [3] = 'tenuto' },
+  kArticulationStress = { [0] = 'stress', [1] = 'unstress' },
+}
+
 -- Events read from a stream report the base class Event to class_info, so
 -- the type comes from the string form: "kNoteEvent (id:3) at 0, ..." for a
 -- stream's events, "NoteEvent ID: 13" for one just created.
@@ -219,6 +227,13 @@ local function describe_event(event, staff, voice, stream_id)
   if kind == 'NoteEvent' or kind == 'GraceNoteEvent' then
     item.pitch = tonumber(property(event, 'kNotePitch'))
     item.name = text:match('%s([A-G][#bx]*%-?%d+) %(ends') or text:match('%s([A-G][#bx]*%-?%d+)%s*$')
+    -- Articulations are note properties (set by NoteInput.SetArticulation).
+    local articulations = array()
+    for prop, names in pairs(ARTICULATION_PROPERTIES) do
+      local value = tonumber(property(event, prop))
+      if value ~= nil and names[value] then articulations[#articulations + 1] = names[value] end
+    end
+    if #articulations > 0 then table.sort(articulations) item.articulations = articulations end
   elseif kind == 'ClefEvent' then
     item.clef = text:match('Clef entity ID in all layouts:%s*([%w%.]+)')
   elseif kind == 'TextEvent' then
