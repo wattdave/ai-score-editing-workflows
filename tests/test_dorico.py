@@ -716,3 +716,53 @@ def test_copy_passage_refuses_a_note_over_the_paste_point() -> None:
     with pytest.raises(DoricoBatchError, match="covers the paste point"):
         prepare_batch([{"op": "copy-passage", "fromBar": 1, "toBar": 1, "topStaff": 1, "bottomStaff": 1,
                         "destStaff": 1, "destBar": 3}], locate_events(events, BARS), STAVES, BARS)
+
+
+# ------------------------------------------------------------------ probe placement
+
+def test_layout_from_probed_placements() -> None:
+    from sibelius_websocket_cli.dorico import layout
+
+    piano = {"staves": [{"stream": 1}, {"stream": 3}],
+             "instruments": [{"id": 0, "name": "Piano", "voiceStreams": [2, 4, 6, 7]}]}
+    staves = layout.resolve(piano, [], placements={2: 1, 4: 2, 7: 1})
+    assert [s["voiceStreams"] for s in staves] == [[2, 7], [4]]  # 6 has no notes: unplaced
+    choir = {"staves": [{"stream": 1}, {"stream": 3}, {"stream": 5}],
+             "instruments": [{"id": 0, "name": "S", "voiceStreams": [10]},
+                             {"id": 1, "name": "T", "voiceStreams": [11, 12]}]}
+    staves = layout.resolve(choir, [], placements={10: 1, 11: 2, 12: 3})
+    assert [(s["name"], s["voiceStreams"]) for s in staves] == [("S", [10]), ("T", [11]), ("T", [12])]
+    with pytest.raises(layout.NeedsMusicXML):
+        layout.resolve(choir, [], placements={11: 2, 12: 3})  # S has nothing probed
+
+
+async def test_probe_placements_selects_probes_and_undoes() -> None:
+    class Client:
+        def __init__(self) -> None:
+            self.commands: list[str] = []
+            self.dynamics: list[dict[str, Any]] = []
+
+        async def flows(self) -> list[dict[str, Any]]:
+            return [{"flowID": 0}]
+
+        async def command(self, command: str) -> None:
+            self.commands.append(command)
+            if command.startswith("NoteInput.CreateDynamic"):
+                selected = next(c for c in reversed(self.commands) if c.startswith("EventEdit.Select"))
+                staff = 1 if "EventID=3&" in selected else 2
+                self.dynamics.append({"id": 90 + len(self.commands), "type": "DynamicGroupEvent", "staff": staff})
+            if command == "Edit.Undo":
+                self.dynamics.pop()
+
+    class Bridge:
+        client = Client()
+
+        async def read_partial(self, flow: int) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+            return list(self.client.dynamics), []
+
+    raw = {"blocks": {"2": 2, "4": 4, "6": 6},
+           "instruments": [{"id": 0, "voiceStreams": [2, 4, 6]}]}
+    events = [{"id": 3, "stream": 2, "type": "NoteEvent"}, {"id": 13, "stream": 4, "type": "NoteEvent"}]
+    bridge = Bridge()
+    assert await service.probe_placements(bridge, raw, events, 1) == {2: 1, 4: 2}  # type: ignore[arg-type]
+    assert bridge.client.commands.count("Edit.Undo") == 2 and bridge.client.dynamics == []
