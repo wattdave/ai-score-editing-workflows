@@ -6,7 +6,7 @@
 #              (the first connection per Sibelius launch shows an approval
 #              dialog in Sibelius)
 #
-# Prints one line per requirement: "ok|missing|warn <name> <detail>".
+# Prints one line per requirement: "ok|missing|warn|optional <name> <detail>".
 # Exits 0 when everything required is ok, 1 otherwise.
 
 cd "$(dirname "$0")/.." || exit 2
@@ -66,6 +66,18 @@ if command -v ffmpeg >/dev/null 2>&1; then
     report ok ffmpeg "$(ffmpeg -version 2>/dev/null | head -1 | cut -d' ' -f1-3)"
 else
     report missing ffmpeg "brew install ffmpeg (needed for rehearsal mixes)"
+fi
+
+# Optional: only needed to convert LilyPond sources (lilypond-to-sibelius skill).
+if command -v lilypond >/dev/null 2>&1; then
+    report ok lilypond "$(lilypond --version 2>/dev/null | head -1)"
+else
+    report optional lilypond "brew install lilypond (only for LilyPond sources)"
+fi
+if command -v uv >/dev/null 2>&1; then
+    report ok python-ly "runs on demand with: uvx --from python-ly ly musicxml"
+else
+    report optional python-ly "installed by uv once uv is present"
 fi
 
 if [ -x .venv/bin/sibelius-websocket-cli ]; then
