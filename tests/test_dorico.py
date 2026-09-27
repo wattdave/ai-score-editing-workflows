@@ -392,14 +392,21 @@ async def test_snapshot_fills_unreadable_staves_from_musicxml(tmp_path: Path, mo
         client = None
 
         async def read_partial(self, flow: int) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-            tenor_note = note(40, 128, 46, "Bb2", duration=1024, stream=9, staff=3)
-            return [tenor_note], [{"stream": 5, "staff": 1, "voice": 1}]
+            # Lua gives voice events no staff; the Tenor's one voice on two
+            # staves must be placed by matching the MusicXML.
+            tenor_note = {**note(40, 128, 46, "Bb2", duration=1024, stream=9), "staff": None, "voice": None}
+            return [tenor_note], [{"stream": 5, "staff": None, "voice": None}]
 
         async def overview(self, flow: int) -> dict[str, Any]:
-            return {"staves": [{"staff": 1}, {"staff": 2}, {"staff": 3}]}
+            return {"layout": {
+                "staves": [{"stream": 1}, {"stream": 3}, {"stream": 4}],
+                "instruments": [{"id": 0, "name": "Alto", "voiceStreams": [5]},
+                                {"id": 1, "name": "Tenor", "voiceStreams": [9]}],
+            }}
 
     snap = await service.snapshot(Bridge(), 1)  # type: ignore[arg-type]
     assert snap.unreadable_staves == [1]
+    assert [s["voiceStreams"] for s in snap.staves] == [[5], [], [9]]
     alto = [e for e in snap.located if e["staff"] == 1]
     assert all(e["source"] == "musicxml" and "id" not in e for e in alto)
     tenor = [e for e in snap.located if e["staff"] == 3]
@@ -440,3 +447,38 @@ async def test_export_pdf_answers_overwrite_and_reads_path_from_log(tmp_path: Pa
     assert await export.export_pdf(client, log) == pdf  # type: ignore[arg-type]
     assert client.commands == ["Print.ExportCurrentLayoutAsPDF"]
     assert clicked == [("2", "Overwrite")]
+
+
+# ------------------------------------------------------------------ voice layout
+
+def test_layout_one_voice_per_stave_and_single_stave_instruments() -> None:
+    from sibelius_websocket_cli.dorico import layout
+
+    piano = {"staves": [{"stream": 1}, {"stream": 3}],
+             "instruments": [{"id": 0, "name": "Piano", "voiceStreams": [4, 2]}]}
+    assert [s["voiceStreams"] for s in layout.resolve(piano, [])] == [[2], [4]]
+    choir = {"staves": [{"stream": 1}, {"stream": 3}],
+             "instruments": [{"id": 0, "name": "S", "voiceStreams": [9, 5]}, {"id": 1, "name": "A", "voiceStreams": [7]}]}
+    assert [(s["name"], s["voiceStreams"]) for s in layout.resolve(choir, [])] == [("S", [5, 9]), ("A", [7])]
+
+
+def test_layout_extra_voice_needs_musicxml_and_is_placed_by_its_notes() -> None:
+    from sibelius_websocket_cli.dorico import layout
+
+    # A piano whose third voice (stream 7, made later) is on the treble staff:
+    # id order alone would put it on the bass staff.
+    raw = {"staves": [{"stream": 1}, {"stream": 3}],
+           "instruments": [{"id": 0, "name": "Piano", "voiceStreams": [2, 4, 6, 7]}]}
+    events = [
+        {"stream": 2, "position": 0, "pitch": 72}, {"stream": 4, "position": 0, "pitch": 48},
+        {"stream": 7, "position": 1024, "pitch": 72},
+    ]
+    with pytest.raises(layout.NeedsMusicXML):
+        layout.resolve(raw, events)
+    xml = {"staves": [{"staff": 1, "name": "Piano", "part": "P1"}, {"staff": 2, "name": "Piano", "part": "P1"}],
+           "events": [{"staff": 1, "flowPosition": 0, "pitch": 72}, {"staff": 2, "flowPosition": 0, "pitch": 48},
+                      {"staff": 1, "flowPosition": 1024, "pitch": 72}]}
+    staves = layout.resolve(raw, events, xml)
+    assert [s["voiceStreams"] for s in staves] == [[2, 7], [4]]  # empty voice 6 left out
+    placed = layout.assign([{"stream": 7, "staff": None, "voice": None}, {"stream": 6, "staff": None}], staves)
+    assert placed == [{"stream": 7, "staff": 1, "voice": 2}]

@@ -85,12 +85,25 @@ A flow holds:
 | voice streams (type 2) | notes, rests, text, tuplets |
 | player streams (type 3) | player-level items |
 
-`flow.instruments` has one entry per stave, in stave order, with the
-instrument id (names come from `score.players[*].instruments`) and the
-instrument's voice streams. A two-stave instrument lists the same voices on
-both entries; when it has one voice per stave they are given out in order.
-Confirmed on a two-stave piano and an imported eight-staff SATB score. (The
-first rule used, voice-follows-preceding-stave by id, failed on the import.)
+**Dorico's Lua has no link from a voice to its stave.** `flow.instruments`
+has one entry per *voice* (not per stave), each listing all of that
+instrument's voice streams; voice streams expose nothing stave-related.
+Checked 2026-09-27 on a piano with an extra voice made with Edit > Voices >
+Change Voice > New Down-stem Voice on the treble staff: its stream (7) had
+a higher id than both stave streams, so ordering by id would have put it on
+the bass staff. `dorico/layout.py` therefore assigns voices in Python:
+
+1. staves go to instruments in order (one each, all to a single
+   instrument, or by the MusicXML export's parts);
+2. a one-stave instrument gets all its voices;
+3. one voice per stave: given out in id order (piano, imported SATB);
+4. otherwise each voice goes to the stave whose MusicXML notes match its
+   own (flow position and pitch); a voice with no notes is left out and
+   reported as `unplacedVoiceStreams`.
+
+Rules 1 and 4 need a MusicXML export, so reading such a score exports it.
+Verified live: the extra treble voice read as staff 1 voice 2, the empty
+voice as unplaced.
 
 Notes carry six properties: `kNotePitch` (MIDI), `kNoteSpelling`,
 `kEventPosition`, `kEventDuration`, `kEventSecondaryPosition`,
