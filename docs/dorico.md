@@ -391,6 +391,17 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   voice-layout questions, streams that cannot even be dumped, or
   `query_score(lyrics=true)`, which attaches lyric text to notes.
 
+- **Editing notes on staves with lyrics (2026-09-27).** Notes read from
+  `dump()` have ids but no Lua objects, so `set-pitch`, `delete` and
+  `transpose` go through commands instead: `EventEdit.Delete?FlowID=&EventID=
+  &EventBlockID=` deletes by id with no selection (2 undo steps; the note's
+  lyric event stays); a pitch change selects the note, runs
+  `NoteEdit.PitchUpChromatic` / `PitchDownChromatic?count=N` (Dorico spells
+  it; A4 +1 became A#4) and then `NoteEdit.RespellUsingNoteNameAbove` /
+  `…Below` until the letter matches (B♭4). The note keeps its id, lyric and
+  anything attached. Undo steps: selection + move + each respell. Checked
+  live: the verse text was unchanged throughout.
+
 ## Safety rules
 
 - Never follow a Lua write with `Edit.Undo` unless the script is known to

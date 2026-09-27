@@ -217,7 +217,9 @@ async def apply(
     status = await bridge.client.status()
     if not dry_run and status.get("notReadOnly") is False:
         raise DoricoError("the score is read-only")
-    if any(op["op"] in score.COMMAND_OPS for op in operations if isinstance(op, dict)):
+    # Decide on the resolved ops: set-pitch/delete/transpose on notes read
+    # from dump() become command ops (repitch, delete-by-id).
+    if any(op["op"] in score.COMMAND_OPS | score.ROUTED_COMMAND_OPS for op in prepared):
         return await _apply_commands(bridge, prepared, snap, flow, dry_run)
     checked = await bridge.apply(prepared, flow, dry_run=True)
     if "error" in checked:
@@ -258,8 +260,9 @@ async def _apply_commands(
         if "error" in checked:
             raise DoricoError(f"{checked['error']}; nothing was changed")
     planned = (1 if removals else 0) + sum(
-        1 + len(op["syllables"]) if op["op"] == "add-lyrics" else 2 for op in commands
-    )  # every other command op is its selection plus one command
+        1 + len(op["syllables"]) if op["op"] == "add-lyrics" else 2
+        for op in commands
+    )  # every other command op is its selection plus one command (repitch may add respells)
     if dry_run:
         return {"dryRun": True, "operations": prepared, "undoSteps": planned}
     steps = 0
@@ -278,11 +281,25 @@ async def _apply_commands(
     for op in commands:
         target = op["select"]
         try:
+            if op["op"] == "delete-by-id":
+                await bridge.client.command(
+                    f"EventEdit.Delete?FlowID={flow_id}&EventID={target['id']}&EventBlockID={target['block']}"
+                )
+                steps += 2  # EventEdit.Delete is two undo steps (measured 2026-09-27)
+                events, _ = await bridge.read_partial(flow)
+                if any(e.get("id") == target["id"] for e in events):
+                    raise DoricoError(f"Dorico did not delete event {target['id']}")
+                results.append({"op": "delete", "id": target["id"], "via": "command"})
+                continue
             await bridge.client.command(
                 f"EventEdit.Select?FlowID={flow_id}&EventID={target['id']}&EventBlockID={target['block']}"
             )
             steps += 1  # the selection is an undo step of its own
-            if op["op"] == "set-break":
+            if op["op"] == "repitch":
+                done, result = await _repitch(bridge, op, flow)
+                steps += done
+                results.append(result)
+            elif op["op"] == "set-break":
                 await bridge.client.command("Edit.CreateSystemBreak")
                 events, _ = await bridge.read_partial(flow)
                 made = [e for e in events if e["type"] == "BreakEvent" and e["position"] == op["position"]]
@@ -313,6 +330,41 @@ async def _apply_commands(
     if lyrics:
         outcome["lyricsCheck"] = await _check_lyrics(bridge, lyrics, flow)
     return outcome
+
+
+LETTERS = "CDEFGAB"
+
+
+async def _repitch(bridge: DoricoBridge, op: dict[str, Any], flow: int) -> tuple[int, dict[str, Any]]:
+    """Move the selected note chromatically to newPitch, then respell to the
+    asked letter; the note keeps its id and anything attached (lyrics).
+
+    Returns the undo steps taken (not counting the selection) and the result.
+    """
+    shift = op["newPitch"] - op["oldPitch"]
+    direction = "Up" if shift > 0 else "Down"
+    await bridge.client.command(f"NoteEdit.Pitch{direction}Chromatic?count={abs(shift)}")
+    steps = 1
+
+    async def current() -> dict[str, Any]:
+        events, _ = await bridge.read_partial(flow)
+        note = next((e for e in events if e.get("id") == op["id"]), None)
+        if note is None:
+            raise DoricoError(f"note {op['id']} disappeared while changing its pitch")
+        return note
+
+    note = await current()
+    for _ in range(2):
+        name = note.get("name") or ""
+        if not name or name[0] == op["letter"]:
+            break
+        up = (LETTERS.index(op["letter"]) - LETTERS.index(name[0])) % 7 == 1
+        await bridge.client.command(f"NoteEdit.RespellUsingNoteName{'Above' if up else 'Below'}")
+        steps += 1
+        note = await current()
+    if note.get("pitch") != op["newPitch"] or not (note.get("name") or "").startswith(op["letter"]):
+        raise DoricoError(f"note {op['id']} reads {note.get('name')} ({note.get('pitch')}), not {op['letter']} ({op['newPitch']})")
+    return steps, {"op": "set-pitch", "id": op["id"], "via": "command", "before": op.get("name"), "after": note.get("name")}
 
 
 async def _run_note_command(bridge: DoricoBridge, op: dict[str, Any], flow: int) -> dict[str, Any]:
