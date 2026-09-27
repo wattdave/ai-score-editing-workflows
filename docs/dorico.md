@@ -190,6 +190,16 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   respelled pitch is a delete plus a create with an explicit
   `MIDIPitchWithSpelling`. Setting `kNotePitch` alone lets Dorico pick the
   spelling (A4 + 2 became A𝄪4).
+- **Respelling (2026-09-27).** With a note selected by id,
+  `NoteEdit.RespellUsingNoteNameAbove` / `…Below` respell it one letter
+  name up or down (G2 -> A𝄫2 -> G2 -> F𝄪2), and the Lua read shows the new
+  spelling. `NoteEdit.ResetSpellingInCurrentLayout` / `…InAllLayouts` did
+  not undo that respelling (they seem to clear layout-specific overrides
+  only). `NoteEdit.ResetSpellAutomatically` opens the QML "Respell Notes
+  Automatically" dialog, not tried. These could let set-pitch keep the
+  note (set `kNotePitch`, then respell) instead of replacing it, at the
+  cost of extra undo steps; not done, since it is not yet known what the
+  replacement loses.
 - **Durations.** `kEventDuration` accepts `Variant.createString("1/2")` and
   the render changes, but the event's `duration` still reads the old value
   afterwards, so there is no set-duration op until reads agree.
@@ -291,7 +301,15 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   sources are compiled into the main binary as readable text. The build has
   no QML debugging enabler and ships no `qmltooling` plugins, so Qt's QML
   inspector/debugger is not available; GammaRay-style injection would
-  fight the hardened runtime.
+  fight the hardened runtime. `scripts/extract_dorico_qml.py OUT_DIR`
+  recovers them (324 unique files in 6.2.30, named by content hash, with an
+  INDEX.txt of root type, titles and controller calls). They are layout
+  bound to C++ `controller` objects (`controller.onLyricsPopoverButtonClicked()`),
+  so they show a screen's structure but offer nothing to call. 48 are
+  `DoricoDialog`s (Project Statistics, Respell Notes Automatically,
+  Generate Notes From Chord Symbols, Edit Instrument Families, …). The
+  dialogs driven here (Edit Lyrics, Export MusicXML) are not among them:
+  they are Qt Widgets, which is why macOS accessibility reaches them.
 
 ## Safety rules
 
