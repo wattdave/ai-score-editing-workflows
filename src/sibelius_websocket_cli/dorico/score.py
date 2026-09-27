@@ -310,6 +310,11 @@ def _addressed(
             f"{label}: staff {event['staff']} was read from a MusicXML export (Dorico's scripting cannot "
             "read staves with lyrics), so its existing notes cannot be changed or deleted; adding works"
         )
+    if event.get("source") == "dump" and op != "lookup":
+        raise DoricoBatchError(
+            f"{label}: event {event['id']} is on a staff Dorico's scripting can only list (lyrics or "
+            "tempo marks), so it cannot be changed or deleted from a script; adding works"
+        )
     if "type" in operation and event["type"] not in _types([_str(operation, "type", label)]):
         raise DoricoBatchError(f"{label}: the object there is a {event['type']}, not a {operation['type']}")
     if "position" in operation and event["position"] != operation["position"]:
@@ -466,9 +471,12 @@ def _add_lyrics(
     note itself, so only the first note needs an id: the staff must not
     have lyrics yet (Lua cannot read a staff that has them).
     """
-    target = _addressed({**operation, "op": "delete"}, "delete", label, by_id, by_address)
+    target = _addressed({**operation, "op": "delete"}, "lookup", label, by_id, by_address)
     if target["type"] not in TYPE_ALIASES["Note"]:
         raise DoricoBatchError(f"{label}: lyrics start on a note, not a {target['type']}")
+    if by_id[target["id"]].get("source") == "dump":
+        raise DoricoBatchError(f"{label}: staff {by_id[target['id']]['staff']} already has lyrics (or items "
+                               "Dorico's scripting cannot read); add-lyrics needs a staff without lyrics")
     verse = operation.get("verse", 1)
     if verse != 1:
         raise DoricoBatchError(f"{label}: only verse 1 is supported so far")
@@ -555,10 +563,10 @@ def _transpose(operation: dict[str, Any], label: str, located: list[dict[str, An
     for event in located:
         if event["type"] not in TYPE_ALIASES["Note"] or not first <= event["bar"] <= last or not top <= event["staff"] <= bottom:
             continue
-        if "id" not in event:
+        if "id" not in event or event.get("source") == "dump":
             raise DoricoBatchError(
-                f"{label}: staff {event['staff']} has lyrics, which Dorico's scripting cannot read, so its "
-                "notes cannot be transposed"
+                f"{label}: staff {event['staff']} has lyrics or tempo marks, which Dorico's scripting cannot "
+                "read, so its notes cannot be transposed"
             )
         try:
             pitch, letter = transpose_spelled(event.get("name"), event["pitch"], steps, semitones)

@@ -37,6 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     query.add_argument("--voice", type=int)
     query.add_argument("--where", action="append")
     query.add_argument("--limit", type=int, default=200)
+    query.add_argument("--lyrics", action="store_true", help="add lyric text (exports MusicXML)")
     apply = sub.add_parser("apply", help="apply a JSON batch as one undo step")
     source = apply.add_mutually_exclusive_group(required=True)
     source.add_argument("--file")
@@ -74,7 +75,7 @@ async def run(args: argparse.Namespace) -> Any:
             first, last = parse_bar_range(bars=args.bars) if args.bars else (None, None)
             return await service.query(
                 bridge, flow=args.flow, staves=args.staves, from_bar=first, to_bar=last,
-                types=args.types, voice=args.voice, where=args.where, limit=args.limit,
+                types=args.types, voice=args.voice, where=args.where, limit=args.limit, lyrics=args.lyrics,
             )
         if args.command == "apply":
             text = Path(args.file).expanduser().read_text() if args.file else args.json

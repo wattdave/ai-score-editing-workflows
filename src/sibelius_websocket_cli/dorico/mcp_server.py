@@ -143,6 +143,7 @@ async def query_score(
     where: list[str] | None = None,
     flow: int = 1,
     limit: int = 200,
+    lyrics: bool = False,
 ) -> dict[str, Any]:
     """Find events in a flow of the open Dorico project.
 
@@ -153,6 +154,11 @@ async def query_score(
     conditions that must all hold, e.g. "Pitch>=72", "Name='Bb4'",
     "Duration<256". Each note of a chord is its own object.
 
+    lyrics=true adds each note's lyrics (text, verse, syllable), read from a
+    MusicXML export (slower; Dorico's export window opens and closes).
+    Objects on staves with lyrics or tempo marks have "source": "dump":
+    they can be selected and used by command ops but not changed by Lua ops.
+
     Returns {objects, count, truncated}. Each object has staff, bar, index,
     type and position (its address for apply_batch), plus id, flowPosition,
     duration, voice, and pitch and spelled name for notes.
@@ -161,7 +167,7 @@ async def query_score(
     return await session.run(
         lambda b: service.query(
             b, flow=flow, staves=staves, from_bar=first, to_bar=last,
-            types=types, voice=voice, where=where, limit=limit,
+            types=types, voice=voice, where=where, limit=limit, lyrics=lyrics,
         ),
         retry=True,
     )

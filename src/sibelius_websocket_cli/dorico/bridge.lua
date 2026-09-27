@@ -232,11 +232,65 @@ local function describe_event(event, staff, voice, stream_id)
   return item
 end
 
-local function stream_events(stream, staff, voice, out)
-  local sid = field(stream, 'id')
-  for _, event in ipairs(stream_list(stream)) do
-    out[#out + 1] = describe_event(event, staff, voice, sid)
+-- MIDI pitch from a spelled name such as "Bb4", "C#5" or "Fx2".
+local LETTER_SEMITONES = { C = 0, D = 2, E = 4, F = 5, G = 7, A = 9, B = 11 }
+local function pitch_of(name)
+  local letter, accidentals, octave = (name or ''):match('^([A-G])([#bx]*)(%-?%d+)$')
+  if not letter then return nil end
+  local alter = 0
+  for ch in accidentals:gmatch('.') do
+    alter = alter + ((ch == '#' and 1) or (ch == 'x' and 2) or -1)
   end
+  return 12 * (tonumber(octave) + 1) + LETTER_SEMITONES[letter] + alter
+end
+
+-- A stream's events from its dump(), for streams whose .events Dorico
+-- cannot give to Lua (lyrics, tempo marks). dump() is written by Dorico's
+-- C++ and lists every event:
+--   "0 (0) dur: 1: kNoteEvent (id:3) at 0, duration 1  C5 (ends 1)"
+--   "0 (0): kLyricEvent (id:61) at 0  element ID = 30,  duration 0"
+-- Items carry source = "dump": there is no Lua object to change them with.
+local function dump_items(stream, staff, voice)
+  local sid = field(stream, 'id')
+  local ok, text = pcall(function() return stream:dump() end)
+  if not ok then error('Dorico cannot read or dump stream ' .. str(sid) .. ': ' .. str(text):sub(1, 80), 0) end
+  local items = {}
+  for line in text:gmatch('[^\n]+') do
+    local kind, id, rest = line:match(': k(%a+Event) %(id:(%d+)%) at (.*)$')
+    if kind then
+      local item = { id = tonumber(id), type = kind, stream = sid, staff = staff, voice = voice, source = 'dump' }
+      local position = rest:match('^(%-?%d+/%d+)') or rest:match('^(%-?%d+)')
+      item.position, item.exactPosition = units(position)
+      local duration = rest:match('duration (%-?%d+/%d+)') or rest:match('duration (%-?%d+)')
+      if duration then item.duration, item.exactDuration = units(duration) else item.duration = 0 end
+      if kind == 'NoteEvent' or kind == 'GraceNoteEvent' then
+        item.name = rest:match('%s([A-G][#bx]*%-?%d+) %(ends') or rest:match('%s([A-G][#bx]*%-?%d+)%s*$')
+        item.pitch = pitch_of(item.name)
+      elseif kind == 'TextEvent' then
+        item.text = rest:match('^[^:]-%s:%s(.*)$')
+      end
+      items[#items + 1] = item
+    end
+  end
+  return items
+end
+
+-- A stream's events as items: from .events when Lua can have them,
+-- otherwise from dump(). The second result says whether dump() was used.
+local function stream_items(stream, staff, voice)
+  local ok, events = pcall(stream_list, stream)
+  if ok then
+    local sid, items = field(stream, 'id'), {}
+    for _, event in ipairs(events) do items[#items + 1] = describe_event(event, staff, voice, sid) end
+    return items, false
+  end
+  return dump_items(stream, staff, voice), true
+end
+
+local function stream_events(stream, staff, voice, out)
+  local items, dumped = stream_items(stream, staff, voice)
+  for _, item in ipairs(items) do out[#out + 1] = item end
+  return dumped
 end
 
 local function sort_events(events)
@@ -289,20 +343,27 @@ function actions.read(request)
   local score = current_score()
   local flow = flow_at(score, request.flow)
   local events = {}
+  local dumped = array()
   local unreadable = array()
-  -- With skipUnreadable, streams Dorico cannot read (lyrics) are listed
-  -- instead of failing the read, so bridge.py can fill them from MusicXML.
+  -- Streams whose events Lua cannot have are read from dump() and listed in
+  -- `dumped`; with skipUnreadable, a stream that cannot even be dumped is
+  -- listed in `unreadable` instead of failing the read.
   local function add_stream(stream, staff, voice)
-    if not request.skipUnreadable then return stream_events(stream, staff, voice, events) end
-    local ok, problem = pcall(stream_events, stream, staff, voice, events)
-    if not ok then unreadable[#unreadable + 1] = { stream = field(stream, 'id'), staff = staff, voice = voice } end
+    local ok, was_dumped = pcall(stream_events, stream, staff, voice, events)
+    if ok then
+      if was_dumped then dumped[#dumped + 1] = { stream = field(stream, 'id'), staff = staff } end
+    elseif request.skipUnreadable then
+      unreadable[#unreadable + 1] = { stream = field(stream, 'id'), staff = staff, voice = voice }
+    else
+      error(was_dumped, 0)
+    end
   end
   for _, tb in ipairs(list(field(flow, 'timebaseStreams'))) do add_stream(tb, 0, nil) end
   -- Stave-stream events get their stave's index; voice-stream events get
   -- none, since layout.py assigns voices to staves.
   for i, stave in ipairs(by_id(list(field(flow, 'staveStreams')))) do add_stream(stave, i, nil) end
   for _, voice in ipairs(by_id(list(field(flow, 'voiceStreams')))) do add_stream(voice, nil, nil) end
-  return { flow = request.flow or 1, events = sort_events(events), unreadable = unreadable }
+  return { flow = request.flow or 1, events = sort_events(events), dumped = dumped, unreadable = unreadable }
 end
 
 -- Bar lengths cannot be read (the time signature property does not convert),
@@ -314,9 +375,9 @@ function actions.bars(request)
   local flow = flow_at(score, request.flow)
   local divisions = {}
   for _, tb in ipairs(list(field(flow, 'timebaseStreams'))) do
-    for _, event in ipairs(stream_list(tb)) do
-      if event_type(event) == 'BarDivisionEvent' then
-        divisions[#divisions + 1] = { id = field(event, 'id'), position = units(field(event, 'position')) }
+    for _, item in ipairs((stream_items(tb, 0, nil))) do
+      if item.type == 'BarDivisionEvent' then
+        divisions[#divisions + 1] = { id = item.id, position = item.position }
       end
     end
   end

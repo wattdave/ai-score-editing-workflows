@@ -137,7 +137,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 |---|---|---|
 | `score_overview` | ✅ | title, flows, players, staves with voice streams, layouts, selection |
 | `score_structure` | ⚠️ | from a MusicXML export when any staff has lyrics (full time/key info); otherwise bar lengths and key positions only |
-| `query_score` | ✅ | staves, bars, types (Sibelius names or Dorico's), voice, `where`; lyric staves via MusicXML (no ids) |
+| `query_score` | ✅ | staves, bars, types (Sibelius names or Dorico's), voice, `where`; lyric staves via `dump()` with ids, lyric text with `lyrics=true` |
 | `apply_batch` + `dry_run` | ✅ | every op checked first; one undo step |
 | `set-pitch` | ✅ | replaces the note, spelled as asked; new id reported |
 | `delete` | ✅ | |
@@ -346,6 +346,40 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   and `Text` are accepted but change nothing, so bar 1 cannot be changed.
   Keystroke-driven popovers are fragile: a leftover lyric popover took a
   Shift+M. The ops send the commands directly.
+
+- **Dynamics, articulations, slurs, tempo, rehearsal marks, copy/paste
+  (2026-09-27).** All tested on a note selected by id, rendered, and undone:
+  - `NoteInput.CreateDynamic?Definition=p` makes a `DynamicGroupEvent` in
+    the staff's stave stream at the note (readable from Lua).
+  - Articulation shortcuts log `NoteInput.SetArticulation?Value=kAccent` /
+    `kStaccato`; they become note properties (`kArticulationForce`,
+    `kArticulationDuration`), readable from Lua.
+  - S logs `NoteInput.SlurStart`; with one note selected it slurs to the
+    next note. The slur is in no stream Lua can see.
+  - `NoteInput.CreateTempo?Definition=Allegro` and `…=q=120` and
+    `NoteInput.CreateRehearsalMark` work (a second tempo at the same
+    position replaced the first), but they make the **global timebase
+    unreadable** to Lua ("Not implemented"), taking time and key signature
+    events with it: such scores need the MusicXML read.
+  - From a selected note, `EventEdit.NavigateRightExtend` extends the
+    selection (it is refused from a clef); `Edit.Copy`, then selecting a
+    destination note and `Edit.Paste`, pasted the passage at that note's
+    position, overwriting what was there, as one undo step.
+
+- **dump() rescues unreadable streams (2026-09-27).** Window mode makes
+  no difference to the "Not implemented" failure (same in Write, Engrave,
+  Play, Print and Setup), but `EventStream:dump()`, written by Dorico's C++,
+  still lists every event of such a stream: notes with id, position,
+  duration and spelled pitch, `kLyricEvent`s (id, position, element id, no
+  text), and in the timebase `kImmediateTempoChangeEvent` /
+  `kRehearsalMarkEvent` alongside time and key signatures. The bridge
+  reads those streams from `dump()` (items marked `source: "dump"`, MIDI
+  pitch computed from the spelling), so lyric staves keep their ids:
+  command ops (set-break, set-time, set-key, set-barline, selections) work
+  on them. Lua ops (set-pitch, delete, transpose, add-lyrics) refuse them,
+  since there is no Lua object to change. MusicXML is now exported only for
+  voice-layout questions, streams that cannot even be dumped, or
+  `query_score(lyrics=true)`, which attaches lyric text to notes.
 
 ## Safety rules
 
