@@ -45,19 +45,30 @@ class Snapshot:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-async def snapshot(bridge: DoricoBridge, flow: int = 1) -> Snapshot:
+async def snapshot(bridge: DoricoBridge, flow: int = 1, lyrics: bool = False) -> Snapshot:
+    """Read a flow, exporting MusicXML only when Lua's view is not enough.
+
+    Streams Lua cannot take events from (lyrics, tempo marks) are read from
+    Dorico's dump() and keep their ids (source "dump"). MusicXML is exported
+    when the voice layout needs it, a stream cannot even be dumped, bars
+    cannot be measured, or `lyrics` asks for lyric text.
+    """
     raw = (await bridge.overview(flow))["layout"]
     events, unreadable = await bridge.read_partial(flow)
     staves = None
-    if not unreadable:
+    if not unreadable and not lyrics:
         try:
             staves = layout.resolve(raw, events)
         except layout.NeedsMusicXML:
             staves = None
     if staves is not None:
         placed = layout.assign(events, staves)
-        bars = await bridge.bars(flow, events)
-        return Snapshot(staves, score.locate_events(placed, bars), bars, raw=raw)
+        try:
+            bars = await bridge.bars(flow, events)
+        except DoricoError:
+            bars = None  # e.g. no voice Lua can measure in: use the export
+        if bars is not None:
+            return Snapshot(staves, score.locate_events(placed, bars), bars, raw=raw)
 
     path = await export_musicxml(bridge.client, flow)
     xml = musicxml_read.read(path)
@@ -77,6 +88,8 @@ async def snapshot(bridge: DoricoBridge, flow: int = 1) -> Snapshot:
     all_voices = {v for i in raw["instruments"] for v in i.get("voiceStreams") or []}
     lua_located = [e for e in score.locate_events(placed, xml["bars"]) if e["staff"] not in bad]
     from_xml = [dict(e, source="musicxml") for e in xml["events"] if e["staff"] in bad]
+    if lyrics:
+        _attach_lyrics(lua_located, xml["events"])
     located = sorted(
         lua_located + from_xml,
         key=lambda e: (e["staff"], e["bar"], e["position"], e.get("voice") or 0, e.get("pitch") or 0),
@@ -87,6 +100,19 @@ async def snapshot(bridge: DoricoBridge, flow: int = 1) -> Snapshot:
         item["index"] = counters.get(key, 0)
         counters[key] = item["index"] + 1
     return Snapshot(staves, located, xml["bars"], xml, path, bad, sorted(all_voices - placed_streams), raw)
+
+
+def _attach_lyrics(located: list[dict[str, Any]], xml_events: list[dict[str, Any]]) -> None:
+    """Give Lua-read notes the lyrics the MusicXML export has on the same note."""
+    by_note = {
+        (e["staff"], e["flowPosition"], e.get("pitch")): e["lyrics"]
+        for e in xml_events if e.get("lyrics")
+    }
+    for event in located:
+        if event.get("type") in score.TYPE_ALIASES["Note"]:
+            found = by_note.get((event["staff"], event["flowPosition"], event.get("pitch")))
+            if found:
+                event["lyrics"] = found
 
 
 def _last_bar(located: list[dict[str, Any]], bars: BarMap) -> int:
@@ -169,8 +195,9 @@ async def query(
     voice: int | None = None,
     where: list[str] | None = None,
     limit: int = 200,
+    lyrics: bool = False,
 ) -> dict[str, Any]:
-    snap = await snapshot(bridge, flow)
+    snap = await snapshot(bridge, flow, lyrics=lyrics)
     located = snap.located
     wanted = None
     if staves:

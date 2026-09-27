@@ -615,3 +615,38 @@ def test_command_values_escape_commas_and_ampersands() -> None:
     assert command_value("well, you'll & more") == "well\\, you'll \\& more"
     with pytest.raises(DoricoBatchError):
         command_value("a\\b")
+
+
+# ------------------------------------------------------------------ dump()-read streams
+
+DUMPED = EVENTS + [
+    {"id": 60, "type": "NoteEvent", "stream": 2, "staff": 1, "voice": 1, "position": 2048, "duration": 256,
+     "pitch": 60, "name": "C4", "source": "dump"},
+]
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        {"op": "delete", "id": 60},
+        {"op": "set-pitch", "id": 60, "oldPitch": 60, "newPitch": 62},
+        {"op": "add-lyrics", "id": 60, "text": "la"},
+        {"op": "transpose", "fromBar": 3, "toBar": 3, "topStaff": 1, "bottomStaff": 1, "semitones": 2},
+    ],
+)
+def test_lua_ops_refuse_notes_read_from_dump(operation: dict[str, Any]) -> None:
+    with pytest.raises(DoricoBatchError, match="lyrics"):
+        prepare_batch([operation], locate_events(DUMPED, BARS), STAVES, BARS)
+
+
+def test_command_ops_can_select_notes_read_from_dump() -> None:
+    ops = prepare_batch([{"op": "set-key", "bar": 3, "key": "G"}], locate_events(DUMPED, BARS), STAVES, BARS)
+    assert ops[0]["select"] == {"id": 60, "stream": 2}
+
+
+def test_attach_lyrics_matches_notes_by_staff_position_and_pitch() -> None:
+    located = [{"type": "NoteEvent", "staff": 1, "flowPosition": 0, "pitch": 62},
+               {"type": "NoteEvent", "staff": 1, "flowPosition": 256, "pitch": 64}]
+    service._attach_lyrics(located, [{"staff": 1, "flowPosition": 0, "pitch": 62,
+                                      "lyrics": [{"verse": 1, "text": "Oh", "syllabic": "single"}]}])
+    assert located[0]["lyrics"][0]["text"] == "Oh" and "lyrics" not in located[1]
