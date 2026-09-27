@@ -535,3 +535,29 @@ def test_add_lyrics_resolves_first_note_and_refuses_the_rest() -> None:
         prepare_batch([{"op": "add-lyrics", "id": 3, "text": "x", "verse": 2}], located, STAVES, BARS)
     with pytest.raises(DoricoBatchError, match="cannot share a batch"):
         prepare_batch([{"op": "add-lyrics", "id": 3, "text": "x"}, {"op": "delete", "id": 4}], located, STAVES, BARS)
+
+
+# ------------------------------------------------------------------ lyrics dialog
+
+def test_syllable_count_matches_the_dialog_text() -> None:
+    from sibelius_websocket_cli.dorico.lyrics_dialog import syllable_count
+
+    assert syllable_count("This was a lark for ma-king lyr-ics.") == 9
+    assert syllable_count("if I go ten thou-sand-miles.") == 7
+    assert syllable_count("  ") == 0
+
+
+async def test_part_layout_is_found_by_player_name() -> None:
+    from sibelius_websocket_cli.dorico.lyrics_dialog import _part_layout
+
+    class Client:
+        async def layouts(self) -> list[dict[str, Any]]:
+            return [{"layoutID": 0, "layoutName": "Full score", "layoutType": "kFullScoreLayout"},
+                    {"layoutID": 3, "layoutName": "Alto I", "layoutType": "kPartLayout"}]
+
+    class Bridge:
+        client = Client()
+
+    assert (await _part_layout(Bridge(), "alto i"))["layoutID"] == 3  # type: ignore[arg-type]
+    with pytest.raises(DoricoError, match="parts: Alto I"):
+        await _part_layout(Bridge(), "Bass")  # type: ignore[arg-type]

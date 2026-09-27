@@ -146,6 +146,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `transpose` | ✅ | per-note, respelled diatonically |
 | `set` (Dx, Dy, Hidden, ...), `tie`, `bracket`, `flip-stem`, `nudge`, `beam` | ❌ | not in the Lua model |
 | `add-line` | ❌ | no line classes exposed |
+| (Dorico only) `read_lyrics`, `edit_lyrics` | ⚠️ | a player's verse as text through the Edit Lyrics dialog; edits must keep the syllable count |
 | `add-lyric` → `add-lyrics` | ⚠️ | verse 1, typed through the lyric popover by command (see gaps); staff must have no lyrics yet |
 | `copy-passage` | ❌ | `copyRange(from, to, stream, dest, 0)` runs but copies nothing |
 | `set-key`, `set-time` | 🔜/❌ | create calls exist but need elements Lua cannot construct |
@@ -264,6 +265,33 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 - **Qt.** Dorico 6.2.30 is built on Qt 6.10.1 (universal, Apple LLVM 15),
   with QtLabs QML modules; dialogs are reachable through macOS
   accessibility, the score canvas is not.
+
+- **Reading and editing a line of lyrics (2026-09-27).** In Write mode,
+  `Edit.SelectAll` then `Filter.LyricsLine1` (…`Line5`) selects a verse
+  without pixels; `Edit.LineOfLyrics` ("Edit Line of Lyrics…") opens an
+  "Edit Lyrics" dialog whose text area (readable and settable through
+  System Events) holds the verse of the *first staff in the selection*,
+  hyphenated ("ma-king lyr-ics"), with a counter "Current number of
+  lyrics: N (target: N)". To reach one player, show its part layout first:
+  `Window.SwitchToLayout?OpenScoreID=&ScoreLayoutViewContainerID=&LayoutID=`
+  (ids from `getstatus` and `getlayouts`), then switch back. Setting the
+  text and pressing OK applied a same-length edit ("lark" -> "song", read
+  back, restored the same way); an edit with one more syllable was not
+  applied, and the counter did not change when the text was set by
+  script. Selecting a clef by id cannot be widened (`SelectMore`,
+  `SelectToEndOfSystem`, `NavigateRightExtendBar` all refused), so part
+  layouts are the only per-player route found. `Edit.SelectAll` is refused
+  outside Write mode (`Window.SwitchMode?WindowMode=kWriteMode`).
+  `dorico/lyrics_dialog.py` does this (the `read_lyrics` / `edit_lyrics`
+  tools), restoring the window's layout (Lua `DoApp().currentLayoutID`)
+  and mode afterwards. `Edit.LineOfLyrics` runs for as long as the dialog is
+  open and applies the edit itself: no separate command is logged, so there
+  is no way around the dialog.
+- **QML (2026-09-27).** Dorico's UI is largely QtQuick; 88 `Dorico/…qml`
+  sources are compiled into the main binary as readable text. The build has
+  no QML debugging enabler and ships no `qmltooling` plugins, so Qt's QML
+  inspector/debugger is not available; GammaRay-style injection would
+  fight the hardened runtime.
 
 ## Safety rules
 

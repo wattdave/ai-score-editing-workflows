@@ -41,8 +41,9 @@ trying.
   it happened: Dorico's undo reverts the user's own edits too.
 - Reading bars makes and undoes a temporary edit, which clears Dorico's redo
   history. Say so if the user may want to redo.
-- Lyrics: `add-lyrics` types verse 1 onto a staff that has none yet.
-  Refuse or explain what the back end cannot do (editing existing lyrics,
+- Lyrics: `add-lyrics` types verse 1 onto a staff that has none yet;
+  `read_lyrics` / `edit_lyrics` read and correct a player's verse (same
+  syllable count). Refuse or explain what the back end cannot do (
   slurs and other lines, dynamics, layout, key or time signature changes) instead of approximating them.
 - If a call says Dorico did not answer, a dialog is open in Dorico: ask the
   user to dismiss it; do not retry.

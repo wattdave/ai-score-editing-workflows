@@ -20,7 +20,7 @@ from mcp.types import ToolAnnotations
 
 from sibelius_websocket_cli.cli import parse_bar_range
 
-from . import service
+from . import lyrics_dialog, service
 from .bridge import DoricoBridge
 from .client import DEFAULT_PORT, DoricoClient, DoricoError
 from .score import DoricoBatchError
@@ -210,6 +210,32 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
     Returns each operation's before/after events and the number applied.
     """
     return await session.run(lambda b: service.apply(b, operations, flow=flow, dry_run=dry_run), retry=False)
+
+
+@server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+async def read_lyrics(player: str, verse: int = 1) -> dict[str, Any]:
+    """A player's line of lyrics as text, read from Dorico's Edit Lyrics dialog.
+
+    player is a part layout name (as score_overview's players list them);
+    verse 1-5. The text is hyphenated as Dorico shows it ("ma-king"). For a
+    two-staff player it is the first staff's line. The window briefly shows
+    the part layout and Dorico comes to the front; it is switched back.
+    Syllables are not tied to notes here: use query_score for that.
+    """
+    return await session.run(lambda b: lyrics_dialog.read_lyrics(b, player, verse), retry=True)
+
+
+@server.tool(annotations=WRITE)
+async def edit_lyrics(player: str, text: str, verse: int = 1) -> dict[str, Any]:
+    """Replace a player's line of lyrics with text (read it first with read_lyrics).
+
+    The new text must have the same number of syllables (words split by
+    spaces and hyphens): Dorico ignores edits that change the count, so they
+    are refused. The result is read back and compared. Use this to correct
+    words or hyphenation; add-lyrics (apply_batch) adds lyrics to a staff
+    that has none.
+    """
+    return await session.run(lambda b: lyrics_dialog.edit_lyrics(b, player, text, verse), retry=False)
 
 
 @server.tool(annotations=WRITE)
