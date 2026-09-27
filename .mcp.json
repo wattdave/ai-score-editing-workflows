@@ -3,6 +3,10 @@
     "sibelius": {
       "command": "uv",
       "args": ["run", "--directory", ".", "sibelius-mcp"]
+    },
+    "dorico": {
+      "command": "uv",
+      "args": ["run", "--directory", ".", "dorico-mcp"]
     }
   }
 }
