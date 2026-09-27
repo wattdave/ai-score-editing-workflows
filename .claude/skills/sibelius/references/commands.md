@@ -184,7 +184,8 @@ Single-object writes:
   copy warms the sound up: an export's opening otherwise carries the previous
   staff's voice), so allow about 10 seconds per staff. It prints each staff's playback sound
   first; `--require-sound Cantai` refuses to export unless every voice plays
-  a sound set containing that name.
+  a sound set containing that name. `--all-parts` treats every staff as a
+  voice, for instrumental scores without lyrics.
 - Playback sounds: `playback-sounds [--require SOUND_SET]` (bridge v55) lists
   each staff's sound set, patch and sound ID at the start and at every later
   sound change, plus any Mixer override. `--require` exits non-zero if any

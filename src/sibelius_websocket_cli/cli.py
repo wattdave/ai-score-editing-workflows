@@ -522,6 +522,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="integrated loudness for every file (default: %(default)s); lowered if a file would clip",
     )
     mixes.add_argument(
+        "--all-parts", action="store_true",
+        help="treat every staff as a part to mix, not only staves with lyrics (for instrumental scores)",
+    )
+    mixes.add_argument(
         "--require-sound", metavar="SOUND_SET",
         help="refuse to export unless every voice plays a sound set containing this, e.g. Cantai",
     )
@@ -2157,7 +2161,7 @@ async def _run_rehearsal_mixes(args: argparse.Namespace) -> int:
                 return EXIT_COMMAND_FAILED
             vocal = set()
             for staff in staves:
-                if await _bridge(client, "ReadLyrics", [staff["staffNum"], 1, info["barCount"]]):
+                if args.all_parts or await _bridge(client, "ReadLyrics", [staff["staffNum"], 1, info["barCount"]]):
                     vocal.add(staff["staffNum"])
             await _require_bridge(client, PLAYBACK_SOUNDS_BRIDGE_VERSION, "rehearsal-mixes sound check")
             playback = await _bridge(client, "GetPlaybackSounds")
@@ -2188,7 +2192,8 @@ async def _run_rehearsal_mixes(args: argparse.Namespace) -> int:
                 stems.append(rehearsal_mix.Stem(num, name, path, vocal=num in vocal))
         voices = [s for s in stems if s.vocal]
         if not voices:
-            print("error: no staff has lyrics, so there are no voices to mix", file=sys.stderr)
+            print("error: no staff has lyrics, so there are no voices to mix (use --all-parts "
+                  "for an instrumental score)", file=sys.stderr)
             return EXIT_COMMAND_FAILED
         loudness = {s.staff: rehearsal_mix.integrated_loudness(s.path) for s in voices}
         gains = rehearsal_mix.voice_gains(loudness)
