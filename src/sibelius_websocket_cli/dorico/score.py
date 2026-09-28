@@ -476,10 +476,10 @@ def _signature(
     at the selected item's position, mid-bar if it is not at the start) and
     runs NoteInput.CreateTimeSignature / CreateKeySignature / CreateBarLine
     with the popover's text as Definition, sent unencoded (Dorico does not
-    URL-decode parameters). Bar 1 cannot be changed this way: the edit-in-
-    place commands do nothing (docs/dorico.md).
+    URL-decode parameters). At bar 1 the new signature or barline replaces
+    the one already there (docs/dorico.md).
     """
-    bar = _int(operation, "bar", label, 2)
+    bar = _int(operation, "bar", label, 1)
     if op == "set-time":
         top = _int(operation, "numerator", label, 1, 64)
         bottom = _int(operation, "denominator", label, 1, 64)
