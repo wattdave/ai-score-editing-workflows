@@ -315,6 +315,20 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   `SelectToEndOfSystem`, `NavigateRightExtendBar` all refused), so part
   layouts are the only per-player route found. `Edit.SelectAll` is refused
   outside Write mode (`Window.SwitchMode?WindowMode=kWriteMode`).
+  **Undo history (2026-09-27):** `Edit.SelectAll` and `Filter.LyricsLine<n>`
+  are undo steps (layout and mode switches, opening and cancelling the
+  dialog are not), so a read left two. Dorico's Edit menu names the step on
+  top ("Undo Select", "Undo Select All", "Undo Filter Lyrics"; "Redo …"
+  likewise), readable through System Events, but its titles lag commands by
+  up to about a second: read at 0.4 s after an undo it still showed the old
+  one, at 1.5 s it was right both passively and with the menu opened. A read
+  now undoes its two steps afterwards, each only once the title has settled
+  and names that step, and leaves them if anything else is on top (or the
+  UI is not English). An edit's selections are under the edit, so
+  `edit_lyrics` reports `undoSteps` 3 (Select All, Filter, the edit); its
+  read-back cleans up after itself. Measured with a marker edit: a read
+  leaves 0 steps, with or without a prior selection; undoing an edit's 3
+  steps restored the text and kept the marker.
   `dorico/lyrics_dialog.py` does this (the `read_lyrics` / `edit_lyrics`
   tools), restoring the window's layout (Lua `DoApp().currentLayoutID`)
   and mode afterwards. `Edit.LineOfLyrics` runs for as long as the dialog is
