@@ -563,6 +563,9 @@ def _set_break(
 
 #: How AcceptCurrentLyricInput leaves each syllable (logged from the popover).
 HYPHENATE = "kHyphenateCurrentWord"
+NEXT_VERSE = "kIncrementVerseNumber"  # the popover's Down Arrow
+#: Lyric lines past this are refused as likely mistakes.
+MAX_VERSE = 10
 END_WORD = "kEndOrExtendCurrentWord"
 END_INPUT = "kEndInput"
 
@@ -594,22 +597,22 @@ def _add_lyrics(
     operation: dict[str, Any], label: str,
     by_id: dict[int, dict[str, Any]], by_address: dict[tuple[int, int, int], dict[str, Any]],
 ) -> dict[str, Any]:
-    """Lyrics typed into Dorico's lyric popover from a first note onwards.
+    """Lyrics typed into Dorico's lyric popover from a first note onwards, in any verse.
 
-    Runs NoteInput.StartLyricInput and one AcceptCurrentLyricInput per
-    syllable, as the popover does (docs/dorico.md). Dorico moves to the next
-    note itself, so only the first note needs an id: the staff must not
-    have lyrics yet (Lua cannot read a staff that has them).
+    Runs NoteInput.StartLyricInput, one kIncrementVerseNumber accept per
+    verse below the target (as the popover's Down Arrow does), then one
+    AcceptCurrentLyricInput per syllable (docs/dorico.md). Dorico moves to
+    the next note itself, so only the first note needs an id. On a staff
+    that already has lyrics, the lower verses' text at that note and any
+    lyrics the new syllables would overwrite are checked before typing
+    (service._plan_lyrics).
     """
     target = _addressed({**operation, "op": "delete"}, "lookup", label, by_id, by_address)
     if target["type"] not in TYPE_ALIASES["Note"]:
         raise DoricoBatchError(f"{label}: lyrics start on a note, not a {target['type']}")
-    if by_id[target["id"]].get("source") == "dump":
-        raise DoricoBatchError(f"{label}: staff {by_id[target['id']]['staff']} already has lyrics (or items "
-                               "Dorico's scripting cannot read); add-lyrics needs a staff without lyrics")
     verse = operation.get("verse", 1)
-    if verse != 1:
-        raise DoricoBatchError(f"{label}: only verse 1 is supported so far")
+    if isinstance(verse, bool) or not isinstance(verse, int) or not 1 <= verse <= MAX_VERSE:
+        raise DoricoBatchError(f"{label}.verse must be a whole number from 1 to {MAX_VERSE}")
     text = operation.get("text")
     if isinstance(text, str) and UNSAFE_PARAMETER & set(text):
         raise DoricoBatchError(f"{label}.text cannot contain a backslash or a line break")
@@ -617,8 +620,9 @@ def _add_lyrics(
         raise DoricoBatchError(f"{label}.text must be a string of words, e.g. \"ma-king lyr-ics\"")
     event = by_id[target["id"]]
     return {
-        "op": "add-lyrics", "staff": event["staff"], "position": event["flowPosition"],
+        "op": "add-lyrics", "staff": event["staff"], "position": event["flowPosition"], "verse": verse,
         "select": {"id": target["id"], "stream": target["stream"]},
+        "hasLyrics": event.get("source") == "dump",
         "syllables": [list(s) for s in parse_lyrics(text)],
     }
 

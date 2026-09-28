@@ -301,9 +301,10 @@ async def _apply_commands(
 
     Break removals go first, as one Lua step. Each added break is two undo
     steps (selecting its note, which Dorico records, and the break); each
-    add-lyrics is one step for the selection plus one per syllable. The
-    result reports how many steps to undo. Lyrics are checked afterwards
-    against a MusicXML export, since Lua cannot read a staff with lyrics.
+    add-lyrics is one step for the selection, one per verse below its own
+    and one per syllable. The result reports how many steps to undo. Lyrics
+    are checked afterwards against a MusicXML export, since Lua cannot read
+    a staff with lyrics.
     """
     removals = [op for op in prepared if op["op"] == "delete"]
     commands = [op for op in prepared if op["op"] != "delete"]
@@ -320,11 +321,12 @@ async def _apply_commands(
         if "error" in checked:
             raise DoricoError(f"{checked['error']}; nothing was changed")
     planned = (1 if removals else 0) + sum(
-        1 + len(op["syllables"]) if op["op"] == "add-lyrics"
+        1 + (op["verse"] - 1) + len(op["syllables"]) if op["op"] == "add-lyrics"
         else COPY_STEPS + op["extendBars"] + ("tempRest" in op) if op["op"] == "copy-passage"
         else 2
         for op in commands
     )  # every other command op is its selection plus one command (repitch may add respells)
+    await _plan_lyrics(bridge, [op for op in commands if op["op"] == "add-lyrics"], flow)
     if dry_run:
         return {"dryRun": True, "operations": prepared, "undoSteps": planned}
     steps = 0
@@ -388,9 +390,10 @@ async def _apply_commands(
                 results.append(await _run_note_command(bridge, op, flow))
                 steps += 1
             else:
-                steps += await _type_lyrics(bridge, op["syllables"])
+                steps += await _type_lyrics(bridge, op["syllables"], op["keep"])
                 lyrics.append(op)
-                results.append({"op": "add-lyrics", "staff": op["staff"], "syllables": len(op["syllables"])})
+                results.append({"op": "add-lyrics", "staff": op["staff"], "verse": op["verse"],
+                                "syllables": len(op["syllables"])})
         except DoricoError as exc:
             raise DoricoError(f"{exc}; {steps} undo step(s) were applied (undo that many to revert)") from exc
     outcome: dict[str, Any] = {"applied": len(results), "undoSteps": steps, "results": results}
@@ -509,11 +512,57 @@ POPOVER_OPEN_DELAY = 0.8
 SYLLABLE_DELAY = 0.3
 
 
-async def _type_lyrics(bridge: DoricoBridge, syllables: list[list[str]]) -> int:
-    """Type syllables into the lyric popover at the selected note; return undo steps."""
+async def _plan_lyrics(bridge: DoricoBridge, ops: list[dict[str, Any]], flow: int) -> None:
+    """Give each add-lyrics op the text to keep at its first note in each lower verse.
+
+    Moving the popover down a verse accepts its current text, and an empty
+    accept deletes the lyric there, so the text of verses 1..verse-1 at the
+    first note is sent back unchanged. A staff without lyrics has none to
+    keep. On a staff with lyrics they are read from a MusicXML export, and
+    the batch is refused if a syllable would land on a note that already
+    has a lyric in that verse (typing would replace it).
+    """
+    for op in ops:
+        op["keep"] = [""] * (op["verse"] - 1)
+    with_lyrics = [op for op in ops if op["hasLyrics"]]
+    if not with_lyrics:
+        return
+    snap = await snapshot(bridge, flow, lyrics=True)
+    for op in with_lyrics:
+        by_position: dict[int, list[dict[str, Any]]] = {}
+        for e in snap.located:
+            if e.get("stream") == op["select"]["stream"] and e["type"] in score.TYPE_ALIASES["Note"] \
+                    and e["flowPosition"] >= op["position"]:
+                by_position.setdefault(e["flowPosition"], []).extend(e.get("lyrics", []))
+        positions = sorted(by_position)[: len(op["syllables"])]
+        first = {lyric["verse"]: lyric["text"] for lyric in by_position.get(op["position"], [])}
+        op["keep"] = [first.get(verse, "") for verse in range(1, op["verse"])]
+        for text in op["keep"]:
+            score.command_value(text)  # refuses text a command cannot carry
+        taken = [p for p in positions if any(lyric["verse"] == op["verse"] for lyric in by_position[p])]
+        if taken:
+            bar, offset = snap.bars.locate(taken[0])
+            raise DoricoError(
+                f"staff {op['staff']} already has a verse {op['verse']} lyric at bar {bar} "
+                f"(position {offset}) where these lyrics would go; nothing was changed"
+            )
+
+
+async def _type_lyrics(bridge: DoricoBridge, syllables: list[list[str]], keep: list[str]) -> int:
+    """Type syllables into the lyric popover at the selected note; return undo steps.
+
+    keep holds the text already at that note in each verse below the target;
+    each is accepted again with kIncrementVerseNumber to move down a line.
+    """
     bring_to_front()
     await bridge.client.command("NoteInput.StartLyricInput")
     await asyncio.sleep(POPOVER_OPEN_DELAY)
+    for text in keep:
+        lyric = f"LyricText={score.command_value(text)}&" if text else ""
+        await bridge.client.command(f"NoteInput.AcceptCurrentLyricInput?{lyric}LyricsEntryAdvanceType={score.NEXT_VERSE}")
+        await asyncio.sleep(SYLLABLE_DELAY)
+        await bridge.client.command("NoteInput.AdvanceLyricInput")
+        await asyncio.sleep(SYLLABLE_DELAY)
     for text, kind in syllables:
         await bridge.client.command(
             f"NoteInput.AcceptCurrentLyricInput?LyricText={score.command_value(text)}&LyricsEntryAdvanceType={kind}"
@@ -522,22 +571,29 @@ async def _type_lyrics(bridge: DoricoBridge, syllables: list[list[str]]) -> int:
         if kind != score.END_INPUT:
             await bridge.client.command("NoteInput.AdvanceLyricInput")
             await asyncio.sleep(SYLLABLE_DELAY)
-    return len(syllables)
+    return len(keep) + len(syllables)
 
 
 async def _check_lyrics(bridge: DoricoBridge, ops: list[dict[str, Any]], flow: int) -> dict[str, Any]:
-    """Compare the typed syllables with a MusicXML export of the staff."""
+    """Compare the typed syllables, and the lower verses kept at the first note, with a MusicXML export."""
     xml = musicxml_read.read(await export_musicxml(bridge.client, flow))
     checks = []
     for op in ops:
         wanted = [text for text, _ in op["syllables"] if text]
+        staff_events = sorted((e for e in xml["events"] if e["staff"] == op["staff"]), key=lambda e: e["flowPosition"])
         found = [
             lyric["text"]
-            for e in sorted(xml["events"], key=lambda e: e["flowPosition"])
-            if e["staff"] == op["staff"] and e["flowPosition"] >= op["position"]
-            for lyric in e.get("lyrics", []) if lyric["verse"] == 1 and lyric["text"]
+            for e in staff_events if e["flowPosition"] >= op["position"]
+            for lyric in e.get("lyrics", []) if lyric["verse"] == op["verse"] and lyric["text"]
         ][: len(wanted)]
-        checks.append({"staff": op["staff"], "ok": found == wanted, "expected": wanted, "found": found})
+        at_first = {lyric["verse"]: lyric["text"] for e in staff_events if e["flowPosition"] == op["position"]
+                    for lyric in e.get("lyrics", [])}
+        kept = [at_first.get(verse, "") for verse in range(1, op["verse"])]
+        check = {"staff": op["staff"], "verse": op["verse"], "ok": found == wanted and kept == op["keep"],
+                 "expected": wanted, "found": found}
+        if op["keep"]:
+            check.update(keptExpected=op["keep"], keptFound=kept)
+        checks.append(check)
     return {"ok": all(c["ok"] for c in checks), "staves": checks}
 
 

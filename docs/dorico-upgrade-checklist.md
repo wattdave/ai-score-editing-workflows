@@ -166,6 +166,17 @@ Expect `verified: true` and bar 4 = G2 B2. Undo the reported steps.
 Expect `lyricsCheck.ok` (the comma survives). Undo the reported steps; staff
 2 must read without `source: "dump"` again.
 
+```json
+[{"op":"add-lyrics","staff":1,"bar":1,"index":2,"verse":2,"text":"u-no dos"}]
+```
+
+Expect `undoSteps` 5, `lyricsCheck.ok` with `keptFound` `["one"]`, and
+`query --staff 1 --bars 1 --lyrics` showing verse 1 "one two three four"
+unchanged and verse 2 "u-no dos" on C5 D5 E5. Undo the reported steps and
+check the lyrics again: the Lua read cannot tell a verse-2 lyric from a
+verse-1 one. The same batch again with `"verse":1` must be refused
+("already has a verse 1 lyric").
+
 ## 5. Dialog and export automation
 
 These depend on dialog titles, control names and log lines.
