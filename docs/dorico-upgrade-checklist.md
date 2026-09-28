@@ -151,6 +151,21 @@ articulations `["staccato"]`; slur `verified: false`. Render: p, staccato,
 slur G2→B2, the tempo text with its comma, a boxed A. Undo the reported
 steps; the timebase must be readable again (`query --staff system`).
 
+```json
+[{"op":"add-line","line":"crescendo","staff":2,"bar":1,"position":0,"duration":1536},
+ {"op":"add-line","line":"8va","staff":1,"bar":2,"position":0,"duration":768},
+ {"op":"add-line","line":"trill","staff":2,"bar":3,"position":0,"duration":1280},
+ {"op":"add-line","line":"pedal","staff":2,"bar":2,"position":0,"duration":384},
+ {"op":"add-line","line":"glissando","staff":2,"bar":2,"position":0},
+ {"op":"add-line","line":"diminuendo","staff":1,"bar":4,"position":256,"duration":512}]
+```
+
+Expect `undoSteps` 24; `verified: true` with those durations for the 8va,
+trill and pedal (hairpins `verified: false`), the glissando 512. Render: a
+crescendo to the middle of bar 2, 8va over bar 2's treble (notes drawn an
+octave lower), tr in bar 3, a short Ped. line in bar 2, gliss. G2→B2, a
+diminuendo on bar 4 beat 2 with no leftover rest. Undo the reported steps.
+
 ### 4d. Edits on the lyric staff (command ops)
 
 ```json

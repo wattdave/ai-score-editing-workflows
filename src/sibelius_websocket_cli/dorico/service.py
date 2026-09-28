@@ -323,6 +323,7 @@ async def _apply_commands(
     planned = (1 if removals else 0) + sum(
         1 + (op["verse"] - 1) + len(op["syllables"]) if op["op"] == "add-lyrics"
         else COPY_STEPS + op["extendBars"] + ("tempRest" in op) if op["op"] == "copy-passage"
+        else 2 + _resize_cost(op.get("resize")) + (TEMP_REST_STEPS if "tempRest" in op else 0) if op["op"] == "add-line"
         else 2 + (TEMP_REST_STEPS if "tempRest" in op else 0)
         for op in commands
     )  # every other command op is its selection plus one command (repitch may add respells)
@@ -399,6 +400,12 @@ async def _apply_commands(
             elif op["op"] in score.NOTE_COMMAND_OPS:
                 results.append(await _run_note_command(bridge, op, flow))
                 steps += 1
+            elif op["op"] == "add-line":
+                done, result = await _add_line(bridge, op, flow, flow_id, blocks)
+                steps += done
+                if "tempRest" in op:
+                    steps += await _delete_temporary_rest(bridge, target, flow, flow_id)
+                results.append(result)
             else:
                 steps += await _type_lyrics(bridge, op["syllables"], op["keep"])
                 lyrics.append(op)
@@ -414,7 +421,7 @@ async def _apply_commands(
 
 LETTERS = "CDEFGAB"
 #: Ops that select a temporary rest where a bar has nothing to select.
-TEMP_REST_OPS = {"set-time", "set-key", "set-barline", "set-break"}
+TEMP_REST_OPS = {"set-time", "set-key", "set-barline", "set-break", "add-line"}
 #: Undo steps a temporary rest adds to one of them: creating it (Lua) and
 #: deleting it (EventEdit.Delete: one step for a rest, though two for a note;
 #: both measured with a marker edit, 2026-09-27).
@@ -442,6 +449,54 @@ async def _delete_temporary_rest(bridge: DoricoBridge, rest: dict[str, Any], flo
     if any(e.get("id") == rest["id"] for e in events):
         raise DoricoError(f"the temporary rest {rest['id']} could not be deleted; delete it in Dorico")
     return 1
+
+
+def _resize_cost(resize: list[str] | None) -> int:
+    """Undo steps of resizing a new line: selecting it, then one per command."""
+    return 1 + len(resize) if resize else 0
+
+
+async def _add_line(
+    bridge: DoricoBridge, op: dict[str, Any], flow: int, flow_id: Any, blocks: dict[str, Any]
+) -> tuple[int, dict[str, Any]]:
+    """Make the line at the selected item, then select it and resize it to op["duration"].
+
+    Returns the undo steps taken after the selection (the command, the
+    line's selection and each resize) and the result. The new line is found
+    anywhere in the flow: a pedal line started on a piano's lower staff
+    lands in its upper staff's stream.
+    """
+    before = {e["id"] for e in (await bridge.read_partial(flow))[0]}
+    await bridge.client.command(op["command"])
+    steps = 1
+    events, _ = await bridge.read_partial(flow)
+    made = [e for e in events if e["id"] not in before and e["type"] == op["expect"] and e["position"] == op["position"]]
+    if not made:
+        raise DoricoError(f"Dorico made no {op['line']} at bar {op['bar']}; {steps} undo step(s) were applied")
+    line = made[0]
+    result: dict[str, Any] = {"op": "add-line", "line": op["line"], "staff": op["staff"], "id": line["id"]}
+    readable = op["expect"] not in score.UNREADABLE_LENGTH
+    if op["duration"] is None:  # a glissando: it runs to the next note
+        result["duration"] = line.get("duration")
+        return steps, result
+    current = line.get("duration") if readable else op["itemDuration"]
+    resize = score.resize_steps(current, op["duration"])
+    if resize:
+        block = blocks.get(str(line["stream"]))
+        if block is None:
+            raise DoricoError(f"cannot find the event block of stream {line['stream']}; {steps} undo step(s) were applied")
+        await bridge.client.command(f"EventEdit.Select?FlowID={flow_id}&EventID={line['id']}&EventBlockID={block}")
+        steps += 1
+        for command in resize:
+            await bridge.client.command(command)
+            steps += 1
+    if readable:
+        final = next((e for e in (await bridge.read_partial(flow))[0] if e["id"] == line["id"]), {})
+        result["duration"] = final.get("duration")
+        result["verified"] = final.get("duration") == op["duration"]
+    else:
+        result["verified"] = False  # a hairpin's length is not visible to Lua
+    return steps, result
 
 
 #: Undo steps of one copy-passage staff before extension and temporary rest:
