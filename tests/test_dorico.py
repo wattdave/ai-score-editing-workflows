@@ -500,7 +500,6 @@ def test_set_break_selects_a_note_in_the_bar_and_removes_via_lua() -> None:
 @pytest.mark.parametrize(
     ("batch", "message"),
     [
-        ([{"op": "set-break", "bar": 5, "type": "system"}], "no note or rest"),
         ([{"op": "set-break", "bar": 2, "type": "none"}], "no break at bar 2"),
         ([{"op": "set-break", "bar": 2, "type": "system"}, {"op": "delete", "id": 3}], "cannot share a batch"),
     ],
@@ -508,6 +507,15 @@ def test_set_break_selects_a_note_in_the_bar_and_removes_via_lua() -> None:
 def test_set_break_refusals(batch: list[dict[str, Any]], message: str) -> None:
     with pytest.raises(DoricoBatchError, match=message):
         prepare_batch(batch, locate_events(EVENTS, BARS), STAVES, BARS)
+
+
+def test_set_break_in_an_empty_bar_uses_a_temporary_rest() -> None:
+    break_at_5 = [{"op": "set-break", "bar": 5, "type": "system"}]
+    ops = prepare_batch(break_at_5, locate_events(EVENTS, BARS), STAVES, BARS)
+    assert "select" not in ops[0] and ops[0]["tempRest"] == {"stream": 2, "position": 4096, "duration": 256}
+    held = EVENTS + [note(9, 3584, 60, "C4", duration=1024), note(10, 3840, 48, "C3", duration=512, stream=4, staff=2)]
+    with pytest.raises(DoricoBatchError, match="every voice holds a note over its barline"):
+        prepare_batch(break_at_5, locate_events(held, BARS), STAVES, BARS)
 
 
 # ------------------------------------------------------------------ add-lyrics

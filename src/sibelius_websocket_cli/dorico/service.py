@@ -343,7 +343,7 @@ async def _apply_commands(
     flow_id = flows[flow - 1]["flowID"] if commands else None
     lyrics = []
     for op in commands:
-        if op["op"] in SIGNATURE_OPS and "tempRest" in op:
+        if "tempRest" in op and op["op"] in TEMP_REST_OPS:
             try:
                 op["select"] = await _place_temporary_rest(bridge, op["tempRest"], flow, blocks)
             except DoricoError as exc:
@@ -381,6 +381,8 @@ async def _apply_commands(
                 if not made:
                     raise DoricoError(f"Dorico made no break at bar {op['bar']}")
                 steps += 1
+                if "tempRest" in op:
+                    steps += await _delete_temporary_rest(bridge, target, flow, flow_id)
                 results.append({"op": "set-break", "type": "system", "bar": op["bar"], "id": made[0]["id"]})
             elif op["op"] in {"set-time", "set-key", "set-barline"}:
                 before = {e["id"] for e in (await bridge.read_partial(flow))[0]}
@@ -411,8 +413,9 @@ async def _apply_commands(
 
 
 LETTERS = "CDEFGAB"
-SIGNATURE_OPS = {"set-time", "set-key", "set-barline"}
-#: Undo steps a temporary rest adds to a signature op: creating it (Lua) and
+#: Ops that select a temporary rest where a bar has nothing to select.
+TEMP_REST_OPS = {"set-time", "set-key", "set-barline", "set-break"}
+#: Undo steps a temporary rest adds to one of them: creating it (Lua) and
 #: deleting it (EventEdit.Delete: one step for a rest, though two for a note;
 #: both measured with a marker edit, 2026-09-27).
 TEMP_REST_STEPS = 2
