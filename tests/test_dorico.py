@@ -736,33 +736,62 @@ def test_layout_from_probed_placements() -> None:
         layout.resolve(choir, [], placements={11: 2, 12: 3})  # S has nothing probed
 
 
+class _ProbeClient:
+    """Dorico's undo stack as the probe sees it: selections and dynamics are steps."""
+
+    def __init__(self, notes: list[dict[str, Any]], history: list[Any], select_is_a_step: bool = True) -> None:
+        self.commands: list[str] = []
+        self.notes = notes
+        self.history = history  # the user's own steps come first
+        self.select_is_a_step = select_is_a_step
+        self.selected = ""
+        self.undone: Any = None
+
+    async def flows(self) -> list[dict[str, Any]]:
+        return [{"flowID": 0}]
+
+    async def command(self, command: str) -> None:
+        self.commands.append(command)
+        if command.startswith("EventEdit.Select"):
+            self.selected = command
+            if self.select_is_a_step:
+                self.history.append("select")
+        elif command.startswith("NoteInput.CreateDynamic"):
+            staff = 1 if "EventID=3&" in self.selected else 2
+            self.history.append({"id": 90 + len(self.commands), "type": "DynamicGroupEvent", "staff": staff})
+        elif command == "Edit.Undo":
+            self.undone = self.history.pop()
+        elif command == "Edit.Redo":
+            self.history.append(self.undone)
+
+    def events(self) -> list[dict[str, Any]]:
+        return self.notes + [step for step in self.history if isinstance(step, dict)]
+
+
+class _ProbeBridge:
+    def __init__(self, client: _ProbeClient) -> None:
+        self.client = client
+
+    async def read_partial(self, flow: int) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        return self.client.events(), []
+
+
+_PROBE_RAW = {"blocks": {"2": 2, "4": 4, "6": 6}, "instruments": [{"id": 0, "voiceStreams": [2, 4, 6]}]}
+_PROBE_NOTES = [{"id": 3, "stream": 2, "type": "NoteEvent"}, {"id": 13, "stream": 4, "type": "NoteEvent"}]
+_USER_EDIT = {"id": 50, "type": "TextEvent", "stream": 2, "text": "the user's own edit"}
+
+
 async def test_probe_placements_selects_probes_and_undoes() -> None:
-    class Client:
-        def __init__(self) -> None:
-            self.commands: list[str] = []
-            self.dynamics: list[dict[str, Any]] = []
+    client = _ProbeClient(list(_PROBE_NOTES), [_USER_EDIT])
+    placements = await service.probe_placements(_ProbeBridge(client), _PROBE_RAW, client.events(), 1)  # type: ignore[arg-type]
+    assert placements == {2: 1, 4: 2}
+    # the dynamic and the selection are undone for each probe, so the undo
+    # history is as it was: the user's edit is still the next step to undo
+    assert client.commands.count("Edit.Undo") == 4 and client.history == [_USER_EDIT]
 
-        async def flows(self) -> list[dict[str, Any]]:
-            return [{"flowID": 0}]
 
-        async def command(self, command: str) -> None:
-            self.commands.append(command)
-            if command.startswith("NoteInput.CreateDynamic"):
-                selected = next(c for c in reversed(self.commands) if c.startswith("EventEdit.Select"))
-                staff = 1 if "EventID=3&" in selected else 2
-                self.dynamics.append({"id": 90 + len(self.commands), "type": "DynamicGroupEvent", "staff": staff})
-            if command == "Edit.Undo":
-                self.dynamics.pop()
-
-    class Bridge:
-        client = Client()
-
-        async def read_partial(self, flow: int) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-            return list(self.client.dynamics), []
-
-    raw = {"blocks": {"2": 2, "4": 4, "6": 6},
-           "instruments": [{"id": 0, "voiceStreams": [2, 4, 6]}]}
-    events = [{"id": 3, "stream": 2, "type": "NoteEvent"}, {"id": 13, "stream": 4, "type": "NoteEvent"}]
-    bridge = Bridge()
-    assert await service.probe_placements(bridge, raw, events, 1) == {2: 1, 4: 2}  # type: ignore[arg-type]
-    assert bridge.client.commands.count("Edit.Undo") == 2 and bridge.client.dynamics == []
+async def test_probe_placements_redoes_an_undo_that_changed_the_score() -> None:
+    client = _ProbeClient(list(_PROBE_NOTES), [_USER_EDIT], select_is_a_step=False)
+    with pytest.raises(DoricoError, match="redone"):
+        await service.probe_placements(_ProbeBridge(client), _PROBE_RAW, client.events(), 1)  # type: ignore[arg-type]
+    assert client.commands[-1] == "Edit.Redo" and client.history == [_USER_EDIT]
