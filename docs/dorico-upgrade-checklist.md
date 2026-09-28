@@ -43,7 +43,9 @@ If the approval prompt appears, the token was invalidated: accept it once.
 ## 2. Open the fixture
 
 Open `tests/fixtures/dorico-upgrade-fixture.musicxml` in Dorico
-(File › Open, accept the import options) and keep it as the active project.
+(File › Open, or `open -a "Dorico 6" <path>`; it imports without a dialog)
+and keep it as the active project. Give Dorico a few seconds after the
+import before the first read.
 It is a two-staff piano, 4/4, C major, four bars:
 
 | Staff | Bar 1 | Bar 2 | Bar 3 | Bar 4 |
@@ -52,7 +54,9 @@ It is a two-staff piano, 4/4, C major, four bars:
 | 2 (bass), no lyrics | C3 | G2 B2 | C3 | rest |
 
 Staff 1 has lyrics, so it is read from `dump()`; staff 2 is read by Lua;
-bar 3's second voice forces voice placement by probe.
+bar 3's second voice forces voice placement by probe. Each bar-1 clef is
+index 0 of its bar, so the batches below address staff 2's bar-1 C3 as
+index 1 and staff 1's C5 as index 2.
 
 ## 3. Reads
 
@@ -68,9 +72,12 @@ Run each and compare with the expected result.
 | `dorico-cli lyrics Piano` | "one two three four five six sev" |
 | `dorico-cli info` | Title "Dorico Upgrade Fixture" (or as imported) |
 
-If `overview` reports `readFromMusicXML`, probing or bar measurement failed:
-re-run with `-v` logging and check `docs/dorico.md` (voice placement, bar
-measurement).
+If `overview` reports `readFromMusicXML`, probing or bar measurement failed.
+Run it once more: the first read straight after the import fell back once
+and then read normally. If it persists, `dorico-cli structure` shows whether
+bars still measure; if they do, the voice probe is failing (call
+`service.probe_placements` directly to see its error) — see `docs/dorico.md`
+(voice placement, bar measurement).
 
 ## 4. Writes, one batch at a time
 
@@ -80,10 +87,17 @@ check the result, look at the render when noted (`dorico-cli export
 (Lua batches: `--steps 1`) and confirm with a query that the fixture is
 back. **Never undo more than the result reports.**
 
+Reads (`query`, `overview`, `structure`) must leave the undo history as it
+was, so the reported count stays right however many reads come between the
+batch and the undo. This is itself under test: if an undo of the reported
+steps leaves the batch in place, stop, undo one step at a time checking
+each with a read until the fixture is back, and treat it as a failure
+(before #60, each read on this fixture added one selection per voice).
+
 ### 4a. Lua ops (staff 2)
 
 ```json
-[{"op":"set-pitch","staff":2,"bar":1,"index":0,"oldPitch":48,"newPitch":50},
+[{"op":"set-pitch","staff":2,"bar":1,"index":1,"oldPitch":48,"newPitch":50},
  {"op":"add-note","staff":2,"bar":4,"position":0,"duration":512,"pitches":[43,47]},
  {"op":"add-text","staff":2,"bar":4,"position":0,"text":"dolce"},
  {"op":"add-clef","staff":2,"bar":4,"position":0,"clef":"treble"},
@@ -128,11 +142,12 @@ steps; the timebase must be readable again (`query --staff system`).
 ### 4d. Edits on the lyric staff (command ops)
 
 ```json
-[{"op":"set-pitch","staff":1,"bar":1,"index":0,"oldPitch":72,"newPitch":73,"spelling":"Db"},
- {"op":"delete","staff":1,"bar":1,"index":3}]
+[{"op":"set-pitch","staff":1,"bar":1,"index":2,"oldPitch":72,"newPitch":73,"spelling":"Db"},
+ {"op":"delete","staff":1,"bar":1,"index":8}]
 ```
 
-(`index` counts lyric events too; take the addresses from `query --staff 1
+(`index` counts the clef and lyric events too: clef 0, then a lyric and
+its note for each beat, so C5 is 2 and F5 is 8; check with `query --staff 1
 --bars 1`.) Expect the note to keep its id and read Db5, the F5 gone, and
 `dorico-cli lyrics Piano` unchanged. Undo the reported steps.
 
@@ -145,7 +160,7 @@ steps; the timebase must be readable again (`query --staff system`).
 Expect `verified: true` and bar 4 = G2 B2. Undo the reported steps.
 
 ```json
-[{"op":"add-lyrics","staff":2,"bar":1,"index":0,"text":"la, la-la"}]
+[{"op":"add-lyrics","staff":2,"bar":1,"index":1,"text":"la, la-la"}]
 ```
 
 Expect `lyricsCheck.ok` (the comma survives). Undo the reported steps; staff
@@ -164,6 +179,11 @@ These depend on dialog titles, control names and log lines.
 | `dorico-cli set-info Composer=Test` then `set-info Composer=` | read back each time; title page shows the composer |
 
 After each, check no Dorico dialog is left open.
+
+The PDF export also leaves Dorico's own copy next to the file the project
+came from, which for the imported fixture is
+`tests/fixtures/01 - Full score - Dorico Upgrade Fixture.pdf`: delete it
+(`git status` should be clean afterwards).
 
 ## 6. Re-test the known limits
 

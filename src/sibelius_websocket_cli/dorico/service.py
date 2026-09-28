@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from . import layout, musicxml_read, score
-from .bridge import BarMap, DoricoBridge
+from .bridge import BarMap, DoricoBridge, fingerprint
 from .client import DoricoError
 from .export import bring_to_front, export_musicxml, export_pdf
 
@@ -123,9 +123,9 @@ async def probe_placements(
     Lua has no link from a voice to its staff, but a dynamic created at a
     note goes into that staff's stave stream. So for each voice with a note:
     select the note, NoteInput.CreateDynamic, see which staff's stream got
-    the new dynamic, and undo it. Like bar measurement, this edits the score
-    briefly: each probe leaves its selection on the undo stack and clears
-    the redo history.
+    the new dynamic, and undo it and the selection. Like bar measurement,
+    this edits the score briefly and clears the redo history, but leaves the
+    undo history as it was, so reads do not shift the undo count of a batch.
     """
     client = bridge.client
     blocks = raw.get("blocks") or {}
@@ -149,6 +149,13 @@ async def probe_placements(
         check, _ = await bridge.read_partial(flow)
         if any(e.get("id") == made[0]["id"] for e in check):
             raise DoricoError("the probe dynamic could not be undone; check the score")
+        # Every EventEdit.Select is an undo step, even of a note already
+        # selected, so undo it too; if that reverted anything else, redo it.
+        await client.command("Edit.Undo")
+        check, _ = await bridge.read_partial(flow)
+        if fingerprint(check) != fingerprint(events):
+            await client.command("Edit.Redo")
+            raise DoricoError("undoing the probe selection changed the score; the undo was redone. Check the score.")
         placements[voice] = made[0]["staff"]
     return placements
 
