@@ -124,6 +124,11 @@ Expect three results with ids, `undoSteps` 6; render shows ||, G major and
 3/4 at bar 3. Undo the reported steps. Then `[{"op":"set-break","bar":3,"type":"system"}]`
 (render: a system starts at bar 3), undo.
 
+Bar 1: `[{"op":"set-time","bar":1,"numerator":3,"denominator":4},{"op":"set-key","bar":1,"key":"G"}]`.
+Expect `undoSteps` 4, `structure` measuring bar 1 as 768, and a render
+opening in 3/4, G major with the music re-barred. Undo the reported steps
+before any other command: `lyrics` adds two selection steps of its own.
+
 ### 4c. Notation ops (command ops)
 
 ```json

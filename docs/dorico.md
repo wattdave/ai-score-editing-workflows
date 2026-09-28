@@ -153,9 +153,9 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | (Dorico only) `read_lyrics`, `edit_lyrics` | ⚠️ | a player's verse as text through the Edit Lyrics dialog; edits must keep the syllable count |
 | `add-lyric` → `add-lyrics` | ⚠️ | verses 1-10, typed through the lyric popover by command (see gaps); refuses to type over a lyric already in that verse |
 | `copy-passage` | ✅ | by selection + `Edit.Copy` / `Edit.Paste` (see gaps); destPosition 0 only |
-| `set-key`, `set-time` | ⚠️ | by command at the start of a bar ≥ 2 with a note or rest on its first beat; 2 undo steps each (see gaps) |
+| `set-key`, `set-time` | ⚠️ | by command at the start of any bar, bar 1 included, with a note or rest on its first beat; 2 undo steps each (see gaps) |
 | `set-break` | ⚠️ | system breaks via `Edit.CreateSystemBreak` on a selected note (2 undo steps each); bars without a note or rest of their own are refused |
-| `set-barline` | ⚠️ | double, final, start/end repeat, by command like set-time |
+| `set-barline` | ⚠️ | double, final, start/end repeat, by command like set-time (a start repeat at bar 1 keeps the opening time signature) |
 | `set-bar-number`, `add-bars`, `set-layout`, `hide-empty-staves`, `delete-voice` | ❌ | not exposed |
 | `undo` | ✅ | stops when Dorico has nothing to undo |
 | (Dorico only) `project_info`, `set_project_info` | ✅ | project-level Project Info fields through the Project Info dialog (typed); not per-flow |
@@ -364,7 +364,17 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   places the change at the *selected item's position*, so the item must
   start at the bar (a note half a beat in made a short bar first).
   `EventEdit.EditExistingTimeSignature` / `…KeySignature` with an event id
-  and `Text` are accepted but change nothing, so bar 1 cannot be changed.
+  and `Text` are accepted but change nothing. **Bar 1 works the same way
+  as any other bar (2026-09-27):** with a bar-1 note selected,
+  `CreateTimeSignature?Definition=3/4` replaced the opening 4/4 (a new
+  `BarDivisionEvent` id at position 0; bars measured 768 and the music was
+  re-barred), `CreateKeySignature?Definition=G` replaced the opening key
+  (new `TonalityDivisionEvent` id), and `CreateBarLine?Definition=|:` put a
+  start repeat at bar 1 in a new event that keeps 4/4. Two undo steps each,
+  as elsewhere; a time and key batch at bar 1 is 4. The timebase `dump()`
+  was no help in reading them back: it lists these events only as
+  `element ID = 0`, not their content, so bar lengths (measured) and the
+  new event ids are the read-back.
   Keystroke-driven popovers are fragile: a leftover lyric popover took a
   Shift+M. The ops send the commands directly.
 

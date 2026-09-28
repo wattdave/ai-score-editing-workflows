@@ -211,8 +211,9 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
     - {"op":"set-time","bar":B,"numerator":N,"denominator":D},
       {"op":"set-key","bar":B,"key":"Bb"[,"minor":true]},
       {"op":"set-barline","bar":B,"type":"double"|"final"|"start_repeat"|"end_repeat"}:
-      at the start of bar B (not bar 1); needs a note or rest with an id on
-      B's first beat. Two undo steps each (selection + command).
+      at the start of bar B (bar 1 replaces the opening signature or
+      barline); needs a note or rest with an id on B's first beat. Two undo
+      steps each (selection + command).
     - {"op":"add-dynamic",...,"dynamic":"p"|"mf"|...}, {"op":"set-articulation",
       ...,"articulation":"accent"|"marcato"|"staccato"|"staccatissimo"|
       "tenuto"|"staccato-tenuto"|"stress"|"unstress"}, {"op":"add-slur",...}

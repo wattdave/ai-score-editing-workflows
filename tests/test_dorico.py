@@ -652,12 +652,17 @@ def test_signature_ops_select_a_first_beat_note_and_use_popover_definitions() ->
         ("NoteInput.CreateBarLine", "|]", "BarDivisionEvent"),
     ]
     assert ops[0]["select"] == {"id": 7, "stream": 2} and ops[0]["position"] == 1024
+    ops = prepare_batch([{"op": "set-time", "bar": 1, "numerator": 3, "denominator": 4},
+                         {"op": "set-key", "bar": 1, "key": "G"},
+                         {"op": "set-barline", "bar": 1, "type": "start_repeat"}], located, STAVES, BARS)
+    assert [(o["definition"], o["position"], o["select"]["id"]) for o in ops] == [
+        ("3/4", 0, 3), ("G", 0, 3), ("|:", 0, 3)]
 
 
 @pytest.mark.parametrize(
     ("operation", "message"),
     [
-        ({"op": "set-key", "bar": 1, "key": "D"}, "bar must be"),
+        ({"op": "set-key", "bar": 0, "key": "D"}, "bar must be"),
         ({"op": "set-key", "bar": 2, "key": "H"}, "major key"),
         ({"op": "set-time", "bar": 2, "numerator": 3, "denominator": 3}, "power of two"),
         ({"op": "set-barline", "bar": 2, "type": "dashed"}, "type must be one of"),
