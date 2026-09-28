@@ -30,6 +30,14 @@ dev = [
     "pytest-asyncio>=1.4.0",
 ]
 
+# This project resolves from public PyPI only, even where a user-level uv
+# config sets another default index (a project's default index wins over a
+# user's), so `uv sync` and `uv run` work anywhere and uv.lock stays public.
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 pythonpath = ["src"]
