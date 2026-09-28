@@ -43,7 +43,8 @@ tempo marks), so they are read from Dorico's `dump()`: objects have ids and
 `"source": "dump"`. Command ops work on them; set-pitch, delete and
 transpose are done by commands (the note keeps its id and lyric).
 `query_score(lyrics=true)` adds lyric text from a MusicXML export.
-`add-lyrics` adds verse 1 to a staff with no lyrics; `read_lyrics` /
+`add-lyrics` adds lyrics in any verse (`"verse": 2`), keeping the others,
+and refuses to type over existing lyrics in that verse; `read_lyrics` /
 `edit_lyrics` read and correct a player's verse (same syllable count).
 
 ## Limits

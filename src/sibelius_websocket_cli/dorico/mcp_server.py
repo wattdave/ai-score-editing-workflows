@@ -225,12 +225,15 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       and paste (overwriting at the destination), anchored so the notes keep
       their places in the bar; checked afterwards. Needs a note in bar A on
       each staff with notes; refuses a destination under a sustained note.
-    - {"op":"add-lyrics","staff":S,"bar":B,"index":I (or "id"),"text":"ma-king lyr-ics _ now"}:
-      verse-1 lyrics typed into Dorico's lyric popover from that note on
-      (spaces separate words, hyphens syllables, "_" continues a melisma).
-      The staff must not have lyrics yet. One undo step for the selection
-      plus one per syllable; Dorico is brought to the front while it types,
-      and the result's lyricsCheck compares a MusicXML export with the text.
+    - {"op":"add-lyrics","staff":S,"bar":B,"index":I (or "id"),"text":"ma-king lyr-ics _ now","verse":V}:
+      lyrics typed into Dorico's lyric popover from that note on (spaces
+      separate words, hyphens syllables, "_" continues a melisma), in verse
+      V (1-10, default 1). Other verses are kept; the batch is refused if a
+      syllable would land on a note that already has a lyric in verse V
+      (use edit_lyrics to change existing words). One undo step for the
+      selection, one per verse below V, and one per syllable; Dorico is
+      brought to the front while it types, and the result's lyricsCheck
+      compares a MusicXML export with the text.
       Command ops (set-break, set-time, set-key, set-barline, add-lyrics,
       the notation ops above) cannot share a batch with the others.
 
@@ -260,8 +263,8 @@ async def edit_lyrics(player: str, text: str, verse: int = 1) -> dict[str, Any]:
     The new text must have the same number of syllables (words split by
     spaces and hyphens): Dorico ignores edits that change the count, so they
     are refused. The result is read back and compared. Use this to correct
-    words or hyphenation; add-lyrics (apply_batch) adds lyrics to a staff
-    that has none.
+    words or hyphenation; add-lyrics (apply_batch) adds new lyrics, including
+    a further verse.
     """
     return await session.run(lambda b: lyrics_dialog.edit_lyrics(b, player, text, verse), retry=False)
 

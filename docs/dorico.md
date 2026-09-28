@@ -151,7 +151,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `add-line` | ⚠️ | only slurs, note to next note (`add-slur`); hairpins and other lines not explored |
 | (Dorico only) `add-dynamic`, `set-articulation`, `add-slur`, `add-tempo`, `add-rehearsal-mark` | ✅ | by command at a note; slurs cannot be read back |
 | (Dorico only) `read_lyrics`, `edit_lyrics` | ⚠️ | a player's verse as text through the Edit Lyrics dialog; edits must keep the syllable count |
-| `add-lyric` → `add-lyrics` | ⚠️ | verse 1, typed through the lyric popover by command (see gaps); staff must have no lyrics yet |
+| `add-lyric` → `add-lyrics` | ⚠️ | verses 1-10, typed through the lyric popover by command (see gaps); refuses to type over a lyric already in that verse |
 | `copy-passage` | ✅ | by selection + `Edit.Copy` / `Edit.Paste` (see gaps); destPosition 0 only |
 | `set-key`, `set-time` | ⚠️ | by command at the start of a bar ≥ 2 with a note or rest on its first beat; 2 undo steps each (see gaps) |
 | `set-break` | ⚠️ | system breaks via `Edit.CreateSystemBreak` on a selected note (2 undo steps each); bars without a note or rest of their own are refused |
@@ -278,6 +278,23 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   an accept with `kEndInput`, so it can only be reached by pixel position.
   A selected lyric's `getproperties` gives its syllable type, verse, and
   placement values, but never its text.
+- **Further verses (2026-09-27).** In the popover, Down Arrow logs
+  `NoteInput.AcceptCurrentLyricInput?LyricText=<the lyric already there>&LyricsEntryAdvanceType=kIncrementVerseNumber`
+  and `NoteInput.AdvanceLyricInput`: it accepts the current line's text
+  and moves down a line at the same note. Sent by command it works the
+  same: one increment per line below the target, then the syllables as for
+  verse 1, and later syllables stay on that line. The text sent must be
+  the lyric already on that line: an increment with no `LyricText` deleted
+  the verse-1 lyric under it, while re-sending it kept it, hyphenation
+  included (a `begin` syllable stayed `begin`). On a line with no lyric no
+  text is sent and none is created (verse 3 over an empty verse 2 left
+  verse 2 empty). Undo steps, measured with a marker edit: the selection 1,
+  each increment 1, each syllable 1. `add-lyrics` reads the lower lines'
+  text at the first note from a MusicXML export when the staff has lyrics,
+  and refuses a batch whose syllables would land on a note that already
+  has a lyric in the target verse (typing replaces it). Up Arrow (chorus),
+  Shift-Up/Down (above/below the staff) and Alt-Down (translation) were not
+  tried.
 - **Qt.** Dorico 6.2.30 is built on Qt 6.10.1 (universal, Apple LLVM 15),
   with QtLabs QML modules; dialogs are reachable through macOS
   accessibility, the score canvas is not.

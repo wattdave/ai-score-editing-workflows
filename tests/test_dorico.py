@@ -528,13 +528,74 @@ def test_add_lyrics_resolves_first_note_and_refuses_the_rest() -> None:
     located = locate_events(EVENTS, BARS)
     ops = prepare_batch([{"op": "add-lyrics", "staff": 1, "bar": 1, "index": 0, "text": "Oh fare-well"}],
                         located, STAVES, BARS)
-    assert ops == [{"op": "add-lyrics", "staff": 1, "position": 0, "select": {"id": 3, "stream": 2},
+    assert ops == [{"op": "add-lyrics", "staff": 1, "position": 0, "verse": 1, "select": {"id": 3, "stream": 2},
+                    "hasLyrics": False,
                     "syllables": [["Oh", "kEndOrExtendCurrentWord"], ["fare", "kHyphenateCurrentWord"],
                                   ["well", "kEndInput"]]}]
-    with pytest.raises(DoricoBatchError, match="only verse 1"):
-        prepare_batch([{"op": "add-lyrics", "id": 3, "text": "x", "verse": 2}], located, STAVES, BARS)
+    ops = prepare_batch([{"op": "add-lyrics", "id": 3, "text": "x", "verse": 3}], located, STAVES, BARS)
+    assert ops[0]["verse"] == 3
+    for verse in (0, 11, True, "2"):
+        with pytest.raises(DoricoBatchError, match="verse must be"):
+            prepare_batch([{"op": "add-lyrics", "id": 3, "text": "x", "verse": verse}], located, STAVES, BARS)
     with pytest.raises(DoricoBatchError, match="cannot share a batch"):
         prepare_batch([{"op": "add-lyrics", "id": 3, "text": "x"}, {"op": "delete", "id": 4}], located, STAVES, BARS)
+
+
+def _lyric_op(position: int, verse: int, syllables: int, has_lyrics: bool = True) -> dict[str, Any]:
+    return {"op": "add-lyrics", "staff": 1, "position": position, "verse": verse, "hasLyrics": has_lyrics,
+            "select": {"id": 3, "stream": 2}, "syllables": [["la", "kEndOrExtendCurrentWord"]] * syllables}
+
+
+async def test_plan_lyrics_keeps_lower_verses_and_refuses_to_overwrite(monkeypatch: pytest.MonkeyPatch) -> None:
+    def note(position: int, *lyrics: tuple[int, str]) -> dict[str, Any]:
+        return {"type": "NoteEvent", "stream": 2, "flowPosition": position,
+                "lyrics": [{"verse": v, "text": t} for v, t in lyrics]}
+
+    located = [note(0, (1, "well,")), note(256, (1, "a")), note(512, (1, "day"), (3, "tres")),
+               {"type": "NoteEvent", "stream": 9, "flowPosition": 256, "lyrics": [{"verse": 3, "text": "x"}]}]
+    reads: list[bool] = []
+
+    async def fake_snapshot(bridge: Any, flow: int, lyrics: bool = False) -> Any:
+        reads.append(lyrics)
+        return service.Snapshot([], located, BarMap([(0, 1024)]))
+
+    monkeypatch.setattr(service, "snapshot", fake_snapshot)
+    fresh = _lyric_op(0, 3, 2, has_lyrics=False)
+    await service._plan_lyrics(None, [fresh], 1)  # type: ignore[arg-type]
+    assert fresh["keep"] == ["", ""] and reads == []  # a staff without lyrics needs no export
+    op = _lyric_op(0, 3, 2)  # lands on 0 and 256; stream 9's verse 3 at 256 is another voice
+    await service._plan_lyrics(None, [op], 1)  # type: ignore[arg-type]
+    assert op["keep"] == ["well,", ""] and reads == [True]
+    with pytest.raises(DoricoError, match="already has a verse 3 lyric at bar 1"):
+        await service._plan_lyrics(None, [_lyric_op(0, 3, 3)], 1)  # type: ignore[arg-type]
+
+
+async def test_type_lyrics_moves_down_a_verse_per_kept_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Client:
+        commands: list[str] = []
+
+        async def command(self, command: str) -> None:
+            self.commands.append(command)
+
+    class Bridge:
+        client = Client()
+
+    monkeypatch.setattr(service, "bring_to_front", lambda: None)
+    monkeypatch.setattr(service, "POPOVER_OPEN_DELAY", 0)
+    monkeypatch.setattr(service, "SYLLABLE_DELAY", 0)
+    steps = await service._type_lyrics(Bridge(), [["u", "kHyphenateCurrentWord"], ["no", "kEndInput"]],  # type: ignore[arg-type]
+                                       ["well,", ""])
+    assert steps == 4
+    assert Bridge.client.commands == [
+        "NoteInput.StartLyricInput",
+        "NoteInput.AcceptCurrentLyricInput?LyricText=well\\,&LyricsEntryAdvanceType=kIncrementVerseNumber",
+        "NoteInput.AdvanceLyricInput",
+        "NoteInput.AcceptCurrentLyricInput?LyricsEntryAdvanceType=kIncrementVerseNumber",  # no text: nothing to keep
+        "NoteInput.AdvanceLyricInput",
+        "NoteInput.AcceptCurrentLyricInput?LyricText=u&LyricsEntryAdvanceType=kHyphenateCurrentWord",
+        "NoteInput.AdvanceLyricInput",
+        "NoteInput.AcceptCurrentLyricInput?LyricText=no&LyricsEntryAdvanceType=kEndInput",
+    ]
 
 
 # ------------------------------------------------------------------ lyrics dialog
@@ -636,8 +697,8 @@ def test_edits_to_notes_read_from_dump_become_commands() -> None:
     assert [(o["op"], o["newPitch"], o["letter"]) for o in ops] == [("repitch", 64, "E")]
     with pytest.raises(DoricoBatchError, match="cannot share a batch"):
         prepare_batch([{"op": "delete", "id": 60}, {"op": "delete", "id": 3}], located, STAVES, BARS)
-    with pytest.raises(DoricoBatchError, match="already has lyrics"):
-        prepare_batch([{"op": "add-lyrics", "id": 60, "text": "la"}], located, STAVES, BARS)
+    ops = prepare_batch([{"op": "add-lyrics", "id": 60, "text": "la", "verse": 2}], located, STAVES, BARS)
+    assert ops[0]["hasLyrics"] and ops[0]["select"] == {"id": 60, "stream": 2}
 
 
 def test_command_ops_can_select_notes_read_from_dump() -> None:
