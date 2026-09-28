@@ -126,8 +126,9 @@ Expect three results with ids, `undoSteps` 6; render shows ||, G major and
 
 Bar 1: `[{"op":"set-time","bar":1,"numerator":3,"denominator":4},{"op":"set-key","bar":1,"key":"G"}]`.
 Expect `undoSteps` 4, `structure` measuring bar 1 as 768, and a render
-opening in 3/4, G major with the music re-barred. Undo the reported steps
-before any other command: `lyrics` adds two selection steps of its own.
+opening in 3/4, G major with the music re-barred. Run `dorico-cli lyrics
+Piano` before undoing the reported steps: reads, `lyrics` included, must
+leave the undo history alone, so the undo still reverts the batch exactly.
 
 ### 4c. Notation ops (command ops)
 
@@ -191,7 +192,7 @@ These depend on dialog titles, control names and log lines.
 | `dorico-cli export /tmp/f.pdf --format pdf` | every page; no dialog left open. Run twice: the second answers the "output files already exist" prompt |
 | `dorico-cli export /tmp/f.musicxml --format musicxml` | the Export MusicXML window opens and closes by itself; the file parses |
 | `dorico-cli export /tmp/f.png --format preview-png` | a PNG of page 1 |
-| `dorico-cli edit-lyrics Piano "<same text with one word changed>"` | `after` shows the change; run again with the original text |
+| `dorico-cli edit-lyrics Piano "<same text with one word changed>"` | `after` shows the change and `undoSteps` 3; `undo --steps 3` restores the text (check with `lyrics`, whose result must carry no `note` about undo steps) |
 | `dorico-cli set-info Composer=Test` then `set-info Composer=` | read back each time; title page shows the composer |
 
 After each, check no Dorico dialog is left open.

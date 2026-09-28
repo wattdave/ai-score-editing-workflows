@@ -252,6 +252,8 @@ async def read_lyrics(player: str, verse: int = 1) -> dict[str, Any]:
     verse 1-5. The text is hyphenated as Dorico shows it ("ma-king"). For a
     two-staff player it is the first staff's line. The window briefly shows
     the part layout and Dorico comes to the front; it is switched back.
+    The selections it makes are undone again, so the undo history is left as
+    it was (a "note" in the result says when that could not be done).
     Syllables are not tied to notes here: use query_score for that.
     """
     return await session.run(lambda b: lyrics_dialog.read_lyrics(b, player, verse), retry=True)
@@ -263,9 +265,10 @@ async def edit_lyrics(player: str, text: str, verse: int = 1) -> dict[str, Any]:
 
     The new text must have the same number of syllables (words split by
     spaces and hyphens): Dorico ignores edits that change the count, so they
-    are refused. The result is read back and compared. Use this to correct
-    words or hyphenation; add-lyrics (apply_batch) adds new lyrics, including
-    a further verse.
+    are refused. The result is read back and compared, and its undoSteps
+    (3: two selections and the edit) is what undo needs to revert it. Use
+    this to correct words or hyphenation; add-lyrics (apply_batch) adds new
+    lyrics, including a further verse.
     """
     return await session.run(lambda b: lyrics_dialog.edit_lyrics(b, player, text, verse), retry=False)
 

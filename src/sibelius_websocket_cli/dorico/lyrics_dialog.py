@@ -11,6 +11,10 @@ selection, so the window is switched to the player's part layout first:
 
 Only edits with the same number of syllables are applied by Dorico, so any
 other edit is refused here; every edit is read back to confirm it.
+
+Selecting is an undo step in Dorico, so a read undoes its Select All and
+Filter afterwards, each only when the Edit menu names it as the step on top
+(Undo Filter Lyrics, Undo Select All); anything else is left alone.
 """
 
 from __future__ import annotations
@@ -26,6 +30,20 @@ from .export import _osascript, bring_to_front
 DIALOG = "Edit Lyrics"
 DIALOG_TIMEOUT = 8.0
 LAYOUT_SWITCH_DELAY = 1.0
+#: Edit menu titles of the undo steps a read leaves, top first (Dorico 6.2.30,
+#: English UI). Another language will not match, and nothing is undone.
+READ_UNDO_TITLES = ("Undo Filter Lyrics", "Undo Select All")
+#: The Edit menu's titles lag behind commands by up to about a second.
+MENU_SETTLE_TIMEOUT = 4.0
+MENU_POLL = 0.3
+
+_UNDO_TITLE = """
+tell application "System Events"
+  tell process "%(process)s"
+    return name of menu item 1 of menu 1 of menu bar item "Edit" of menu bar 1
+  end tell
+end tell
+"""
 
 _DIALOG_OPEN = """
 tell application "System Events"
@@ -96,6 +114,34 @@ async def _wait(condition: Any, timeout: float, what: str) -> None:
         await asyncio.sleep(0.2)
 
 
+async def _undo_title(changed_from: str | None = None) -> str:
+    """The Edit menu's undo title once it has settled (read twice alike, and
+    different from changed_from when given)."""
+    deadline = time.monotonic() + MENU_SETTLE_TIMEOUT
+    last = None
+    while True:
+        title = _osascript(_UNDO_TITLE)
+        if title == last and title != changed_from:
+            return title
+        if time.monotonic() > deadline:
+            return title
+        last = title
+        await asyncio.sleep(MENU_POLL)
+
+
+async def _undo_read_steps(bridge: DoricoBridge, titles: list[str]) -> bool:
+    """Undo the selection steps a read made, top first, each only while the
+    Edit menu names it on top. False if anything else was there."""
+    previous = None
+    for expected in titles:
+        title = await _undo_title(previous)
+        if title != expected:
+            return False
+        await bridge.client.command("Edit.Undo")
+        previous = title
+    return True
+
+
 async def _part_layout(bridge: DoricoBridge, player: str) -> dict[str, Any]:
     layouts = await bridge.client.layouts()
     parts = [l for l in layouts if l.get("layoutType") == "kPartLayout"]
@@ -106,8 +152,12 @@ async def _part_layout(bridge: DoricoBridge, player: str) -> dict[str, Any]:
     return match[0]
 
 
-async def _in_dialog(bridge: DoricoBridge, player: str, verse: int, new_text: str | None) -> str:
-    """Open the dialog on the player's verse, read it, optionally replace it."""
+async def _in_dialog(bridge: DoricoBridge, player: str, verse: int, new_text: str | None) -> tuple[str, bool]:
+    """Open the dialog on the player's verse, read it, optionally replace it.
+
+    Returns the verse's text before any edit, and whether a read left the
+    undo history as it found it (an edit leaves its selections under it).
+    """
     if not 1 <= verse <= 5:
         raise DoricoError("verse must be 1-5")
     if _dialog_open():
@@ -118,6 +168,8 @@ async def _in_dialog(bridge: DoricoBridge, player: str, verse: int, new_text: st
     score_id, view_id = status.get("activeOpenScoreID"), status.get("activeViewContainerID")
     mode = status.get("windowMode")
     original_layout = (await bridge.call("window"))["layoutID"]
+    selections: list[str] = []  # undo titles of the selection steps made, in order
+    kept = False
     bring_to_front()
     try:
         if mode != "kWriteMode":
@@ -127,22 +179,18 @@ async def _in_dialog(bridge: DoricoBridge, player: str, verse: int, new_text: st
         )
         await asyncio.sleep(LAYOUT_SWITCH_DELAY)
         await client.command("Edit.SelectAll")
+        selections.append(READ_UNDO_TITLES[1])
         await client.command(f"Filter.LyricsLine{verse}")
+        selections.append(READ_UNDO_TITLES[0])
         if (await client.status()).get("selectedEventType") != "kLyricEvent":
             raise DoricoError(f"{player} has no lyrics in verse {verse}")
         await client.command("Edit.LineOfLyrics")
         await _wait(_dialog_open, DIALOG_TIMEOUT, "the Edit Lyrics dialog")
         current = _osascript(_DIALOG_ACT, "", "")
-        if new_text is None:
-            return current
-        if syllable_count(new_text) != syllable_count(current):
-            raise DoricoError(
-                f"the new text has {syllable_count(new_text)} syllables but {player}'s verse {verse} has "
-                f"{syllable_count(current)}; Dorico only applies edits that keep the count"
-            )
-        _osascript(_DIALOG_ACT, new_text, "OK")
-        await _wait(lambda: not _dialog_open(), DIALOG_TIMEOUT, "Dorico to accept the edit")
-        return current
+        if new_text is not None:
+            _replace(current, new_text, player, verse)
+            await _wait(lambda: not _dialog_open(), DIALOG_TIMEOUT, "Dorico to accept the edit")
+            selections.clear()  # now under the edit: undoing them would undo it
     finally:
         if _dialog_open():
             _osascript(_DIALOG_ACT, "", "Cancel")
@@ -151,19 +199,38 @@ async def _in_dialog(bridge: DoricoBridge, player: str, verse: int, new_text: st
         )
         if mode and mode != "kWriteMode":
             await client.command(f"Window.SwitchMode?WindowMode={mode}")
+        if selections:
+            kept = await _undo_read_steps(bridge, selections[::-1])
+    return current, kept
+
+
+def _replace(current: str, new_text: str, player: str, verse: int) -> None:
+    """Set the open dialog's text and press OK, if the syllable count is kept."""
+    if syllable_count(new_text) != syllable_count(current):
+        raise DoricoError(
+            f"the new text has {syllable_count(new_text)} syllables but {player}'s verse {verse} has "
+            f"{syllable_count(current)}; Dorico only applies edits that keep the count"
+        )
+    _osascript(_DIALOG_ACT, new_text, "OK")
 
 
 async def read_lyrics(bridge: DoricoBridge, player: str, verse: int = 1) -> dict[str, Any]:
-    text = await _in_dialog(bridge, player, verse, None)
-    return {"player": player, "verse": verse, "text": _normal(text), "syllables": syllable_count(text)}
+    text, kept = await _in_dialog(bridge, player, verse, None)
+    result = {"player": player, "verse": verse, "text": _normal(text), "syllables": syllable_count(text)}
+    if not kept:
+        result["note"] = ("the read's selections could not be identified in Dorico's Edit menu, so they "
+                          "were left in the undo history (2 steps)")
+    return result
 
 
 async def edit_lyrics(bridge: DoricoBridge, player: str, text: str, verse: int = 1) -> dict[str, Any]:
     """Replace a player's verse (same syllable count) and read it back."""
     if not text.strip():
         raise DoricoError("text is empty")
-    before = await _in_dialog(bridge, player, verse, text)
-    after = await _in_dialog(bridge, player, verse, None)
+    before, _ = await _in_dialog(bridge, player, verse, text)
+    after, kept = await _in_dialog(bridge, player, verse, None)
     if _normal(after) != _normal(text):
         raise DoricoError(f"Dorico did not apply the edit; {player}'s verse {verse} still reads: {_normal(after)[:80]}…")
-    return {"player": player, "verse": verse, "before": _normal(before), "after": _normal(after)}
+    # Select All, Filter and the edit; the read-back undoes its own selections.
+    return {"player": player, "verse": verse, "before": _normal(before), "after": _normal(after),
+            "undoSteps": 3 if kept else 5}

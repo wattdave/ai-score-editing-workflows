@@ -608,6 +608,49 @@ def test_syllable_count_matches_the_dialog_text() -> None:
     assert syllable_count("  ") == 0
 
 
+class _MenuClient:
+    """Dorico's undo history as its Edit menu names it, top last."""
+
+    def __init__(self, history: list[str]) -> None:
+        self.history = history
+        self.commands: list[str] = []
+
+    async def command(self, command: str) -> None:
+        self.commands.append(command)
+        if command == "Edit.Undo":
+            self.history.pop()
+
+    def title(self) -> str:
+        return f"Undo {self.history[-1]}" if self.history else "Undo"
+
+
+@pytest.mark.parametrize(
+    ("history", "undone", "kept"),
+    [
+        (["Add Text", "Select All", "Filter Lyrics"], 2, True),
+        (["Select All", "Add Text"], 0, False),  # the top step is not the read's: leave everything
+        (["Add Text", "Tout sélectionner", "Filtrer"], 0, False),  # another UI language
+    ],
+)
+async def test_read_undoes_only_its_own_selections(
+    monkeypatch: pytest.MonkeyPatch, history: list[str], undone: int, kept: bool
+) -> None:
+    from sibelius_websocket_cli.dorico import lyrics_dialog
+
+    client = _MenuClient(list(history))
+
+    class Bridge:
+        pass
+
+    bridge = Bridge()
+    bridge.client = client  # type: ignore[attr-defined]
+    monkeypatch.setattr(lyrics_dialog, "_osascript", lambda script, *args: client.title())
+    monkeypatch.setattr(lyrics_dialog, "MENU_POLL", 0)
+    result = await lyrics_dialog._undo_read_steps(bridge, ["Undo Filter Lyrics", "Undo Select All"])  # type: ignore[arg-type]
+    assert result is kept and client.commands.count("Edit.Undo") == undone
+    assert client.history == history[: len(history) - undone]
+
+
 async def test_part_layout_is_found_by_player_name() -> None:
     from sibelius_websocket_cli.dorico.lyrics_dialog import _part_layout
 
