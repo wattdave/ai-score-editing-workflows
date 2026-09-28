@@ -518,6 +518,52 @@ def test_set_break_in_an_empty_bar_uses_a_temporary_rest() -> None:
         prepare_batch(break_at_5, locate_events(held, BARS), STAVES, BARS)
 
 
+# ------------------------------------------------------------------ add-line
+
+def test_resize_steps_use_only_checked_note_values() -> None:
+    from sibelius_websocket_cli.dorico.score import resize_steps
+
+    lengthen = "EventEdit.DurationLengthenByValue?RhythmicGridResolutionValue="
+    shorten = "EventEdit.DurationShortenByValue?RhythmicGridResolutionValue="
+    assert resize_steps(1024, 1024) == []
+    assert resize_steps(1024, 1536) == [lengthen + "kMinim"]
+    assert resize_steps(256, 1312) == [lengthen + v for v in ("kSemibreve", "kDemisemiquaver")]
+    assert resize_steps(1024, 384) == [shorten + "kMinim", shorten + "kQuaver"]
+    with pytest.raises(DoricoBatchError, match="steps of 32"):
+        resize_steps(256, 270)
+
+
+def test_add_line_selects_the_item_at_the_position_or_a_temporary_rest() -> None:
+    located = locate_events(EVENTS, BARS)
+    ops = prepare_batch([{"op": "add-line", "line": "crescendo", "staff": 1, "bar": 1, "position": 256, "duration": 768}],
+                        located, STAVES, BARS)
+    assert ops[0]["select"] == {"id": 4, "stream": 2} and ops[0]["position"] == 256 and ops[0]["itemDuration"] == 256
+    assert ops[0]["command"] == "NoteInput.CreateDynamic?Definition=<" and ops[0]["expect"] == "DynamicGroupEvent"
+    assert ops[0]["resize"] == ["EventEdit.DurationLengthenByValue?RhythmicGridResolutionValue=kMinim"]
+    ops = prepare_batch([{"op": "add-line", "line": "pedal", "staff": 2, "bar": 3, "duration": 256}], located, STAVES, BARS)
+    assert "select" not in ops[0] and ops[0]["tempRest"] == {"stream": 4, "position": 2048, "duration": 256}
+    assert ops[0]["resize"] == []
+    ops = prepare_batch([{"op": "add-line", "line": "glissando", "staff": 1, "bar": 1}], located, STAVES, BARS)
+    assert ops[0]["duration"] is None and "resize" not in ops[0]
+
+
+@pytest.mark.parametrize(
+    ("operation", "message"),
+    [
+        ({"line": "hairpin", "duration": 256}, "line must be one of"),
+        ({"line": "trill", "bar": 3, "duration": 256}, "starts on a note"),
+        ({"line": "glissando", "duration": 256}, "takes no duration"),
+        ({"line": "8va", "duration": 100}, "multiple of 32"),
+        ({"line": "8va"}, "duration must be an integer"),
+        ({"line": "8va", "staff": 3, "duration": 256}, "no staff 3"),
+    ],
+)
+def test_add_line_refusals(operation: dict[str, Any], message: str) -> None:
+    batch = [{"op": "add-line", "staff": 1, "bar": 1, **operation}]
+    with pytest.raises(DoricoBatchError, match=message):
+        prepare_batch(batch, locate_events(EVENTS, BARS), STAVES, BARS)
+
+
 # ------------------------------------------------------------------ add-lyrics
 
 def test_parse_lyrics_words_hyphens_and_melismas() -> None:

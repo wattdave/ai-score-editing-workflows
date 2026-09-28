@@ -148,7 +148,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | (Dorico only) `add-clef` | ✅ | treble, bass, percussion, tab, tab.4 from the score's clef library |
 | `transpose` | ✅ | per-note, respelled diatonically |
 | `set` (Dx, Dy, Hidden, ...), `tie`, `bracket`, `flip-stem`, `nudge`, `beam` | ❌ | not in the Lua model |
-| `add-line` | ⚠️ | only slurs, note to next note (`add-slur`); hairpins and other lines not explored |
+| `add-line` | ⚠️ | crescendo/diminuendo hairpins, 8va/8vb, trills, pedal lines and glissandos at any position and length (multiples of 32), by command then resize (see gaps); hairpin lengths cannot be read back; octave lines keep the sounding pitch and rewrite the notes, unlike Sibelius; other Sibelius line styles are not mapped. Slurs: `add-slur`, note to next note |
 | (Dorico only) `add-dynamic`, `set-articulation`, `add-slur`, `add-tempo`, `add-rehearsal-mark` | ✅ | by command at a note; slurs cannot be read back |
 | (Dorico only) `read_lyrics`, `edit_lyrics` | ⚠️ | a player's verse as text through the Edit Lyrics dialog; edits must keep the syllable count |
 | `add-lyric` → `add-lyrics` | ⚠️ | verses 1-10, typed through the lyric popover by command (see gaps); refuses to type over a lyric already in that verse |
@@ -463,6 +463,34 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   `…Below` until the letter matches (B♭4). The note keeps its id, lyric and
   anything attached. Undo steps: selection + move + each respell. Checked
   live: the verse text was unchanged throughout.
+
+- **Lines (2026-09-27).** With a note (or rest) selected, each of these
+  makes a line starting there and lasting as long as the item:
+  `NoteInput.CreateDynamic?Definition=<` / `>` (hairpin; a
+  `DynamicGroupEvent` in the staff's stave stream whose length is in its
+  dynamic group element, which Lua cannot reach: duration reads 0),
+  `NoteInput.OttavaLineStart?Octave=1` / `-1` (8va / 8vb, an
+  `OttavaLineEvent` with a readable duration), `NoteInput.CreateOrnament?Definition=tr`
+  (`TrillEvent` in the voice stream), `NoteInput.CreatePlayingTechnique?Definition=ped`
+  (`PedalLineEvent`; on a piano it lands in the *upper* staff's stream even
+  when started on the lower, and is drawn below the lower staff) and
+  `NoteInput.CreateGlissando` (to the next note). Trill and pedal events
+  make their streams unreadable to Lua, so those are read from `dump()`,
+  lengths included. Octave lines keep the sounding pitch: Dorico rewrites
+  the notes under them an octave the other way (Sibelius keeps the written
+  notes and changes playback). A selected line is resized exactly by
+  `EventEdit.DurationLengthenByValue` / `DurationShortenByValue?RhythmicGridResolutionValue=`
+  `kSemibreve`, `kMinim`, `kCrotchet`, `kQuaver`, `kSemiquaver` or
+  `kDemisemiquaver` (each checked on an octave line: +1024 … +32, id kept);
+  `kBreve` and `kHemidemisemiquaver` are accepted but moved the end by 256
+  and 160, so they are never sent. Undo steps, measured with a marker for
+  each kind: selection 1, command 1, selecting the line 1, each resize 1
+  (a glissando: 2). `add-line` does exactly this, with a temporary rest
+  where nothing starts at the position; a batch of all six kinds reported
+  24 steps and undoing exactly 24 left the marker. Lua's
+  `EventStream:createOttavaLine(pos, ?, duration, ?, string)` makes events
+  the layout ignores (like Lua-made system breaks) and accepts any string,
+  so it is not used.
 
 - **copy-passage (2026-09-27).** `Edit.SelectMore` from a *note* selects
   its whole bar on that staff (from a rest it does not), and

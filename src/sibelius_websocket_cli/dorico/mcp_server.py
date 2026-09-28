@@ -226,6 +226,15 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       {"op":"add-rehearsal-mark",...}: at a note addressed like set-pitch
       (works on staves with lyrics too). Two undo steps each; slurs cannot be
       checked afterwards (verified: false).
+    - {"op":"add-line","line":"crescendo"|"diminuendo"|"8va"|"8vb"|"trill"|
+      "pedal"|"glissando","staff":S,"bar":B,"position":P,"duration":D}: a line
+      from the note or rest on staff S at that position (a temporary rest
+      where there is none; trills and glissandos need a note), resized to D
+      (a multiple of 32). A glissando runs to the next note and takes no
+      duration. Hairpins cannot be read back (verified: false); the others
+      are. Octave lines keep the sounding pitch, so Dorico rewrites the notes
+      under them (unlike Sibelius). Undo steps: selection + command, plus the
+      line's selection and one per resize step, plus two for a temporary rest.
     - {"op":"copy-passage","fromBar":A,"toBar":B,"topStaff":T,"bottomStaff":U,
       "destStaff":S,"destBar":D}: copies each staff's notes by Dorico's copy
       and paste (overwriting at the destination), anchored so the notes keep

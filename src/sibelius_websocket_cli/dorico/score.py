@@ -49,7 +49,7 @@ CLEFS = {"treble", "bass", "percussion", "tab", "tab.4"}
 #: a batch with the Lua ops (one batch, one undo step).
 #: Ops that select a note and run one Dorico command on it.
 NOTE_COMMAND_OPS = {"add-dynamic", "set-articulation", "add-slur", "add-tempo", "add-rehearsal-mark"}
-COMMAND_OPS = {"set-break", "add-lyrics", "set-time", "set-key", "set-barline", "copy-passage"} | NOTE_COMMAND_OPS
+COMMAND_OPS = {"set-break", "add-lyrics", "set-time", "set-key", "set-barline", "copy-passage", "add-line"} | NOTE_COMMAND_OPS
 #: Resolved forms of set-pitch/delete/transpose on notes read from dump().
 ROUTED_COMMAND_OPS = {"repitch", "delete-by-id"}
 #: set-articulation names and NoteInput.SetArticulation values (checked 2026-09-27).
@@ -63,6 +63,42 @@ DYNAMICS = {"pppp", "ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "ffff", "sfz
 BARLINE_DEFINITIONS = {"double": "||", "final": "|]", "start_repeat": "|:", "end_repeat": ":|"}
 MAJOR_KEYS = {"C", "G", "D", "A", "E", "B", "F#", "C#", "F", "Bb", "Eb", "Ab", "Db", "Gb", "Cb"}
 MINOR_KEYS = {"A", "E", "B", "F#", "C#", "G#", "D#", "A#", "D", "G", "C", "F", "Bb", "Eb", "Ab"}
+#: add-line kinds: the command that makes one at the selected item, the event
+#: it makes, and whether that item must be a note (logged or checked live
+#: 2026-09-27; each line starts at the item and lasts as long as it).
+LINES: dict[str, tuple[str, str, bool]] = {
+    "crescendo": ("NoteInput.CreateDynamic?Definition=<", "DynamicGroupEvent", False),
+    "diminuendo": ("NoteInput.CreateDynamic?Definition=>", "DynamicGroupEvent", False),
+    "8va": ("NoteInput.OttavaLineStart?Octave=1", "OttavaLineEvent", False),
+    "8vb": ("NoteInput.OttavaLineStart?Octave=-1", "OttavaLineEvent", False),
+    "trill": ("NoteInput.CreateOrnament?Definition=tr", "TrillEvent", True),
+    "pedal": ("NoteInput.CreatePlayingTechnique?Definition=ped", "PedalLineEvent", False),
+    "glissando": ("NoteInput.CreateGlissando", "GlissandoLineEvent", True),
+}
+#: Lines whose length Lua cannot read (a hairpin's is in its dynamic group element).
+UNREADABLE_LENGTH = {"DynamicGroupEvent"}
+#: The note values EventEdit.DurationLengthenByValue / ShortenByValue take,
+#: checked one by one on a line (2026-09-27). Other names, such as kBreve,
+#: are not refused but move the end somewhere else, so only these are sent.
+RESIZE_VALUES = [(1024, "kSemibreve"), (512, "kMinim"), (256, "kCrotchet"),
+                 (128, "kQuaver"), (64, "kSemiquaver"), (32, "kDemisemiquaver")]
+
+
+def resize_steps(current: int, target: int) -> list[str]:
+    """The lengthen/shorten commands that take a selected line from current to target length."""
+    change = target - current
+    command = "EventEdit.DurationLengthenByValue" if change > 0 else "EventEdit.DurationShortenByValue"
+    left = abs(change)
+    commands = []
+    for units, value in RESIZE_VALUES:
+        while left >= units:
+            commands.append(f"{command}?RhythmicGridResolutionValue={value}")
+            left -= units
+    if left:
+        raise DoricoBatchError(f"a line cannot be resized by {abs(change)}: lengths go in steps of 32 (a demisemiquaver)")
+    return commands
+
+
 #: Characters a command parameter cannot carry (untested or line-based).
 UNSAFE_PARAMETER = set("\\\n\r")
 
@@ -279,6 +315,8 @@ def prepare_batch(
             resolved = [_signature(operation, op, label, located, bars, staves)]
         elif op in NOTE_COMMAND_OPS:
             resolved = [_note_command(operation, op, label, by_id, by_address)]
+        elif op == "add-line":
+            resolved = [_add_line(operation, label, located, staves, bars)]
         elif op == "copy-passage":
             resolved = _copy_passage(operation, label, located, staves, bars)
         elif op in ADDRESSED:
@@ -661,6 +699,68 @@ def _add_lyrics(
         "hasLyrics": event.get("source") == "dump",
         "syllables": [list(s) for s in parse_lyrics(text)],
     }
+
+
+def _add_line(
+    operation: dict[str, Any], label: str, located: list[dict[str, Any]],
+    staves: list[dict[str, Any]], bars: BarMap,
+) -> dict[str, Any]:
+    """A hairpin, octave line, trill, pedal line or glissando on a staff.
+
+    Dorico makes each at the selected item, lasting as long as it (LINES):
+    the op selects a note or rest on the staff starting at the position (a
+    temporary rest where there is none, for lines that need no note), runs
+    the command, then selects the new line and lengthens or shortens it to
+    duration (resize_steps). A glissando runs to the next note and takes no
+    duration. Compare Sibelius's add-line (a styleId and duration); octave
+    lines differ in meaning: Dorico keeps the sounding pitch and rewrites
+    the notes, Sibelius keeps the notes.
+    """
+    kind = operation.get("line")
+    if kind not in LINES:
+        raise DoricoBatchError(f"{label}.line must be one of: {', '.join(LINES)}")
+    command, expect, needs_note = LINES[kind]
+    staff = _int(operation, "staff", label, 1)
+    stave = next((s for s in staves if s["staff"] == staff), None)
+    if stave is None:
+        raise DoricoBatchError(f"{label}: no staff {staff}")
+    bar = _int(operation, "bar", label, 1)
+    offset = _int({"position": 0, **operation}, "position", label, 0)
+    try:
+        position = bars.position(bar, offset)
+    except Exception as exc:
+        raise DoricoBatchError(f"{label}: {exc}") from exc
+    if kind == "glissando":
+        if "duration" in operation:
+            raise DoricoBatchError(f"{label}: a glissando runs to the next note and takes no duration")
+        duration = None
+    else:
+        duration = _int(operation, "duration", label, 32)
+        if duration % 32:
+            raise DoricoBatchError(f"{label}.duration must be a multiple of 32 (a demisemiquaver)")
+    types = TYPE_ALIASES["Note"] if needs_note else TYPE_ALIASES["NoteRest"]
+    at = [e for e in located if e["staff"] == staff and e["flowPosition"] == position and "id" in e
+          and e["type"] in types and e.get("voice")]
+    resolved: dict[str, Any] = {"op": "add-line", "line": kind, "staff": staff, "bar": bar, "position": position,
+                                "command": command, "expect": expect, "duration": duration}
+    if at:
+        item = min(at, key=lambda e: (e.get("voice") or 0, e["id"]))
+        resolved["select"] = {"id": item["id"], "stream": item["stream"]}
+        resolved["itemDuration"] = item.get("duration") or 0
+    elif needs_note:
+        raise DoricoBatchError(f"{label}: a {kind} starts on a note, and staff {staff} has none at bar {bar} position {offset}")
+    else:
+        rest = _temporary_rest(position, located, [stave])
+        if rest is None:
+            raise DoricoBatchError(
+                f"{label}: nothing starts on staff {staff} at bar {bar} position {offset} and every voice holds "
+                "a note over it, so there is nothing to select and no room for a temporary rest"
+            )
+        resolved["tempRest"] = rest
+        resolved["itemDuration"] = rest["duration"]
+    if duration is not None:
+        resolved["resize"] = resize_steps(resolved["itemDuration"], duration)
+    return resolved
 
 
 def _stream_for(staff: int, voice: int, staves: list[dict[str, Any]], label: str) -> int:

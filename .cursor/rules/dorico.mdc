@@ -31,8 +31,8 @@ bar (`flowPosition` from the flow start), MIDI pitches. Give
   transpose on ordinary staves) run as one script: one undo step.
   set-pitch/transpose there replace the note, so its id changes.
 - **Command ops** (set-time, set-key, set-barline, set-break, add-dynamic,
-  set-articulation, add-slur, add-tempo, add-rehearsal-mark, copy-passage,
-  add-lyrics, and edits to notes on staves with lyrics) drive Dorico's own
+  set-articulation, add-slur, add-tempo, add-rehearsal-mark, add-line,
+  copy-passage, add-lyrics, and edits to notes on staves with lyrics) drive Dorico's own
   commands. Each takes several undo steps; the result's `undoSteps` says how
   many. They cannot share a batch with Lua ops.
 
@@ -52,7 +52,10 @@ and refuses to type over existing lyrics in that verse; `read_lyrics` /
 - Signatures and barlines work at any bar (bar 1 replaces the opening
   signature; an empty bar gets a temporary rest, 4 undo steps), except
   where every voice holds a note over the barline. Breaks: the same, from
-  bar 2 on. `add-slur` joins a note to the next only.
+  bar 2 on. `add-slur` joins a note to the next only. `add-line` makes
+  hairpins, 8va/8vb, trills, pedal lines and glissandos, but octave lines
+  rewrite the notes (Dorico keeps the sounding pitch) and hairpin lengths
+  cannot be read back.
   copy-passage pastes at the start of a bar only.
 - Not reachable: hairpins and other lines, layout, bar numbers, adding bars.
   Say so rather than approximating.
