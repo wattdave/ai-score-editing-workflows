@@ -127,7 +127,8 @@ Expect three results with ids, `undoSteps` 6; render shows ||, G major and
 Empty bar: `[{"op":"set-time","bar":4,"numerator":3,"denominator":4}]` (bar 4
 holds implicit rests only). Expect `undoSteps` 4, a render with 3/4 at bar 4
 and only bar rests after it, and `query --bars 4` on both staves showing no
-leftover rest. Undo the reported steps.
+leftover rest. Undo the reported steps. Then `[{"op":"set-break","bar":4,"type":"system"}]`:
+`undoSteps` 4, a system starting at bar 4, no leftover rest; undo.
 
 Bar 1: `[{"op":"set-time","bar":1,"numerator":3,"denominator":4},{"op":"set-key","bar":1,"key":"G"}]`.
 Expect `undoSteps` 4, `structure` measuring bar 1 as 768, and a render

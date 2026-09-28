@@ -154,7 +154,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `add-lyric` → `add-lyrics` | ⚠️ | verses 1-10, typed through the lyric popover by command (see gaps); refuses to type over a lyric already in that verse |
 | `copy-passage` | ✅ | by selection + `Edit.Copy` / `Edit.Paste` (see gaps); destPosition 0 only |
 | `set-key`, `set-time` | ✅ | by command at the start of any bar, bar 1 included: 2 undo steps each, 4 where the bar starts with implicit rests only (a temporary rest is selected); refused only when every voice holds a note over the barline (see gaps) |
-| `set-break` | ⚠️ | system breaks via `Edit.CreateSystemBreak` on a selected note (2 undo steps each); bars without a note or rest of their own are refused |
+| `set-break` | ✅ | system breaks via `Edit.CreateSystemBreak` on a selected note (2 undo steps each), or a temporary rest in a bar with nothing of its own (4); refused only where every voice holds a note over the barline |
 | `set-barline` | ⚠️ | double, final, start/end repeat, by command like set-time (a start repeat at bar 1 keeps the opening time signature) |
 | `set-bar-number`, `add-bars`, `set-layout`, `hide-empty-staves`, `delete-voice` | ❌ | not exposed |
 | `undo` | ✅ | stops when Dorico has nothing to undo |
@@ -250,7 +250,8 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   which needs a note or rest (with an id) starting in that bar, and the
   project to be Dorico's active score. Deleting the `BreakEvent` removes a
   break. `set-break` does exactly this; bars with no event of their own
-  (empty bars, or only a note tied in from the bar before) are refused.
+  get a temporary rest to select (see the signatures section), and only a
+  bar where every voice holds a note over the barline is refused.
   Dorico's implied rests are not events, and `Edit.GoToLocation` /
   `GoToRhythmicPosition` do not select anything. A temporary rest to select
   worked but was dropped as too fragile to undo; the signature ops now use
@@ -399,8 +400,10 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   On the fixture's empty bar 4, 3/4 rendered with Dorico's own bar rests
   and no leftover rest. Refused only where every voice holds a note over
   the barline (a tie across it is one event), since a rest there would cut
-  the note short. `set-break` still refuses such bars; the same approach
-  would work there. The timebase `dump()`
+  the note short. `set-break` does the same (2026-09-27): a break at the
+  fixture's empty bar 4 rendered with a new system there and no leftover
+  rest, 4 undo steps, exact with a marker (a break at bar 3 and bar 4 in
+  one batch: 6). The timebase `dump()`
   was no help in reading them back: it lists these events only as
   `element ID = 0`, not their content, so bar lengths (measured) and the
   new event ids are the read-back.

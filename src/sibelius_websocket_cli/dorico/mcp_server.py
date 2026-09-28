@@ -205,8 +205,10 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       system break at the start of bar B. Must be the only kind of op in
       its batch: each added break selects a note in bar B and runs a Dorico
       command, two undo steps (the result's undoSteps says how many to undo;
-      the user's selection in Dorico changes). Adding needs a note or rest
-      that starts in bar B, and the project must be Dorico's active one.
+      the user's selection in Dorico changes). A bar with no note or rest
+      of its own gets a temporary rest to select, made and deleted around
+      the command (four undo steps); refused only where every voice holds a
+      note over the barline. The project must be Dorico's active one.
 
     - {"op":"set-time","bar":B,"numerator":N,"denominator":D},
       {"op":"set-key","bar":B,"key":"Bb"[,"minor":true]},

@@ -272,7 +272,7 @@ def prepare_batch(
         if op == "transpose":
             resolved = _transpose(operation, label, located)
         elif op == "set-break":
-            resolved = [_set_break(operation, label, located, bars)]
+            resolved = [_set_break(operation, label, located, bars, staves)]
         elif op == "add-lyrics":
             resolved = [_add_lyrics(operation, label, by_id, by_address)]
         elif op in {"set-time", "set-key", "set-barline"}:
@@ -536,9 +536,9 @@ def _temporary_rest(
     """A quarter rest (shorter if a note follows sooner) to select at position,
     in the first voice, top staff first, with nothing held over that point.
 
-    For a bar whose first beat holds only Dorico's implicit rests, which are
-    not events and so cannot be selected. Created and deleted around the
-    signature command (two more undo steps).
+    For a bar whose first beat (for a break, whole bar) holds only Dorico's
+    implicit rests, which are not events and so cannot be selected. Created
+    and deleted around the command (two more undo steps).
     """
     for staff in sorted(staves, key=lambda s: s["staff"]):
         for stream in staff.get("voiceStreams") or []:
@@ -551,13 +551,15 @@ def _temporary_rest(
 
 
 def _set_break(
-    operation: dict[str, Any], label: str, located: list[dict[str, Any]], bars: BarMap
+    operation: dict[str, Any], label: str, located: list[dict[str, Any]], bars: BarMap,
+    staves: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """A system break at the start of a bar ("system"), or its removal ("none").
 
-    Adding selects the bar's first note or rest (by id) and runs
-    Edit.CreateSystemBreak: Lua-made breaks are ignored by the layout
-    (docs/dorico.md). Removing deletes the BreakEvent through Lua.
+    Adding selects the bar's first note or rest (by id), or a temporary rest
+    in a bar with nothing of its own, and runs Edit.CreateSystemBreak:
+    Lua-made breaks are ignored by the layout (docs/dorico.md). Removing
+    deletes the BreakEvent through Lua.
     """
     bar = _int(operation, "bar", label, 2)
     kind = operation.get("type")
@@ -580,14 +582,19 @@ def _set_break(
         if e["bar"] == bar and e["staff"] >= 1 and "id" in e
         and e["type"] in TYPE_ALIASES["NoteRest"] and e.get("voice")
     ]
-    if not candidates:
+    resolved: dict[str, Any] = {"op": "set-break", "type": "system", "bar": bar, "position": position}
+    if candidates:
+        target = min(candidates, key=lambda e: (e["position"], e["staff"], e["id"]))
+        resolved["select"] = {"id": target["id"], "stream": target["stream"]}
+        return resolved
+    rest = _temporary_rest(position, located, staves)
+    if rest is None:
         raise DoricoBatchError(
-            f"{label}: bar {bar} has no note or rest the bridge can select (staves with lyrics "
-            "have no ids), so Dorico cannot be told where to break"
+            f"{label}: nothing starts in bar {bar} and every voice holds a note over its barline, so "
+            "there is nothing to select and no room for a temporary rest (Dorico breaks at the selected item)"
         )
-    target = min(candidates, key=lambda e: (e["position"], e["staff"], e["id"]))
-    return {"op": "set-break", "type": "system", "bar": bar, "position": position,
-            "select": {"id": target["id"], "stream": target["stream"]}}
+    resolved["tempRest"] = rest
+    return resolved
 
 
 #: How AcceptCurrentLyricInput leaves each syllable (logged from the popover).
