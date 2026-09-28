@@ -276,7 +276,7 @@ def prepare_batch(
         elif op == "add-lyrics":
             resolved = [_add_lyrics(operation, label, by_id, by_address)]
         elif op in {"set-time", "set-key", "set-barline"}:
-            resolved = [_signature(operation, op, label, located, bars)]
+            resolved = [_signature(operation, op, label, located, bars, staves)]
         elif op in NOTE_COMMAND_OPS:
             resolved = [_note_command(operation, op, label, by_id, by_address)]
         elif op == "copy-passage":
@@ -468,12 +468,14 @@ def _copy_passage(
 
 
 def _signature(
-    operation: dict[str, Any], op: str, label: str, located: list[dict[str, Any]], bars: BarMap
+    operation: dict[str, Any], op: str, label: str, located: list[dict[str, Any]], bars: BarMap,
+    staves: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """A time signature, key signature or barline at the start of a bar.
 
     Selects an item that starts exactly at the bar (Dorico puts a signature
-    at the selected item's position, mid-bar if it is not at the start) and
+    at the selected item's position, mid-bar if it is not at the start), or
+    a temporary rest when the bar starts with implicit rests only, and
     runs NoteInput.CreateTimeSignature / CreateKeySignature / CreateBarLine
     with the popover's text as Definition, sent unencoded (Dorico does not
     URL-decode parameters). At bar 1 the new signature or barline replaces
@@ -511,14 +513,41 @@ def _signature(
         if e["bar"] == bar and e["position"] == 0 and e["staff"] >= 1 and "id" in e
         and e["type"] in TYPE_ALIASES["NoteRest"] and e.get("voice")
     ]
-    if not candidates:
+    resolved = {"op": op, "bar": bar, "position": position, "command": command, "definition": definition,
+                "expect": expect}
+    if candidates:
+        target = min(candidates, key=lambda e: (e["staff"], e["id"]))
+        resolved["select"] = {"id": target["id"], "stream": target["stream"]}
+        return resolved
+    rest = _temporary_rest(position, located, staves)
+    if rest is None:
         raise DoricoBatchError(
-            f"{label}: bar {bar} has no note or rest the bridge can select at its first beat "
-            "(Dorico places the change at the selected item)"
+            f"{label}: nothing starts at bar {bar}'s first beat and every voice holds a note over it, "
+            "so there is nothing to select and no room for a temporary rest (Dorico places the change "
+            "at the selected item)"
         )
-    target = min(candidates, key=lambda e: (e["staff"], e["id"]))
-    return {"op": op, "bar": bar, "position": position, "command": command, "definition": definition,
-            "expect": expect, "select": {"id": target["id"], "stream": target["stream"]}}
+    resolved["tempRest"] = rest
+    return resolved
+
+
+def _temporary_rest(
+    position: int, located: list[dict[str, Any]], staves: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """A quarter rest (shorter if a note follows sooner) to select at position,
+    in the first voice, top staff first, with nothing held over that point.
+
+    For a bar whose first beat holds only Dorico's implicit rests, which are
+    not events and so cannot be selected. Created and deleted around the
+    signature command (two more undo steps).
+    """
+    for staff in sorted(staves, key=lambda s: s["staff"]):
+        for stream in staff.get("voiceStreams") or []:
+            events = [e for e in located if e.get("stream") == stream and e["type"] in TYPE_ALIASES["NoteRest"]]
+            if any(e["flowPosition"] < position < e["flowPosition"] + (e.get("duration") or 0) for e in events):
+                continue
+            later = [e["flowPosition"] for e in events if e["flowPosition"] > position]
+            return {"stream": stream, "position": position, "duration": min(later + [position + 256]) - position}
+    return None
 
 
 def _set_break(

@@ -153,7 +153,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | (Dorico only) `read_lyrics`, `edit_lyrics` | ⚠️ | a player's verse as text through the Edit Lyrics dialog; edits must keep the syllable count |
 | `add-lyric` → `add-lyrics` | ⚠️ | verses 1-10, typed through the lyric popover by command (see gaps); refuses to type over a lyric already in that verse |
 | `copy-passage` | ✅ | by selection + `Edit.Copy` / `Edit.Paste` (see gaps); destPosition 0 only |
-| `set-key`, `set-time` | ⚠️ | by command at the start of any bar, bar 1 included, with a note or rest on its first beat; 2 undo steps each (see gaps) |
+| `set-key`, `set-time` | ✅ | by command at the start of any bar, bar 1 included: 2 undo steps each, 4 where the bar starts with implicit rests only (a temporary rest is selected); refused only when every voice holds a note over the barline (see gaps) |
 | `set-break` | ⚠️ | system breaks via `Edit.CreateSystemBreak` on a selected note (2 undo steps each); bars without a note or rest of their own are refused |
 | `set-barline` | ⚠️ | double, final, start/end repeat, by command like set-time (a start repeat at bar 1 keeps the opening time signature) |
 | `set-bar-number`, `add-bars`, `set-layout`, `hide-empty-staves`, `delete-voice` | ❌ | not exposed |
@@ -253,7 +253,8 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   (empty bars, or only a note tied in from the bar before) are refused.
   Dorico's implied rests are not events, and `Edit.GoToLocation` /
   `GoToRhythmicPosition` do not select anything. A temporary rest to select
-  worked but was dropped as too fragile to undo.
+  worked but was dropped as too fragile to undo; the signature ops now use
+  one (next section), with the undo steps measured.
 - **Selections are undo steps.** `EventEdit.Select` adds an entry to
   Dorico's undo history, so select-then-command costs two undo steps; an
   undo count that ignores this reverts the wrong thing (seen twice on
@@ -371,7 +372,21 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   re-barred), `CreateKeySignature?Definition=G` replaced the opening key
   (new `TonalityDivisionEvent` id), and `CreateBarLine?Definition=|:` put a
   start repeat at bar 1 in a new event that keeps 4/4. Two undo steps each,
-  as elsewhere; a time and key batch at bar 1 is 4. The timebase `dump()`
+  as elsewhere; a time and key batch at bar 1 is 4.
+  **Bars with nothing to select (2026-09-27).** Where no staff has a note
+  or rest starting on the bar's first beat (Dorico's implicit rests are not
+  events), the op creates a temporary rest there by Lua (a quarter, shorter
+  if a note follows sooner; the first voice, top staff first, with nothing
+  held over the barline), selects it, runs the command, and deletes it with
+  `EventEdit.Delete` by id (which works in streams Lua can only dump).
+  Measured with a marker edit: creating it 1 step, deleting a *rest* by id 1
+  (a note is 2), so these ops are 4 steps; undoing the reported count left
+  exactly the marker for time, key, barline and a time + key batch (8).
+  On the fixture's empty bar 4, 3/4 rendered with Dorico's own bar rests
+  and no leftover rest. Refused only where every voice holds a note over
+  the barline (a tie across it is one event), since a rest there would cut
+  the note short. `set-break` still refuses such bars; the same approach
+  would work there. The timebase `dump()`
   was no help in reading them back: it lists these events only as
   `element ID = 0`, not their content, so bar lengths (measured) and the
   new event ids are the read-back.

@@ -323,7 +323,7 @@ async def _apply_commands(
     planned = (1 if removals else 0) + sum(
         1 + (op["verse"] - 1) + len(op["syllables"]) if op["op"] == "add-lyrics"
         else COPY_STEPS + op["extendBars"] + ("tempRest" in op) if op["op"] == "copy-passage"
-        else 2
+        else 2 + (TEMP_REST_STEPS if "tempRest" in op else 0)
         for op in commands
     )  # every other command op is its selection plus one command (repitch may add respells)
     await _plan_lyrics(bridge, [op for op in commands if op["op"] == "add-lyrics"], flow)
@@ -343,6 +343,12 @@ async def _apply_commands(
     flow_id = flows[flow - 1]["flowID"] if commands else None
     lyrics = []
     for op in commands:
+        if op["op"] in SIGNATURE_OPS and "tempRest" in op:
+            try:
+                op["select"] = await _place_temporary_rest(bridge, op["tempRest"], flow, blocks)
+            except DoricoError as exc:
+                raise DoricoError(f"{exc}; {steps} undo step(s) were applied (undo that many to revert)") from exc
+            steps += 1
         target = op["select"]
         try:
             if op["op"] == "copy-passage":
@@ -385,6 +391,8 @@ async def _apply_commands(
                 if not made:
                     raise DoricoError(f"Dorico made no {op['op'][4:]} change at bar {op['bar']} ({op['definition']})")
                 steps += 1
+                if "tempRest" in op:
+                    steps += await _delete_temporary_rest(bridge, target, flow, flow_id)
                 results.append({"op": op["op"], "bar": op["bar"], "definition": op["definition"], "id": made[0]["id"]})
             elif op["op"] in score.NOTE_COMMAND_OPS:
                 results.append(await _run_note_command(bridge, op, flow))
@@ -403,6 +411,36 @@ async def _apply_commands(
 
 
 LETTERS = "CDEFGAB"
+SIGNATURE_OPS = {"set-time", "set-key", "set-barline"}
+#: Undo steps a temporary rest adds to a signature op: creating it (Lua) and
+#: deleting it (EventEdit.Delete: one step for a rest, though two for a note;
+#: both measured with a marker edit, 2026-09-27).
+TEMP_REST_STEPS = 2
+
+
+async def _place_temporary_rest(
+    bridge: DoricoBridge, rest: dict[str, Any], flow: int, blocks: dict[str, Any]
+) -> dict[str, Any]:
+    """Create a rest to select where a bar starts with implicit rests only."""
+    block = blocks.get(str(rest["stream"]))
+    if block is None:
+        raise DoricoError(f"cannot find the event block of stream {rest['stream']}")
+    made = await bridge.apply([{"op": "add-rest", **rest}], flow)
+    if "error" in made:
+        raise DoricoError(f"could not place a temporary rest to select: {made['error']}")
+    return {"id": made["results"][0]["after"]["id"], "stream": rest["stream"], "block": block}
+
+
+async def _delete_temporary_rest(bridge: DoricoBridge, rest: dict[str, Any], flow: int, flow_id: Any) -> int:
+    """Delete the temporary rest by id (a command, so it also works in streams
+    Lua can only dump); returns its undo steps (one for a rest)."""
+    await bridge.client.command(f"EventEdit.Delete?FlowID={flow_id}&EventID={rest['id']}&EventBlockID={rest['block']}")
+    events, _ = await bridge.read_partial(flow)
+    if any(e.get("id") == rest["id"] for e in events):
+        raise DoricoError(f"the temporary rest {rest['id']} could not be deleted; delete it in Dorico")
+    return 1
+
+
 #: Undo steps of one copy-passage staff before extension and temporary rest:
 #: select, SelectMore, select anchor, paste (measured 2026-09-27).
 COPY_STEPS = 4

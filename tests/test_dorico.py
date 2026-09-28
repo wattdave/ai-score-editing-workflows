@@ -659,6 +659,22 @@ def test_signature_ops_select_a_first_beat_note_and_use_popover_definitions() ->
         ("3/4", 0, 3), ("G", 0, 3), ("|:", 0, 3)]
 
 
+def test_signature_in_a_bar_of_implicit_rests_uses_a_temporary_rest() -> None:
+    time_at_bar_3 = [{"op": "set-time", "bar": 3, "numerator": 3, "denominator": 4}]
+    ops = prepare_batch(time_at_bar_3, locate_events(EVENTS, BARS), STAVES, BARS)
+    assert "select" not in ops[0] and ops[0]["tempRest"] == {"stream": 2, "position": 2048, "duration": 256}
+    # a note soon after the first beat shortens the rest to fit
+    ops = prepare_batch(time_at_bar_3, locate_events(EVENTS + [note(9, 2176, 60, "C4")], BARS), STAVES, BARS)
+    assert ops[0]["tempRest"] == {"stream": 2, "position": 2048, "duration": 128}
+    # held over the barline: the top voice is skipped for the next free one
+    held = EVENTS + [note(9, 1536, 60, "C4", duration=1024)]
+    ops = prepare_batch(time_at_bar_3, locate_events(held, BARS), STAVES, BARS)
+    assert ops[0]["tempRest"]["stream"] == 4
+    held.append(note(10, 1792, 48, "C3", duration=512, stream=4, staff=2))
+    with pytest.raises(DoricoBatchError, match="every voice holds a note over it"):
+        prepare_batch(time_at_bar_3, locate_events(held, BARS), STAVES, BARS)
+
+
 @pytest.mark.parametrize(
     ("operation", "message"),
     [
@@ -666,7 +682,6 @@ def test_signature_ops_select_a_first_beat_note_and_use_popover_definitions() ->
         ({"op": "set-key", "bar": 2, "key": "H"}, "major key"),
         ({"op": "set-time", "bar": 2, "numerator": 3, "denominator": 3}, "power of two"),
         ({"op": "set-barline", "bar": 2, "type": "dashed"}, "type must be one of"),
-        ({"op": "set-time", "bar": 3, "numerator": 3, "denominator": 4}, "first beat"),
         ({"op": "add-lyrics", "id": 3, "text": "back\\slash"}, "cannot contain"),
     ],
 )
