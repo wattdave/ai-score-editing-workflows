@@ -212,8 +212,11 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       {"op":"set-key","bar":B,"key":"Bb"[,"minor":true]},
       {"op":"set-barline","bar":B,"type":"double"|"final"|"start_repeat"|"end_repeat"}:
       at the start of bar B (bar 1 replaces the opening signature or
-      barline); needs a note or rest with an id on B's first beat. Two undo
-      steps each (selection + command).
+      barline). Dorico places it at a selected item, so a note or rest on
+      B's first beat is selected, or, where the bar starts with implicit
+      rests only, a temporary rest made and deleted around it. Two undo
+      steps each (selection + command), four with a temporary rest; refused
+      where every voice holds a note over the barline.
     - {"op":"add-dynamic",...,"dynamic":"p"|"mf"|...}, {"op":"set-articulation",
       ...,"articulation":"accent"|"marcato"|"staccato"|"staccatissimo"|
       "tenuto"|"staccato-tenuto"|"stress"|"unstress"}, {"op":"add-slur",...}

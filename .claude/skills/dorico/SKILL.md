@@ -48,9 +48,10 @@ and refuses to type over existing lyrics in that verse; `read_lyrics` /
 
 ## Limits
 
-- Signatures and barlines need a note or rest on the bar's first beat
-  (bar 1 included: the opening signature is replaced); breaks, bar 2
-  onwards. `add-slur` joins a note to the next only.
+- Signatures and barlines work at any bar (bar 1 replaces the opening
+  signature; an empty bar gets a temporary rest, 4 undo steps), except
+  where every voice holds a note over the barline. Breaks: bar 2 onwards,
+  needing a note or rest of the bar's own. `add-slur` joins a note to the next only.
   copy-passage pastes at the start of a bar only.
 - Not reachable: hairpins and other lines, layout, bar numbers, adding bars.
   Say so rather than approximating.
