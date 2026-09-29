@@ -28,7 +28,8 @@ It changes nothing. It reports the Dorico, Qt and Lua versions and checks:
 the Remote Control connection and saved token; the Lua bridge
 (`Script.RunScript`, `DoApp.currentLayoutID`, raw layout, reads, the `dump()`
 fallback when the project has lyrics); every command the back end sends is
-still listed (`getcommands`); the Lua classes the bridge constructs exist;
+still listed (`getcommands`); every Layout Options path set-layout sets is
+still in `getoptions`; the Lua classes the bridge constructs exist;
 `application.log` still records commands; System Events can see Dorico.
 Removed or added commands and classes are listed against the baseline.
 

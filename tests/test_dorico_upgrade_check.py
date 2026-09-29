@@ -9,7 +9,7 @@ spec = importlib.util.spec_from_file_location("dorico_upgrade_check", ROOT / "sc
 check = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(check)
 
-COMMAND = re.compile(r'"((?:Edit|EventEdit|NoteInput|NoteEdit|File|Print|Window|Filter|Script)\.[A-Za-z]+)')
+COMMAND = re.compile(r'"((?:Edit|EventEdit|NoteInput|NoteEdit|File|Print|Window|Filter|Script|Project)\.[A-Za-z.]*[A-Za-z])')
 
 
 def test_every_command_the_back_end_sends_is_checked() -> None:

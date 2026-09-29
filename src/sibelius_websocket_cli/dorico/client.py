@@ -184,3 +184,10 @@ class DoricoClient:
 
     async def layouts(self) -> list[dict[str, Any]]:
         return (await self.request({"message": "getlayouts"}, "layoutslist")).get("layouts", [])
+
+    async def layout_options(self, layout_id: int) -> dict[str, str]:
+        """A layout's Layout Options, as {path: current value} (values are text)."""
+        answer = await self.request(
+            {"message": "getoptions", "optionsType": "kLayout", "layoutID": layout_id}, "optionslist"
+        )
+        return {o["path"]: o.get("currentValue", "") for o in answer.get("options", [])}
