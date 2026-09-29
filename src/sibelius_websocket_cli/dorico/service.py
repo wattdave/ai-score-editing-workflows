@@ -225,6 +225,7 @@ async def structure(bridge: DoricoBridge, flow: int = 1) -> dict[str, Any]:
     time_signatures = [
         {"bar": first, "position": 0, "barLength": length, "flowPosition": start}
         for first, start, length in snap.bars.segments()
+        if start not in snap.bars.carried
     ]
     keys = [
         {"bar": e["bar"], "position": e["position"], "flowPosition": e["flowPosition"], "id": e["id"]}
