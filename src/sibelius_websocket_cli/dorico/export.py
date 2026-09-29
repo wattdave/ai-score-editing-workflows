@@ -7,19 +7,28 @@ score - <n> <flow>.musicxml" (and one file per part if that is ticked).
 There is no scripting route around the window, so this drives it through
 System Events, which needs Accessibility permission for the terminal.
 
-Existing files raise one "Do you want to overwrite the file ...?" dialog each;
-Overwrite is clicked only for .musicxml files inside the export folder.
-Anything unexpected is cancelled rather than guessed at.
+The window exports to the folder it last used for that project, which may be
+the user's score folder, where existing files raise one "Do you want to
+overwrite the file ...?" dialog each. So the export always goes to a private
+folder (EXPORT_DIR): if the window shows another, its folder button opens a
+macOS Open panel, and Go to Folder (shift-command-G) takes the path. Dorico
+remembers that folder for the project, and a Cancel keeps the old one, so
+it cannot be set back without exporting there (checked 2026-09-28). The
+private folder is emptied before each export, so no overwrite prompts come;
+any that do are answered only for .musicxml files inside it, and anything
+unexpected is cancelled rather than guessed at.
 """
 
 from __future__ import annotations
 
 import asyncio
 import re
+import shutil
 import subprocess
 import time
 from pathlib import Path
 
+from .bridge import default_workdir
 from .client import DoricoClient, DoricoError
 
 PROCESS = "Dorico 6"
@@ -28,6 +37,11 @@ DIALOG_TIMEOUT = 15.0
 EXPORT_TIMEOUT = 120.0
 #: Polls (0.8 s apart) without an overwrite prompt before the export counts as done.
 QUIET_POLLS = 4
+#: Where the back end's MusicXML exports go; nothing else is kept there.
+EXPORT_DIR = default_workdir() / "musicxml"
+#: Reads of the export window before its folder counts as unreadable (it
+#: was once read before Dorico had filled it in).
+WINDOW_READS = 6
 
 # Returns lines "role\tname\tvalue" for every element of the export window.
 _READ_WINDOW = """
@@ -132,6 +146,57 @@ end run
 """
 
 
+# Presses the folder button after the "Export to:" path, then types the
+# target into the Open panel's Go to Folder field and chooses it.
+_CHOOSE_FOLDER = """
+on run argv
+  set target to item 1 of argv
+  tell application "System Events"
+    tell process "%(process)s"
+      set frontmost to true
+      set w to window "Export MusicXML"
+      set items_ to entire contents of w
+      set found to false
+      set pressed to false
+      repeat with i from 1 to count of items_
+        set e to item i of items_
+        if found is false and (get role of e) is "AXStaticText" then
+          try
+            if ((get value of e) as text) starts with "/" then set found to true
+          end try
+        else if found is true and (get role of e) is "AXButton" then
+          click e
+          set pressed to true
+          exit repeat
+        end if
+      end repeat
+      if not pressed then return "no folder button"
+      repeat 20 times
+        if exists window "Open" then exit repeat
+        delay 0.25
+      end repeat
+      if not (exists window "Open") then return "no Open panel"
+      perform action "AXRaise" of window "Open"
+      delay 0.3
+      keystroke "g" using {command down, shift down}
+      delay 0.8
+      keystroke target
+      delay 0.5
+      key code 36
+      delay 1.0
+      key code 36
+      delay 1.0
+      if exists window "Open" then
+        key code 53
+        return "Open panel still open"
+      end if
+      return "chosen"
+    end tell
+  end tell
+end run
+"""
+
+
 def _osascript(script: str, *args: str) -> str:
     result = subprocess.run(
         ["osascript", "-", *args], input=script % {"process": PROCESS},
@@ -180,10 +245,36 @@ def _handle_prompts(folder: Path) -> list[str]:
     return answered
 
 
+async def _read_filled_window() -> dict[str, object]:
+    """The export window once Dorico has filled in its folder ({} if closed)."""
+    window = read_export_window()
+    for _ in range(WINDOW_READS):
+        if not window or window.get("folder"):
+            break
+        await asyncio.sleep(0.3)
+        window = read_export_window()
+    return window
+
+
+def _clear_export_dir() -> Path:
+    """Empty the private export folder (only ever the back end's exports)."""
+    root = EXPORT_DIR.resolve()
+    if not root.is_relative_to(default_workdir().resolve()):
+        raise DoricoError(f"refusing to clear {root}: not under the back end's work folder")
+    root.mkdir(parents=True, exist_ok=True)
+    for item in root.iterdir():
+        if item.is_dir():
+            shutil.rmtree(item)
+        else:
+            item.unlink()
+    return root
+
+
 async def export_musicxml(client: DoricoClient, flow: int = 1) -> Path:
     """Export the full score of the active project as MusicXML; return the file."""
     if read_export_window():
         raise DoricoError("Dorico's Export MusicXML window is already open; close it first")
+    root = _clear_export_dir()
     await client.command("File.Export?FilterID=MusicXMLExportFilter")
     deadline = time.monotonic() + DIALOG_TIMEOUT
     window = read_export_window()
@@ -192,6 +283,16 @@ async def export_musicxml(client: DoricoClient, flow: int = 1) -> Path:
             raise DoricoError("Dorico did not open its Export MusicXML window")
         await asyncio.sleep(0.3)
         window = read_export_window()
+    window = await _read_filled_window()
+    if window.get("folder") and Path(str(window["folder"])).resolve() != root:
+        outcome = _osascript(_CHOOSE_FOLDER, str(root))
+        window = await _read_filled_window()
+        if outcome != "chosen" or not window.get("folder") or Path(str(window["folder"])).resolve() != root:
+            if window:
+                _osascript(_CLICK, WINDOW, "Cancel")
+            raise DoricoError(
+                f"could not point Dorico's Export MusicXML window at {root} ({outcome}); export cancelled"
+            )
     boxes = window["boxes"]
     folder = window["folder"]
     problem = None
@@ -204,7 +305,6 @@ async def export_musicxml(client: DoricoClient, flow: int = 1) -> Path:
     if problem:
         _osascript(_CLICK, WINDOW, "Cancel")
         raise DoricoError(f"{problem}; export cancelled")
-    root = Path(str(folder))
     started = time.time()
     if _osascript(_CLICK, WINDOW, "OK") != "clicked":
         raise DoricoError("could not press OK in Dorico's Export MusicXML window")
