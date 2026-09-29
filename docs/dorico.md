@@ -677,6 +677,11 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
     add-bars, set-time or mid-bar barline moves, as on Sibelius.
   - Changing meters can lengthen the flow (the fixture gained an empty
     bar), and undo does not shorten it again; check the end of the flow.
+  - In a flow with a tempo mark the timebase is read from `dump()`, so
+    deleting a time signature goes through `EventEdit.Delete` by id
+    rather than Lua. It works the same (the music re-bars) and is **one**
+    undo step, like a rest; only a note is two (measured with a marker
+    edit, 2026-09-28; until then every command delete was counted as two).
   - `query_score` with `types` now includes global items (time and key
     signatures, breaks, on staff 0) of those types.
 
