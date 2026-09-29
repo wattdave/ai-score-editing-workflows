@@ -160,7 +160,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `add-bars` | ⚠️ | before a bar by the bars popover (`+N`) or at the end (`AddBarAtEndOfFlow`); no `length` (irregular bars); appended bars are not read back |
 | `set-layout` | ⚠️ | `Project.Layout.SetOptions`, one undo step, read back; the full score layout unless `layout` names another; no `extraSpacesBelowVocalStaves`; page sizes with ambiguous dimensions need `pageWidth`/`pageHeight` (mm); left/right margins need identical margins. `score_structure` reports the settings as `layout` |
 | `hide-empty-staves` | ⚠️ | not over a range of bars: Dorico hides empty staves per layout, set by `set-layout`'s `hideEmptyStaves` (`never`, `after-first-system`, `all-systems`) |
-| `set-bar-number` | ❌ | a dialog scripting cannot drive (see gaps) |
+| `set-bar-number` | ❌ | the number only exists inside a dialog: no command carries it and nothing reads it back (see gaps) |
 | `undo` | ✅ | stops when Dorico has nothing to undo |
 | (Dorico only) `project_info`, `set_project_info` | ✅ | project-level Project Info fields through the Project Info dialog (typed); not per-flow |
 | `save_score` | ⚠️ | saves a copy to a given `.dorico` path; the project keeps its own file |
@@ -564,6 +564,29 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
     no parameters. The change is a `BarDivisionEvent`. Driving the spin box
     failed: AXIncrement steps by 10000, and typed digits registered once
     in three tries, with value reads lagging.
+  - Walked through by hand (2026-09-28), to see whether any command
+    carries the number:
+    - Typing in the dialog works for a person: Primary 10 at bar 3 made
+      the bar ruler read 1, 2, 10, 11, with an orange italic 10 above the
+      bar. OK still logs only `Edit.AddBarNumberChange`.
+    - **A bar number change is a hidden time signature.** Selected, the
+      status bar calls it a time signature, and the Properties panel shows
+      only Common and Time Signatures ("Hide time signature" on). There is
+      no Bar Numbers group, so no property edit that would log the number.
+    - Double-clicking it opens the **time signature popover**
+      (`NoteInput.EnterAtPoint` then
+      `EventEdit.EditExistingTimeSignature?...&Text=4/4`). Closing it left
+      two visible 4/4 time signatures and note input steps on the undo
+      stack ("Create Time Signature" twice, "Start Note Input", "Stop Note
+      Input"). Never double-click one to edit it.
+    - Editing an existing change through the dialog (Primary 12) logs only
+      `Edit.AddBarNumberChange?OpenScoreID=-1&LayoutID=-1`, and the
+      `BarDivisionEvent` gets a new id.
+    - **Nothing reads the number back.** Lua shows the event but not its
+      element, and the MusicXML export numbers measures 1 to n whatever the
+      bar numbers are (`<measure number="3">` with bar 3 showing 12).
+    - So set-bar-number could only type into the dialog without being able
+      to check the result. It stays refused.
   - `Project.Layout.Options` opens a modeless Layout Options window whose
     controls accessibility lists (page size, orientation, rastral size,
     margins in points, ...), but Qt ignores accessibility presses there
