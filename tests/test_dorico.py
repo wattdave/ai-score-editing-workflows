@@ -258,11 +258,12 @@ async def test_bridge_call_round_trips_through_a_response_file(dorico: Any, tmp_
 class ScriptedBridge(DoricoBridge):
     """A bridge whose Dorico calls are scripted, for the measure-and-undo guard."""
 
-    def __init__(self, reads: list[list[dict[str, Any]]]) -> None:
+    def __init__(self, reads: list[list[dict[str, Any]]], divisions: list[dict[str, Any]] | None = None) -> None:
         self.client = self  # type: ignore[assignment]
         self.workdir = Path("/nonexistent")
         self._bars = {}
         self.reads = reads
+        self.divisions = divisions or [{"position": 0, "length": 768}]
         self.commands: list[str] = []
 
     async def status(self) -> dict[str, Any]:
@@ -275,7 +276,7 @@ class ScriptedBridge(DoricoBridge):
         if action == "read":
             return {"events": self.reads.pop(0)}
         assert action == "bars"
-        return {"divisions": [{"position": 0, "length": 768}], "created": 1}
+        return {"divisions": self.divisions, "created": len(self.divisions)}
 
 
 async def test_bar_measurement_is_undone_and_cached() -> None:
@@ -285,6 +286,34 @@ async def test_bar_measurement_is_undone_and_cached() -> None:
     assert bridge.commands == ["Edit.Undo"]
     assert await bridge.bars(1, EVENTS) is first
     assert bridge.commands == ["Edit.Undo"]
+
+
+async def test_a_division_without_a_meter_keeps_the_meter_before_it() -> None:
+    # A bar number change or a barline on its own at bar 3 measures 0.
+    bridge = ScriptedBridge([EVENTS], [{"position": 0, "length": 1024}, {"position": 2048, "length": 0}])
+    bars = await bridge.bars(1, EVENTS)
+    assert bars.divisions == [(0, 1024), (2048, 1024)]
+    assert bars.carried == {2048}
+    assert bars.locate(2048 + 1024 + 5) == (4, 5)
+
+
+async def test_a_barline_part_way_through_a_bar_leaves_a_short_bar() -> None:
+    # A barline three beats into bar 3 of 4/4 (measured 0 there).
+    bridge = ScriptedBridge([EVENTS], [{"position": 0, "length": 1024}, {"position": 2816, "length": 0}])
+    bars = await bridge.bars(1, EVENTS)
+    assert bars.segments() == [(1, 0, 1024), (4, 2816, 1024)]
+    assert bars.bar_length(3) == 768
+    assert bars.bar_length(4) == 1024
+    assert bars.locate(2816) == (4, 0)
+    assert bars.position(3, 512) == 2560
+    with pytest.raises(DoricoError, match="768 long"):
+        bars.position(3, 768)
+
+
+async def test_a_pickup_bar_is_still_unmeasurable() -> None:
+    bridge = ScriptedBridge([EVENTS], [{"position": 0, "length": 0}, {"position": 256, "length": 1024}])
+    with pytest.raises(DoricoError, match="pickup"):
+        await bridge.bars(1, EVENTS)
 
 
 async def test_bar_measurement_redoes_if_the_undo_hit_something_else() -> None:

@@ -190,6 +190,15 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   it redoes and fails. The map is cached per connection until the bar
   divisions change. Side effect: Dorico's redo history is cleared by each
   measurement.
+  **Divisions without a meter (2026-09-28).** A bar number change, a
+  barline on its own (`||` at a bar with no time signature change) and a
+  barline part-way through a bar are `BarDivisionEvent`s too, and a bar rest
+  created there measures 0. The meter before such a division carries on
+  from it (a mid-bar barline leaves a short bar, which `BarMap` measures to
+  the division), and `structure` does not list it as a time signature.
+  Until then any of these made the whole map unmeasurable, so reads fell
+  back to a MusicXML export. Only a 0 at the first division (a pickup bar)
+  is still refused.
 - **Key signatures.** `TonalityDivisionElement` is an unregistered class:
   positions are known, keys are not.
 - **Spelling.** `kNoteSpelling` accepts writes that change nothing, so a

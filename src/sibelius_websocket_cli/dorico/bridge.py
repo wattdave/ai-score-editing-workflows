@@ -83,6 +83,9 @@ class BarMap:
     """Bar numbers from bar divisions: (flow position, bar length) pairs."""
 
     divisions: list[tuple[int, int]]
+    #: Positions of divisions that carry the meter before them on (a bar
+    #: number change or a barline, not a time signature).
+    carried: frozenset[int] = frozenset()
 
     def segments(self) -> list[tuple[int, int, int]]:
         """(first bar, start position, bar length) for each division."""
@@ -104,21 +107,49 @@ class BarMap:
         offset = position - start
         return bar + offset // length, offset % length
 
+    def _bar(self, bar: int) -> tuple[int, int]:
+        """(flow position, length) of a bar; a bar cut short by the next
+        division (a barline part-way through a bar) has its real length."""
+        segments = self.segments()
+        index = next((i for i in reversed(range(len(segments))) if segments[i][0] <= bar), None)
+        if index is None:
+            raise DoricoError(f"bar {bar} is before the first bar")
+        first, start, length = segments[index]
+        bar_start = start + (bar - first) * length
+        if index + 1 < len(segments):
+            length = min(length, segments[index + 1][1] - bar_start)
+        return bar_start, length
+
     def position(self, bar: int, offset: int = 0) -> int:
         """The flow position of a bar and a position within it."""
-        found = None
-        for segment in self.segments():
-            if segment[0] <= bar:
-                found = segment
-        if found is None:
-            raise DoricoError(f"bar {bar} is before the first bar")
-        first, start, length = found
+        start, length = self._bar(bar)
         if not 0 <= offset < length:
             raise DoricoError(f"position {offset} is outside bar {bar}, which is {length} long")
-        return start + (bar - first) * length + offset
+        return start + offset
 
     def bar_length(self, bar: int) -> int:
-        return next(length for first, _, length in reversed(self.segments()) if first <= bar)
+        return self._bar(bar)[1]
+
+
+def _division_lengths(divisions: list[dict[str, Any]]) -> list[tuple[int, int]]:
+    """(position, bar length) for each measured bar division.
+
+    A bar rest measures 0 at a division that does not change the meter: a
+    bar number change, a barline on its own, or a barline part-way through
+    a bar (measured 2026-09-28). The meter before it carries on from there,
+    and BarMap counts the short bar a mid-bar barline leaves. At the first
+    division 0 means a pickup bar (10,000 Miles), which has nothing to carry
+    on from; a bad length would break every bar number, so that is refused.
+    """
+    out: list[tuple[int, int]] = []
+    for d in divisions:
+        length = d.get("length") or 0
+        if length <= 0:
+            if not out:
+                raise DoricoError("could not measure the bars (a pickup bar?)")
+            length = out[-1][1]
+        out.append((d["position"], length))
+    return out
 
 
 def fingerprint(events: list[dict[str, Any]]) -> list[tuple[Any, ...]]:
@@ -208,11 +239,11 @@ class DoricoBridge:
                 )
         if result.get("error"):
             raise DoricoError(f"could not measure bars: {result['error']}")
-        if any(not d.get("length") or d["length"] <= 0 for d in result["divisions"]):
-            # A pickup bar measures as length 0 (10,000 Miles); a bad length
-            # would break every bar number, so treat it as unmeasurable.
-            raise DoricoError("could not measure the bars (a pickup bar?)")
-        bar_map = BarMap([(d["position"], d["length"]) for d in result["divisions"]])
+        divisions = _division_lengths(result["divisions"])
+        carried = frozenset(
+            d["position"] for d in result["divisions"] if (d.get("length") or 0) <= 0
+        )
+        bar_map = BarMap(divisions, carried)
         self._bars[key] = bar_map
         return bar_map
 
