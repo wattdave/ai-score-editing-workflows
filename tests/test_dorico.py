@@ -1257,3 +1257,19 @@ def test_deleting_by_command_counts_measured_undo_steps() -> None:
     assert service._delete_steps({"op": "delete-by-id", "type": "NoteEvent"}) == 2
     assert service._delete_steps({"op": "delete-by-id", "type": "RestEvent"}) == 1
     assert service._delete_steps({"op": "delete-by-id", "type": "BarDivisionEvent"}) == 1
+
+
+def test_private_export_folder_is_emptied_and_guarded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from sibelius_websocket_cli.dorico import export
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    work = tmp_path / "cache" / "sibelius-websocket-cli" / "dorico"
+    monkeypatch.setattr(export, "EXPORT_DIR", work / "musicxml")
+    old = work / "musicxml" / "Flows from Old"
+    old.mkdir(parents=True)
+    (old / "Old - Full score - 01 Old.musicxml").write_text("<x/>")
+    assert export._clear_export_dir() == (work / "musicxml").resolve()
+    assert list((work / "musicxml").iterdir()) == []
+    monkeypatch.setattr(export, "EXPORT_DIR", tmp_path / "Scores")
+    with pytest.raises(DoricoError, match="refusing to clear"):
+        export._clear_export_dir()

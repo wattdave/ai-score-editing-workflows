@@ -277,6 +277,22 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   / Skip this file); moving the old folder aside first avoids them.
   AppleScript must use `get role of e` / `get name of e` explicitly on
   Dorico's Qt elements, or comparisons silently fail.
+  **Where it exports (2026-09-28).** The "Export to:" folder is remembered
+  per project (Hallelujah's was its score folder, the fixture's `~/Music`),
+  so reads used to write `Flows from <title>` into the user's folders, and
+  a second read raised an overwrite prompt per file (the back end answered
+  them, so an export of the user's own there would have been replaced).
+  Now every export goes to `~/.cache/sibelius-websocket-cli/dorico/musicxml`,
+  emptied first, so no prompts come. The button after the folder path opens
+  a macOS **Open** panel; shift-command-G, the path, Return, Return chooses
+  the folder. Dorico then remembers it for the project; a **Cancel** keeps
+  the old folder, and an OK with every flow unticked writes nothing but also
+  keeps the old folder, so it cannot be put back without exporting there.
+  Side effect: after the back end has read a project, that project's
+  Export MusicXML window suggests the private folder. The first export of a
+  project takes about 13 s (the panel), later ones about 7 s. Reading the
+  window is retried, since it was once read before Dorico filled in the
+  folder ("could not read the Export to: folder").
 
 - **System breaks (2026-09-27).** A break made with the menu is
   `EventEdit.Select?FlowID=0&EventID=<a note at the bar>&EventBlockID=<block>`
