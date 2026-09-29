@@ -50,6 +50,10 @@ and refuses to type over existing lyrics in that verse; `read_lyrics` /
 
 ## Limits
 
+- Bar numbers count every measure from 1, as on Sibelius: a pick-up is bar
+  1 and each part of a bar split by a mid-bar repeat is a bar. Dorico shows
+  a pick-up as bar 0 and both parts of a split bar with one number, so its
+  displayed numbers can be lower; go by query_score, not the screen.
 - Signatures and barlines work at any bar (bar 1 replaces the opening
   signature; an empty bar gets a temporary rest, 4 undo steps), except
   where every voice holds a note over the barline. Breaks: the same, from

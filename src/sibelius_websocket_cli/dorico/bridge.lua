@@ -405,35 +405,58 @@ function actions.bars(request)
     end
   end
   table.sort(divisions, function(a, b) return a.position < b.position end)
-  -- Prefer a voice Lua can read; if every voice has lyrics, use one read
-  -- from dump(): Lua can still create in it and delete what it created.
-  -- The emptiest voice is the least disturbing place for a temporary rest.
-  local readable, dumped = {}, {}
+  -- A bar rest created at a barline takes the length to the next barline,
+  -- but only in a voice with nothing sounding there: elsewhere, or over a
+  -- note, it comes back 0 (checked at every beat, 2026-09-28). Voices read
+  -- from dump() work too (Lua can create in them and delete what it made).
+  -- Emptiest first, as the least disturbing place for a temporary rest.
+  local voices = {}
   for _, v in ipairs(list(field(flow, 'voiceStreams'))) do
-    local ok, events = pcall(stream_list, v)
-    if ok then readable[#readable + 1] = { stream = v, count = #events }
-    else
-      local okd, items = pcall(dump_items, v, nil, nil)
-      if okd then dumped[#dumped + 1] = { stream = v, count = #items } end
-    end
+    local ok, items = pcall(stream_items, v, nil, nil)
+    if ok then voices[#voices + 1] = { stream = v, items = items } end
   end
-  local voices = #readable > 0 and readable or dumped
-  table.sort(voices, function(a, b) return a.count < b.count end)
-  local probe = voices[1] and voices[1].stream
-  if probe == nil then error('the flow has no voices to measure bars in') end
+  if #voices == 0 then error('the flow has no voices to measure bars in') end
+  table.sort(voices, function(a, b) return #a.items < #b.items end)
+  local function free_at(position)
+    for _, v in ipairs(voices) do
+      local busy = false
+      for _, item in ipairs(v.items) do
+        local finish = item.position + math.max(item.duration or 0, 0)
+        if item.position == position or (item.position < position and position < finish) then busy = true; break end
+      end
+      if not busy then return v.stream end
+    end
+    return nil
+  end
   local created = 0
   local out = array()
   -- Once anything is created the script is an undo step, so failures after
   -- that are reported rather than raised: bridge.py must still undo it.
-  for _, d in ipairs(divisions) do
-    local ok, rest = pcall(function() return probe:createBarRest(length(d.position)) end)
-    if not ok or rest == nil then
-      return { divisions = out, created = created, error = 'bar rest at ' .. d.position .. ': ' .. str(rest) }
-    end
+  local function measure(position)
+    local voice = free_at(position)
+    if voice == nil then return nil, 'every voice has a note at ' .. position end
+    local ok, rest = pcall(function() return voice:createBarRest(length(position)) end)
+    if not ok or rest == nil then return nil, 'bar rest at ' .. position .. ': ' .. str(rest) end
     created = created + 1
     local bar_length = units(field(rest, 'duration'))
-    pcall(function() probe:delete(rest) end)
-    out[#out + 1] = { position = d.position, length = bar_length, event = d.id }
+    pcall(function() voice:delete(rest) end)
+    if not bar_length or bar_length <= 0 then return nil, 'no barline at ' .. position end
+    return bar_length
+  end
+  for i, d in ipairs(divisions) do
+    local first, problem = measure(d.position)
+    if first == nil then return { divisions = out, created = created, error = problem } end
+    local entry = { position = d.position, length = first, event = d.id }
+    -- The first bar after a division may be short (a pick-up, or the rest
+    -- of a bar split by a barline), so the bar after it gives the meter,
+    -- unless the next division comes first.
+    local nxt = divisions[i + 1]
+    if nxt == nil or d.position + first < nxt.position then
+      local after, problem2 = measure(d.position + first)
+      if after == nil then return { divisions = out, created = created, error = problem2 } end
+      entry.next = after
+    end
+    out[#out + 1] = entry
   end
   return { divisions = out, created = created }
 end

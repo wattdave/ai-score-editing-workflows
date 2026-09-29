@@ -223,11 +223,11 @@ async def structure(bridge: DoricoBridge, flow: int = 1) -> dict[str, Any]:
             "source": str(snap.export),
             "layout": await _layout_report(bridge),
         }
-    time_signatures = [
-        {"bar": first, "position": 0, "barLength": length, "flowPosition": start}
-        for first, start, length in snap.bars.segments()
-        if start not in snap.bars.carried
-    ]
+    # A run of bars as long as the one before is no change of meter.
+    time_signatures: list[dict[str, Any]] = []
+    for first, start, length in snap.bars.segments():
+        if not time_signatures or time_signatures[-1]["barLength"] != length:
+            time_signatures.append({"bar": first, "position": 0, "barLength": length, "flowPosition": start})
     keys = [
         {"bar": e["bar"], "position": e["position"], "flowPosition": e["flowPosition"], "id": e["id"]}
         for e in snap.located if e["type"] == "TonalityDivisionEvent"
