@@ -597,7 +597,7 @@ def test_add_bars_inserts_at_the_bar_start_or_appends() -> None:
         ([{"op": "add-bars", "count": 1, "bar": 2, "length": 768}], "length is not supported"),
         ([{"op": "add-bars", "count": 1001}], "count must be 1-1000"),
         ([{"op": "add-bars", "count": 1, "bar": 2}, {"op": "set-break", "bar": 3, "type": "system"}],
-         "names a bar from bar 2 on"),
+         "names a bar after bar 1, which an earlier op"),
         ([{"op": "add-bars", "count": 1}, {"op": "delete", "id": 3}], "cannot share a batch"),
         ([{"op": "delete-voice", "staff": 1, "voice": 1, "fromBar": 1, "toBar": 1},
           {"op": "add-bars", "count": 1}], "cannot share a batch"),
@@ -636,6 +636,57 @@ def test_ops_before_an_insert_or_at_earlier_bars_are_allowed() -> None:
                          {"op": "add-bars", "count": 1, "bar": 3},
                          {"op": "set-barline", "bar": 2, "type": "double"}], located, STAVES, BARS)
     assert [o["op"] for o in ops] == ["set-break", "add-bars", "set-barline"]
+
+
+# ------------------------------------------------------------------ pick-ups, mid-bar barlines
+
+def test_query_by_type_includes_global_items() -> None:
+    located = locate_events(EVENTS, BARS)
+    assert [o["id"] for o in query(located, types=["TimeSignature"])["objects"]] == [1]
+    assert all(o["staff"] != 0 for o in query(located)["objects"])
+
+
+def test_set_time_with_a_pickup_sends_beats_of_the_denominator() -> None:
+    located = locate_events(EVENTS, BARS)
+    cases = [((6, 4, 768), "6/4\\,3"), ((6, 8, 384), "6/8\\,3"), ((4, 4, 384), "4/4\\,1.5"), ((3, 4, 256), "3/4\\,1")]
+    for (top, bottom, pickup), definition in cases:
+        op = prepare_batch([{"op": "set-time", "bar": 1, "numerator": top, "denominator": bottom, "pickup": pickup}],
+                           located, STAVES, BARS)[0]
+        assert op["definition"] == definition
+    with pytest.raises(DoricoBatchError, match="pickup must be 1-1023"):
+        prepare_batch([{"op": "set-time", "bar": 1, "numerator": 4, "denominator": 4, "pickup": 1024}],
+                      located, STAVES, BARS)
+
+
+def test_set_barline_part_way_through_a_bar() -> None:
+    located = locate_events(EVENTS, BARS)
+    ops = prepare_batch([{"op": "set-barline", "bar": 1, "type": "end_repeat", "position": 512}], located, STAVES, BARS)
+    assert ops[0]["select"] == {"id": 5, "stream": 2}
+    assert ops[0]["position"] == 512 and ops[0]["offset"] == 512 and ops[0]["definition"] == ":|"
+    ops = prepare_batch([{"op": "set-barline", "bar": 3, "type": "start_repeat", "position": 768}], located, STAVES, BARS)
+    assert "select" not in ops[0] and ops[0]["tempRest"]["position"] == 2048 + 768
+    with pytest.raises(DoricoBatchError, match="outside bar 1"):
+        prepare_batch([{"op": "set-barline", "bar": 1, "type": "double", "position": 1024}], located, STAVES, BARS)
+
+
+@pytest.mark.parametrize(
+    "batch",
+    [
+        [{"op": "set-time", "bar": 2, "numerator": 2, "denominator": 4}, {"op": "set-barline", "bar": 3, "type": "double"}],
+        [{"op": "set-barline", "bar": 1, "type": "end_repeat", "position": 512},
+         {"op": "set-break", "bar": 2, "type": "system"}],
+    ],
+)
+def test_ops_after_a_rebarring_op_may_not_name_moved_bars(batch: list[dict[str, Any]]) -> None:
+    with pytest.raises(DoricoBatchError, match="which an earlier op in this batch moves"):
+        prepare_batch(batch, locate_events(EVENTS, BARS), STAVES, BARS)
+
+
+def test_ops_at_or_before_a_rebarred_bar_are_allowed() -> None:
+    ops = prepare_batch([{"op": "set-time", "bar": 2, "numerator": 2, "denominator": 4},
+                         {"op": "set-barline", "bar": 2, "type": "double"},
+                         {"op": "set-key", "bar": 1, "key": "G"}], locate_events(EVENTS, BARS), STAVES, BARS)
+    assert [o["op"] for o in ops] == ["set-time", "set-barline", "set-key"]
 
 
 # ------------------------------------------------------------------ set-layout
