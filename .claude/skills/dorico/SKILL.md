@@ -1,6 +1,6 @@
 ---
 name: dorico
-description: Inspect and change the project open in Dorico (notes, pitches, chords, text, rests, transposition, dynamics, articulations, slurs, tempo, key/time signatures, barlines, lyrics, copying bars, project info) through this repository's Dorico back end, the dorico MCP tools or dorico-cli. Use for Dorico score requests and /dorico.
+description: Inspect and change the project open in Dorico (notes, pitches, chords, text, rests, transposition, dynamics, articulations, slurs, tempo, key/time signatures, barlines, lyrics, copying bars, adding bars, deleting voices, project info) through this repository's Dorico back end, the dorico MCP tools or dorico-cli. Use for Dorico score requests and /dorico.
 ---
 
 # Driving Dorico
@@ -26,12 +26,13 @@ bar (`flowPosition` from the flow start), MIDI pitches. Give
 
 ## Two kinds of batch
 
-- **Lua ops** (add-note, add-rest, add-text, add-clef, and set-pitch, delete,
-  transpose on ordinary staves) run as one script: one undo step.
+- **Lua ops** (add-note, add-rest, add-text, add-clef, delete-voice, and
+  set-pitch, delete, transpose on ordinary staves) run as one script: one
+  undo step.
   set-pitch/transpose there replace the note, so its id changes.
 - **Command ops** (set-time, set-key, set-barline, set-break, add-dynamic,
   set-articulation, add-slur, add-tempo, add-rehearsal-mark, add-line,
-  copy-passage, add-lyrics, and edits to notes on staves with lyrics) drive Dorico's own
+  add-bars, copy-passage, add-lyrics, and edits to notes on staves with lyrics) drive Dorico's own
   commands. Each takes several undo steps; the result's `undoSteps` says how
   many. They cannot share a batch with Lua ops.
 
@@ -55,9 +56,11 @@ and refuses to type over existing lyrics in that verse; `read_lyrics` /
   hairpins, 8va/8vb, trills, pedal lines and glissandos, but octave lines
   rewrite the notes (Dorico keeps the sounding pitch) and hairpin lengths
   cannot be read back.
-  copy-passage pastes at the start of a bar only.
-- Not reachable: hairpins and other lines, layout, bar numbers, adding bars.
-  Say so rather than approximating.
+  copy-passage pastes at the start of a bar only. add-bars inserts before
+  an existing bar or appends; it cannot make irregular bars (`length`).
+- Not reachable: layout (set-layout), bar numbers (set-bar-number), hiding
+  empty staves, Sibelius line styles beyond the seven add-line kinds. Say so
+  rather than approximating.
 
 ## Rules
 

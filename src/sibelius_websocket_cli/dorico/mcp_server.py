@@ -200,6 +200,10 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
     - {"op":"transpose","fromBar":A,"toBar":B,"topStaff":T,"bottomStaff":U,
       "fromNote":"C","toNote":"D","direction":"up"|"down"[,"octaves":N]}
       (or "semitones":N[,"steps":D]): respells every note in range.
+    - {"op":"delete-voice","staff":S,"voice":V,"fromBar":A,"toBar":B}:
+      deletes everything in that voice that starts in bars A-B, lyrics
+      included (a note held into the range is kept); runs after the batch's
+      other operations, in its one undo step. Works on staves with lyrics.
 
     - {"op":"set-break","bar":B,"type":"system"|"none"}: add or remove a
       system break at the start of bar B. Must be the only kind of op in
@@ -235,6 +239,13 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       are. Octave lines keep the sounding pitch, so Dorico rewrites the notes
       under them (unlike Sibelius). Undo steps: selection + command, plus the
       line's selection and one per resize step, plus two for a temporary rest.
+    - {"op":"add-bars","count":N[,"bar":B]}: N bars of the meter in force
+      inserted before bar B (selecting an item on B's first beat, or a
+      temporary rest: 2 undo steps, 4 with the rest; refused past the end of
+      the flow), or appended at the end without "bar" (one undo step per
+      bar; not read back, verified: false). No "length": irregular bars are
+      not supported. Later operations in the batch may not name bar B or
+      after, which the insert moves.
     - {"op":"copy-passage","fromBar":A,"toBar":B,"topStaff":T,"bottomStaff":U,
       "destStaff":S,"destBar":D}: copies each staff's notes by Dorico's copy
       and paste (overwriting at the destination), anchored so the notes keep
@@ -249,8 +260,8 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       selection, one per verse below V, and one per syllable; Dorico is
       brought to the front while it types, and the result's lyricsCheck
       compares a MusicXML export with the text.
-      Command ops (set-break, set-time, set-key, set-barline, add-lyrics,
-      the notation ops above) cannot share a batch with the others.
+      Command ops (set-break, set-time, set-key, set-barline, add-bars,
+      add-lyrics, the notation ops above) cannot share a batch with the others.
 
     No operation may target an event another operation already changes.
     Returns each operation's before/after events and the number applied.

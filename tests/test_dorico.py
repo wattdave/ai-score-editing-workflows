@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from types import SimpleNamespace
 import websockets
 
 from sibelius_websocket_cli.dorico import bridge as bridge_mod
@@ -545,6 +546,76 @@ def test_set_break_in_an_empty_bar_uses_a_temporary_rest() -> None:
     held = EVENTS + [note(9, 3584, 60, "C4", duration=1024), note(10, 3840, 48, "C3", duration=512, stream=4, staff=2)]
     with pytest.raises(DoricoBatchError, match="every voice holds a note over its barline"):
         prepare_batch(break_at_5, locate_events(held, BARS), STAVES, BARS)
+
+
+# ------------------------------------------------------------------ delete-voice, add-bars
+
+def test_delete_voice_covers_whole_bars_and_runs_last() -> None:
+    located = locate_events(EVENTS, BARS)
+    ops = prepare_batch([{"op": "delete-voice", "staff": 1, "voice": 1, "fromBar": 1, "toBar": 2},
+                         {"op": "set-pitch", "id": 3, "oldPitch": 72, "newPitch": 74}], located, STAVES, BARS)
+    assert [o["op"] for o in ops] == ["set-pitch", "delete-voice"]
+    assert ops[1] == {"op": "delete-voice", "stream": 2, "staff": 1, "voice": 1,
+                      "fromBar": 1, "toBar": 2, "start": 0, "end": 2048}
+    with pytest.raises(DoricoBatchError, match="has 1 voice"):
+        prepare_batch([{"op": "delete-voice", "staff": 1, "voice": 2, "fromBar": 1, "toBar": 1}], located, STAVES, BARS)
+
+
+def test_add_bars_inserts_at_the_bar_start_or_appends() -> None:
+    located = locate_events(EVENTS, BARS)
+    ops = prepare_batch([{"op": "add-bars", "count": 2, "bar": 2}], located, STAVES, BARS)
+    assert ops == [{"op": "add-bars", "count": 2, "bar": 2, "position": 1024, "shift": 2048,
+                    "select": {"id": 7, "stream": 2}}]
+    ops = prepare_batch([{"op": "add-bars", "count": 1, "bar": 3}], located, STAVES, BARS)
+    assert "select" not in ops[0] and ops[0]["tempRest"] == {"stream": 2, "position": 2048, "duration": 256}
+    assert prepare_batch([{"op": "add-bars", "count": 3}], located, STAVES, BARS) == [{"op": "add-bars", "count": 3}]
+
+
+@pytest.mark.parametrize(
+    ("batch", "message"),
+    [
+        ([{"op": "add-bars", "count": 1, "bar": 2, "length": 768}], "length is not supported"),
+        ([{"op": "add-bars", "count": 1001}], "count must be 1-1000"),
+        ([{"op": "add-bars", "count": 1, "bar": 2}, {"op": "set-break", "bar": 3, "type": "system"}],
+         "names a bar from bar 2 on"),
+        ([{"op": "add-bars", "count": 1}, {"op": "delete", "id": 3}], "cannot share a batch"),
+        ([{"op": "delete-voice", "staff": 1, "voice": 1, "fromBar": 1, "toBar": 1},
+          {"op": "add-bars", "count": 1}], "cannot share a batch"),
+    ],
+)
+def test_add_bars_refusals(batch: list[dict[str, Any]], message: str) -> None:
+    with pytest.raises(DoricoBatchError, match=message):
+        prepare_batch(batch, locate_events(EVENTS, BARS), STAVES, BARS)
+
+
+async def test_add_bars_past_the_end_of_the_flow_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    exports: list[int] = []
+
+    async def export(client: Any, flow: int) -> Path:
+        exports.append(flow)
+        return Path("/nonexistent.musicxml")
+
+    monkeypatch.setattr(service, "export_musicxml", export)
+    monkeypatch.setattr(service.musicxml_read, "read", lambda path: {"barCount": 4})
+    located = locate_events(EVENTS, BARS)  # music in bars 1-2
+    snap = service.Snapshot(STAVES, located, BARS)
+    bridge = SimpleNamespace(client=None)
+    ops = prepare_batch([{"op": "add-bars", "count": 1, "bar": 4}], located, STAVES, BARS)
+    await service._check_bars_exist(bridge, ops, snap, 1)  # type: ignore[arg-type]
+    ops = prepare_batch([{"op": "add-bars", "count": 1, "bar": 6}], located, STAVES, BARS)
+    with pytest.raises(DoricoError, match="past the end of the flow, which has 4 bars"):
+        await service._check_bars_exist(bridge, ops, snap, 1)  # type: ignore[arg-type]
+    ops = prepare_batch([{"op": "add-bars", "count": 1, "bar": 2}], located, STAVES, BARS)
+    await service._check_bars_exist(bridge, ops, snap, 1)  # type: ignore[arg-type]
+    assert exports == [1, 1]  # a bar with music needs no export
+
+
+def test_ops_before_an_insert_or_at_earlier_bars_are_allowed() -> None:
+    located = locate_events(EVENTS, BARS)
+    ops = prepare_batch([{"op": "set-break", "bar": 3, "type": "system"},
+                         {"op": "add-bars", "count": 1, "bar": 3},
+                         {"op": "set-barline", "bar": 2, "type": "double"}], located, STAVES, BARS)
+    assert [o["op"] for o in ops] == ["set-break", "add-bars", "set-barline"]
 
 
 # ------------------------------------------------------------------ add-line

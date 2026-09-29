@@ -325,10 +325,12 @@ async def _apply_commands(
         1 + (op["verse"] - 1) + len(op["syllables"]) if op["op"] == "add-lyrics"
         else COPY_STEPS + op["extendBars"] + ("tempRest" in op) if op["op"] == "copy-passage"
         else 2 + _resize_cost(op.get("resize")) + (TEMP_REST_STEPS if "tempRest" in op else 0) if op["op"] == "add-line"
+        else op["count"] if op["op"] == "add-bars" and "bar" not in op
         else 2 + (TEMP_REST_STEPS if "tempRest" in op else 0)
         for op in commands
     )  # every other command op is its selection plus one command (repitch may add respells)
     await _plan_lyrics(bridge, [op for op in commands if op["op"] == "add-lyrics"], flow)
+    await _check_bars_exist(bridge, commands, snap, flow)
     if dry_run:
         return {"dryRun": True, "operations": prepared, "undoSteps": planned}
     steps = 0
@@ -345,6 +347,17 @@ async def _apply_commands(
     flow_id = flows[flow - 1]["flowID"] if commands else None
     lyrics = []
     for op in commands:
+        if op["op"] == "add-bars" and "bar" not in op:
+            # Appending needs no selection: one command, one undo step per bar.
+            for done in range(op["count"]):
+                try:
+                    await bridge.client.command("NoteInput.AddBarAtEndOfFlow")
+                except DoricoError as exc:
+                    raise DoricoError(f"{exc}; {steps} undo step(s) were applied (undo that many to revert)") from exc
+                steps += 1
+            # Lua cannot read how many bars a flow has, so this is not read back.
+            results.append({"op": "add-bars", "count": op["count"], "at": "end", "verified": False})
+            continue
         if "tempRest" in op and op["op"] in TEMP_REST_OPS:
             try:
                 op["select"] = await _place_temporary_rest(bridge, op["tempRest"], flow, blocks)
@@ -401,6 +414,24 @@ async def _apply_commands(
             elif op["op"] in score.NOTE_COMMAND_OPS:
                 results.append(await _run_note_command(bridge, op, flow))
                 steps += 1
+            elif op["op"] == "add-bars":
+                before = next(
+                    (e["position"] for e in (await bridge.read_partial(flow))[0] if e.get("id") == target["id"]), None
+                )
+                await bridge.client.command(f"NoteInput.CreateBarLine?Definition=+{op['count']}")
+                steps += 1
+                after = next(
+                    (e["position"] for e in (await bridge.read_partial(flow))[0] if e.get("id") == target["id"]), None
+                )
+                # The selected item is moved on by the inserted bars.
+                if before is None or after is None or after - before != op["shift"]:
+                    raise DoricoError(
+                        f"Dorico did not insert {op['count']} bar(s) before bar {op['bar']} "
+                        f"(the selected item moved from {before} to {after}, not by {op['shift']})"
+                    )
+                if "tempRest" in op:
+                    steps += await _delete_temporary_rest(bridge, target, flow, flow_id)
+                results.append({"op": "add-bars", "count": op["count"], "bar": op["bar"]})
             elif op["op"] == "add-line":
                 done, result = await _add_line(bridge, op, flow, flow_id, blocks)
                 steps += done
@@ -420,9 +451,34 @@ async def _apply_commands(
     return outcome
 
 
+async def _check_bars_exist(
+    bridge: DoricoBridge, commands: list[dict[str, Any]], snap: Snapshot, flow: int
+) -> None:
+    """Refuse add-bars before a bar past the end of the flow.
+
+    A temporary rest created past the end makes Dorico lengthen the flow to
+    hold it (checked 2026-09-28: add-bars before bar 6 of 4 left 7 bars), and
+    Lua cannot read how many bars a flow has, so for a bar after the last one
+    holding anything the count comes from a MusicXML export.
+    """
+    beyond = [
+        op for op in commands
+        if op["op"] == "add-bars" and "tempRest" in op and op["bar"] > _last_bar(snap.located, snap.bars)
+    ]
+    if not beyond:
+        return
+    count = musicxml_read.read(await export_musicxml(bridge.client, flow))["barCount"]
+    for op in beyond:
+        if op["bar"] > count:
+            raise DoricoError(
+                f"bar {op['bar']} is past the end of the flow, which has {count} bars; "
+                "leave out bar to add bars at the end. Nothing was changed"
+            )
+
+
 LETTERS = "CDEFGAB"
 #: Ops that select a temporary rest where a bar has nothing to select.
-TEMP_REST_OPS = {"set-time", "set-key", "set-barline", "set-break", "add-line"}
+TEMP_REST_OPS = {"set-time", "set-key", "set-barline", "set-break", "add-line", "add-bars"}
 #: Undo steps a temporary rest adds to one of them: creating it (Lua) and
 #: deleting it (EventEdit.Delete: one step for a rest, though two for a note;
 #: both measured with a marker edit, 2026-09-27).
