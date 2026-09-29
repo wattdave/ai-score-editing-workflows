@@ -1249,3 +1249,11 @@ async def test_probe_placements_redoes_an_undo_that_changed_the_score() -> None:
     with pytest.raises(DoricoError, match="redone"):
         await service.probe_placements(_ProbeBridge(client), _PROBE_RAW, client.events(), 1)  # type: ignore[arg-type]
     assert client.commands[-1] == "Edit.Redo" and client.history == [_USER_EDIT]
+
+
+def test_deleting_by_command_counts_measured_undo_steps() -> None:
+    # EventEdit.Delete by id: two steps for a note, one for a rest or a time
+    # signature (each measured with a marker edit).
+    assert service._delete_steps({"op": "delete-by-id", "type": "NoteEvent"}) == 2
+    assert service._delete_steps({"op": "delete-by-id", "type": "RestEvent"}) == 1
+    assert service._delete_steps({"op": "delete-by-id", "type": "BarDivisionEvent"}) == 1

@@ -329,6 +329,7 @@ async def _apply_commands(
         else 2 + _resize_cost(op.get("resize")) + (TEMP_REST_STEPS if "tempRest" in op else 0) if op["op"] == "add-line"
         else op["count"] if op["op"] == "add-bars" and "bar" not in op
         else 1 if op["op"] == "set-layout"
+        else _delete_steps(op) if op["op"] == "delete-by-id"
         else 2 + (TEMP_REST_STEPS if "tempRest" in op else 0)
         for op in commands
     )  # every other command op is its selection plus one command (repitch may add respells)
@@ -386,7 +387,7 @@ async def _apply_commands(
                 await bridge.client.command(
                     f"EventEdit.Delete?FlowID={flow_id}&EventID={target['id']}&EventBlockID={target['block']}"
                 )
-                steps += 2  # EventEdit.Delete is two undo steps (measured 2026-09-27)
+                steps += _delete_steps(op)
                 events, _ = await bridge.read_partial(flow)
                 if any(e.get("id") == target["id"] for e in events):
                     raise DoricoError(f"Dorico did not delete event {target['id']}")
@@ -532,6 +533,13 @@ async def _check_bars_exist(
                 f"bar {op['bar']} is past the end of the flow, which has {count} bars; "
                 "leave out bar to add bars at the end. Nothing was changed"
             )
+
+
+def _delete_steps(op: dict[str, Any]) -> int:
+    """Undo steps of EventEdit.Delete by id: two for a note (2026-09-27),
+    one for a rest or a time signature (2026-09-28), each measured with a
+    marker edit."""
+    return 2 if op.get("type") in score.TYPE_ALIASES["Note"] else 1
 
 
 LETTERS = "CDEFGAB"
