@@ -106,8 +106,12 @@ def read(path: str | Path) -> dict[str, Any]:
                         if child.find("grace") is None:
                             cursor += duration
                     longest = max(longest, cursor)
+            # A measure is as long as its music: pick-ups and the parts of a
+            # bar split by a barline are short, and exporters do not always
+            # mark them implicit (Dorico marks only the later part of a split
+            # bar; Sibelius marks neither). An empty measure takes the meter.
             natural = Fraction(4 * beats[0], beats[1])
-            length = longest if measure.get("implicit") == "yes" and longest else max(longest, natural)
+            length = longest if longest > 0 else natural
             if part_index == 0:
                 bar_lengths.append(_units(length))
             flow += length

@@ -194,15 +194,40 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   it redoes and fails. The map is cached per connection until the bar
   divisions change. Side effect: Dorico's redo history is cleared by each
   measurement.
-  **Divisions without a meter (2026-09-28).** A bar number change, a
-  barline on its own (`||` at a bar with no time signature change) and a
-  barline part-way through a bar are `BarDivisionEvent`s too, and a bar rest
-  created there measures 0. The meter before such a division carries on
-  from it (a mid-bar barline leaves a short bar, which `BarMap` measures to
-  the division), and `structure` does not list it as a time signature.
-  Until then any of these made the whole map unmeasurable, so reads fell
-  back to a MusicXML export. Only a 0 at the first division (a pickup bar)
-  is still refused.
+  **What a bar rest measures (2026-09-28, at every beat of every voice).**
+  `createBarRest` at a barline returns the length to the *next barline*,
+  but only in a voice with nothing sounding there. Anywhere else, or where
+  the voice has a note starting or held over, it returns 0. The staff,
+  player and timebase streams refuse bar rests altogether. So:
+  - each division is measured in a voice free at that point, and so is the
+    bar after it: a pick-up (`4/4\,2` measures 512) or the part of a bar
+    after a barline placed part-way through it is shorter than the meter,
+    and only the next bar gives the meter;
+  - a bar number change or barline on its own at a bar start is a
+    `BarDivisionEvent` too, and simply measures the meter;
+  - where every voice has a note (common in choral music), the bars cannot
+    be measured, and reads use the MusicXML export instead.
+
+  #68 took a 0 to mean "a division without a meter" and carried the previous
+  length on. A 0 only means the voice was busy, so a real time signature
+  change there (3/4 at bar 3 of the fixture, every voice with a note) read as
+  4/4 carrying on, silently; the carry is gone.
+
+  **Bar numbering.** Every barline-to-barline measure is a bar, as in the
+  MusicXML export and the Sibelius back end: a pick-up is bar 1, and each
+  part of a bar split by a mid-bar barline is a bar of its own. Dorico
+  *shows* a pick-up as bar 0 and both parts of a split bar with the same
+  number (its bar ruler read 0, 1, 1, 2, 2, 3, 4 for a pick-up and two
+  mid-bar repeats), so its displayed numbers can be lower than these.
+  Dorico places `:|` and `|:` part-way through a bar (at the selected note)
+  with a hidden restatement of the meter (a signpost such as
+  "4/4 (q, 1+1+1+1)"), and makes no visible time signature.
+
+  **MusicXML.** A measure is as long as its music. Dorico's export marks
+  only the *later* part of a split bar `implicit="yes"` (numbered `X1`,
+  `X2`, ...), and Sibelius marks neither a pick-up nor a split, so padding
+  unmarked short measures to the meter (as before) put every later bar in
+  the wrong place.
 - **Key signatures.** `TonalityDivisionElement` is an unregistered class:
   positions are known, keys are not.
 - **Spelling.** `kNoteSpelling` accepts writes that change nothing, so a
@@ -532,9 +557,9 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   against the read taken before and redoes if anything else was reverted,
   so reads leave the undo history as they found it; until #60 each read of
   a probed score left one selection per voice there, and `undo` of a
-  batch's reported steps reverted those instead. Bars are measured first, and a
-  measured length of 0 (a pickup bar, as in 10,000 Miles) counts as
-  unmeasurable, so such scores still read from MusicXML. Bar measurement
+  batch's reported steps reverted those instead. Bars are measured first
+  (see Bar numbers above); where no voice is free to measure a bar, the score
+  reads from MusicXML. Bar measurement
   now also works when every voice has lyrics (Lua can create in and delete
   from a stream it can only dump).
 

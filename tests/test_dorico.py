@@ -289,32 +289,52 @@ async def test_bar_measurement_is_undone_and_cached() -> None:
     assert bridge.commands == ["Edit.Undo"]
 
 
-async def test_a_division_without_a_meter_keeps_the_meter_before_it() -> None:
-    # A bar number change or a barline on its own at bar 3 measures 0.
-    bridge = ScriptedBridge([EVENTS], [{"position": 0, "length": 1024}, {"position": 2048, "length": 0}])
+async def test_a_division_that_keeps_the_meter_adds_no_run() -> None:
+    # A bar number change at bar 3, measured in a free voice: same length.
+    bridge = ScriptedBridge([EVENTS], [{"position": 0, "length": 1024, "next": 1024},
+                                       {"position": 2048, "length": 1024, "next": 1024}])
     bars = await bridge.bars(1, EVENTS)
     assert bars.divisions == [(0, 1024), (2048, 1024)]
-    assert bars.carried == {2048}
     assert bars.locate(2048 + 1024 + 5) == (4, 5)
 
 
-async def test_a_barline_part_way_through_a_bar_leaves_a_short_bar() -> None:
-    # A barline three beats into bar 3 of 4/4 (measured 0 there).
-    bridge = ScriptedBridge([EVENTS], [{"position": 0, "length": 1024}, {"position": 2816, "length": 0}])
+async def test_a_pickup_is_a_bar_of_its_own() -> None:
+    # 4/4 with a two-beat pick-up (4/4,2): the bar rest there measures 512.
+    bridge = ScriptedBridge([EVENTS], [{"position": 0, "length": 512, "next": 1024}])
     bars = await bridge.bars(1, EVENTS)
-    assert bars.segments() == [(1, 0, 1024), (4, 2816, 1024)]
-    assert bars.bar_length(3) == 768
-    assert bars.bar_length(4) == 1024
-    assert bars.locate(2816) == (4, 0)
-    assert bars.position(3, 512) == 2560
-    with pytest.raises(DoricoError, match="768 long"):
-        bars.position(3, 768)
+    assert bars.segments() == [(1, 0, 512), (2, 512, 1024)]
+    assert bars.locate(512 + 1024 + 256) == (3, 256)
+    assert bars.bar_length(1) == 512
 
 
-async def test_a_pickup_bar_is_still_unmeasurable() -> None:
-    bridge = ScriptedBridge([EVENTS], [{"position": 0, "length": 0}, {"position": 256, "length": 1024}])
-    with pytest.raises(DoricoError, match="pickup"):
+async def test_a_repeat_part_way_through_a_bar_splits_it() -> None:
+    # An end repeat on beat 3 of bar 2 (measured live, 2026-09-28): the bar
+    # after it measures 512, the one after that the meter again.
+    bridge = ScriptedBridge([EVENTS], [{"position": 0, "length": 1024, "next": 1024},
+                                       {"position": 1536, "length": 512, "next": 1024}])
+    bars = await bridge.bars(1, EVENTS)
+    assert bars.segments() == [(1, 0, 1024), (3, 1536, 512), (4, 2048, 1024)]
+    assert [bars.bar_length(b) for b in (1, 2, 3, 4)] == [1024, 512, 512, 1024]
+    assert bars.locate(1536) == (3, 0) and bars.locate(2560) == (4, 512)
+    with pytest.raises(DoricoError, match="512 long"):
+        bars.position(2, 512)
+
+
+async def test_an_unmeasurable_bar_is_refused() -> None:
+    bridge = ScriptedBridge([EVENTS], [{"position": 0, "length": 0}])
+    with pytest.raises(DoricoError, match="could not measure the bar at 0"):
         await bridge.bars(1, EVENTS)
+
+
+def test_musicxml_pickup_and_split_bars_keep_their_length() -> None:
+    from sibelius_websocket_cli.dorico import musicxml_read
+
+    # Dorico's export of 4/4 with a two-beat pick-up, a start repeat on beat 3
+    # of bar 1 and an end repeat on beat 3 of bar 2: only the later part of
+    # each split bar is marked implicit.
+    xml = musicxml_read.read(Path(__file__).parent / "fixtures" / "dorico-pickup-split-bars.musicxml")
+    lengths = [xml["bars"].bar_length(b) for b in range(1, xml["barCount"] + 1)]
+    assert lengths == [512, 512, 512, 512, 512, 1024, 1024]
 
 
 async def test_bar_measurement_redoes_if_the_undo_hit_something_else() -> None:

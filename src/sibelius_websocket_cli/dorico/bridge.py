@@ -83,9 +83,6 @@ class BarMap:
     """Bar numbers from bar divisions: (flow position, bar length) pairs."""
 
     divisions: list[tuple[int, int]]
-    #: Positions of divisions that carry the meter before them on (a bar
-    #: number change or a barline, not a time signature).
-    carried: frozenset[int] = frozenset()
 
     def segments(self) -> list[tuple[int, int, int]]:
         """(first bar, start position, bar length) for each division."""
@@ -132,23 +129,25 @@ class BarMap:
 
 
 def _division_lengths(divisions: list[dict[str, Any]]) -> list[tuple[int, int]]:
-    """(position, bar length) for each measured bar division.
+    """(position, bar length) runs from the measured bar divisions.
 
-    A bar rest measures 0 at a division that does not change the meter: a
-    bar number change, a barline on its own, or a barline part-way through
-    a bar (measured 2026-09-28). The meter before it carries on from there,
-    and BarMap counts the short bar a mid-bar barline leaves. At the first
-    division 0 means a pickup bar (10,000 Miles), which has nothing to carry
-    on from; a bad length would break every bar number, so that is refused.
+    bridge.lua measures the bar at each division and the one after it. When
+    they differ, the first is a short bar of its own (a pick-up, or the part
+    of a bar after a barline placed part-way through it), and the meter
+    starts with the second. Every barline-to-barline measure counts as a bar,
+    as in the MusicXML export and the Sibelius back end, so a pick-up is bar
+    1 and each part of a split bar is a bar (Dorico itself shows 0 and the
+    same number twice).
     """
     out: list[tuple[int, int]] = []
     for d in divisions:
         length = d.get("length") or 0
         if length <= 0:
-            if not out:
-                raise DoricoError("could not measure the bars (a pickup bar?)")
-            length = out[-1][1]
+            raise DoricoError(f"could not measure the bar at {d.get('position')}")
         out.append((d["position"], length))
+        after = d.get("next")
+        if after and after != length:
+            out.append((d["position"] + length, after))
     return out
 
 
@@ -239,11 +238,7 @@ class DoricoBridge:
                 )
         if result.get("error"):
             raise DoricoError(f"could not measure bars: {result['error']}")
-        divisions = _division_lengths(result["divisions"])
-        carried = frozenset(
-            d["position"] for d in result["divisions"] if (d.get("length") or 0) <= 0
-        )
-        bar_map = BarMap(divisions, carried)
+        bar_map = BarMap(_division_lengths(result["divisions"]))
         self._bars[key] = bar_map
         return bar_map
 
