@@ -215,11 +215,16 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       the command (four undo steps); refused only where every voice holds a
       note over the barline. The project must be Dorico's active one.
 
-    - {"op":"set-time","bar":B,"numerator":N,"denominator":D},
+    - {"op":"set-time","bar":B,"numerator":N,"denominator":D[,"pickup":P]},
       {"op":"set-key","bar":B,"key":"Bb"[,"minor":true]},
-      {"op":"set-barline","bar":B,"type":"double"|"final"|"start_repeat"|"end_repeat"}:
+      {"op":"set-barline","bar":B,"type":"double"|"final"|"start_repeat"|"end_repeat"[,"position":P]}:
       at the start of bar B (bar 1 replaces the opening signature or
-      barline). Dorico places it at a selected item, so a note or rest on
+      barline). pickup (1/256 quarters) makes the bar a pick-up of that
+      length, then the meter. position puts a barline part-way through bar
+      B (a repeat mid-bar, with no visible time signature); set a pick-up
+      before placing such barlines. Later operations in the batch may not
+      name bars after B. Remove a time signature with {"op":"delete","id":N}
+      (ids from query_score types ["TimeSignature"]). Dorico places it at a selected item, so a note or rest on
       B's first beat is selected, or, where the bar starts with implicit
       rests only, a temporary rest made and deleted around it. Two undo
       steps each (selection + command), four with a temporary rest; refused

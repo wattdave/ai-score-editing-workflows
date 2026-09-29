@@ -118,6 +118,8 @@ def command_value(text: str) -> str:
         raise DoricoBatchError(f"{text!r} cannot contain a backslash or a line break")
     return text.replace(",", "\\,").replace("&", "\\&")
 OPERATIONS = ADDRESSED | ADDING | COMMAND_OPS | {"transpose", "delete-voice"}
+#: A quarter note in the back end's units.
+UNIT_QUARTER = 256
 #: Sibelius ops with no Dorico route yet, and why (docs/dorico.md).
 NOT_ON_DORICO = {
     "set-bar-number": "a bar number change goes through a dialog scripting cannot drive yet",
@@ -281,7 +283,9 @@ def query(
     for item in located:
         if staves is not None and item["staff"] not in staves:
             continue
-        if staves is None and item["staff"] == 0:
+        # Global items (time and key signatures, breaks) are on staff 0: left
+        # out unless asked for by staff or by type.
+        if staves is None and item["staff"] == 0 and not (wanted_types and item["type"] in wanted_types):
             continue
         if from_bar is not None and item["bar"] < from_bar:
             continue
@@ -545,12 +549,15 @@ def _signature(
     the one already there (docs/dorico.md).
     """
     bar = _int(operation, "bar", label, 1)
+    offset = 0
     if op == "set-time":
         top = _int(operation, "numerator", label, 1, 64)
         bottom = _int(operation, "denominator", label, 1, 64)
         if bottom & (bottom - 1):
             raise DoricoBatchError(f"{label}.denominator must be a power of two up to 64")
         definition, command, expect = f"{top}/{bottom}", "NoteInput.CreateTimeSignature", "BarDivisionEvent"
+        if "pickup" in operation:
+            definition += "\\," + _pickup_beats(operation, label, top, bottom)
     elif op == "set-key":
         key = _str(operation, "key", label)
         minor = operation.get("minor", False)
@@ -567,17 +574,23 @@ def _signature(
         if kind not in BARLINE_DEFINITIONS:
             raise DoricoBatchError(f"{label}.type must be one of: {', '.join(sorted(BARLINE_DEFINITIONS))}")
         definition, command, expect = BARLINE_DEFINITIONS[kind], "NoteInput.CreateBarLine", "BarDivisionEvent"
+        # Part-way through a bar (a repeat on beat 4 of 6/4): Dorico splits
+        # the bar there with a hidden restatement of the meter, and shows no
+        # time signature (checked 2026-09-28).
+        offset = _int({"position": 0, **operation}, "position", label, 0)
     try:
-        position = bars.position(bar, 0)
+        position = bars.position(bar, offset)
     except Exception as exc:
         raise DoricoBatchError(f"{label}: {exc}") from exc
     candidates = [
         e for e in located
-        if e["bar"] == bar and e["position"] == 0 and e["staff"] >= 1 and "id" in e
+        if e["bar"] == bar and e["position"] == offset and e["staff"] >= 1 and "id" in e
         and e["type"] in TYPE_ALIASES["NoteRest"] and e.get("voice")
     ]
     resolved = {"op": op, "bar": bar, "position": position, "command": command, "definition": definition,
                 "expect": expect}
+    if offset:
+        resolved["offset"] = offset
     if candidates:
         target = min(candidates, key=lambda e: (e["staff"], e["id"]))
         resolved["select"] = {"id": target["id"], "stream": target["stream"]}
@@ -585,12 +598,28 @@ def _signature(
     rest = _temporary_rest(position, located, staves)
     if rest is None:
         raise DoricoBatchError(
-            f"{label}: nothing starts at bar {bar}'s first beat and every voice holds a note over it, "
-            "so there is nothing to select and no room for a temporary rest (Dorico places the change "
+            f"{label}: nothing starts at position {offset} of bar {bar} and every voice holds a note over "
+            "it, so there is nothing to select and no room for a temporary rest (Dorico places the change "
             "at the selected item)"
         )
     resolved["tempRest"] = rest
     return resolved
+
+
+def _pickup_beats(operation: dict[str, Any], label: str, top: int, bottom: int) -> str:
+    """set-time's pickup (1/256 quarters) in beats of the denominator, as the
+    time signature popover takes it: 6/4,3 is 6/4 with a three-quarter
+    pick-up, 6/8,3 three eighths, 4/4,1.5 a quarter and a half (all
+    checked by measuring the bar, 2026-09-28)."""
+    from fractions import Fraction
+
+    bar_length = 4 * UNIT_QUARTER * top // bottom
+    pickup = _int(operation, "pickup", label, 1, bar_length - 1)
+    beats = Fraction(pickup * bottom, 4 * UNIT_QUARTER)
+    if 1000 % beats.denominator:
+        raise DoricoBatchError(f"{label}.pickup {pickup} is not a whole number of 1/1000 beats of 1/{bottom}")
+    text = f"{float(beats):.3f}".rstrip("0").rstrip(".")
+    return text
 
 
 def _temporary_rest(
@@ -789,22 +818,33 @@ def _add_line(
 
 
 def _check_inserted_bars(operations: list[dict[str, Any]]) -> None:
-    """Refuse ops that name a bar an earlier add-bars has moved.
+    """Refuse ops that name a bar an earlier op in the batch moves.
 
-    Addresses are read before the batch, so after bars are inserted before
-    bar B, bar B and every bar after it would mean something else.
+    Addresses are read before the batch, so after add-bars before bar B
+    (bar B on), a set-time at bar B (the bars after B are re-barred) or a
+    barline part-way through bar B (the bars after it are renumbered, since
+    each part of a split bar is a bar), those bars would mean something else.
     """
-    moved_from: int | None = None
+    moved_after: int | None = None
     for i, operation in enumerate(operations):
         named = [operation[f] for f in ("bar", "fromBar", "toBar", "destBar") if isinstance(operation.get(f), int)]
-        if moved_from is not None and any(b >= moved_from for b in named):
+        if moved_after is not None and any(b > moved_after for b in named):
             raise DoricoBatchError(
-                f"op {i} names a bar from bar {moved_from} on, which an earlier add-bars moves; "
-                "put it before the add-bars or send it in a later batch"
+                f"op {i} names a bar after bar {moved_after}, which an earlier op in this batch moves "
+                "(add-bars, set-time, or a barline part-way through a bar); put it earlier or send it "
+                "in a later batch"
             )
-        if operation.get("op") == "add-bars" and isinstance(operation.get("bar"), int):
-            bar = operation["bar"]
-            moved_from = bar if moved_from is None else min(moved_from, bar)
+        bar = operation.get("bar")
+        if not isinstance(bar, int):
+            continue
+        op = operation.get("op")
+        if op == "add-bars":
+            after = bar - 1
+        elif op == "set-time" or (op == "set-barline" and operation.get("position")):
+            after = bar
+        else:
+            continue
+        moved_after = after if moved_after is None else min(moved_after, after)
 
 
 def _delete_voice(

@@ -153,9 +153,9 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | (Dorico only) `read_lyrics`, `edit_lyrics` | ⚠️ | a player's verse as text through the Edit Lyrics dialog; edits must keep the syllable count |
 | `add-lyric` → `add-lyrics` | ⚠️ | verses 1-10, typed through the lyric popover by command (see gaps); refuses to type over a lyric already in that verse |
 | `copy-passage` | ✅ | by selection + `Edit.Copy` / `Edit.Paste` (see gaps); destPosition 0 only |
-| `set-key`, `set-time` | ✅ | by command at the start of any bar, bar 1 included: 2 undo steps each, 4 where the bar starts with implicit rests only (a temporary rest is selected); refused only when every voice holds a note over the barline (see gaps) |
+| `set-key`, `set-time` | ✅ | by command at the start of any bar, bar 1 included: 2 undo steps each, 4 where the bar starts with implicit rests only (a temporary rest is selected); refused only when every voice holds a note over the barline (see gaps). `set-time` takes a `pickup` (Dorico only). A time signature is removed with `delete` by its id (`query_score` type `TimeSignature`) |
 | `set-break` | ✅ | system breaks via `Edit.CreateSystemBreak` on a selected note (2 undo steps each), or a temporary rest in a bar with nothing of its own (4); refused only where every voice holds a note over the barline |
-| `set-barline` | ⚠️ | double, final, start/end repeat, by command like set-time (a start repeat at bar 1 keeps the opening time signature) |
+| `set-barline` | ⚠️ | double, final, start/end repeat, by command like set-time (a start repeat at bar 1 keeps the opening time signature); `position` puts one part-way through a bar (Dorico only) |
 | `delete-voice` | ✅ | Lua `deleteEventsInRange` over the bars: everything starting there, lyrics included; staves with lyrics too; one undo step with the batch |
 | `add-bars` | ⚠️ | before a bar by the bars popover (`+N`) or at the end (`AddBarAtEndOfFlow`); no `length` (irregular bars); appended bars are not read back |
 | `set-layout` | ⚠️ | `Project.Layout.SetOptions`, one undo step, read back; the full score layout unless `layout` names another; no `extraSpacesBelowVocalStaves`; page sizes with ambiguous dimensions need `pageWidth`/`pageHeight` (mm); left/right margins need identical margins. `score_structure` reports the settings as `layout` |
@@ -646,6 +646,39 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
     (HideEmptyStavesOverridesInternalCommand), which cannot be replayed.
     "Hide All" hid a staff that holds music (and split the system there),
     so it is not hide-empty-staves.
+
+- **Pick-ups, mid-bar repeats, and scores exported with half-bars
+  (2026-09-28).** Sibelius can only put a repeat part-way through a bar by
+  splitting the bar with (hidden) time signatures; its MusicXML keeps them
+  (Hallelujah in 6/4: 3/4 half-bars around each repeat, 6/4 after), and
+  Dorico's import shows them. Dorico writes this natively:
+  - `set-time` with `pickup` sends the popover's `N/D,beats` (the comma
+    escaped): the pick-up in beats of the denominator, decimals allowed.
+    `6/8,3` measured 384 (three eighths), `4/4,1.5` measured 384.
+  - `set-barline` with `position` puts the barline at the item there, as the
+    popover does; Dorico splits the bar with a hidden restatement of the
+    meter. Both parts keep one displayed number.
+  - A time signature is a `BarDivisionEvent` in the timebase; `delete` by
+    its id removes it through Lua (one undo step with the batch), and the
+    music re-bars with the meter before it. Removing the half-bars' 2/4 and
+    the 4/4 after them was not enough on its own: **the imported repeat
+    barline's event carried the 2/4 too** (signpost "2/4 (q, 1+1)"), so the
+    music after it stayed in 2/4. Delete the repeat's event as well, and put
+    the repeat back part-way through the bar with `set-barline` `position`.
+  - **Order matters: set the pick-up first.** A barline placed part-way
+    through a bar keeps the rest of that bar as its offset; a pick-up made
+    afterwards moves every barline, which left the repeat on a barline and a
+    two-beat bar after it. With the pick-up first, then the positions read
+    again, then the repeats, the fixture's ruler read 0, 1, 2, 2, 3, 4.
+  - The recipe on the fixture, each step checked with a marker edit:
+    delete the extra time signatures and the imported repeats (1 undo step),
+    `set-time` with `pickup` at bar 1 (2), `set-barline` with `position`
+    (2 each). Batches refuse a later op that names a bar an earlier
+    add-bars, set-time or mid-bar barline moves, as on Sibelius.
+  - Changing meters can lengthen the flow (the fixture gained an empty
+    bar), and undo does not shorten it again; check the end of the flow.
+  - `query_score` with `types` now includes global items (time and key
+    signatures, breaks, on staff 0) of those types.
 
 ## Safety rules
 

@@ -55,7 +55,13 @@ and refuses to type over existing lyrics in that verse; `read_lyrics` /
   displayed numbers can be lower; go by query_score, not the screen.
 - Signatures and barlines work at any bar (bar 1 replaces the opening
   signature; an empty bar gets a temporary rest, 4 undo steps), except
-  where every voice holds a note over the barline. Breaks: the same, from
+  where every voice holds a note over the barline. `set-time` takes a
+  `pickup`; `set-barline` takes a `position` for a repeat part-way through a
+  bar. A score exported from Sibelius with half-bars around mid-bar repeats
+  (hidden short time signatures) converts as: delete the extra time
+  signatures *and the imported repeats* (their events carry the short
+  meter), set the pick-up, read again, then place each repeat with
+  `position`. Pick-up first; see docs/dorico.md. Breaks: the same, from
   bar 2 on. `add-slur` joins a note to the next only. `add-line` makes
   hairpins, 8va/8vb, trills, pedal lines and glissandos, but octave lines
   rewrite the notes (Dorico keeps the sounding pitch) and hairpin lengths
