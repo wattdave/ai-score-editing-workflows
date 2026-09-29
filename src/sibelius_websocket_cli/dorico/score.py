@@ -49,7 +49,9 @@ CLEFS = {"treble", "bass", "percussion", "tab", "tab.4"}
 #: a batch with the Lua ops (one batch, one undo step).
 #: Ops that select a note and run one Dorico command on it.
 NOTE_COMMAND_OPS = {"add-dynamic", "set-articulation", "add-slur", "add-tempo", "add-rehearsal-mark"}
-COMMAND_OPS = {"set-break", "add-lyrics", "set-time", "set-key", "set-barline", "copy-passage", "add-line"} | NOTE_COMMAND_OPS
+COMMAND_OPS = {
+    "set-break", "add-lyrics", "set-time", "set-key", "set-barline", "copy-passage", "add-line", "add-bars",
+} | NOTE_COMMAND_OPS
 #: Resolved forms of set-pitch/delete/transpose on notes read from dump().
 ROUTED_COMMAND_OPS = {"repitch", "delete-by-id"}
 #: set-articulation names and NoteInput.SetArticulation values (checked 2026-09-27).
@@ -113,7 +115,9 @@ def command_value(text: str) -> str:
     if UNSAFE_PARAMETER & set(text):
         raise DoricoBatchError(f"{text!r} cannot contain a backslash or a line break")
     return text.replace(",", "\\,").replace("&", "\\&")
-OPERATIONS = ADDRESSED | ADDING | COMMAND_OPS | {"transpose"}
+OPERATIONS = ADDRESSED | ADDING | COMMAND_OPS | {"transpose", "delete-voice"}
+#: add-bars refuses more than this, as the Sibelius back end does.
+MAX_ADD_BARS = 1000
 BREAK_TYPES = {"system", "none"}
 
 
@@ -319,6 +323,10 @@ def prepare_batch(
             resolved = [_add_line(operation, label, located, staves, bars)]
         elif op == "copy-passage":
             resolved = _copy_passage(operation, label, located, staves, bars)
+        elif op == "delete-voice":
+            resolved = [_delete_voice(operation, label, staves, bars)]
+        elif op == "add-bars":
+            resolved = [_add_bars(operation, label, located, staves, bars)]
         elif op in ADDRESSED:
             resolved = [_addressed(operation, op, label, by_id, by_address)]
         else:
@@ -333,11 +341,14 @@ def prepare_batch(
             out.append(item)
     if not out:
         raise DoricoBatchError("the batch changes nothing (a transpose range may hold no notes)")
+    _check_inserted_bars(operations)
+    # As on Sibelius, voice deletions run after everything else in the batch.
+    out.sort(key=lambda o: o["op"] == "delete-voice")
     kinds = {o["op"] in COMMAND_OPS | ROUTED_COMMAND_OPS or o["op"] == "delete" and o.get("type") == "BreakEvent"
              for o in out}
     if len(kinds) > 1:
         raise DoricoBatchError(
-            "command ops (set-break, set-time, set-key, set-barline, add-lyrics, notation ops, and "
+            "command ops (set-break, set-time, set-key, set-barline, add-bars, add-lyrics, notation ops, and "
             "edits to notes on staves with lyrics) take several undo steps, so they cannot "
             "share a batch with other operations; send them as their own batch"
         )
@@ -760,6 +771,97 @@ def _add_line(
         resolved["itemDuration"] = rest["duration"]
     if duration is not None:
         resolved["resize"] = resize_steps(resolved["itemDuration"], duration)
+    return resolved
+
+
+def _check_inserted_bars(operations: list[dict[str, Any]]) -> None:
+    """Refuse ops that name a bar an earlier add-bars has moved.
+
+    Addresses are read before the batch, so after bars are inserted before
+    bar B, bar B and every bar after it would mean something else.
+    """
+    moved_from: int | None = None
+    for i, operation in enumerate(operations):
+        named = [operation[f] for f in ("bar", "fromBar", "toBar", "destBar") if isinstance(operation.get(f), int)]
+        if moved_from is not None and any(b >= moved_from for b in named):
+            raise DoricoBatchError(
+                f"op {i} names a bar from bar {moved_from} on, which an earlier add-bars moves; "
+                "put it before the add-bars or send it in a later batch"
+            )
+        if operation.get("op") == "add-bars" and isinstance(operation.get("bar"), int):
+            bar = operation["bar"]
+            moved_from = bar if moved_from is None else min(moved_from, bar)
+
+
+def _delete_voice(
+    operation: dict[str, Any], label: str, staves: list[dict[str, Any]], bars: BarMap
+) -> dict[str, Any]:
+    """Everything in one voice of a staff that starts in bars fromBar-toBar.
+
+    bridge.lua deletes it with EventStream:deleteEventsInRange, which takes
+    the events starting in the range (lyrics included, since they are events
+    in the same stream) and leaves a note held into the range from before it
+    alone; the gap shows Dorico's implicit rests. Works on staves with
+    lyrics too, where Lua can only dump the stream (checked 2026-09-28).
+    """
+    first = _int(operation, "fromBar", label, 1)
+    last = _int(operation, "toBar", label, first)
+    staff = _int(operation, "staff", label, 1)
+    voice = _int(operation, "voice", label, 1, 8)
+    stream = _stream_for(staff, voice, staves, label)
+    try:
+        start = bars.position(first, 0)
+        end = bars.position(last, 0) + bars.bar_length(last)
+    except Exception as exc:
+        raise DoricoBatchError(f"{label}: {exc}") from exc
+    return {"op": "delete-voice", "stream": stream, "staff": staff, "voice": voice,
+            "fromBar": first, "toBar": last, "start": start, "end": end}
+
+
+def _add_bars(
+    operation: dict[str, Any], label: str, located: list[dict[str, Any]], staves: list[dict[str, Any]],
+    bars: BarMap,
+) -> dict[str, Any]:
+    """count bars of the meter in force, before bar `bar` or at the end.
+
+    Inserting selects an item on the bar's first beat (or a temporary rest)
+    and runs NoteInput.CreateBarLine?Definition=+N, the bars popover's text,
+    which inserts N bars before it. Appending runs
+    NoteInput.AddBarAtEndOfFlow once per bar, with nothing selected
+    (both checked 2026-09-28).
+    """
+    count = _int(operation, "count", label, 1, MAX_ADD_BARS)
+    if "length" in operation:
+        raise DoricoBatchError(
+            f"{label}.length is not supported on Dorico: an irregular bar is a barline part-way "
+            "through a bar, which this back end cannot make yet"
+        )
+    if "bar" not in operation:
+        return {"op": "add-bars", "count": count}
+    bar = _int(operation, "bar", label, 1)
+    try:
+        position = bars.position(bar, 0)
+        shift = count * bars.bar_length(bar)
+    except Exception as exc:
+        raise DoricoBatchError(f"{label}: {exc}") from exc
+    resolved: dict[str, Any] = {"op": "add-bars", "count": count, "bar": bar, "position": position, "shift": shift}
+    candidates = [
+        e for e in located
+        if e["bar"] == bar and e["position"] == 0 and e["staff"] >= 1 and "id" in e
+        and e["type"] in TYPE_ALIASES["NoteRest"] and e.get("voice")
+    ]
+    if candidates:
+        target = min(candidates, key=lambda e: (e["staff"], e["id"]))
+        resolved["select"] = {"id": target["id"], "stream": target["stream"]}
+        return resolved
+    rest = _temporary_rest(position, located, staves)
+    if rest is None:
+        raise DoricoBatchError(
+            f"{label}: nothing starts at bar {bar}'s first beat and every voice holds a note over it, "
+            "so there is nothing to select and no room for a temporary rest (Dorico inserts bars at "
+            "the selected item)"
+        )
+    resolved["tempRest"] = rest
     return resolved
 
 

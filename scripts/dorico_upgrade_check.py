@@ -45,7 +45,7 @@ REQUIRED_COMMANDS = sorted({
     "NoteEdit.PitchUpChromatic", "NoteEdit.PitchDownChromatic", "NoteEdit.RespellUsingNoteNameAbove",
     "NoteEdit.RespellUsingNoteNameBelow", "NoteInput.OttavaLineStart", "NoteInput.CreateOrnament",
     "NoteInput.CreatePlayingTechnique", "NoteInput.CreateGlissando", "EventEdit.DurationLengthenByValue",
-    "EventEdit.DurationShortenByValue",
+    "EventEdit.DurationShortenByValue", "NoteInput.AddBarAtEndOfFlow",
 })
 #: Lua classes bridge.lua constructs or relies on.
 REQUIRED_CLASSES = ["DoApp", "MIDIPitch", "MIDIPitchWithSpelling", "NoteName", "PropertyContext",

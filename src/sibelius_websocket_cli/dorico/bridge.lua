@@ -457,6 +457,16 @@ local function spelled(pitch, letter)
   return DoCore.MIDIPitchWithSpelling(DoCore.MIDIPitch(pitch), DoCore.NoteName.fromString(letter))
 end
 
+-- The items of a stream that start in [start, end): what
+-- deleteEventsInRange takes (checked 2026-09-28).
+local function in_range(stream, start, finish)
+  local out = array()
+  for _, item in ipairs((stream_items(stream, nil, nil))) do
+    if item.position >= start and item.position < finish then out[#out + 1] = item end
+  end
+  return out
+end
+
 -- Check every addressed operation against the score before anything changes.
 local function resolve(ops, streams)
   local targets = {}
@@ -478,6 +488,8 @@ local function resolve(ops, streams)
         return nil, label .. ': event ' .. op.id .. ' has pitch ' .. tostring(found.pitch) .. ', not ' .. op.oldPitch
       end
       targets[i] = { stream = stream, event = event, before = found }
+    elseif op.op == 'delete-voice' then
+      targets[i] = { stream = stream, before = in_range(stream, op.start, op['end']) }
     else
       targets[i] = { stream = stream }
     end
@@ -494,6 +506,14 @@ end
 
 -- Dorico has no writable spelling, so a pitch change replaces the note with a
 -- new one spelled as asked. The replacement gets a new event id.
+-- Everything in one voice that starts in a range of bars (delete-voice).
+apply_op['delete-voice'] = function(op, t)
+  t.stream:deleteEventsInRange(length(op.start), length(op['end']))
+  local left = in_range(t.stream, op.start, op['end'])
+  if #left > 0 then error(#left .. ' event(s) were left in the range') end
+  return { deleted = t.before }
+end
+
 apply_op['set-pitch'] = function(op, t)
   local position = field(t.event, 'position')
   local duration = field(t.event, 'duration')

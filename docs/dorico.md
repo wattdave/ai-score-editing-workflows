@@ -156,7 +156,9 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `set-key`, `set-time` | ✅ | by command at the start of any bar, bar 1 included: 2 undo steps each, 4 where the bar starts with implicit rests only (a temporary rest is selected); refused only when every voice holds a note over the barline (see gaps) |
 | `set-break` | ✅ | system breaks via `Edit.CreateSystemBreak` on a selected note (2 undo steps each), or a temporary rest in a bar with nothing of its own (4); refused only where every voice holds a note over the barline |
 | `set-barline` | ⚠️ | double, final, start/end repeat, by command like set-time (a start repeat at bar 1 keeps the opening time signature) |
-| `set-bar-number`, `add-bars`, `set-layout`, `hide-empty-staves`, `delete-voice` | ❌ | not exposed |
+| `delete-voice` | ✅ | Lua `deleteEventsInRange` over the bars: everything starting there, lyrics included; staves with lyrics too; one undo step with the batch |
+| `add-bars` | ⚠️ | before a bar by the bars popover (`+N`) or at the end (`AddBarAtEndOfFlow`); no `length` (irregular bars); appended bars are not read back |
+| `set-bar-number`, `set-layout`, `hide-empty-staves` | ❌ | dialogs scripting cannot drive (see gaps) |
 | `undo` | ✅ | stops when Dorico has nothing to undo |
 | (Dorico only) `project_info`, `set_project_info` | ✅ | project-level Project Info fields through the Project Info dialog (typed); not per-flow |
 | `save_score` | ⚠️ | saves a copy to a given `.dorico` path; the project keeps its own file |
@@ -533,6 +535,44 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   unmeasurable, so such scores still read from MusicXML. Bar measurement
   now also works when every voice has lyrics (Lua can create in and delete
   from a stream it can only dump).
+
+- **Deleting a voice (2026-09-28).** `EventStream:deleteEventsInRange(start,
+  end)` deletes the events that *start* in [start, end): a note held into
+  the range from before it keeps its full length, and one starting at the
+  end is kept. Nothing is put in their place (Dorico shows implicit rests),
+  lyrics go with their notes (they are events in the same stream), and it
+  works on streams Lua can only dump. One undo step, like any Lua script.
+- **Adding bars (2026-09-28).** With an item selected, the bars popover's
+  `NoteInput.CreateBarLine?Definition=+N` inserts N bars of the meter in
+  force before it (ids kept; undo title "Create Barline"; bar 1 works, the
+  opening signatures stay at the start). `NoteInput.AddBarAtEndOfFlow`
+  appends one bar with nothing selected, one undo step. Lua cannot read how
+  many bars a flow has (Flow has no length attribute and the timebase
+  dump has no end marker), so appended bars are not read back, and a bar
+  past the last one holding anything is checked against a MusicXML export
+  before inserting: a temporary rest created past the end makes Dorico
+  lengthen the flow to hold it (before bar 6 of 4 left 7 bars). `+3q`
+  inserts beats into the bar rather than a bar; a `|` barline after them
+  makes an irregular bar, which reads correctly since #68 but is not
+  offered yet.
+- **Bar number changes, layout options, staff visibility (2026-09-28).**
+  - `Edit.AddBarNumberChange` opens "Insert Bar Number Change" (Qt
+    Widgets: Primary/Subordinate spin boxes, Type Primary / Subordinate /
+    Don't Include / Continue Primary, "Hide primary bar numbers") and logs
+    no parameters. The change is a `BarDivisionEvent`. Driving the spin box
+    failed: AXIncrement steps by 10000, and typed digits registered once
+    in three tries, with value reads lagging.
+  - `Project.Layout.Options` opens a modeless Layout Options window whose
+    controls accessibility lists (page size, orientation, rastral size,
+    margins in points, ...), but Qt ignores accessibility presses there
+    (Apply stays disabled), and System Events' `click at` is an
+    accessibility press too. `Project.Layout.SetOptions` takes a
+    `Dictionary` whose format is unknown.
+  - `Edit.ManualStaffVisibility` opens a dialog whose per-staff rows are
+    not exposed; OK runs `Internal.Command?BlobID=`
+    (HideEmptyStavesOverridesInternalCommand), which cannot be replayed.
+    "Hide All" hid a staff that holds music (and split the system there),
+    so it is not hide-empty-staves.
 
 ## Safety rules
 
