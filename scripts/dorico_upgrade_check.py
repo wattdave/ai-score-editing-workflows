@@ -23,6 +23,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from sibelius_websocket_cli.dorico import score
 from sibelius_websocket_cli.dorico.bridge import DoricoBridge
 from sibelius_websocket_cli.dorico.client import DoricoClient, DoricoError
 from sibelius_websocket_cli.dorico.export import APPLICATION_LOG
@@ -45,7 +46,12 @@ REQUIRED_COMMANDS = sorted({
     "NoteEdit.PitchUpChromatic", "NoteEdit.PitchDownChromatic", "NoteEdit.RespellUsingNoteNameAbove",
     "NoteEdit.RespellUsingNoteNameBelow", "NoteInput.OttavaLineStart", "NoteInput.CreateOrnament",
     "NoteInput.CreatePlayingTechnique", "NoteInput.CreateGlissando", "EventEdit.DurationLengthenByValue",
-    "EventEdit.DurationShortenByValue", "NoteInput.AddBarAtEndOfFlow",
+    "EventEdit.DurationShortenByValue", "NoteInput.AddBarAtEndOfFlow", "Project.Layout.SetOptions",
+})
+#: Layout Options paths set-layout sends and structure reads (getoptions).
+REQUIRED_LAYOUT_OPTIONS = sorted({
+    score.PAGE_WIDTH, score.PAGE_HEIGHT, score.SPACE_SIZE, score.MARGIN_TYPE, score.HIDE_EMPTY,
+    *score.LAYOUT_MM_KEYS.values(), *score.LAYOUT_SPACE_KEYS.values(),
 })
 #: Lua classes bridge.lua constructs or relies on.
 REQUIRED_CLASSES = ["DoApp", "MIDIPitch", "MIDIPitchWithSpelling", "NoteName", "PropertyContext",
@@ -125,6 +131,15 @@ async def run(baseline: str, app: Path, write_baseline: bool = False) -> None:
             report("INFO", "dump() fallback", "no stream needed it in this project (open one with lyrics to test it)")
         if unreadable:
             report("FAIL", "streams neither readable nor dumpable", str(unreadable))
+
+        layouts = await client.layouts()
+        if layouts:
+            options = await client.layout_options(layouts[0]["layoutID"])
+            missing = [p for p in REQUIRED_LAYOUT_OPTIONS if p not in options]
+            report("FAIL" if missing else "PASS", "layout options set-layout sets",
+                   f"missing {missing}" if missing else f"all {len(REQUIRED_LAYOUT_OPTIONS)} present")
+        else:
+            report("FAIL", "layout options set-layout sets", "getlayouts listed no layouts")
 
         classes = (await bridge.call("classes"))["classes"]
         version = info.get("number")

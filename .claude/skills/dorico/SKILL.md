@@ -1,6 +1,6 @@
 ---
 name: dorico
-description: Inspect and change the project open in Dorico (notes, pitches, chords, text, rests, transposition, dynamics, articulations, slurs, tempo, key/time signatures, barlines, lyrics, copying bars, adding bars, deleting voices, project info) through this repository's Dorico back end, the dorico MCP tools or dorico-cli. Use for Dorico score requests and /dorico.
+description: Inspect and change the project open in Dorico (notes, pitches, chords, text, rests, transposition, dynamics, articulations, slurs, tempo, key/time signatures, barlines, lyrics, copying bars, adding bars, deleting voices, page layout, project info) through this repository's Dorico back end, the dorico MCP tools or dorico-cli. Use for Dorico score requests and /dorico.
 ---
 
 # Driving Dorico
@@ -32,7 +32,7 @@ bar (`flowPosition` from the flow start), MIDI pitches. Give
   set-pitch/transpose there replace the note, so its id changes.
 - **Command ops** (set-time, set-key, set-barline, set-break, add-dynamic,
   set-articulation, add-slur, add-tempo, add-rehearsal-mark, add-line,
-  add-bars, copy-passage, add-lyrics, and edits to notes on staves with lyrics) drive Dorico's own
+  add-bars, set-layout, copy-passage, add-lyrics, and edits to notes on staves with lyrics) drive Dorico's own
   commands. Each takes several undo steps; the result's `undoSteps` says how
   many. They cannot share a batch with Lua ops.
 
@@ -58,9 +58,11 @@ and refuses to type over existing lyrics in that verse; `read_lyrics` /
   cannot be read back.
   copy-passage pastes at the start of a bar only. add-bars inserts before
   an existing bar or appends; it cannot make irregular bars (`length`).
-- Not reachable: layout (set-layout), bar numbers (set-bar-number), hiding
-  empty staves, Sibelius line styles beyond the seven add-line kinds. Say so
-  rather than approximating.
+  set-layout changes one layout (the full score unless `layout` names a
+  part); it has no extra gap below vocal staves, and hides empty staves only
+  for a whole layout (`hideEmptyStaves`), not over a range of bars.
+- Not reachable: bar numbers (set-bar-number), Sibelius line styles beyond
+  the seven add-line kinds. Say so rather than approximating.
 
 ## Rules
 

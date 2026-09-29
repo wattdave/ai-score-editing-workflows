@@ -158,7 +158,9 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `set-barline` | ⚠️ | double, final, start/end repeat, by command like set-time (a start repeat at bar 1 keeps the opening time signature) |
 | `delete-voice` | ✅ | Lua `deleteEventsInRange` over the bars: everything starting there, lyrics included; staves with lyrics too; one undo step with the batch |
 | `add-bars` | ⚠️ | before a bar by the bars popover (`+N`) or at the end (`AddBarAtEndOfFlow`); no `length` (irregular bars); appended bars are not read back |
-| `set-bar-number`, `set-layout`, `hide-empty-staves` | ❌ | dialogs scripting cannot drive (see gaps) |
+| `set-layout` | ⚠️ | `Project.Layout.SetOptions`, one undo step, read back; the full score layout unless `layout` names another; no `extraSpacesBelowVocalStaves`; page sizes with ambiguous dimensions need `pageWidth`/`pageHeight` (mm); left/right margins need identical margins. `score_structure` reports the settings as `layout` |
+| `hide-empty-staves` | ⚠️ | not over a range of bars: Dorico hides empty staves per layout, set by `set-layout`'s `hideEmptyStaves` (`never`, `after-first-system`, `all-systems`) |
+| `set-bar-number` | ❌ | a dialog scripting cannot drive (see gaps) |
 | `undo` | ✅ | stops when Dorico has nothing to undo |
 | (Dorico only) `project_info`, `set_project_info` | ✅ | project-level Project Info fields through the Project Info dialog (typed); not per-flow |
 | `save_score` | ⚠️ | saves a copy to a given `.dorico` path; the project keeps its own file |
@@ -566,8 +568,31 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
     controls accessibility lists (page size, orientation, rastral size,
     margins in points, ...), but Qt ignores accessibility presses there
     (Apply stays disabled), and System Events' `click at` is an
-    accessibility press too. `Project.Layout.SetOptions` takes a
-    `Dictionary` whose format is unknown.
+    accessibility press too. The dialog is not needed, though (next item).
+- **Layout Options by command (2026-09-28).** Changing an option by hand
+  and pressing Apply logs
+  `Project.Layout.SetOptions?LayoutIDArray=0&Dictionary=list: {string: "pageSizeAndMarginOptions.pageWidth"}\, {string: "792.000000"}\, {string: "pageSizeAndMarginOptions.pageHeight"}\, {string: "612.000000"}&OpenScoreID=0`:
+  key and value strings in turn, commas escaped. Sent over the WebSocket
+  it applies at once (several keys in one command too), as one undo step
+  titled "Set Layout Options", which it adds even when nothing changes.
+  Enum values can be sent by name (`{string: "kAllSystems"}`) or by their
+  index in the option's `enumValues` (`{int: 0}`, as Apply sends them).
+  The Remote Control API's
+  `{"message": "getoptions", "optionsType": "kLayout", "layoutID": N}`
+  answers `optionslist`: all 241 of the layout's options with `path`,
+  `valueType`, `currentValue` (text) and, for enums, `enumValues`. So
+  options are read back exactly. Lengths are in points (`kPun`: page
+  size, margins, music frame margins, `defaultSpaceSize`, which is one
+  staff space) or staff spaces (`kStaveUnit`: `verticalStaveGapOptions.*`).
+  Landscape is only width and height swapped. With identical margins
+  (`pageMargins.type` `kIdentical`), `margins.outer` is the left margin and
+  `margins.inner` the right (checked in renders). `hideEmptyStavesPolicy`
+  is `kAllSystems`, `kAfterFirstSystem` or `kNever`. The page size presets
+  (`PageDimensionsPresetEntityID`) could not be listed
+  (`getlibraryentities` for `kPageDimensionsPresetCollection` is empty), so
+  set-layout sends sizes in points. Most option paths are in the binary as
+  `xxxOptions.yyy` strings (2157 of them); `getoptions` is the reliable
+  list.
   - `Edit.ManualStaffVisibility` opens a dialog whose per-staff rows are
     not exposed; OK runs `Internal.Command?BlobID=`
     (HideEmptyStavesOverridesInternalCommand), which cannot be replayed.

@@ -618,6 +618,111 @@ def test_ops_before_an_insert_or_at_earlier_bars_are_allowed() -> None:
     assert [o["op"] for o in ops] == ["set-break", "add-bars", "set-barline"]
 
 
+# ------------------------------------------------------------------ set-layout
+
+LETTER_OPTIONS = {
+    "pageSizeAndMarginOptions.pageWidth": "612", "pageSizeAndMarginOptions.pageHeight": "792",
+    "defaultSpaceSize": "4.96", "pageSizeAndMarginOptions.pageMargins.type": "kIdentical",
+    "pageSizeAndMarginOptions.pageMargins.margins.top": "42", "pageSizeAndMarginOptions.pageMargins.margins.bottom": "42",
+    "pageSizeAndMarginOptions.pageMargins.margins.outer": "42", "pageSizeAndMarginOptions.pageMargins.margins.inner": "42",
+    "pageSizeAndMarginOptions.defaultMusicFrameTopPadding": "40",
+    "pageSizeAndMarginOptions.defaultMusicFrameBottomPadding": "30",
+    "verticalStaveGapOptions.staveToStaveGap": "6", "verticalStaveGapOptions.interSystemGap": "10",
+    "hideEmptyStavesPolicy": "kNever",
+}
+
+
+def _layout_options(batch: dict[str, Any], current: dict[str, str] = LETTER_OPTIONS) -> dict[str, str]:
+    from sibelius_websocket_cli.dorico.score import layout_dictionary
+
+    op = prepare_batch([{"op": "set-layout", **batch}], locate_events(EVENTS, BARS), STAVES, BARS)[0]
+    return layout_dictionary(op["settings"], current, "op 0")
+
+
+def test_layout_command_matches_what_layout_options_apply_sends() -> None:
+    from sibelius_websocket_cli.dorico.score import layout_command
+
+    # Logged from Layout Options' Apply after choosing Landscape (2026-09-28).
+    logged = ('Project.Layout.SetOptions?LayoutIDArray=0&Dictionary=list: '
+              '{string: "pageSizeAndMarginOptions.pageWidth"}\\, {string: "792.000000"}\\, '
+              '{string: "pageSizeAndMarginOptions.pageHeight"}\\, {string: "612.000000"}&OpenScoreID=0')
+    assert layout_command(0, 0, _layout_options({"orientation": "landscape"})) == logged
+
+
+def test_set_layout_converts_to_dorico_units() -> None:
+    options = _layout_options({"pageSize": "a4", "staffSize": 7, "topMargin": 20, "leftMargin": 15,
+                               "rightMargin": 10, "spacesBetweenStaves": 9, "hideEmptyStaves": "all-systems"})
+    assert options == {
+        "pageSizeAndMarginOptions.pageWidth": "595.280000", "pageSizeAndMarginOptions.pageHeight": "841.890000",
+        "defaultSpaceSize": "4.960630",  # a 7 mm staff: 1.75 mm spaces
+        "pageSizeAndMarginOptions.pageMargins.margins.top": "56.692913",
+        "pageSizeAndMarginOptions.pageMargins.margins.outer": "42.519685",  # left
+        "pageSizeAndMarginOptions.pageMargins.margins.inner": "28.346457",  # right
+        "verticalStaveGapOptions.staveToStaveGap": "9.000000",
+        "hideEmptyStavesPolicy": "kAllSystems",
+    }
+    assert _layout_options({"pageSize": "a4", "orientation": "landscape"})["pageSizeAndMarginOptions.pageWidth"] == "841.890000"
+    assert _layout_options({"pageWidth": 100, "pageHeight": 200}) == {
+        "pageSizeAndMarginOptions.pageWidth": "283.464567", "pageSizeAndMarginOptions.pageHeight": "566.929134",
+    }
+
+
+@pytest.mark.parametrize(
+    ("batch", "message"),
+    [
+        ({"pageSize": "b5"}, "ambiguous"),
+        ({"pageSize": "huge"}, "pageSize must be one of"),
+        ({"extraSpacesBelowVocalStaves": 2}, "no Layout Option in Dorico"),
+        ({"staffSize": 40}, "staffSize must be a number from 1 to 30"),
+        ({"pageWidth": 200}, "together"),
+        ({"hideEmptyStaves": "sometimes"}, "hideEmptyStaves must be one of"),
+        ({}, "at least one setting"),
+        ({"margin": 3}, "unknown set-layout fields"),
+    ],
+)
+def test_set_layout_refusals(batch: dict[str, Any], message: str) -> None:
+    with pytest.raises(DoricoBatchError, match=message):
+        prepare_batch([{"op": "set-layout", **batch}], locate_events(EVENTS, BARS), STAVES, BARS)
+
+
+def test_left_and_right_margins_need_identical_margins() -> None:
+    mirrored = {**LETTER_OPTIONS, "pageSizeAndMarginOptions.pageMargins.type": "kMirrored"}
+    with pytest.raises(DoricoBatchError, match="kMirrored"):
+        _layout_options({"leftMargin": 10}, mirrored)
+    assert "pageSizeAndMarginOptions.pageMargins.margins.top" in _layout_options({"topMargin": 10}, mirrored)
+
+
+def test_choose_layout_defaults_to_the_full_score() -> None:
+    from sibelius_websocket_cli.dorico.score import choose_layout
+
+    layouts = [{"layoutID": 0, "layoutName": "Full score", "layoutType": "kFullScoreLayout"},
+               {"layoutID": 1, "layoutName": "Piano", "layoutType": "kPartLayout"}]
+    assert choose_layout(None, layouts, "op 0")["layoutID"] == 0
+    assert choose_layout("piano", layouts, "op 0")["layoutID"] == 1
+    assert choose_layout(1, layouts, "op 0")["layoutID"] == 1
+    with pytest.raises(DoricoBatchError, match="no layout 'Flute'"):
+        choose_layout("Flute", layouts, "op 0")
+    with pytest.raises(DoricoBatchError, match="say which layout"):
+        choose_layout(None, [layouts[1]], "op 0")
+
+
+def test_layout_report_in_set_layout_terms() -> None:
+    from sibelius_websocket_cli.dorico.score import layout_report
+
+    report = layout_report({**LETTER_OPTIONS, "pageSizeAndMarginOptions.pageWidth": "792",
+                            "pageSizeAndMarginOptions.pageHeight": "612"})
+    assert report["pageSize"] == "letter" and report["orientation"] == "landscape"
+    assert report["pageWidth"] == 279.4 and report["staffSize"] == 7.0
+    assert report["leftMargin"] == 14.82 and report["spacesBetweenStaves"] == 6.0
+    assert report["hideEmptyStaves"] == "never"
+
+
+@pytest.mark.parametrize("op", ["set-bar-number", "hide-empty-staves"])
+def test_sibelius_ops_without_a_dorico_route_say_why(op: str) -> None:
+    with pytest.raises(DoricoBatchError, match=f"{op} is not available on Dorico"):
+        prepare_batch([{"op": op, "bar": 2, "number": 5}], locate_events(EVENTS, BARS), STAVES, BARS)
+
+
 # ------------------------------------------------------------------ add-line
 
 def test_resize_steps_use_only_checked_note_values() -> None:

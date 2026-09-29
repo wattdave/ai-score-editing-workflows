@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from sibelius_websocket_cli.batch_ops import LAYOUT_NUMBERS, ORIENTATIONS, PAGE_SIZES
 from sibelius_websocket_cli.intervals import compute_transposition, parse_note
 
 from .bridge import BarMap
@@ -51,6 +52,7 @@ CLEFS = {"treble", "bass", "percussion", "tab", "tab.4"}
 NOTE_COMMAND_OPS = {"add-dynamic", "set-articulation", "add-slur", "add-tempo", "add-rehearsal-mark"}
 COMMAND_OPS = {
     "set-break", "add-lyrics", "set-time", "set-key", "set-barline", "copy-passage", "add-line", "add-bars",
+    "set-layout",
 } | NOTE_COMMAND_OPS
 #: Resolved forms of set-pitch/delete/transpose on notes read from dump().
 ROUTED_COMMAND_OPS = {"repitch", "delete-by-id"}
@@ -116,6 +118,14 @@ def command_value(text: str) -> str:
         raise DoricoBatchError(f"{text!r} cannot contain a backslash or a line break")
     return text.replace(",", "\\,").replace("&", "\\&")
 OPERATIONS = ADDRESSED | ADDING | COMMAND_OPS | {"transpose", "delete-voice"}
+#: Sibelius ops with no Dorico route yet, and why (docs/dorico.md).
+NOT_ON_DORICO = {
+    "set-bar-number": "a bar number change goes through a dialog scripting cannot drive yet",
+    "hide-empty-staves": (
+        "Dorico hides empty staves per layout, not over a range of bars; use set-layout's "
+        "hideEmptyStaves (\"never\", \"after-first-system\" or \"all-systems\") for the whole layout"
+    ),
+}
 #: add-bars refuses more than this, as the Sibelius back end does.
 MAX_ADD_BARS = 1000
 BREAK_TYPES = {"system", "none"}
@@ -307,6 +317,8 @@ def prepare_batch(
         if not isinstance(operation, dict):
             raise DoricoBatchError(f"{label} must be an object")
         op = operation.get("op")
+        if op in NOT_ON_DORICO:
+            raise DoricoBatchError(f"{label}: {op} is not available on Dorico: {NOT_ON_DORICO[op]}")
         if op not in OPERATIONS:
             raise DoricoBatchError(f"{label}.op must be one of: {', '.join(sorted(OPERATIONS))}")
         if op == "transpose":
@@ -327,6 +339,8 @@ def prepare_batch(
             resolved = [_delete_voice(operation, label, staves, bars)]
         elif op == "add-bars":
             resolved = [_add_bars(operation, label, located, staves, bars)]
+        elif op == "set-layout":
+            resolved = [_set_layout(operation, label)]
         elif op in ADDRESSED:
             resolved = [_addressed(operation, op, label, by_id, by_address)]
         else:
@@ -348,7 +362,7 @@ def prepare_batch(
              for o in out}
     if len(kinds) > 1:
         raise DoricoBatchError(
-            "command ops (set-break, set-time, set-key, set-barline, add-bars, add-lyrics, notation ops, and "
+            "command ops (set-break, set-time, set-key, set-barline, add-bars, set-layout, add-lyrics, notation ops, and "
             "edits to notes on staves with lyrics) take several undo steps, so they cannot "
             "share a batch with other operations; send them as their own batch"
         )
@@ -863,6 +877,202 @@ def _add_bars(
         )
     resolved["tempRest"] = rest
     return resolved
+
+
+#: Page sizes by set-layout name, portrait, in points (1/72 inch), for the
+#: Sibelius names whose dimensions are unambiguous. The others (b4, b5,
+#: us-band, hymn, quarto, folio) need pageWidth/pageHeight in millimetres.
+PAGE_POINTS: dict[str, tuple[float, float]] = {
+    "letter": (612, 792), "tabloid": (792, 1224), "legal": (612, 1008), "executive": (522, 756),
+    "statement": (396, 612), "a3": (841.89, 1190.55), "a4": (595.28, 841.89), "a5": (419.53, 595.28),
+    "concert": (648, 864), "octavo": (486, 756), "9.5x12.5": (684, 900), "10x13": (720, 936),
+}
+#: set-layout's millimetre fields and the Layout Options they set (points).
+#: With identical margins, Dorico's outer margin is the left one and its
+#: inner margin the right (checked in a render, 2026-09-28).
+LAYOUT_MM_KEYS = {
+    "topMargin": "pageSizeAndMarginOptions.pageMargins.margins.top",
+    "bottomMargin": "pageSizeAndMarginOptions.pageMargins.margins.bottom",
+    "leftMargin": "pageSizeAndMarginOptions.pageMargins.margins.outer",
+    "rightMargin": "pageSizeAndMarginOptions.pageMargins.margins.inner",
+    "aboveTopStaveGap": "pageSizeAndMarginOptions.defaultMusicFrameTopPadding",
+    "belowBottomStaveGap": "pageSizeAndMarginOptions.defaultMusicFrameBottomPadding",
+}
+#: set-layout's staff-space fields and their Layout Options (staff spaces).
+LAYOUT_SPACE_KEYS = {
+    "spacesBetweenStaves": "verticalStaveGapOptions.staveToStaveGap",
+    "spacesBetweenSystems": "verticalStaveGapOptions.interSystemGap",
+}
+PAGE_WIDTH = "pageSizeAndMarginOptions.pageWidth"
+PAGE_HEIGHT = "pageSizeAndMarginOptions.pageHeight"
+SPACE_SIZE = "defaultSpaceSize"  # one staff space, in points
+MARGIN_TYPE = "pageSizeAndMarginOptions.pageMargins.type"
+HIDE_EMPTY = "hideEmptyStavesPolicy"
+HIDE_EMPTY_POLICIES = {"never": "kNever", "after-first-system": "kAfterFirstSystem", "all-systems": "kAllSystems"}
+POINTS_PER_MM = 72 / 25.4
+
+
+def _set_layout(operation: dict[str, Any], label: str) -> dict[str, Any]:
+    """Validate set-layout. The Layout Options it sets are worked out when it
+    runs (layout_dictionary), since an orientation on its own and left or
+    right margins depend on the layout's current settings."""
+    known = {"op", "pageSize", "orientation", "pageWidth", "pageHeight", "hideEmptyStaves", "layout",
+             *LAYOUT_NUMBERS}
+    if unknown := sorted(operation.keys() - known):
+        raise DoricoBatchError(f"{label}: unknown set-layout fields {unknown}; allowed: {', '.join(sorted(known - {'op'}))}")
+    if "extraSpacesBelowVocalStaves" in operation:
+        raise DoricoBatchError(f"{label}.extraSpacesBelowVocalStaves has no Layout Option in Dorico")
+    settings: dict[str, Any] = {}
+    if "pageSize" in operation:
+        size = operation["pageSize"]
+        if size not in PAGE_SIZES:
+            raise DoricoBatchError(f"{label}.pageSize must be one of: {', '.join(PAGE_SIZES)}")
+        if size not in PAGE_POINTS:
+            raise DoricoBatchError(
+                f"{label}.pageSize {size} is not supported on Dorico (its size is ambiguous); "
+                "give pageWidth and pageHeight in millimetres"
+            )
+        settings["pageSize"] = size
+    if ("pageWidth" in operation) != ("pageHeight" in operation):
+        raise DoricoBatchError(f"{label}: give pageWidth and pageHeight together")
+    if "pageWidth" in operation:
+        if "pageSize" in operation:
+            raise DoricoBatchError(f"{label}: give pageSize or pageWidth/pageHeight, not both")
+        for field in ("pageWidth", "pageHeight"):
+            settings[field] = _number(operation, field, label, 50, 1000)
+    if "orientation" in operation:
+        if operation["orientation"] not in ORIENTATIONS:
+            raise DoricoBatchError(f"{label}.orientation must be one of: {', '.join(ORIENTATIONS)}")
+        settings["orientation"] = operation["orientation"]
+    for field, (_, low, high) in LAYOUT_NUMBERS.items():
+        if field in operation and field != "extraSpacesBelowVocalStaves":
+            settings[field] = _number(operation, field, label, low, high)
+    if "hideEmptyStaves" in operation:
+        if operation["hideEmptyStaves"] not in HIDE_EMPTY_POLICIES:
+            raise DoricoBatchError(f"{label}.hideEmptyStaves must be one of: {', '.join(HIDE_EMPTY_POLICIES)}")
+        settings["hideEmptyStaves"] = operation["hideEmptyStaves"]
+    if not settings:
+        raise DoricoBatchError(f"{label}: set-layout needs at least one setting")
+    out: dict[str, Any] = {"op": "set-layout", "settings": settings}
+    if "layout" in operation:
+        layout = operation["layout"]
+        if isinstance(layout, bool) or not isinstance(layout, (str, int)) or layout == "":
+            raise DoricoBatchError(f"{label}.layout must be a layout's name or layoutID")
+        out["layout"] = layout
+    return out
+
+
+def _number(operation: dict[str, Any], field: str, label: str, low: float, high: float) -> float:
+    value = operation.get(field)
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
+        raise DoricoBatchError(f"{label}.{field} must be a number from {low} to {high}")
+    return value
+
+
+def choose_layout(requested: Any, layouts: list[dict[str, Any]], label: str) -> dict[str, Any]:
+    """The layout set-layout changes: the one named (or with that layoutID),
+    else the project's only full score layout."""
+    if requested is None:
+        full = [lay for lay in layouts if lay.get("layoutType") == "kFullScoreLayout"]
+        if len(full) == 1:
+            return full[0]
+        names = ", ".join(str(lay.get("layoutName")) for lay in layouts)
+        raise DoricoBatchError(f"{label}: say which layout to change (\"layout\"): {names}")
+    for lay in layouts:
+        if requested == lay.get("layoutID") or (
+            isinstance(requested, str) and requested.casefold() == str(lay.get("layoutName", "")).casefold()
+        ):
+            return lay
+    names = ", ".join(f"{lay.get('layoutName')} ({lay.get('layoutID')})" for lay in layouts)
+    raise DoricoBatchError(f"{label}: no layout {requested!r}; layouts: {names}")
+
+
+def layout_dictionary(settings: dict[str, Any], current: dict[str, str], label: str) -> dict[str, str]:
+    """The Layout Options (path -> value text) that apply set-layout's settings
+    to a layout whose current options are `current`."""
+    out: dict[str, str] = {}
+    width = height = None
+    if "pageSize" in settings:
+        width, height = PAGE_POINTS[settings["pageSize"]]
+    elif "pageWidth" in settings:
+        width, height = settings["pageWidth"] * POINTS_PER_MM, settings["pageHeight"] * POINTS_PER_MM
+    orientation = settings.get("orientation")
+    if orientation is not None and width is None:
+        width, height = float(current[PAGE_WIDTH]), float(current[PAGE_HEIGHT])
+    if width is not None and height is not None:
+        if orientation == "landscape":
+            width, height = max(width, height), min(width, height)
+        elif orientation == "portrait":
+            width, height = min(width, height), max(width, height)
+        out[PAGE_WIDTH], out[PAGE_HEIGHT] = _points(width), _points(height)
+    if "staffSize" in settings:
+        # Sibelius's staff size is the staff's height, four spaces.
+        out[SPACE_SIZE] = _points(settings["staffSize"] / 4 * POINTS_PER_MM)
+    if ("leftMargin" in settings or "rightMargin" in settings) and current.get(MARGIN_TYPE) != "kIdentical":
+        raise DoricoBatchError(
+            f"{label}: this layout's page margins are {current.get(MARGIN_TYPE)}, so left and right "
+            "differ between pages; set Page margins to Same in Layout Options first"
+        )
+    for field, path in LAYOUT_MM_KEYS.items():
+        if field in settings:
+            out[path] = _points(settings[field] * POINTS_PER_MM)
+    for field, path in LAYOUT_SPACE_KEYS.items():
+        if field in settings:
+            out[path] = _points(settings[field])
+    if "hideEmptyStaves" in settings:
+        out[HIDE_EMPTY] = HIDE_EMPTY_POLICIES[settings["hideEmptyStaves"]]
+    return out
+
+
+def _points(value: float) -> str:
+    return f"{value:.6f}"
+
+
+def layout_command(layout_id: int, open_score_id: int, options: dict[str, str]) -> str:
+    """Project.Layout.SetOptions as Layout Options' Apply sends it (logged
+    2026-09-28): the Dictionary is key and value strings, commas escaped."""
+    pairs = []
+    for path, value in options.items():
+        if any(ch in path + value for ch in ',"\\&\n'):
+            raise DoricoBatchError(f"cannot send the layout option {path} = {value!r}")
+        pairs.append(f'{{string: "{path}"}}\\, {{string: "{value}"}}')
+    return (f"Project.Layout.SetOptions?LayoutIDArray={layout_id}&Dictionary=list: "
+            + "\\, ".join(pairs) + f"&OpenScoreID={open_score_id}")
+
+
+def layout_report(current: dict[str, str]) -> dict[str, Any]:
+    """A layout's page setup in set-layout's terms (millimetres, staff spaces)."""
+    def mm(path: str) -> float | None:
+        try:
+            return round(float(current[path]) / POINTS_PER_MM, 2)
+        except (KeyError, ValueError):
+            return None
+
+    width, height = mm(PAGE_WIDTH), mm(PAGE_HEIGHT)
+    report: dict[str, Any] = {"pageWidth": width, "pageHeight": height}
+    if width is not None and height is not None:
+        report["orientation"] = "landscape" if width > height else "portrait"
+        w_pt, h_pt = float(current[PAGE_WIDTH]), float(current[PAGE_HEIGHT])
+        report["pageSize"] = next(
+            (name for name, (w, h) in PAGE_POINTS.items()
+             if abs(min(w_pt, h_pt) - w) < 0.5 and abs(max(w_pt, h_pt) - h) < 0.5),
+            "custom",
+        )
+    try:
+        report["staffSize"] = round(float(current[SPACE_SIZE]) * 4 / POINTS_PER_MM, 2)
+    except (KeyError, ValueError):
+        pass
+    for field, path in LAYOUT_MM_KEYS.items():
+        report[field] = mm(path)
+    for field, path in LAYOUT_SPACE_KEYS.items():
+        try:
+            report[field] = float(current[path])
+        except (KeyError, ValueError):
+            report[field] = None
+    policy = current.get(HIDE_EMPTY)
+    report["hideEmptyStaves"] = next((k for k, v in HIDE_EMPTY_POLICIES.items() if v == policy), policy)
+    report["marginType"] = current.get(MARGIN_TYPE)
+    return report
 
 
 def _stream_for(staff: int, voice: int, staves: list[dict[str, Any]], label: str) -> int:

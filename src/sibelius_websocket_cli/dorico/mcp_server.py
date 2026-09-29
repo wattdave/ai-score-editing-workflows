@@ -126,7 +126,8 @@ async def score_overview(flow: int = 1) -> dict[str, Any]:
 
 @server.tool(annotations=READ_ONLY)
 async def score_structure(flow: int = 1) -> dict[str, Any]:
-    """Time signatures (as measured bar lengths) and key signature positions.
+    """Time signatures (as measured bar lengths), key signature positions,
+    and the full score layout's page setup ("layout", in set-layout's terms).
 
     Dorico's scripting cannot read a time signature's numbers or a key
     signature's key, only where they are and how long the bars are.
@@ -239,6 +240,16 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       are. Octave lines keep the sounding pitch, so Dorico rewrites the notes
       under them (unlike Sibelius). Undo steps: selection + command, plus the
       line's selection and one per resize step, plus two for a temporary rest.
+    - {"op":"set-layout", ...}: any of pageSize ("letter", "a4", "a3", "a5",
+      "tabloid", "legal", "executive", "statement", "concert", "octavo",
+      "9.5x12.5", "10x13"), orientation ("portrait"/"landscape"), or
+      pageWidth + pageHeight (mm), staffSize, topMargin, bottomMargin,
+      leftMargin, rightMargin, aboveTopStaveGap, belowBottomStaveGap (mm),
+      spacesBetweenStaves, spacesBetweenSystems (staff spaces), and
+      hideEmptyStaves ("never"|"after-first-system"|"all-systems", for the
+      whole layout). Changes the full score layout unless "layout" names
+      another (name or layoutID). One undo step; every option is read back.
+      score_structure reports the current settings as "layout".
     - {"op":"add-bars","count":N[,"bar":B]}: N bars of the meter in force
       inserted before bar B (selecting an item on B's first beat, or a
       temporary rest: 2 undo steps, 4 with the rest; refused past the end of
@@ -261,7 +272,9 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       brought to the front while it types, and the result's lyricsCheck
       compares a MusicXML export with the text.
       Command ops (set-break, set-time, set-key, set-barline, add-bars,
-      add-lyrics, the notation ops above) cannot share a batch with the others.
+      set-layout, add-lyrics, the notation ops above) cannot share a batch
+      with the others. set-bar-number and a ranged hide-empty-staves are
+      not available on Dorico.
 
     No operation may target an event another operation already changes.
     Returns each operation's before/after events and the number applied.

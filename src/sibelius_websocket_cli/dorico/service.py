@@ -221,6 +221,7 @@ async def structure(bridge: DoricoBridge, flow: int = 1) -> dict[str, Any]:
             ],
             "barCount": snap.musicxml["barCount"],
             "source": str(snap.export),
+            "layout": await _layout_report(bridge),
         }
     time_signatures = [
         {"bar": first, "position": 0, "barLength": length, "flowPosition": start}
@@ -240,6 +241,7 @@ async def structure(bridge: DoricoBridge, flow: int = 1) -> dict[str, Any]:
             "where they are."
         ),
         "lastBarWithMusic": _last_bar(snap.located, snap.bars),
+        "layout": await _layout_report(bridge),
     }
 
 
@@ -326,11 +328,13 @@ async def _apply_commands(
         else COPY_STEPS + op["extendBars"] + ("tempRest" in op) if op["op"] == "copy-passage"
         else 2 + _resize_cost(op.get("resize")) + (TEMP_REST_STEPS if "tempRest" in op else 0) if op["op"] == "add-line"
         else op["count"] if op["op"] == "add-bars" and "bar" not in op
+        else 1 if op["op"] == "set-layout"
         else 2 + (TEMP_REST_STEPS if "tempRest" in op else 0)
         for op in commands
     )  # every other command op is its selection plus one command (repitch may add respells)
     await _plan_lyrics(bridge, [op for op in commands if op["op"] == "add-lyrics"], flow)
     await _check_bars_exist(bridge, commands, snap, flow)
+    await _resolve_layouts(bridge, commands)
     if dry_run:
         return {"dryRun": True, "operations": prepared, "undoSteps": planned}
     steps = 0
@@ -347,6 +351,13 @@ async def _apply_commands(
     flow_id = flows[flow - 1]["flowID"] if commands else None
     lyrics = []
     for op in commands:
+        if op["op"] == "set-layout":
+            try:
+                results.append(await _set_layout(bridge, op))
+            except DoricoError as exc:
+                raise DoricoError(f"{exc}; {steps + 1} undo step(s) were applied (undo that many to revert)") from exc
+            steps += 1
+            continue
         if op["op"] == "add-bars" and "bar" not in op:
             # Appending needs no selection: one command, one undo step per bar.
             for done in range(op["count"]):
@@ -449,6 +460,53 @@ async def _apply_commands(
     if lyrics:
         outcome["lyricsCheck"] = await _check_lyrics(bridge, lyrics, flow)
     return outcome
+
+
+async def _resolve_layouts(bridge: DoricoBridge, commands: list[dict[str, Any]]) -> None:
+    """Work out each set-layout's layout and the Layout Options it sets,
+    from the layout's current options (before anything changes)."""
+    ops = [op for op in commands if op["op"] == "set-layout"]
+    if not ops:
+        return
+    layouts = await bridge.client.layouts()
+    for i, op in enumerate(ops):
+        layout = score.choose_layout(op.get("layout"), layouts, f"set-layout {i}")
+        current = await bridge.client.layout_options(layout["layoutID"])
+        op["layoutID"], op["layoutName"] = layout["layoutID"], layout.get("layoutName")
+        op["options"] = score.layout_dictionary(op["settings"], current, f"set-layout {i}")
+
+
+async def _set_layout(bridge: DoricoBridge, op: dict[str, Any]) -> dict[str, Any]:
+    """Send Project.Layout.SetOptions (one undo step, even when nothing
+    changes) and read every option back."""
+    open_score = (await bridge.client.status()).get("activeOpenScoreID", 0)
+    await bridge.client.command(score.layout_command(op["layoutID"], open_score, op["options"]))
+    after = await bridge.client.layout_options(op["layoutID"])
+    wrong = {path: after.get(path) for path, value in op["options"].items() if not _same_option(after.get(path), value)}
+    if wrong:
+        raise DoricoError(f"Dorico did not take these layout options: {wrong} (sent {op['options']})")
+    return {"op": "set-layout", "layout": op["layoutName"], "options": op["options"],
+            "layoutNow": score.layout_report(after)}
+
+
+def _same_option(read: str | None, sent: str) -> bool:
+    if read is None:
+        return False
+    try:
+        return abs(float(read) - float(sent)) < 0.01
+    except ValueError:
+        return read == sent
+
+
+async def _layout_report(bridge: DoricoBridge) -> dict[str, Any] | None:
+    """The full score layout's page setup, for structure (None if the
+    project has no single full score layout)."""
+    try:
+        layout = score.choose_layout(None, await bridge.client.layouts(), "layout")
+    except score.DoricoBatchError:
+        return None
+    report = score.layout_report(await bridge.client.layout_options(layout["layoutID"]))
+    return {"layout": layout.get("layoutName"), "layoutID": layout["layoutID"], **report}
 
 
 async def _check_bars_exist(
