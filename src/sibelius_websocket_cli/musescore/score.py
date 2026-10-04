@@ -29,7 +29,12 @@ SYSTEM_STAFF = 0
 # they hold, chords and rests by voice, lyrics by verse, then lines.
 KIND_ORDER = {
     "Clef": 0, "KeySignature": 1, "TimeSignature": 2, "Text": 3,
-    "Tuplet": 4, "NoteRest": 5, "LyricItem": 6, "Line": 7,
+    "Tuplet": 4, "GraceNote": 5, "NoteRest": 6, "LyricItem": 7, "Line": 8,
+}
+#: MuseScore NoteType for grace notes (engraving/types/types.h).
+GRACE_TYPES = {
+    1: "acciaccatura", 2: "appoggiatura", 4: "grace4", 8: "grace16", 16: "grace32",
+    32: "grace8-after", 64: "grace16-after", 128: "grace32-after",
 }
 #: MuseScore spanner names as line types, where Sibelius's name differs.
 LINE_TYPES = {"HairPin": "Hairpin"}
@@ -213,6 +218,14 @@ def present(obj: dict[str, Any], staff: int, bar: int, bar_tick: int, division: 
                  "tiedBack": n["tieBack"], "bracketed": n["parentheses"] != 0}
                 for n in obj.get("notes", [])
             ]
+    elif kind == "GraceNote":
+        item["duration"] = to_units(obj["duration"], division)
+        item["graceType"] = GRACE_TYPES.get(obj.get("noteType"), obj.get("noteType"))
+        item["notes"] = [
+            {"pitch": n["pitch"], "tpc1": n["tpc1"], "tpc2": n["tpc2"], "tied": n["tieForward"],
+             "tiedBack": n["tieBack"], "bracketed": n["parentheses"] != 0}
+            for n in obj.get("notes", [])
+        ]
     elif kind == "LyricItem":
         item.update(text=obj.get("text"), verse=obj.get("verse", 0) + 1, syllabic=obj.get("syllabic"))
         if obj.get("lyricTicks"):
@@ -1007,6 +1020,8 @@ def _target(
     item = by_address.get(address)
     if item is None:
         raise MuseScoreBatchError(f"{label}: nothing at staff {address[0]} bar {address[1]} index {address[2]}")
+    if item["type"] == "GraceNote":
+        raise MuseScoreBatchError(f"{label}: grace notes are read-only in MuseScore so far")
     if "type" in operation and not _matches_type(item, operation["type"]):
         raise MuseScoreBatchError(f"{label}: the object there is a {item['type']} ({item['msType']}), "
                                   f"not a {operation['type']}")

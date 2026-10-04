@@ -41,7 +41,7 @@ Accessibility permission for the terminal.
 |---|---|---|
 | `score_overview` | ✅ | versions, score, metadata, staves with transposition, bar count |
 | `score_structure` | ✅ | keys, times, barlines, repeats, breaks, bar numbers, layout |
-| `query_score` | ✅ | plus `ticks` (exact for tuplets) and `msType`; grace notes not listed yet |
+| `query_score` | ✅ | plus `ticks` (exact for tuplets) and `msType`; grace notes listed read-only (`GraceNote`, with `graceType`) |
 | `apply_batch` + `dry_run` | ✅ | the dry run really runs and rolls back; a MusicXML backup before a real run |
 | `set` | ⚠️ | Dx, Dy, Hidden, CueSize, Beam (MuseScore modes), RestPosition, Text, Duration; lyric `NumNotes` is `Duration` |
 | `set-pitch`, `tie`, `bracket`, `flip-stem`, `nudge`, `delete`, `beam` | ✅ | set-pitch keeps ties, lyrics and articulations |
@@ -101,7 +101,10 @@ MusicXML copy to `~/.cache/sibelius-websocket-cli/musescore/backups/`.
 Differences from Sibelius: `Beam` takes MuseScore's beam modes (0 auto,
 1 none, 2 begin, 5 middle); a lyric's melisma is set with `Duration`, not
 `NumNotes`; a tie needs a next note of the same pitch. The opening clef is
-generated in MuseScore, so it isn't listed, and grace notes aren't listed yet.
+generated in MuseScore, so it isn't listed. Grace notes are listed as
+`GraceNote` just before their main chord, at its position, with `graceType`
+(acciaccatura, appoggiatura, grace8-after, ...) and `notes`; they are
+read-only, so a batch addressing one is refused.
 
 Checked live on 4.7.5 (2026-10-03, ScratchScore): query read bars 1-2 of all
 three staves. A dry run of seven ops (Dy, set-pitch 71→70 spelled B♭ with
