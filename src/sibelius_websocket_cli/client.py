@@ -77,7 +77,8 @@ class SibeliusClient:
                 handshake does not complete.
         """
         if self.launch_if_needed and launcher.is_local_host(self.host):
-            if not launcher.is_sibelius_running():
+            # pgrep/osascript run in a thread so the event loop keeps serving.
+            if not await asyncio.to_thread(launcher.is_sibelius_running):
                 print("Sibelius is not running. Starting Sibelius...", file=sys.stderr)
                 launcher.launch_sibelius(self.app_path)
                 print(

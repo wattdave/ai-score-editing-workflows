@@ -35,6 +35,8 @@ PROCESS = "Dorico 6"
 WINDOW = "Export MusicXML"
 DIALOG_TIMEOUT = 15.0
 EXPORT_TIMEOUT = 120.0
+#: Seconds one osascript run may take before it is killed.
+OSASCRIPT_TIMEOUT = 60.0
 #: Polls (0.8 s apart) without an overwrite prompt before the export counts as done.
 QUIET_POLLS = 4
 #: Where the back end's MusicXML exports go; nothing else is kept there.
@@ -197,25 +199,45 @@ end run
 """
 
 
-def _osascript(script: str, *args: str) -> str:
-    result = subprocess.run(
-        ["osascript", "-", *args], input=script % {"process": PROCESS},
-        capture_output=True, text=True, timeout=60,
+def _text(data: bytes) -> str:
+    """Decode output as subprocess.run(text=True) did, newlines included."""
+    return data.decode().replace("\r\n", "\n").replace("\r", "\n")
+
+
+async def _osascript(script: str, *args: str) -> str:
+    """Run an AppleScript with osascript without blocking the event loop."""
+    process = await asyncio.create_subprocess_exec(
+        "osascript", "-", *args,
+        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
     )
-    if result.returncode != 0:
-        message = result.stderr.strip()
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate((script % {"process": PROCESS}).encode()), OSASCRIPT_TIMEOUT
+        )
+    except BaseException as exc:
+        # A timeout or cancellation must not leave osascript running.
+        if process.returncode is None:
+            process.kill()
+            await process.wait()
+        if isinstance(exc, TimeoutError):
+            # As subprocess.run raised: a TimeoutError is an OSError, which
+            # the MCP session would take for a dropped connection.
+            raise subprocess.TimeoutExpired(["osascript", "-", *args], OSASCRIPT_TIMEOUT) from None
+        raise
+    if process.returncode != 0:
+        message = _text(stderr).strip()
         if "assistive access" in message or "not allowed" in message:
             raise DoricoError(
                 "macOS denied UI scripting; give the terminal Accessibility permission "
                 "(System Settings > Privacy & Security > Accessibility)"
             )
         raise DoricoError(f"UI scripting failed: {message}")
-    return result.stdout.strip()
+    return _text(stdout).strip()
 
 
-def read_export_window() -> dict[str, object]:
+async def read_export_window() -> dict[str, object]:
     """The export window's folder and check boxes, or {} if it is not open."""
-    text = _osascript(_READ_WINDOW, WINDOW)
+    text = await _osascript(_READ_WINDOW, WINDOW)
     if text == "MISSING":
         return {}
     rows = [line.split("\t") + ["", ""] for line in text.splitlines()]
@@ -228,31 +250,31 @@ def read_export_window() -> dict[str, object]:
     return {"folder": folder, "boxes": boxes}
 
 
-def _handle_prompts(folder: Path) -> list[str]:
+async def _handle_prompts(folder: Path) -> list[str]:
     """Answer overwrite prompts for .musicxml files under folder; refuse others."""
     answered = []
-    for line in _osascript(_DIALOGS).splitlines():
+    for line in (await _osascript(_DIALOGS)).splitlines():
         index, _, text = line.partition("\t")
         if "overwrite the file" not in text:
             continue
         target = text.split("'")[1] if text.count("'") >= 2 else ""
         if target.endswith(".musicxml") and Path(target).resolve().is_relative_to(folder.resolve()):
-            _osascript(_CLICK_IN_DIALOG, index, "Overwrite")
+            await _osascript(_CLICK_IN_DIALOG, index, "Overwrite")
             answered.append(target)
         else:
-            _osascript(_CLICK_IN_DIALOG, index, "Cancel")
+            await _osascript(_CLICK_IN_DIALOG, index, "Cancel")
             raise DoricoError(f"Dorico asked to overwrite {target or text.strip()!r}; cancelled")
     return answered
 
 
 async def _read_filled_window() -> dict[str, object]:
     """The export window once Dorico has filled in its folder ({} if closed)."""
-    window = read_export_window()
+    window = await read_export_window()
     for _ in range(WINDOW_READS):
         if not window or window.get("folder"):
             break
         await asyncio.sleep(0.3)
-        window = read_export_window()
+        window = await read_export_window()
     return window
 
 
@@ -272,24 +294,24 @@ def _clear_export_dir() -> Path:
 
 async def export_musicxml(client: DoricoClient, flow: int = 1) -> Path:
     """Export the full score of the active project as MusicXML; return the file."""
-    if read_export_window():
+    if await read_export_window():
         raise DoricoError("Dorico's Export MusicXML window is already open; close it first")
     root = _clear_export_dir()
     await client.command("File.Export?FilterID=MusicXMLExportFilter")
     deadline = time.monotonic() + DIALOG_TIMEOUT
-    window = read_export_window()
+    window = await read_export_window()
     while not window:
         if time.monotonic() > deadline:
             raise DoricoError("Dorico did not open its Export MusicXML window")
         await asyncio.sleep(0.3)
-        window = read_export_window()
+        window = await read_export_window()
     window = await _read_filled_window()
     if window.get("folder") and Path(str(window["folder"])).resolve() != root:
-        outcome = _osascript(_CHOOSE_FOLDER, str(root))
+        outcome = await _osascript(_CHOOSE_FOLDER, str(root))
         window = await _read_filled_window()
         if outcome != "chosen" or not window.get("folder") or Path(str(window["folder"])).resolve() != root:
             if window:
-                _osascript(_CLICK, WINDOW, "Cancel")
+                await _osascript(_CLICK, WINDOW, "Cancel")
             raise DoricoError(
                 f"could not point Dorico's Export MusicXML window at {root} ({outcome}); export cancelled"
             )
@@ -303,27 +325,27 @@ async def export_musicxml(client: DoricoClient, flow: int = 1) -> Path:
     elif not boxes.get("Full score", True):  # type: ignore[union-attr]
         problem = "tick the Full score layout in Dorico's Export MusicXML window"
     if problem:
-        _osascript(_CLICK, WINDOW, "Cancel")
+        await _osascript(_CLICK, WINDOW, "Cancel")
         raise DoricoError(f"{problem}; export cancelled")
     started = time.time()
-    if _osascript(_CLICK, WINDOW, "OK") != "clicked":
+    if await _osascript(_CLICK, WINDOW, "OK") != "clicked":
         raise DoricoError("could not press OK in Dorico's Export MusicXML window")
     deadline = time.monotonic() + EXPORT_TIMEOUT
     while True:
-        _handle_prompts(root)
+        await _handle_prompts(root)
         found = sorted(
             (p for p in root.rglob("*Full score*.musicxml") if p.stat().st_mtime >= started - 1),
             key=lambda p: p.stat().st_mtime,
         )
         flows = [p for p in found if f" - {flow:02d} " in p.name] or found
-        if flows and not read_export_window():
+        if flows and not await read_export_window():
             # Part files follow the full score, each possibly with its own
             # overwrite prompt; a prompt left open blocks every later
             # command, so wait until prompts stop coming.
             quiet = 0
             while quiet < QUIET_POLLS:
                 await asyncio.sleep(0.8)
-                quiet = 0 if _handle_prompts(root) else quiet + 1
+                quiet = 0 if await _handle_prompts(root) else quiet + 1
                 if time.monotonic() > deadline:
                     raise DoricoError("Dorico kept asking to overwrite exported files")
             return flows[-1]
@@ -336,13 +358,13 @@ APPLICATION_LOG = Path.home() / "Library/Application Support/Steinberg/Dorico 6/
 _EXPORTING_PDF = re.compile(r"Exporting PDF to (.+\.pdf)\s*$", re.MULTILINE)
 
 
-def _answer_pdf_prompts() -> bool:
+async def _answer_pdf_prompts() -> bool:
     """Choose Overwrite in Dorico's "output files already exist" prompt."""
     answered = False
-    for line in _osascript(_DIALOGS).splitlines():
+    for line in (await _osascript(_DIALOGS)).splitlines():
         index, _, text = line.partition("\t")
         if "output files already exist" in text:
-            _osascript(_CLICK_IN_DIALOG, index, "Overwrite")
+            await _osascript(_CLICK_IN_DIALOG, index, "Overwrite")
             answered = True
     return answered
 
@@ -359,7 +381,7 @@ async def export_pdf(client: DoricoClient, log: Path = APPLICATION_LOG) -> Path:
     await client.command("Print.ExportCurrentLayoutAsPDF")
     deadline = time.monotonic() + EXPORT_TIMEOUT
     while True:
-        _answer_pdf_prompts()
+        await _answer_pdf_prompts()
         with log.open("rb") as handle:
             handle.seek(offset)
             recent = handle.read().decode("utf-8", "replace")
@@ -373,6 +395,6 @@ async def export_pdf(client: DoricoClient, log: Path = APPLICATION_LOG) -> Path:
         await asyncio.sleep(0.3)
 
 
-def bring_to_front() -> None:
+async def bring_to_front() -> None:
     """Make Dorico the frontmost app; its lyric popover needs it."""
-    _osascript('tell application "System Events" to tell process "%(process)s" to set frontmost to true')
+    await _osascript('tell application "System Events" to tell process "%(process)s" to set frontmost to true')
