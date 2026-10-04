@@ -12,31 +12,67 @@ The Dorico back end is the model. It got to parity by probing first
 all planning in pure Python that tests can reach, and landing in small PRs.
 This plan follows the same route.
 
+## Sources
+
+Every API name and behaviour below is marked with where it comes from:
+
+- **[live]** Seen on this machine with MuseScore Studio 4.7.5 on macOS,
+  2026-10-03, using the upstream plug-in.
+- **[src]** Read in MuseScore's source at tag `v4.7.5`:
+  - the plug-in API in `src/engraving/api/v1/` (`qmlpluginapi.h/.cpp`,
+    `score.h/.cpp`, `elements.h`, `cursor.h/.cpp`, `selection.h`,
+    `style.cpp`, `instrument.h`);
+  - plug-in loading in `src/framework/extensions/`;
+  - the WebSocket API in `src/framework/network/api/websocketserverapi.cpp`;
+  - style names in `src/engraving/style/styledef.h`.
+
+  Reading the source shows that a name exists and what it does, not that a
+  plug-in gets the result it expects. Each such item still has a probe.
+- **[probe]** Not known yet. Phase 0 answers it.
+
+The MuseScore team's API reference is generated from the `APIDOC` comments
+in those same headers, so it's covered here too.
+
 ## What is already known
 
-Established on this machine (MuseScore Studio 4.7.5, macOS), 2026-10-03:
-
-- A QML plug-in can run a WebSocket server:
-  `api.websocketserver.listen(port, onConnect)`, `onMessage(id, fn)`,
-  `send(id, text)`. The upstream plug-in answered `ping` and `getScore`
-  through it. MuseScore's bundled `dev_test_websocket` plug-in also shows a
-  client side, `api.websocket.open(port, fn)`.
-- A plug-in appears in the Plugins menu under its `title` property, or its
-  file name when it has none. `menuPath` is ignored, which is why the
-  upstream plug-in shows as "musescore-mcp-websocket".
-- Enabling a plug-in in the Plugin Manager doesn't start it. The user has
-  to run it from the Plugins menu in every MuseScore session. Nothing
-  listens on the port until they do.
-- The 4.7.5 binary contains the symbols `startCmd`, `endCmd`, `writeScore`,
-  `newElement`, `selectRange` and `websocketserver`. That they're present
-  doesn't show how they behave; that is phase 0's job.
-- Positions in the plug-in API are ticks at 480 per quarter. Measures and
-  staves are 0-based.
-- Generated elements have to be skipped. In the test score, bars 9, 19
-  and 29 reported 20 elements where the other bars had 8, and bar 32 had 12.
+- **WebSocket server** [live][src]: `api.websocketserver.listen(port, fn)`,
+  `onMessage(id, fn)` and `send(id, text)` work. The upstream plug-in
+  answered `ping` and `getScore` through them. There is also a client
+  side, `api.websocket.open(port, fn)`, used by MuseScore's bundled
+  `dev_test_websocket` plug-in.
+- **It listens on every network interface** [src][live]. `listen` calls
+  `QHostAddress::Any`, and `lsof` showed MuseScore listening on `*:8765`
+  while the upstream plug-in ran. Any device that can reach this Mac over
+  the network can drive the open score, with no authentication. A plug-in
+  can't choose the address, so the bridge has to authenticate every
+  request (see Wire protocol).
+- **Plug-in name** [src][live]: MuseScore finds the name by scanning the
+  QML for a line starting with `title:`, and uses the file name if there is
+  none. `menuPath` is never read. The `title:` therefore has to sit on a
+  line of its own.
+- **Starting the plug-in** [live][src]: enabling a plug-in in the Plugin
+  Manager doesn't run it. The framework has "exec points" that set when a
+  plug-in runs (`disabled`, `manually`, and any a module registers), but
+  no registration for an automatic start showed up. Treat "run it from
+  the Plugins menu every session" as the rule, and probe the Plugin
+  Manager for anything else (P1).
+- **Undo grouping** [src]: `startCmd()` opens an undo command and locks the
+  undo stack. The source comment says this locking is so that "all changes
+  made by the plugin, including PluginAPI::cmd(), are committed as a single
+  command". `endCmd(rollback)` either commits or rolls back everything
+  since `startCmd`.
+- **Ticks** [live][src]: positions are ticks, and `division` gives the
+  ticks per quarter (480). Measure and staff indices are 0-based.
+- **No file path or dirty flag** [src]: `Score` exposes `scoreName` (the
+  file name without folder or extension) but no path. The plug-in API's
+  `filePath` property is commented out, and there's nothing for unsaved
+  changes either.
+- **Generated elements** [live][src]: in the test score, bars 9, 19 and 29
+  reported 20 elements where the other bars had 8, and bar 32 had 12.
   The likely explanation is that the upstream walk counted the clefs, key
-  and time signatures MuseScore draws at the start of each system, and the
-  final barline. These aren't objects a user placed.
+  and time signatures drawn at the start of each system, and the final
+  barline. Every element has a read-only `generated` property that tells
+  these apart from objects a user placed.
 
 ## Architecture
 
@@ -56,7 +92,7 @@ New package `src/sibelius_websocket_cli/musescore/`, shaped like `dorico/`:
 | `client.py` | Connect, authenticate, send one request at a time, timeouts, "plug-in not running" errors |
 | `bridge.py` | Typed calls (`read`, `apply`, `write_copy`, `undo`), bridge version check, tick/unit conversion |
 | `score.py` | Pure Python: locate objects, assign indices, filter queries, check guards, turn a validated batch into bridge primitives |
-| `mscx_read.py` | Parse a `.mscx` copy for structure, layout and anything the plug-in can't see |
+| `mscx_read.py` | Parse a `.mscx` copy for anything the plug-in API can't see |
 | `service.py` | Snapshot, overview, structure, query, apply, undo, save, export |
 | `install.py` | Install the plug-in with its token and version |
 | `mcp_server.py`, `cli.py` | Same tools and subcommands as Dorico |
@@ -74,21 +110,24 @@ parsing) moves to a shared module first, in its own PR.
 Request: `{"id": n, "token": t, "method": "Query", "args": {...}}`.
 Reply: `{"id": n, "ok": true, "result": ...}` or
 `{"id": n, "ok": false, "error": "..."}`. Every reply also carries
-`bridge` (version) and `score` (title, file path, measure count), so Python
-notices when the active tab changed between calls.
+`bridge` (version), `mscoreVersion`, and `score` (`scoreName`, measure and
+staff counts), so Python notices when the active tab changed between calls.
 
 - **Port 8766**, overridable with `MUSESCORE_PORT`, so that it doesn't clash
   with the upstream plug-in on 8765 while both exist.
-- **Token.** `musescore-cli install-plugin` generates a token, stores it in
-  `~/.config/sibelius-websocket-cli/musescore-token`, and writes it into the
-  installed QML. The plug-in refuses any request without it. Today any
-  local process can drive the upstream plug-in.
+- **Token, required** because the server is reachable from the network.
+  `musescore-cli install-plugin` generates a long random token, stores it in
+  `~/.config/sibelius-websocket-cli/musescore-token` (mode 600), and writes
+  it into the installed QML. The plug-in compares it on every request
+  and closes the connection on the first wrong one, without saying why.
+  The token isn't encrypted in transit; that's acceptable because the
+  client only connects to 127.0.0.1.
 - **Methods:** `GetBridgeVersion`, `GetScoreInfo`, `GetStaves`, `Read`
   (bars, staves), `ApplyBatch` (primitives, dryRun), `WriteCopy` (path,
   format), `Undo` (steps), `Save`.
-- **Plug-in name.** The `title` is "sibwscli bridge", which is the name
-  people will see in the menu. Docs, the setup skill and error messages use
-  that name.
+- **Plug-in name.** `title: "sibwscli bridge"` on its own line, which is the
+  name people will see in the menu. Docs, the setup skill and error
+  messages use that name.
 
 ## Model
 
@@ -98,73 +137,87 @@ notices when the active tab changed between calls.
   staff (tempo, system text, rehearsal marks), as on Sibelius.
 - **bar:** 1-based measure order. Every measure counts, pick-ups and split
   bars included, as on the other back ends, and frames (title VBox, HBox)
-  don't. Reads also report MuseScore's displayed number (`displayNumber`),
-  which differs after a pick-up, an excluded measure or a number offset.
+  don't. Reads also report MuseScore's displayed number (`no` plus
+  `noOffset` [src]), which differs after a pick-up, an excluded measure or
+  a number offset.
 - **index:** The object's position in a fixed walk of the staff's bar:
   segments in tick order. Within a segment come clefs, then key and time
   signatures, then annotations (text, dynamics, tempo) in track order, then
   chords and rests in voice order, then lyrics by verse. Spanners (slurs,
-  hairpins, lines) come at their start segment after the chord they start on.
-  One function in `score.py` defines this order, and a test pins it down.
+  hairpins, lines) come at their start segment after the chord they start
+  on. Generated elements are skipped. One function in `score.py` defines
+  this order, and a test pins it down.
 - **Guards:** `type` and `position` as on Sibelius, plus `pitch` for notes.
   MuseScore elements have no ids that survive between calls, so these
   guards are the only check that the object is still the one that was read.
   The bridge resolves every address to an element before the first edit
   (the Sibelius lesson in SPEC.md 1.3.1) and checks each guard against it.
-- **Score guard.** A batch carries the score fingerprint from its snapshot:
-  path, measure count, and a hash of the bar contents it touches. It's
-  refused if the user switched tabs or edited those bars in between.
+- **Score guard.** There's no file path to check (see above), so a batch
+  carries a fingerprint from its snapshot: `scoreName`, measure and staff
+  counts, and a hash of the bar contents it touches. It's refused if the
+  user switched tabs or edited those bars in between.
 
 ### Units
 
-`units = ticks * 256 / 480` (`* 8 / 15`). Whole, half, quarter, eighth,
-sixteenth and thirty-second positions convert exactly. Tuplet positions
-don't: a triplet eighth is 160 ticks, or 85⅓ units. Every object therefore
-also carries its exact `ticks`. Addresses and guards accept either value,
-with units rounded to the nearest integer. Adding at a tuplet position
-takes `ticks`. Sibelius has the same rounding at 256 per quarter, so the
-tools look the same either way.
+`units = ticks * 256 / division` (`* 8 / 15` at 480). Whole, half, quarter,
+eighth, sixteenth and thirty-second positions convert exactly. Tuplet
+positions don't: a triplet eighth is 160 ticks, or 85⅓ units. Every object
+therefore also carries its exact `ticks`. Addresses and guards accept
+either value, with units rounded to the nearest integer. Adding at a tuplet
+position takes `ticks`. Sibelius has the same rounding at 256 per quarter,
+so the tools look the same either way.
+
+`Dx`/`Dy` are `offsetX`/`offsetY` × 32. The offsets are in staff spaces
+(spatium) [src], and the Sibelius unit is 1/32 of a space.
 
 ### Types
 
 | MuseScore element | Reported as | Notes |
 |---|---|---|
-| Chord, Rest | `NoteRest` | notes with pitch, spelling (tpc), tie, parentheses; rest flag |
-| Lyrics | `LyricItem` | text, verse, syllabic, melisma end |
+| Chord, Rest | `NoteRest` | notes with `pitch`, `tpc1`/`tpc2`, `tieForward`/`tieBack`, `hasParentheses` [src] |
+| Lyrics | `LyricItem` | `text`, `verse`, `syllabic`, `lyricTicks` (melisma) [src] |
 | StaffText, Expression, Dynamic, InstrumentChange | `Text` | `styleId` mapped to Sibelius names where one fits |
 | SystemText, TempoText, RehearsalMark | `Text` on staff 0 | |
-| Clef, KeySig, TimeSig | `Clef`, `KeySignature`, `TimeSignature` | no generated ones |
+| Clef, KeySig, TimeSig | `Clef`, `KeySignature`, `TimeSignature` | KeySig `key`, `concertKey` [src, since 4.6] |
 | Tuplet | `Tuplet` | ratio, span |
-| Slur, Hairpin, Ottava, Pedal, Trill, TextLine, Volta | `Line` + `lineType` | `Slur` etc. as a specific type, as on Sibelius |
+| Slur, Hairpin, Ottava, Pedal, Trill, TextLine, Volta | `Line` + `lineType` | from `curScore.spanners`, with `spannerTick`, `spannerTicks`, `startElement`, `endElement` [src] |
 | Articulation, Fermata | properties of the NoteRest | `articulations`, as on Dorico |
 
-Allow-listed fields: `Dx`/`Dy` (offset in spatium × 32, the Sibelius
-unit), `Hidden` (`!visible`), `CueSize` (`small`), `StemFlipped`
-(`stemDirection`), `Beam` (`beamMode`), `Bracketed` (note parentheses),
-plus `Pitch`, `Text`, `Voice`.
+Allow-listed fields: `Dx`/`Dy` (`offsetX`/`offsetY`), `Hidden`
+(`!visible`), `CueSize` (`small`), `StemFlipped` (`stemDirection`), `Beam`
+(`beamMode`), `Bracketed` (`hasParentheses`), plus `Pitch`, `Text`, `Voice`.
+All of these properties exist and are writable [src].
 
 ## Reads
 
-- **`score_overview`:** title and metadata tags, file path, dirty flag,
-  measure count, parts with instrument names and staves, and the current
-  selection.
+- **`score_overview`:** `scoreName` and metadata tags (`metaTag`
+  [src]: workTitle, composer, lyricist and so on), measure count, parts
+  with instrument names and staves, and the current selection. There's no
+  file path or dirty flag (see above). If one is needed, `.mscx` metadata
+  doesn't have it either, so the user would have to supply it.
 - **`query_score`:** The bridge returns the raw objects for the requested
   bars and staves. `score.query` assigns indices, applies `types`, `voice`,
   `where` and `fields` with the shared selector code, and truncates at
-  `limit`, as the Dorico back end does.
-- **`score_structure`:** Key and time signatures, barlines, repeats and
-  voltas, layout breaks, irregular measures and bar-number offsets, page
-  and staff layout. Most of it can be read live (measure properties,
-  `curScore.style`). Anything the plug-in API can't reach comes from a
-  `.mscx` copy that `WriteCopy` writes to
-  `~/.cache/sibelius-websocket-cli/musescore/`. That copy holds the full
-  current score, saved or not, and `mscx_read.py` parses it. Unlike
-  Dorico's MusicXML export, it needs no UI scripting and loses nothing.
-  Phase 0 checks that writing a copy leaves the score's own path and dirty
-  flag alone.
+  `limit`, as the Dorico back end does. Lines come from `curScore.spanners`
+  [src], so no file copy is needed for them.
+- **`score_structure`:** Read live as far as possible:
+  - key and time signatures from their segments;
+  - barlines (`barlineType` [src]) and repeats (`repeatStart`/`repeatEnd`
+    [src]);
+  - irregular measures and bar-number offsets (`timesigActual`,
+    `irregular`, `noOffset` [src]);
+  - page and staff layout from `curScore.style.value` (`pageWidth`,
+    `pageHeight`, `spatium`, `staffDistance`, `minSystemDistance`, the
+    margin keys, `hideEmptyStaves`; names [src], units [probe]).
+
+  Layout breaks and anything else the API doesn't show come from a `.mscx`
+  copy that `WriteCopy` writes to `~/.cache/sibelius-websocket-cli/musescore/`
+  with `writeScore` [src], which only works on the active score.
+  `mscx_read.py` parses it. Whether writing a copy touches the score's own
+  file name or saved state is a probe (P16).
 - **Lyrics:** `read_lyrics` and `edit_lyrics` (Dorico has these, Sibelius
   doesn't) are easy here, since the plug-in can read and write lyric text
-  and syllabic directly, with no dialog.
+  and syllabic directly, with no dialog [src].
 
 ## Batches
 
@@ -174,19 +227,29 @@ plus `Pitch`, `Text`, `Voice`.
    emits primitives that name elements by (staff index, track, tick, kind,
    ordinal at that tick).
 2. **Bridge `ApplyBatch`:** resolve every primitive's element, then
-   `curScore.startCmd()`, run the primitives in order, `curScore.endCmd()`.
-   If any primitive throws, `endCmd(true)` rolls the whole batch back.
-   Partial batches can't happen, unlike on Sibelius.
+   `curScore.startCmd("AI batch")`, run the primitives in order, then
+   `curScore.endCmd()`. If any primitive throws, `endCmd(true)` rolls the
+   whole batch back [src]. Partial batches can't happen, unlike on
+   Sibelius. The name passed to `startCmd` is what Edit → Undo shows.
 3. **`dry_run`:** Run the batch for real, describe each object before and
    after, then `endCmd(true)`. Sibelius and Dorico can only check a batch
    before running it. If rollback is exact, a MuseScore dry run proves the
-   batch works.
-4. **Backup:** Before a real run, write a `.mscz` copy of the current state
+   batch works (P2).
+4. **Changes that skip the undo stack.** A few API paths change the score
+   without recording an undo step [src], so neither undo nor rollback would
+   reverse them:
+   - adding a layout break with `Cursor.add` (it calls
+     `MeasureBase::addInternal`);
+   - `setMetaTag`.
+
+   `prepare_batch` sends no such primitive inside a batch. Each has an
+   undoable route instead, or runs outside batches (see Operations).
+5. **Backup:** Before a real run, write a `.mscz` copy of the current state
    (unsaved edits included) to the backups folder that Sibelius uses, and
    report its path.
-5. **Undo:** Undo the batch's steps with `cmd("undo")`. The result reports
-   `undoSteps` when a batch had to use `cmd()` steps that count separately
-   (see risk 1).
+6. **Undo:** `cmd("undo")` once per step. Inside `startCmd`, `cmd()` calls
+   join the batch's single step [src], so a batch should be one step.
+   P3 confirms this live.
 
 ## Operations
 
@@ -195,40 +258,40 @@ phase 0 list below, and **M** is the milestone that delivers it.
 
 | Op | MuseScore route | Probe | M |
 |---|---|---|---|
-| `set` Dx/Dy, Hidden, CueSize | `offsetX`/`offsetY`, `visible`, `small` | P5 | 2 |
-| `set` Beam, RestPosition | `beamMode`; rest `offsetY` | P5 | 2 |
-| `set` lyric Text, NumNotes | `text`, `lyricTicks` (melisma) | P9 | 2 |
-| `set` Text, line Duration | `text`; spanner `spannerTicks` | P7 | 2 |
-| `set-pitch` | `pitch` + `tpc1`/`tpc2`; the note keeps its ties, lyrics and articulations (Dorico replaces it) | P6 | 2 |
-| `tie` | `Tie` element on the note, or select + `cmd("tie")` | P3, P6 | 2 |
-| `bracket` | note parentheses | P5 | 2 |
-| `flip-stem` | `stemDirection` | P5 | 2 |
+| `set` Dx/Dy, Hidden, CueSize | `offsetX`/`offsetY`, `visible`, `small` [src] | P5 | 2 |
+| `set` Beam, RestPosition | `beamMode` [src]; rest `offsetY` | P5 | 2 |
+| `set` lyric Text, NumNotes | `text`, `lyricTicks` [src] | P9 | 2 |
+| `set` Text, line Duration | `text`; `spannerTicks` [src] | P7 | 2 |
+| `set-pitch` | `pitch` + `tpc1`/`tpc2` [src]; the note keeps its ties, lyrics and articulations (Dorico replaces it) | P6 | 2 |
+| `tie` | select the note + `cmd("tie")` (`tieForward` is read-only [src]) | P3 | 2 |
+| `bracket` | `hasParentheses` [src] | P5 | 2 |
+| `flip-stem` | `stemDirection` [src] | P5 | 2 |
 | `nudge` | offset += | P5 | 2 |
-| `delete` | `removeElement`; a chord becomes a rest | P4 | 2 |
+| `delete` | `removeElement` (`deleteItem` [src]); a chord becomes a rest | P4 | 2 |
 | `beam` | `beamMode` begin/mid on the range | P5 | 2 |
-| `add-note` | Cursor at (track, tick), `setDuration`, `addNote(pitch, addToChord)`; any voice; `tied`; spelling from tpc | P4 | 3 |
-| `add-rest`, `add-tuplet` (MuseScore and Dorico) | `Cursor.addRest`, `addTuplet` | P4 | 3 |
-| `add-text` | `newElement` STAFF_TEXT / SYSTEM_TEXT / EXPRESSION / TEMPO_TEXT / REHEARSAL_MARK + `Cursor.add`; styleId mapped | P4 | 3 |
-| `add-lyric` | `newElement(LYRICS)`, `verse`, `syllabic`, `lyricTicks` | P9 | 3 |
-| `add-line` | spanner via `newElement` + `Cursor.add` with an end tick, or selectRange + `cmd("add-hairpin")` / `"add-slur"` / `"add-8va"` | P7, P3 | 3 |
-| `add-dynamic`, `set-articulation`, `add-tempo`, `add-rehearsal-mark`, `add-slur`, `add-clef` (Dorico ops) | `newElement` DYNAMIC / ARTICULATION / TEMPO_TEXT (with `tempo`) / REHEARSAL_MARK / CLEF | P4 | 3 |
-| `transpose` | per note: `pitch` + `tpc` with the shared `transpose_spelled`, plus key signatures in range | P6, P10 | 4 |
-| `copy-passage` | `selectRange` + `cmd("copy")`, select destination + `cmd("paste")` | P3, P11 | 4 |
-| `set-key` | `newElement(KEYSIG)` with key/mode at the bar's first segment | P10 | 4 |
-| `set-time` | `newElement(TIMESIG)`, `timesig = fraction(n, d)`, common/cut by subtype | P4 | 4 |
-| `set-break` | `newElement(LAYOUT_BREAK)`, `layoutBreakType` line/page, added to the measure; `none` removes it | P12 | 4 |
-| `set-barline` | end barline `barLineType`; repeats as measure `repeatStart`/`repeatEnd` | P12 | 4 |
-| `add-bars` | `appendMeasures(n)` / insert; irregular `length` by measure actual duration | P13 | 4 |
-| `set-bar-number` | measure `noOffset` and `irregular` (exclude from count); Dorico can't do this at all | P13 | 4 |
-| `set-layout` | `curScore.style.setValue`: page size (inches), spatium, margins, staff and system distances | P14 | 4 |
-| `hide-empty-staves` | style `hideEmptyStaves` (score-wide); a bar range likely isn't possible, as on Dorico | P14 | 4 |
+| `add-note` | Cursor at (track, tick), `setDuration`, `addNote(pitch, addToChord)` [src]; any voice; `tied`; spelling from tpc | P4 | 3 |
+| `add-rest`, `add-tuplet` (MuseScore and Dorico) | `Cursor.addRest`, `addTuplet(ratio, duration)` [src] | P4 | 3 |
+| `add-text` | `newElement` STAFF_TEXT / SYSTEM_TEXT / EXPRESSION / TEMPO_TEXT / REHEARSAL_MARK + `Cursor.add` (undoable [src]); styleId mapped | P4 | 3 |
+| `add-lyric` | `newElement(LYRICS)` + `Cursor.add` onto the chord [src], `verse`, `syllabic`, `lyricTicks` | P9 | 3 |
+| `add-line` | `newElement` (HAIRPIN, OTTAVA...) + `Cursor.add` (undoable [src]), then `spannerTicks`; otherwise selectRange + `cmd("add-hairpin")` / `"add-slur"` | P7 | 3 |
+| `add-dynamic`, `set-articulation`, `add-tempo`, `add-rehearsal-mark`, `add-slur`, `add-clef` (Dorico ops) | `newElement` DYNAMIC / ARTICULATION (added to the chord [src]) / TEMPO_TEXT (`tempo`, `tempoFollowText` [src]) / REHEARSAL_MARK / CLEF (`Cursor.add` handles clef placement [src]) | P4 | 3 |
+| `transpose` | per note: `pitch` + `tpc` with the shared `transpose_spelled`; there is no transpose call in the plug-in API [src]. Key signatures in range too | P6, P10 | 4 |
+| `copy-passage` | `selection.selectRange(startTick, endTick, startStaff, endStaff)` [src] + `cmd("copy")`, select the destination + `cmd("paste")` | P3, P11 | 4 |
+| `set-key` | `newElement(KEYSIG)`, `key`/`concertKey` [src, since 4.6], `Cursor.add` on every staff (it adds to one track only [src]) | P10 | 4 |
+| `set-time` | `newElement(TIMESIG)`, `timesig = fraction(n, d)`, `timesigType` for common/cut; `Cursor.add` calls `cmdAddTimeSig` [src] | P4 | 4 |
+| `set-break` | **not** `Cursor.add`, which skips the undo stack [src]; select the measure + `cmd("system-break")` / `"page-break"`, or edit the `.mscx` route if needed | P12 | 4 |
+| `set-barline` | `barlineType` on the end barline [src]; repeats as measure `repeatStart`/`repeatEnd` [src] | P12 | 4 |
+| `add-bars` | `appendMeasures(n)` [src] at the end; no insert call exists [src], so select bar B + `cmd("insert-measures")`-style action; irregular `length` by `timesigActual` [src] | P13 | 4 |
+| `set-bar-number` | measure `noOffset` and `irregular` (exclude from count) [src]; Dorico can't do this at all | P13 | 4 |
+| `set-layout` | `curScore.style.setValue`, undoable [src]: `pageWidth`, `pageHeight`, `spatium`, margins, `staffDistance`, `minSystemDistance` | P14 | 4 |
+| `hide-empty-staves` | style `hideEmptyStaves` (score-wide), or per system with `System.setHideStaffIfEmpty(staffIdx, hide)` [src], which might allow a bar range | P14 | 4 |
 | `delete-voice` | `removeElement` on every chord and rest in that track over the range | P4 | 4 |
 | `undo` | `cmd("undo")` × steps, refusing when nothing is left to undo | P15 | 1 |
-| `save_score` | `cmd("file-save")` for a saved score; `writeScore(.mscz)` for "save a copy" | P16 | 5 |
-| `export_score` | `writeScore` to pdf, png, svg, mid, musicxml, mxl; mp3 if supported | P16 | 5 |
-| `project_info`, `set_project_info` | `metaTag` / `setMetaTag` (workTitle, composer, lyricist, arranger, copyright) | P17 | 5 |
-| `add_instrument` (upstream) | `appendPart(id)` | P18 | 6 |
-| staff mute (upstream does this wrong) | the part's instrument channel `mute` | P18 | 6 |
+| `save_score` | `cmd("file-save")` for a score already saved (the API has no save call [src]); `writeScore(.mscz)` for "save a copy" | P16 | 5 |
+| `export_score` | `writeScore(score, path, ext)` [src]; which formats it takes is a probe | P16 | 5 |
+| `project_info`, `set_project_info` | `metaTag` / `setMetaTag` [src]; `setMetaTag` isn't undoable [src], so it runs outside batches and says so | P17 | 5 |
+| `add_instrument` (upstream) | `appendPart(id)`; also `insertPart`, `replacePart`, `removeParts` [src] | P18 | 6 |
+| staff mute (upstream does this wrong) | `Channel.mute` does nothing in MuseScore 4 [src]. The nearest is turning off a staff's `playbackVoice1`-`4` [src] | P18 | 6 |
 
 ## Phase 0: probes
 
@@ -240,47 +303,50 @@ the undo count with a marker edit.
 - **P1 Plug-in lifecycle.** Does the server survive closing and opening
   scores, and switching tabs? What happens when the plug-in runs a second
   time (the port is already taken)? After the QML file changes, is
-  re-running enough or is a restart needed? Does `listen` bind to
-  127.0.0.1 or to every interface?
-- **P2 Undo grouping.** Are several edits between `startCmd`/`endCmd` one
-  step? Does `endCmd(true)` restore everything, leave no redo entry, and
-  leave the dirty flag alone?
-- **P3 `cmd()` inside `startCmd`.** Does `cmd("tie")`, `"copy"`, `"paste"`
-  or `"delete"` join the open command, start its own undo step, or fail?
-  This is the biggest unknown (risk 1).
+  re-running enough or is a restart needed? Does the Plugin Manager offer
+  any exec point besides "manually"? (It's already known that the server
+  listens on every interface [src][live].)
+- **P2 Rollback.** Are several edits between `startCmd`/`endCmd` one undo
+  step? Does `endCmd(true)` restore everything and leave no redo entry? Does
+  the window show the score as unsaved afterwards?
+- **P3 `cmd()` inside `startCmd`.** The source says `cmd()` changes join the
+  open command. Check this for `tie`, `copy`, `paste`, `delete` and the
+  break and measure actions, including under `endCmd(true)`. `cmd()`
+  dispatches through the UI's action system [src], which might not finish
+  before it returns.
 - **P4 Cursor and newElement.** Adding into voices 2-4 and empty
   measures; overwrite versus merge at a position; adding at tuplet ticks.
-- **P5 Properties.** Which of `offsetX`, `visible`, `small`,
-  `stemDirection`, `beamMode` and parentheses are readable and writable
-  from QML, and in what units.
+- **P5 Properties.** Read and write `offsetX`, `visible`, `small`,
+  `stemDirection`, `beamMode` and `hasParentheses`, and confirm each is one
+  undo step.
 - **P6 Pitch and spelling.** Setting `pitch` and `tpc1`/`tpc2` on
   transposing instruments. Do ties survive a pitch change?
-- **P7 Spanners.** Can the plug-in list slurs, hairpins and lines and
-  their start and end ticks? Can it create them with a chosen length?
-  If not, which `cmd()` actions make them from a range selection?
-- **P8 Generated elements.** Which property separates system-start and
-  courtesy signatures from placed ones (the bar 9/19/29 counts above)?
-- **P9 Lyrics.** Writing `syllabic`, verse and melisma (`lyricTicks`).
-- **P10 Key signatures.** Can a KeySig's key be set from QML, by concert
-  or written key? Older plug-in APIs couldn't.
+- **P7 Spanners.** Read `curScore.spanners` [src] on a score with slurs and
+  hairpins. Create one with `newElement` + `Cursor.add` and set its length.
+- **P8 Generated elements.** Check that `generated` [src] separates the
+  bar 9/19/29 extras from placed objects.
+- **P9 Lyrics.** Writing `syllabic`, `verse` and `lyricTicks`.
+- **P10 Key signatures.** Set `key` and `concertKey` [src] on transposing
+  staves, and check that every staff gets the change.
 - **P11 Clipboard.** Does copy/paste through `cmd()` work with no score
   view focus, and does it overwrite the user's clipboard?
-- **P12 Breaks and barlines.** Can LAYOUT_BREAK be added and removed? Is
-  `barLineType` writable? Are the repeat flags writable?
-- **P13 Measures.** `appendMeasures` and insertion before a bar; changing a
-  measure's actual length; `noOffset`/`irregular`.
-- **P14 Style.** `style.value`/`setValue` names and units for page size,
-  spatium, margins, staff and system distances, hide-empty staves. Are
-  they undoable inside `startCmd`?
+- **P12 Breaks and barlines.** Which action names make and remove system
+  and page breaks, and are they undoable? Is `barlineType` writable? Are
+  the repeat flags writable?
+- **P13 Measures.** `appendMeasures`, and the action that inserts before a
+  bar; changing `timesigActual`; `noOffset` and `irregular`.
+- **P14 Style.** Units of `pageWidth`, margins and distances;
+  `System.setHideStaffIfEmpty` over a bar range.
 - **P15 Undo safety.** Does `cmd("undo")` with an empty history open a
-  dialog? Can the plug-in tell whether undo is available?
-- **P16 Save and export.** Does `writeScore` change the score's path or
-  dirty flag? Which formats does it take? Does `cmd("file-save")` open a
+  dialog? There's no way to ask whether undo is available [src], so the
+  bridge has to count its own steps.
+- **P16 Save and export.** Does `writeScore` change the score's file name or
+  saved state? Which formats does it take? Does `cmd("file-save")` open a
   dialog for a score that has never been saved? The `mscore -o`
   command-line export is the fallback for saved files.
-- **P17 Metadata.** Are `setMetaTag` edits undoable?
-- **P18 Parts.** `appendPart`, and mute through the part's instruments and
-  channels.
+- **P17 Metadata.** Check that `setMetaTag` survives a save and isn't undone.
+- **P18 Parts and playback.** `appendPart`; whether turning off
+  `playbackVoice1`-`4` actually silences a staff.
 - **P19 Size.** How long `Read` takes on a large choral score (the
   SATB scores used for Dorico). The plug-in runs on MuseScore's UI thread,
   so a long read freezes the window. Chunk by bars if needed.
@@ -308,10 +374,10 @@ the undo count with a marker edit.
    set-bar-number, set-layout, hide-empty-staves, delete-voice.
 5. **Files and metadata:** save_score, export_score, project_info,
    read_lyrics, edit_lyrics.
-6. **Switch-over:** add_instrument and mute; a recorded live check; the
-   `musescore` skill rewritten for the new tools (the upstream notes kept
-   as history); README, setup skill, `docs/musescore.md` parity table;
-   `.mcp.json` points `musescore` at `musescore-mcp`.
+6. **Switch-over:** add_instrument and staff playback; a recorded live
+   check; the `musescore` skill rewritten for the new tools (the upstream
+   notes kept as history); README, setup skill, `docs/musescore.md` parity
+   table; `.mcp.json` points `musescore` at `musescore-mcp`.
 
 ## Testing
 
@@ -322,9 +388,9 @@ the undo count with a marker edit.
 - **Client tests** against a fake WebSocket server on a free port: token
   refusal, timeouts, a score change between calls, an old bridge version.
 - **QML checks:** a syntax check of `msbridge.qml` in CI (upstream ships
-  `syntax_check.js`), plus a test that the `cmd()` allow-list and the
-  methods match what Python calls, like the test that keeps
-  `BatchWritableTable` in step with `batch_ops`.
+  `syntax_check.js`), a test that `title:` sits on its own line, and a test
+  that the `cmd()` allow-list and the methods match what Python calls, like
+  the test that keeps `BatchWritableTable` in step with `batch_ops`.
 - **Live check:** `scripts/musescore_live_check.py` runs a fixed scenario on a scratch
   score (read, a batch of every op, dry run, rollback, undo by the reported
   steps, a marker edit left untouched) and prints a report. Its results go
@@ -335,44 +401,52 @@ the undo count with a marker edit.
 
 Assuming the probes go as expected:
 
-- **✅** `score_overview`, `query_score`, `apply_batch` with `dry_run` (better
-  than Sibelius: a real rollback), `undo`, every addressed op, add-note,
-  add-rest, add-tuplet, add-text, add-lyric, the Dorico note ops,
-  set-time, set-break, set-bar-number, delete-voice, project info, lyrics
-  read and edit.
-- **✅ or ⚠️, depending on probes:** `score_structure` (P12-P14), add-line
-  (P7), transpose and set-key (P10), copy-passage (P3, P11), set-barline
-  (P12), add-bars with `length` (P13), set-layout (P14), save_score and
-  export_score (P16).
-- **⚠️ likely:** hide-empty-staves over a bar range.
-- **Still manual:** starting the plug-in each session. MuseScore 4 has no
-  auto-start for plug-ins, so the first tool call that can't connect has to
-  say exactly which menu item to run.
+- **✅** `score_overview` (without a file path), `query_score`,
+  `apply_batch` with `dry_run` (better than Sibelius: a real rollback),
+  `undo`, every addressed op, add-note, add-rest, add-tuplet, add-text,
+  add-lyric, the Dorico note ops, set-time, set-bar-number, set-layout,
+  delete-voice, project info, lyrics read and edit.
+- **✅ or ⚠️, depending on probes:** `score_structure` (P12, P14), add-line
+  (P7), transpose and set-key (P10), copy-passage (P3, P11), set-break
+  (P12), set-barline (P12), add-bars before a bar (P13), hide-empty-staves
+  over a bar range (P14), save_score and export_score (P16).
+- **❌ likely:** staff mute as such. MuseScore 4's mixer isn't reachable from
+  plug-ins [src].
+- **Still manual:** starting the plug-in each session, unless P1 finds an
+  exec point that runs it at startup. The first tool call that can't
+  connect has to say exactly which menu item to run.
 
 ## Risks and decisions
 
-1. **`cmd()` and undo (P3).** If `cmd()` actions take their own undo
-   steps, the operations that depend on them (copy-passage and possibly
-   tie and line creation) can't join the batch's single step or its
-   rollback. In that case: prefer direct element edits; run any remaining
-   `cmd()` ops after the `endCmd` of the API edits; report `undoSteps`;
-   and make dry runs of those ops check only, as on Sibelius.
-2. **Spanner reads (P7).** If the plug-in API can't list spanners, reads
-   take them from the `.mscx` copy. That costs one file write per read, but
-   unlike Dorico's export it needs no UI scripting.
-3. **UI-thread blocking (P19).** Reads are chunked by bars, with one
+1. **Network exposure.** Covered by the token. The docs and the setup skill
+   also say that the upstream plug-in has no such protection: while it
+   runs, anyone on the same network can edit the open score. Recommended:
+   stop using it once milestone 2 lands.
+2. **`cmd()` timing (P3).** The source says `cmd()` changes join the batch's
+   undo step, but `cmd()` dispatches through the UI's action system and
+   may not finish before it returns. If a dispatched action finishes later
+   or opens a dialog, those ops run outside `ApplyBatch`'s
+   `startCmd`/`endCmd` and report their own `undoSteps`, as on Dorico.
+3. **Changes that skip the undo stack.** Layout breaks through `Cursor.add`
+   and `setMetaTag` don't record undo steps [src]. Keep the list in
+   `score.py` and add to it whenever a probe finds another.
+4. **UI-thread blocking (P19).** Reads are chunked by bars, with one
    request in flight at a time.
-4. **MuseScore versions.** Development targets 4.7.x. The bridge reports
-   `mscoreVersion` and the client warns on an untested major or minor
-   version. An upgrade checklist like `dorico-upgrade-checklist.md` follows
-   the first upgrade.
-5. **Which way the WebSocket runs.** Recommended: the plug-in stays the
+5. **MuseScore versions.** Development targets 4.7.x. Several properties
+   used here are only available since 4.6 [src] (`key`, `concertKey`,
+   `isHeader`, `hideStavesWhenIndividuallyEmpty`, `showElementInScore`).
+   The bridge reports `mscoreVersion`, refuses anything older than 4.6, and
+   warns on an untested minor version. An upgrade checklist like
+   `dorico-upgrade-checklist.md` follows the first upgrade.
+6. **Which way the WebSocket runs.** Recommended: the plug-in stays the
    server, as upstream has it. The other way (Python listens, the plug-in
-   connects with `api.websocket.open`) would mean starting the MCP server
-   before the plug-in, every session. Decided after P1.
-6. **The upstream server.** It stays registered as `musescore` until
+   connects with `api.websocket.open`) would avoid the open port, but would
+   mean starting the MCP server before the plug-in, every session. Decided
+   after P1.
+7. **The upstream server.** It stays registered as `musescore` until
    milestone 6. Then it either moves to `musescore-upstream` or is removed;
    recommended: removed, with its plug-in left for the user to delete.
-7. **Licensing.** The bridge is new code. Taking the upstream plug-in's
+8. **Licensing.** The bridge is new code. Taking the upstream plug-in's
    WebSocket setup is fine under its MIT license, which stays credited.
-   MuseScore's own sources are only read for reference.
+   MuseScore's own sources (GPL-3.0) are only read for reference, not
+   copied.
