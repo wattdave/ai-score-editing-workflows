@@ -113,3 +113,104 @@ API seems to support, to confirm on MuseScore 4.7:
 The upstream server can stay registered until the back end covers what
 people use it for. Then `.mcp.json` would point `musescore` at the new
 `musescore-mcp`.
+
+## Probe results (MuseScore Studio 4.7.5, macOS)
+
+Milestone 0 of [musescore-backend-plan.md](musescore-backend-plan.md).
+Probes ran through `scripts/musescore_probe.py` and its plug-in on a
+throwaway score (Clarinet in B♭ and Piano). The plug-in requires a token,
+because MuseScore's WebSocket server listens on every interface (checked:
+`*:8767`; requests with a wrong or missing token were refused). Each edit
+probe ran in its own `startCmd` and was rolled back unless noted.
+
+### Plug-in loading (P1, partly), 2026-10-03
+
+- A plug-in function named `run` clashes with the plug-in's `run` signal:
+  MuseScore logs "Duplicate method name" and then fails the whole file
+  with "Cannot assign to non-existent property onRun".
+- **A changed plug-in file is not reloaded until MuseScore restarts.**
+  After fixing the file, running the plug-in again failed with the old
+  file's error and line number. Every bridge update needs a restart.
+- MuseScore reads `title:` and the other properties as text and stops at
+  the first line ending in `{`, so they must stay above every block.
+- **Replying to a client that has disconnected hits an assertion**
+  (`WebSocketServerApi::send ... it != m_clients.end()`), and MuseScore
+  crashed right after it (crash dump written). The bridge has to keep track
+  of disconnects and not send to a closed client.
+
+### Reading (P8), 2026-10-03
+
+- `generated` is true for system-start header clefs and for ordinary
+  barlines (begin and end). The opening key and time signatures in bar 1
+  are real elements (`generated` false), unlike Sibelius, where they are
+  not bar objects.
+- Parts report `longName`, `instrumentId`, `startTrack`, `endTrack` and
+  their staves; tracks are 4 per staff.
+
+### Undo and rollback (P2, P3, P15), 2026-10-03
+
+- Two edits between `startCmd()` and `endCmd()` are **one** undo step.
+- `endCmd(true)` restores the score at once (the same request reads the old
+  values), and leaves no undo step behind: the next undo reverted the edit
+  before it.
+- **`cmd("undo")` does nothing in 4.7.** `cmd()` translates only a few old
+  names (`copy`, `paste`, `delete`, ...); the undo action is
+  `action://notation/undo` (and `action://notation/redo`). With that name,
+  undo takes effect before `cmd()` returns. The upstream plug-in's `undo`
+  tool sends `cmd("undo")`, so it never worked.
+- Undo is only dispatched when something can be undone (`canUndo`), so an
+  empty history cannot open a dialog [src].
+- **`cmd()` joins the batch.** In one `startCmd`: a pitch change through
+  the API, then selecting the previous note and `cmd("tie")`. The tie
+  existed before `cmd()` returned, one undo reverted both, and
+  `endCmd(true)` rolled both back. (The undo-stack lock that makes this
+  work arrived in 4.6.0: it is absent from `score.cpp` at v4.5.2.)
+
+### Properties and spelling (P5, P6), 2026-10-03
+
+- Writable, and rolled back: `offsetX`/`offsetY` (staff spaces), `visible`,
+  `small`, `stemDirection` (0 auto, 1 up, 2 down).
+- `hasParentheses` takes 0 or 3 (both sides); `true` (1, left only) logs
+  "Notes cannot set left & right parens individually". `cmd("add-parentheses")`
+  on a selected note sets 3.
+- `beamMode` always read 0 and did not change when set to 2, 3 or "BEGIN",
+  nor after `cmd("beam-break-left")`; not yet known whether the write or the
+  read fails.
+- **Setting `pitch` keeps the old spelling** (pitch 74 with tpc1 still C),
+  so set-pitch must write `pitch`, `tpc1` and `tpc2` together. On the
+  clarinet `tpc1` was 14 (C, concert) and `tpc2` 16 (D, written); `tpc`
+  writes the spelling of the current concert/transposed view only.
+  `curScore.staves[0].transpose(fraction(0, 1))` gave chromatic -2,
+  diatonic -1.
+- `selection.select()` refuses a Chord ("Cannot select element of type
+  Chord"); select a note.
+
+### Adding notes (P4), 2026-10-03
+
+- Cursor at track 0, `rewindToTick`, `setDuration(1, 8)`, `addNote` three
+  times wrote three eighths and filled the bar with rests.
+- `addNote(p, true)` after rewinding adds to the chord.
+- **Adding where a note is replaces it** (bar 1 beat 1: 72 became 60).
+- `addTuplet(fraction(3, 2), fraction(1, 4))`, then rewinding and adding
+  eighths, wrote three 160-tick tuplet notes and carried on after it.
+- **Voice 2 needs a position from voice 1.** `rewindToTick` on track 1 in a
+  bar with no voice-2 content leaves no position ("cursor location is
+  undefined") and `addNote` adds nothing. Rewinding on track 0 and then
+  setting `track = 1` without rewinding works; this only reaches ticks
+  where voice 1 has a chord or rest.
+- In one request, `addNote` failed after earlier rolled-back probes in the
+  same request ("cursor location is undefined"), where the same steps
+  worked as the first probe. Not yet explained.
+
+### writeScore (P16, partly), 2026-10-03
+
+- **`writeScore` cannot write `.mscz` or `.mscx` in 4.7.5.** It exports
+  through the File → Export path, choosing per-page, per-part or
+  multi-part output by what the writer supports. The `.msc*` writer only
+  supports multi-part, and its multi-part function returns "Not supported"
+  (`MscNotationWriter::writeList`). The export then shows a Retry/Abort
+  dialog, which blocks the plug-in; every Retry failed again. After Abort,
+  MuseScore crashed (see above). An empty file was left at the path.
+- So the plan's `.mscx` structure read and `.mscz` backups need another
+  route. Any failed export opens that dialog, so the bridge must only
+  request formats known to work.
