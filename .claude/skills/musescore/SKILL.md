@@ -26,9 +26,18 @@ downloads the pinned commit into `.vendor/mcp-musescore` and copies
 MuseScore the user must:
 
 1. Open a score.
-2. Enable "MuseScore API Server" once in Plugins → Plugin Manager.
-3. Run Plugins → MuseScore API Server in every MuseScore session. The plug-in
-   listens on `ws://localhost:8765`; the Python server only connects to it.
+2. Enable "musescore-mcp-websocket" once in Plugins → Plugin Manager.
+   MuseScore 4 names plug-ins by their `title:` line or, failing that, their
+   file name; this plug-in has no `title:`, so its `menuPath` name
+   ("MuseScore API Server") never appears.
+3. Run Plugins → musescore-mcp-websocket in every MuseScore session.
+   Enabling it does not start it. The plug-in listens on port 8765; the
+   Python server only connects to it.
+
+MuseScore's plug-in WebSocket server listens on every network interface, not
+just localhost, and this plug-in has no authentication: while it runs, any
+device on the same network can edit the open score. Tell the user, and
+suggest quitting MuseScore (or not running the plug-in) on shared networks.
 
 To check the bridge without MCP:
 
