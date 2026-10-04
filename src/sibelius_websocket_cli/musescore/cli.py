@@ -47,6 +47,21 @@ def build_parser() -> argparse.ArgumentParser:
     apply.add_argument("--dry-run", action="store_true", help="run the batch, report it, and roll it back")
     undo = sub.add_parser("undo", help="undo the last change(s) in MuseScore")
     undo.add_argument("--steps", type=int, default=1)
+    save = sub.add_parser("save", help="save the score to its own file (File > Save)")
+    save.add_argument("--path", help="also copy the saved file here")
+    export = sub.add_parser("export", help="export the score as pdf, png, svg, musicxml, mxl, mid or audio")
+    export.add_argument("--format", required=True, choices=list(service.EXPORT_FORMATS))
+    export.add_argument("--path", required=True)
+    sub.add_parser("info", help="the score's metadata (title, composer, lyricist, ...)")
+    set_info = sub.add_parser("set-info", help="set metadata fields (not undoable)")
+    set_info.add_argument("--field", action="append", required=True, metavar="NAME=VALUE")
+    lyrics = sub.add_parser("lyrics", help="a staff's verse as one line of text")
+    lyrics.add_argument("--staff", required=True, help="number or part name")
+    lyrics.add_argument("--verse", type=int, default=1)
+    edit = sub.add_parser("edit-lyrics", help="replace a staff's verse (same syllable count)")
+    edit.add_argument("--staff", required=True, help="number or part name")
+    edit.add_argument("--verse", type=int, default=1)
+    edit.add_argument("--text", required=True)
     return parser
 
 
@@ -69,6 +84,21 @@ async def run(args: argparse.Namespace) -> Any:
             return await service.apply(bridge, json.loads(text), dry_run=args.dry_run)
         if args.command == "undo":
             return await bridge.undo(args.steps)
+        if args.command == "save":
+            return await service.save(bridge, args.path)
+        if args.command == "export":
+            return await service.export(bridge, args.format, args.path)
+        if args.command == "info":
+            return await service.project_info(bridge)
+        if args.command == "set-info":
+            fields = dict(item.split("=", 1) for item in args.field if "=" in item)
+            if len(fields) != len(args.field):
+                raise ValueError("each --field is NAME=VALUE")
+            return await service.set_project_info(bridge, fields)
+        if args.command == "lyrics":
+            return await service.read_lyrics(bridge, args.staff, args.verse)
+        if args.command == "edit-lyrics":
+            return await service.edit_lyrics(bridge, args.staff, args.text, args.verse)
     raise AssertionError(args.command)
 
 

@@ -1120,3 +1120,62 @@ def _beam(
     if following and following[0]["beam"] in {0, BEAM_MID}:
         out.append({"op": "set", "ref": following[0]["_ref"], "prop": "beamMode", "value": BEAM_BEGIN})
     return out
+
+
+# ------------------------------------------------------------------ lyrics
+
+SYLLABIC_SINGLE, SYLLABIC_BEGIN, SYLLABIC_END, SYLLABIC_MIDDLE = 0, 1, 2, 3
+
+
+def lyric_line(objects: list[dict[str, Any]], staff: int, verse: int) -> list[dict[str, Any]]:
+    """A staff's syllables of one verse (1-based), in score order across voices."""
+    line = [o for o in objects if o["type"] == "LyricItem" and o["staff"] == staff and o["verse"] == verse]
+    line.sort(key=lambda o: (o["bar"], o["ticks"], o["voice"]))
+    return line
+
+
+def lyric_text(line: list[dict[str, Any]]) -> str:
+    """Syllables as one line of text, hyphenated within words ("ma-king")."""
+    out = []
+    for syllable in line:
+        joined = syllable["syllabic"] in {SYLLABIC_BEGIN, SYLLABIC_MIDDLE}
+        out.append((syllable["text"] or "") + ("-" if joined else " "))
+    return "".join(out).strip().rstrip("-")
+
+
+def split_lyrics(text: str) -> list[tuple[str, int]]:
+    """Words split by spaces, then hyphens, as (syllable, MuseScore syllabic)."""
+    out: list[tuple[str, int]] = []
+    for word in text.split():
+        parts = [p for p in word.split("-") if p]
+        if len(parts) == 1:
+            out.append((parts[0], SYLLABIC_SINGLE))
+        elif parts:
+            out.append((parts[0], SYLLABIC_BEGIN))
+            out += [(p, SYLLABIC_MIDDLE) for p in parts[1:-1]]
+            out.append((parts[-1], SYLLABIC_END))
+    return out
+
+
+def lyric_edits(line: list[dict[str, Any]], text: str, digests: dict[tuple[int, int], str],
+                staff: int, verse: int) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """Primitives that make a verse read as text: same syllable count, changed syllables only."""
+    new = split_lyrics(text)
+    if not line:
+        raise MuseScoreBatchError(f"staff {staff} has no lyrics in verse {verse}; add them with add-lyric")
+    if len(new) != len(line):
+        raise MuseScoreBatchError(
+            f"the new text has {len(new)} syllables and staff {staff}'s verse {verse} has {len(line)}; "
+            "edit_lyrics keeps each syllable on its note, so the counts must match (use add-lyric or "
+            "delete in apply_batch to change them)"
+        )
+    primitives: list[dict[str, Any]] = []
+    for k, (syllable, (word, syllabic)) in enumerate(zip(line, new)):
+        label = f"syllable {k + 1} (bar {syllable['bar']})"
+        if syllable["text"] != word:
+            primitives.append({"op": "set", "ref": syllable["_ref"], "prop": "text", "value": word, "label": label})
+        if syllable["syllabic"] != syllabic:
+            primitives.append({"op": "set", "ref": syllable["_ref"], "prop": "syllabic", "value": syllabic,
+                               "label": label})
+    touched = sorted({(p["ref"]["staff"], p["ref"]["bar"]) for p in primitives})
+    return primitives, {f"{s}:{b}": digests[(s, b)] for s, b in touched if (s, b) in digests}

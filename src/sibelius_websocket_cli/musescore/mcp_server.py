@@ -2,8 +2,9 @@
 
 Run with `uv run musescore-mcp` (stdio). It mirrors the Sibelius server's
 tools as the MuseScore back end gains them (docs/musescore-backend-plan.md):
-so far score_overview, score_structure, query_score, apply_batch and undo. One connection is
-kept and calls are serialized.
+score_overview, score_structure, query_score, apply_batch, undo, save_score,
+export_score, project_info, set_project_info, read_lyrics and edit_lyrics. One
+connection is kept and calls are serialized.
 """
 
 from __future__ import annotations
@@ -258,6 +259,63 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
 async def undo(steps: int = 1) -> dict[str, Any]:
     """Undo the last change(s) in MuseScore; a batch is one step."""
     return await session.run(lambda bridge: service.undo(bridge, steps), retry=False)
+
+
+@server.tool(annotations=WRITE)
+async def save_score(path: str | None = None) -> dict[str, Any]:
+    """Save the score to its own file, as File > Save does; with path (same
+    extension, .mscz), also copy the saved file there. A score that has never
+    been saved is refused: save it once in MuseScore first."""
+    return await session.run(lambda bridge: service.save(bridge, path), retry=False)
+
+
+@server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+async def export_score(path: str, format: str = "pdf") -> dict[str, Any]:
+    """Export the whole score to path as pdf, png, svg, musicxml, mxl, mid,
+    mp3, wav, flac or ogg (the path's extension must match). png and svg
+    write one file per page (name-1.png, name-2.png, ...) when there is more
+    than one. Audio uses MuseScore's playback sounds and can take a while.
+    Returns the files written."""
+    return await session.run(lambda bridge: service.export(bridge, format, path), retry=True)
+
+
+@server.tool(annotations=READ_ONLY)
+async def project_info() -> dict[str, Any]:
+    """The score's metadata (File > Project properties): workTitle, subtitle,
+    composer, lyricist, arranger, translator, copyright, poet, movementTitle,
+    movementNumber, workNumber, creationDate, source. Headers and footers
+    show these; the title frame on the first page is separate text."""
+    return await session.run(service.project_info, retry=True)
+
+
+@server.tool(annotations=WRITE)
+async def set_project_info(fields: dict[str, str]) -> dict[str, Any]:
+    """Set metadata fields by name, e.g. {"composer": "Traditional",
+    "arranger": "D. Watt"} ("title" means workTitle; "" clears a field).
+    MuseScore does not record these for undo: the result has the old values
+    to set back. The title frame text on the page does not change."""
+    return await session.run(lambda bridge: service.set_project_info(bridge, fields), retry=False)
+
+
+@server.tool(annotations=READ_ONLY)
+async def read_lyrics(staff: str, verse: int = 1) -> dict[str, Any]:
+    """A staff's lyrics in one verse as a line of text, hyphenated within
+    words ("ma-king"), with the syllable count and the bars it spans. staff
+    is a staff number or part name (the first staff of a multi-staff part).
+    Syllables are not tied to notes here: use query_score for that."""
+    return await session.run(lambda bridge: service.read_lyrics(bridge, staff, verse), retry=True)
+
+
+@server.tool(annotations=WRITE)
+async def edit_lyrics(staff: str, text: str, verse: int = 1) -> dict[str, Any]:
+    """Replace a staff's verse with text (read it first with read_lyrics).
+
+    The text must have the same number of syllables (words split by spaces,
+    then hyphens): each syllable stays on its note, and its text and
+    hyphenation change. One undo step. Use apply_batch's add-lyric and delete
+    to add or remove syllables.
+    """
+    return await session.run(lambda bridge: service.edit_lyrics(bridge, staff, text, verse), retry=False)
 
 
 def main() -> None:

@@ -128,7 +128,13 @@ uv run musescore-cli apply --dry-run --file batch.json
 uv run musescore-cli apply --file batch.json
 uv run musescore-cli undo --steps 1
 uv run musescore-cli structure --bars 1-40
-uv run musescore-mcp                  # score_overview, score_structure, query_score, apply_batch, undo
+uv run musescore-cli save [--path copy.mscz]
+uv run musescore-cli export --format pdf --path score.pdf
+uv run musescore-cli info
+uv run musescore-cli set-info --field composer=Traditional
+uv run musescore-cli lyrics --staff 1 --verse 1
+uv run musescore-cli edit-lyrics --staff 1 --text "Ma-king a joy-ful noise"
+uv run musescore-mcp                  # the Sibelius tools plus project_info, set_project_info, read_lyrics, edit_lyrics
 ```
 
 After installing, enable "sibwscli bridge" once in Plugins → Manage
@@ -254,6 +260,46 @@ skipped and the next numbered 10, empty staves hidden, two 3/4 bars
 inserted before bar 3) read back as asked, numbering included, and one undo
 restored it. copy-passage of bars 2-3 on two staves to bar 10 matched the
 source note for note, and undo restored the destination.
+
+Milestone 5 (bridge version 5) adds the file, metadata and lyric tools:
+`save_score`, `export_score`, `project_info`, `set_project_info`,
+`read_lyrics` and `edit_lyrics`. How they behave:
+
+- **save_score** runs File > Save (`cmd("file-save")`), which saves a score
+  that already has a file without asking [src, seen]. The plug-in API has
+  no score path, so Python reads the window's `AXDocument` through System
+  Events (Accessibility permission) to find the file, waits until its
+  modification time changes, and with `path` copies the saved `.mscz`
+  there. A score that has never been saved is refused, since MuseScore
+  would ask where to save it.
+- **export_score** writes the whole score with `writeScore`: pdf, png, svg,
+  musicxml (`.musicxml` or `.xml`), mxl, mid, mp3, wav, flac and ogg.
+  `writeScore` adds its own extension unless the path already ends in it
+  (a `.xml` path sent as `musicxml` became `s.xml.musicxml`), so the
+  path's suffix is sent as the format. PNG and SVG write one file per page,
+  `name-1.png`, `name-2.png`, ..., and a single page as `name.png`.
+- **project_info / set_project_info** read and write the metadata tags
+  (`workTitle`, `composer`, `lyricist`, ...). MuseScore does not record
+  them for undo (rollback and undo both left the new value), so they run
+  outside batches and return the old values. The title frame on the first
+  page is separate text and does not change.
+- **read_lyrics** builds a staff's verse from the read, in score order
+  across voices, hyphenated within words. **edit_lyrics** takes text with
+  the same number of syllables and changes each syllable's `text` and
+  `syllabic` in place, as one batch (one undo step), then reads it back.
+
+Checked live on 4.7.5 (2026-10-03, ScratchScore, 33 bars): every export
+format wrote a file without a dialog; png in 1.9 s, the others in under
+0.1 s; audio (69 s of music) in 0.7-1.1 s, with an "Exporting audio..."
+progress window that closed by itself. The WAV is 32-bit float, 44.1 kHz
+stereo, and had sound (peak -17 dB); MP3 128 kb/s, OGG is Opus. With 153
+bars (five pages) png and svg wrote five files each (png in 8.8 s). Save
+rewrote the file with no dialog, and the copy is a valid `.mscz`. Metadata
+round-tripped, and an unknown tag was refused. Seven syllables added with
+add-lyric read back as "Ma-king a joy-ful noise now"; edit_lyrics to
+"Mak-ing a-joy ful noise now" changed five syllables, hyphens included, as
+shown on the page; one undo restored it, and a two-syllable text was
+refused.
 
 Starting two plug-ins that listen (the bridge and the probe) does not give
 two servers: MuseScore has one WebSocket server, the second `listen` only

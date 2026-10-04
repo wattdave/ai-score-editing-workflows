@@ -1121,13 +1121,51 @@ MuseScore {
 
     // Only formats known to export without a dialog: a failed export shows
     // a Retry/Abort dialog, and .mscz/.mscx always fail (docs/musescore.md).
-    readonly property var copyFormats: ({ "musicxml": true, "mxl": true, "pdf": true, "mid": true })
+    readonly property var copyFormats: ({ "musicxml": true, "xml": true, "mxl": true, "pdf": true, "mid": true,
+                                          "png": true, "svg": true, "mp3": true, "wav": true,
+                                          "flac": true, "ogg": true })
 
     function writeCopy(args) {
         var s = requireScore();
         if (!copyFormats[args.format])
             throw new Error("cannot write format " + args.format);
         return { written: root.writeScore(s, args.path, args.format), path: args.path };
+    }
+
+    // file-save saves an existing local score without asking; Python
+    // refuses scores that have never been saved (they would get a dialog).
+    function save(args) {
+        requireScore();
+        root.cmd("file-save");
+        return { saved: true };
+    }
+
+    readonly property var metaTagNames: ["workTitle", "subtitle", "composer", "lyricist", "arranger",
+                                         "translator", "copyright", "poet", "movementTitle",
+                                         "movementNumber", "workNumber", "creationDate", "source",
+                                         "audioComUrl"]
+
+    function getMetaTags() {
+        var s = requireScore();
+        var tags = {};
+        metaTagNames.forEach(function (t) { tags[t] = s.metaTag(t); });
+        return tags;
+    }
+
+    // setMetaTag is not on the undo stack (docs/musescore.md), so this runs
+    // outside batches and reports the old values.
+    function setMetaTags(args) {
+        var s = requireScore();
+        var before = {};
+        Object.keys(args.tags).forEach(function (t) {
+            if (metaTagNames.indexOf(t) < 0)
+                throw new Error("unknown metadata field: " + t);
+        });
+        Object.keys(args.tags).forEach(function (t) {
+            before[t] = s.metaTag(t);
+            s.setMetaTag(t, String(args.tags[t]));
+        });
+        return { before: before, after: getMetaTags() };
     }
 
     // Undo is only dispatched when something can be undone, so asking for
@@ -1149,6 +1187,9 @@ MuseScore {
         case "WriteCopy": return writeCopy(args);
         case "Undo": return undo(args);
         case "GetStructure": return getStructure(args);
+        case "Save": return save(args);
+        case "GetMetaTags": return getMetaTags();
+        case "SetMetaTags": return setMetaTags(args);
         }
         throw new Error("unknown method: " + method);
     }
