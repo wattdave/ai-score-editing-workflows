@@ -236,4 +236,71 @@ probe ran in its own `startCmd` and was rolled back unless noted.
   step followed by `cmd("add-hairpin")` on a selected note crashed
   MuseScore (crash dump written), most likely because of the bad hairpin.
 - `cmd("add-hairpin")` with a range selection did nothing ("no one can
-  handle the action: add-hairpin").
+  handle the action: add-hairpin"): it needs a note or rest selected
+  [src], and a range selected inside a batch is not filled in yet (see
+  Selections below). With a single note selected, adding one hairpin
+  also starts dragging its end handle (`startEditGrip`) [src], an
+  interactive edit that a rollback would cut from under; that may be what
+  crashed. Hairpins and other lines stay open.
+
+### Selections, copy and paste (P11), 2026-10-03
+
+- **Make range selections outside a batch.** Inside an open command,
+  `selection.selectRange` only records the ticks and fills in the selection
+  when the command ends (`setRangeTicks`) [src].
+- `selectRange(0, 1920, 0, 1)` inside a batch followed by `cmd("copy")`
+  crashed MuseScore (crash dump written), most likely because the copy
+  serialised that unfilled selection. The clipboard was unchanged
+  (fingerprint compared before and after). copy-passage would select and
+  copy before `startCmd`, since copying changes nothing, and paste inside
+  the batch; not yet tried.
+
+### More editing (P9, P10, P12, P13, P14, P17), 2026-10-03
+
+All rolled back cleanly unless noted.
+
+- **Lyrics:** `newElement(Element.LYRICS)` + `Cursor.add` attaches to the
+  chord at the cursor. `text`, `syllabic` (0 single, 1 begin, 2 end,
+  3 middle [src]), `verse` (0-based) and `lyricTicks` (melisma length,
+  480 = a quarter) read and write.
+- **Key signatures:** the property is `actualKey`, not `key`. Adding one
+  with `Cursor.add` on each staff's track 0 works, but MuseScore does not
+  derive the written key: concert D (`concertKey` 2) on the B♭ clarinet
+  came out `actualKey` 2. Setting `concertKey` 2 and `actualKey` 4 before
+  adding gave concert D, written E. `Staff.key(tick)` returns the written
+  key (2 for the clarinet in concert C).
+- **Barlines and repeats:** `repeatStart`/`repeatEnd` are writable;
+  `barlineType` 2 (double) set on staff 0's end barline changed all three
+  staves (barlines span the system).
+- **Bar numbers:** `noOffset` and `irregular` are writable, but `no` (the
+  displayed number) of later bars did not change inside the batch: layout
+  runs when the command ends. A dry run's "after" view needs
+  `curScore.doLayout` for derived values; not yet tried.
+- **Layout breaks:** with a note selected, `cmd("system-break")` and
+  `cmd("page-break")` add a break, and the same command again removes it
+  (they toggle). `measure.elements` lists it as `LayoutBreak` with
+  `layoutBreakType` 1 (system) or 0 (page). This is a plain edit, with no
+  interactive mode [src].
+- **Bars:** `appendMeasures(3)` added three bars; with a note selected,
+  `cmd("insert-measure")` inserted an empty bar before it and moved the
+  music on; `timesigActual = fraction(3, 4)` made bar 5 1440 ticks long and
+  refilled its rests. `insert-measures` (several) takes a count from its
+  dialog [src], so it was not tried.
+- **Time signatures:** `newElement(Element.TIMESIG)`, `timesig =
+  fraction(3, 4)`, `Cursor.add` at bar 3 re-barred everything after it
+  (32 bars became 42).
+- **Deleting:** `removeElement` on a chord leaves a rest, on one note of a
+  chord removes that note, on a chord's only note leaves a rest.
+- **Text and marks:** `newElement` + `Cursor.add` works for STAFF_TEXT,
+  SYSTEM_TEXT, TEMPO_TEXT (`tempo` in beats per second,
+  `tempoFollowText`), DYNAMIC, REHEARSAL_MARK and ARTICULATION (attached
+  to the chord; which symbol it shows is not yet known). They read back as
+  segment `annotations` with `text`.
+- **Style:** `curScore.style.value`/`setValue` work and are undoable and
+  rolled back. Page sizes and margins are in inches (Letter: 8.5 × 11);
+  `spatium` is in 1/1200 inch (82.68 = 1.75 mm); `staffDistance`,
+  `akkoladeDistance` and the system distances are in staff spaces. An
+  unknown key returns null and logs a warning, with no dialog.
+- **Metadata:** `metaTag` reads workTitle, composer, lyricist and so on.
+  `setMetaTag` is **not** undone by rollback (it kept "PROBE"), as the
+  source shows, so it was put back by hand.
