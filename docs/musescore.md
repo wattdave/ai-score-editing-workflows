@@ -333,3 +333,20 @@ All rolled back cleanly unless noted.
   Reads do not need to be split into chunks. (Layout runs at the end of a
   command, so these times exclude it.)
 - `root.scores`, the list of open scores, read as empty with a score open.
+
+### Windows and closing (P1), 2026-10-03
+
+- **Each score window is its own MuseScore process.** With ScratchScore
+  open, File → New opened the second score in a new process
+  (`mscore --session-type start-with-new`). The plug-in, started in the
+  first window, kept seeing ScratchScore (`curScore`, `api.engraving.curScore`
+  and a new cursor's score), and `writeScore` exported ScratchScore. Only
+  one process can listen on the port, so the bridge serves the score of the
+  window it was started in; to switch scores, start it in the other window.
+- `curScore` looks up the window's current score on every access, and is
+  null with no score [src].
+- With a second window open, closing ScratchScore ended its whole process
+  normally ("Goodbye!! code: 0"), and the plug-in with it; the client got
+  "connection refused". Closing the last score of the only window (start
+  screen left open) was not tried.
+- `root.scores` is not implemented in 4.7.5 (`NOT_IMPLEMENTED`) [src].
