@@ -5,6 +5,7 @@ connection to the real bridge's port.
 """
 
 import json
+from fractions import Fraction
 import stat
 
 import pytest
@@ -240,7 +241,7 @@ def at(objects, staff, bar, index):
 
 def prepare(objects, ops):
     digests = {(c["staff"], c["bar"]): c["digest"] for c in make_read()["content"]}
-    return score.prepare_batch(ops, objects, STAVES, 480, digests)
+    return score.prepare_batch(ops, objects, STAVES, 480, digests, make_read()["bars"])
 
 
 def test_index_order_is_pinned(objects) -> None:
@@ -315,7 +316,6 @@ def test_prepare_refusals(objects) -> None:
         ({"op": "set-pitch", "staff": 1, "bar": 1, "index": 5, "oldPitch": 62, "newPitch": 65}, "already has"),
         ({"op": "flip-stem", "staff": 1, "bar": 1, "index": 2, "pitch": 61}, "no note of pitch 61"),
         ({"op": "delete", "staff": 1, "bar": 2, "index": 3, "ticks": 0}, "tick 160"),
-        ({"op": "add-note", "staff": 1, "bar": 1, "position": 0, "duration": 256, "pitches": [60]}, "milestone 3"),
         ({"op": "set-key", "bar": 1, "key": "D"}, "milestone 4"),
         ({"op": "frobnicate"}, "must be one of"),
     ]
@@ -370,7 +370,10 @@ def test_plugin_runs_every_primitive_score_emits() -> None:
     text = install.TEMPLATE.read_text()
     for method in ("Read", "ApplyBatch", "WriteCopy"):
         assert f'case "{method}"' in text
-    for primitive in score.SUPPORTED - {"beam"}:
+    for primitive in score.OBJECT_OPS - {"beam"}:
+        assert f'case "{primitive}"' in text
+    for primitive in ("add-note", "add-rest", "add-tuplet", "add-text", "add-clef", "add-lyric", "add-line",
+                      "add-dynamic", "articulation", "add-tempo", "add-rehearsal-mark", "tie-at"):
         assert f'case "{primitive}"' in text
     # Rolling back on failure and for a dry run, and an exact undo-step name.
     assert "s.endCmd(true)" in text and "s.endCmd(!!args.dryRun)" in text
@@ -399,6 +402,9 @@ class ScoreBridge(FakeBridge):
         if method == "ApplyBatch":
             results = []
             for p in args["primitives"]:
+                if "ref" not in p:
+                    results.append({"added": rest(p["at"]["tick"], duration=p.get("ticks", 480))})
+                    continue
                 before = chord(0, [60])
                 after = dict(before, offsetY=-0.5) if p["op"] == "set" else before
                 results.append({"before": before, "after": after})
@@ -442,3 +448,124 @@ async def test_service_dry_run_and_real_run(score_bridge, tmp_path, monkeypatch)
 def test_cli_query_parses(monkeypatch) -> None:
     args = cli.build_parser().parse_args(["query", "--staff", "1", "--bars", "2-3", "--where", "Pitch>60"])
     assert args.staves == ["1"] and args.bars == "2-3"
+
+
+# ------------------------------------------------------------------ milestone 3: adding
+
+
+def test_note_values() -> None:
+    assert score.note_value(480, 480) == Fraction(1, 4)
+    assert score.note_value(720, 480) == Fraction(3, 8)  # dotted quarter
+    assert score.note_value(900, 480) == Fraction(15, 32)  # triple-dotted quarter
+    assert score.note_value(3840, 480) == Fraction(2, 1)  # breve
+    assert score.note_value(600, 480) is None  # quarter + sixteenth: two notes
+
+
+def test_add_note_primitives(objects) -> None:
+    primitives, digests = prepare(objects, [
+        {"op": "add-note", "staff": 1, "bar": 2, "position": 512, "duration": 384, "pitches": [61, 68],
+         "spellings": ["Db", None], "voice": 2, "tied": True},
+        {"op": "add-rest", "staff": 1, "bar": 1, "position": 768, "duration": 256},
+    ])
+    note, rest_, tie = primitives
+    assert note["at"] == {"staff": 1, "bar": 2, "tick": 1920 + 960, "track": 1}
+    assert (note["ticks"], note["z"], note["n"]) == (720, 3, 8)
+    # D♭ concert on the B♭ clarinet is written E♭; no spelling lets MuseScore choose.
+    assert note["notes"] == [{"pitch": 61, "tpc1": score.tpc("D", -1), "tpc2": score.tpc("E", -1)}, {"pitch": 68}]
+    assert rest_["op"] == "add-rest" and rest_["at"]["tick"] == 1440
+    # Ties run last, once every note exists.
+    assert tie == {"op": "tie-at", "at": note["at"], "pitches": [61, 68], "label": "op 0"}
+    assert digests == {"1:1": "a1", "1:2": "a2"}
+
+
+def test_add_text_lyric_line_tuplet_clef(objects) -> None:
+    primitives, _ = prepare(objects, [
+        {"op": "add-text", "staff": 1, "bar": 1, "position": 0, "text": "dolce", "styleId": "text.staff.expression"},
+        {"op": "add-text", "staff": 1, "bar": 1, "position": 0, "text": "pizz.", "styleId": "text.staff.technique"},
+        {"op": "add-text", "staff": 0, "bar": 2, "position": 0, "text": "rit."},
+        {"op": "add-lyric", "staff": 1, "bar": 1, "position": 256, "duration": 256, "text": "ri",
+         "syllableType": "middle", "verse": 2},
+        {"op": "add-line", "staff": 1, "bar": 1, "position": 0, "duration": 768, "styleId": "line.staff.slur.up"},
+        {"op": "add-tuplet", "staff": 1, "bar": 2, "position": 512, "duration": 256, "actual": 3, "normal": 2,
+         "notes": [[60], [], [64, 67]]},
+        {"op": "add-clef", "staff": 1, "bar": 2, "position": 0, "clef": "clef.bass"},
+    ])
+    assert [p.get("element") for p in primitives[:3]] == ["EXPRESSION", "STAFF_TEXT", "SYSTEM_TEXT"]
+    assert primitives[2]["at"] == {"staff": 0, "bar": 2, "tick": 1920, "track": 0}
+    lyric = primitives[3]
+    assert (lyric["verse"], lyric["hyphen"], lyric["ticks"]) == (1, True, 480)
+    assert primitives[4]["line"] == "slur" and primitives[4]["endTick"] == 1440
+    tuplet = primitives[5]
+    assert (tuplet["z"], tuplet["n"], tuplet["baseZ"], tuplet["baseN"]) == (1, 4, 1, 8)
+    assert tuplet["notes"] == [[{"pitch": 60}], [], [{"pitch": 64}, {"pitch": 67}]]
+    assert primitives[6]["clefType"] == score.CLEF_TYPES["bass"] == 20
+
+
+def test_dorico_note_ops(objects) -> None:
+    primitives, _ = prepare(objects, [
+        {"op": "add-dynamic", "staff": 1, "bar": 1, "index": 5, "type": "NoteRest", "dynamic": "mf"},
+        {"op": "set-articulation", "staff": 1, "bar": 1, "index": 2, "articulation": "accent"},
+        {"op": "add-slur", "staff": 1, "bar": 1, "index": 2},
+        {"op": "add-tempo", "staff": 1, "bar": 2, "index": 1, "text": "q = 90"},
+        {"op": "add-tempo", "staff": 1, "bar": 2, "index": 1, "text": "Allegro", "bpm": 132},
+        {"op": "add-rehearsal-mark", "staff": 1, "bar": 2, "index": 1},
+    ])
+    dynamic, accent, slur, tempo, allegro, mark = primitives
+    assert dynamic["text"] == "<sym>dynamicMezzo</sym><sym>dynamicForte</sym>" and dynamic["dynamicType"] == 8
+    assert dynamic["at"] == {"staff": 1, "bar": 1, "tick": 480, "track": 0}
+    assert accent["action"] == "add-sforzato"
+    assert slur == {"op": "add-line", "at": {"staff": 1, "bar": 1, "tick": 0, "track": 0}, "line": "slur",
+                    "endTick": None, "label": "op 2"}
+    assert tempo["text"] == "<sym>metNoteQuarterUp</sym> = 90" and tempo["tempo"] == 1.5
+    assert tempo["at"]["track"] == 0
+    assert allegro["text"] == "Allegro" and allegro["tempo"] == 2.2
+    assert mark["text"] == "A"
+    assert [score._mark_letter(n) for n in (0, 25, 26)] == ["A", "Z", "AA"]
+
+
+def test_adding_refusals(objects) -> None:
+    note = {"op": "add-note", "staff": 1, "bar": 1, "position": 0, "duration": 256, "pitches": [60]}
+    cases = [
+        ({**note, "duration": 320}, "single note value"),
+        ({**note, "position": 1024}, "cross the barline"),
+        ({**note, "position": 768, "duration": 512}, "cross the barline"),
+        ({**note, "bar": 9}, "no bar 9"),
+        ({**note, "pitches": [60, 60]}, "same pitch twice"),
+        ({**note, "spellings": ["C"]} | {"pitches": [60, 64]}, "one spelling"),
+        ({"op": "add-line", "staff": 1, "bar": 1, "position": 0, "duration": 512,
+          "styleId": "line.staff.hairpin.crescendo"}, "crashed MuseScore"),
+        ({"op": "add-line", "staff": 1, "bar": 1, "position": 0, "duration": 512,
+          "styleId": "line.staff.trill"}, "can add these lines"),
+        ({"op": "add-tuplet", "staff": 1, "bar": 1, "position": 0, "duration": 256, "actual": 5, "normal": 3,
+          "notes": [[60]]}, "one note value"),
+        ({"op": "add-tuplet", "staff": 1, "bar": 1, "position": 0, "duration": 256, "actual": 3, "normal": 2,
+          "notes": [[60]] * 4}, "up to 3 chords"),
+        ({"op": "set-articulation", "staff": 1, "bar": 1, "index": 2, "articulation": "stress"}, "one of"),
+        ({"op": "set-articulation", "staff": 1, "bar": 1, "index": 6, "articulation": "staccato"}, "needs a chord"),
+        ({"op": "add-dynamic", "staff": 1, "bar": 1, "index": 1, "dynamic": "f"}, "needs a note or rest"),
+        ({"op": "add-tempo", "staff": 1, "bar": 1, "index": 2, "text": "Allegro"}, "give bpm"),
+        ({"op": "add-clef", "staff": 1, "bar": 1, "position": 0, "clef": "soprano"}, "clef must be"),
+        ({"op": "add-lyric", "staff": 1, "bar": 1, "position": 0, "duration": 256, "text": "a", "verse": 0},
+         "verse"),
+    ]
+    for op, message in cases:
+        with pytest.raises(MuseScoreBatchError, match=message):
+            prepare(objects, [op])
+
+
+def test_object_ops_come_before_adding_ops(objects) -> None:
+    add = {"op": "add-rest", "staff": 1, "bar": 1, "position": 0, "duration": 256}
+    nudge = {"op": "nudge", "staff": 1, "bar": 1, "index": 2, "dx": 1}
+    prepare(objects, [nudge, add])
+    with pytest.raises(MuseScoreBatchError, match="must come before ops that add"):
+        prepare(objects, [add, nudge])
+
+
+async def test_service_reports_added_objects(score_bridge) -> None:
+    op = {"op": "add-rest", "staff": 1, "bar": 2, "position": 256, "duration": 256}
+    async with MuseScoreClient(port=score_bridge.port, token=TOKEN) as client:
+        result = await service.apply(MuseScoreBridge(client), [op], dry_run=True)
+    [report] = result["results"]
+    assert report["primitive"] == "add-rest" and "before" not in report
+    assert (report["added"]["bar"], report["added"]["position"], report["added"]["rest"]) == (2, 256, True)
+    assert score_bridge.requests[-1]["args"]["digests"] == {"1:2": "a2"}

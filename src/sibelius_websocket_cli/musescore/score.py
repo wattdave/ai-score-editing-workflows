@@ -15,6 +15,8 @@ what make sure the object changed is the one that was read.
 
 from __future__ import annotations
 
+import re
+from fractions import Fraction
 from typing import Any
 
 from sibelius_websocket_cli import batch_ops, intervals
@@ -39,13 +41,48 @@ STEM_AUTO = 0
 #: hasParentheses: 0 none, 3 both sides (1 and 2 hit an assertion on notes).
 PARENTHESES = 3
 
-SUPPORTED = {"set", "set-pitch", "tie", "bracket", "flip-stem", "nudge", "delete", "beam"}
+#: Ops that name an existing object (staff/bar/index); they run first.
+OBJECT_OPS = {"set", "set-pitch", "tie", "bracket", "flip-stem", "nudge", "delete", "beam"}
+#: Dorico's note ops, which the Sibelius batch format does not have. The
+#: ones in NOTE_OPS are addressed at a note or rest, as on Dorico.
+NOTE_OPS = {"add-dynamic", "set-articulation", "add-slur", "add-tempo", "add-rehearsal-mark"}
+DORICO_OPS = {"add-rest", "add-tuplet", "add-clef"} | NOTE_OPS
+#: Ops that add objects; they come after every OBJECT_OPS op in a batch.
+ADDING_OPS = batch_ops.ADDING | DORICO_OPS
 #: Valid batch operations the MuseScore back end does not do yet, with the
 #: milestone of docs/musescore-backend-plan.md that adds them.
-NOT_YET = {
-    **{op: 3 for op in batch_ops.ADDING},
-    **{op: 4 for op in batch_ops.STRUCTURAL},
+NOT_YET = {op: 4 for op in batch_ops.STRUCTURAL}
+
+#: add-text styles as MuseScore element types; other text.staff.* styles
+#: make staff text, every text.system.* style system text (add-tempo makes
+#: tempo marks, which change playback).
+TEXT_ELEMENTS = {"text.staff.expression": "EXPRESSION"}
+#: add-line kinds: Sibelius style ids, and Dorico's line names.
+LINE_STYLES = {
+    "line.staff.slur.up": "slur", "line.staff.slur.down": "slur", "line.staff.slur": "slur",
+    "line.staff.octava.plus8": "8va", "line.staff.octava.minus8": "8vb",
 }
+#: Lines refused, and why (docs/musescore.md).
+LINES_REFUSED = {
+    "line.staff.hairpin": "adding a hairpin from a plug-in crashed MuseScore 4.7.5 twice (once with the "
+                          "hairpin's interactive edit ended at once); add hairpins by hand",
+}
+#: set-articulation names and the MuseScore actions that add them to a
+#: selected note [seen]. The actions toggle; the bridge checks the result.
+ARTICULATION_ACTIONS = {"staccato": "add-staccato", "tenuto": "add-tenuto", "marcato": "add-marcato",
+                        "accent": "add-sforzato"}
+#: Dorico's dynamics as MuseScore DynamicType values (types.h, 4.7.5).
+DYNAMIC_TYPES = {
+    "pppp": 3, "ppp": 4, "pp": 5, "p": 6, "mp": 7, "mf": 8, "f": 9, "ff": 10, "fff": 11, "ffff": 12,
+    "fp": 15, "sf": 17, "sfz": 18, "sfp": 23, "rfz": 25, "fz": 27,
+}
+_DYNAMIC_SYMBOLS = {"p": "dynamicPiano", "m": "dynamicMezzo", "f": "dynamicForte", "s": "dynamicSforzando",
+                    "z": "dynamicZ", "r": "dynamicRinforzando"}
+#: add-clef names as MuseScore ClefType values (types.h, 4.7.5).
+CLEF_TYPES = {"treble": 0, "treble-8vb": 2, "treble-8va": 3, "alto": 10, "tenor": 11, "bass": 20,
+              "bass-8vb": 22, "percussion": 29}
+#: Lyric syllabic values: SINGLE 0, BEGIN 1, END 2, MIDDLE 3 [src].
+MAX_TUPLET = 32
 
 
 class MuseScoreBatchError(ValueError):
@@ -266,26 +303,49 @@ def prepare_batch(
     staves: list[dict[str, Any]],
     division: int,
     digests: dict[tuple[int, int], str],
+    bars: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, str]]:
-    """Validate a batch against a fresh read; return (primitives, digests of touched bars)."""
+    """Validate a batch against a fresh read; return (primitives, digests of touched bars).
+
+    Object ops name what was read and run first; adding ops place new
+    objects by staff, bar, position and voice and run after them, in batch
+    order; ties asked for by add-note run last, once every note exists.
+    """
     try:
-        normalized = batch_ops.validate_batch(operations)
+        normalized = batch_ops.validate_batch(operations, EXTRA_OPS)
     except batch_ops.BatchError as exc:
         raise MuseScoreBatchError(str(exc)) from exc
+    first_adding = None
     for i, operation in enumerate(normalized):
-        if operation["op"] in NOT_YET:
+        op = operation["op"]
+        if op in NOT_YET:
             raise MuseScoreBatchError(
-                f"op {i}: {operation['op']} is not available on MuseScore yet "
-                f"(milestone {NOT_YET[operation['op']]} of docs/musescore-backend-plan.md)"
+                f"op {i}: {op} is not available on MuseScore yet "
+                f"(milestone {NOT_YET[op]} of docs/musescore-backend-plan.md)"
+            )
+        if op in ADDING_OPS and first_adding is None:
+            first_adding = i
+        elif op in OBJECT_OPS and first_adding is not None:
+            raise MuseScoreBatchError(
+                f"op {i} ({op}) comes after op {first_adding} ({normalized[first_adding]['op']}); "
+                "ops that change objects by index must come before ops that add objects"
             )
     by_address = {(o["staff"], o["bar"], o["index"]): o for o in objects}
     by_staff = {s["staff"]: s for s in staves}
+    bar_info = {b["bar"]: b for b in bars or []}
     primitives: list[dict[str, Any]] = []
+    ties: list[dict[str, Any]] = []
     touched: set[tuple[int, int]] = set()
     for i, (original, operation) in enumerate(zip(operations, normalized)):
         label = f"op {i}"
-        if operation["op"] == "beam":
+        op = operation["op"]
+        if op == "beam":
             made = _beam(operation, label, by_address, objects)
+        elif op in NOTE_OPS:
+            target = _target(original, operation, label, by_address)
+            made = [_note_op(original, operation, label, target, objects, bar_info, division)]
+        elif op in ADDING_OPS:
+            made = _adding(original, operation, label, by_staff, bar_info, division, objects)
         else:
             target = _target(original, operation, label, by_address)
             if "spelling" in original:  # set-pitch's optional spelling, which validate_batch drops
@@ -293,9 +353,294 @@ def prepare_batch(
             made = [_addressed(operation, label, target, by_staff, division)]
         for primitive in made:
             primitive["label"] = label
-            touched.add((primitive["ref"]["staff"], primitive["ref"]["bar"]))
-            primitives.append(primitive)
-    return primitives, {f"{staff}:{bar}": digests[(staff, bar)] for staff, bar in sorted(touched)}
+            where = primitive.get("ref") or primitive["at"]
+            touched.add((where["staff"], where["bar"]))
+            (ties if primitive["op"] == "tie-at" else primitives).append(primitive)
+    primitives += ties
+    return primitives, {f"{staff}:{bar}": digests[(staff, bar)] for staff, bar in sorted(touched)
+                        if (staff, bar) in digests}
+
+
+# ------------------------------------------------------------------ adding
+
+def _req_int(operation: dict[str, Any], field: str, label: str, minimum: int, maximum: int | None = None,
+             default: int | None = None) -> int:
+    value = operation.get(field, default)
+    if not isinstance(value, int) or isinstance(value, bool) or value < minimum \
+            or (maximum is not None and value > maximum):
+        bound = f"{minimum}-{maximum}" if maximum is not None else f">= {minimum}"
+        raise batch_ops.BatchError(f"{label}.{field} must be an integer {bound}")
+    return value
+
+
+def _req_str(operation: dict[str, Any], field: str, label: str) -> str:
+    value = operation.get(field)
+    if not isinstance(value, str) or not value.strip():
+        raise batch_ops.BatchError(f"{label}.{field} must be a non-empty string")
+    return value
+
+
+def _placed(operation: dict[str, Any], label: str) -> dict[str, Any]:
+    """staff (1 up), bar, position and voice of an op that adds at a place."""
+    return {"op": operation["op"], "staff": _req_int(operation, "staff", label, 1),
+            "bar": _req_int(operation, "bar", label, 1), "position": _req_int(operation, "position", label, 0),
+            "voice": _req_int(operation, "voice", label, 1, 4, default=1)}
+
+
+def _addressed_extra(operation: dict[str, Any], label: str) -> dict[str, Any]:
+    """staff/bar/index and guards of a Dorico note op."""
+    out = {"op": operation["op"], "staff": _req_int(operation, "staff", label, 1),
+           "bar": _req_int(operation, "bar", label, 1), "index": _req_int(operation, "index", label, 0)}
+    if "type" in operation:
+        out["type"] = _req_str(operation, "type", label)
+    if "position" in operation:
+        out["position"] = _req_int(operation, "position", label, 0)
+    return out
+
+
+def _validate_rest(operation: dict[str, Any], label: str) -> dict[str, Any]:
+    return {**_placed(operation, label), "duration": _req_int(operation, "duration", label, 1)}
+
+
+def _validate_tuplet(operation: dict[str, Any], label: str) -> dict[str, Any]:
+    out = {**_placed(operation, label), "duration": _req_int(operation, "duration", label, 1),
+           "actual": _req_int(operation, "actual", label, 2, MAX_TUPLET),
+           "normal": _req_int(operation, "normal", label, 1, MAX_TUPLET)}
+    if out["actual"] == out["normal"]:
+        raise batch_ops.BatchError(f"{label}: actual and normal must differ")
+    notes = operation.get("notes")
+    if not isinstance(notes, list) or not 1 <= len(notes) <= out["actual"] or not all(
+        isinstance(n, list) and all(isinstance(p, int) and not isinstance(p, bool) and 0 <= p <= 127 for p in n)
+        for n in notes
+    ):
+        raise batch_ops.BatchError(
+            f"{label}.notes must list up to {out['actual']} chords, each a list of MIDI pitches ([] for a rest)"
+        )
+    out["notes"] = notes
+    return out
+
+
+def _validate_clef(operation: dict[str, Any], label: str) -> dict[str, Any]:
+    clef = _req_str(operation, "clef", label).removeprefix("clef.")
+    if clef not in CLEF_TYPES:
+        raise batch_ops.BatchError(f"{label}.clef must be one of: {', '.join(CLEF_TYPES)}")
+    return {**_placed(operation, label), "clef": clef}
+
+
+def _validate_note_op(operation: dict[str, Any], label: str) -> dict[str, Any]:
+    out = _addressed_extra(operation, label)
+    op = operation["op"]
+    if op == "add-dynamic":
+        dynamic = _req_str(operation, "dynamic", label)
+        if dynamic not in DYNAMIC_TYPES:
+            raise batch_ops.BatchError(f"{label}.dynamic must be one of: {', '.join(DYNAMIC_TYPES)}")
+        out["dynamic"] = dynamic
+    elif op == "set-articulation":
+        name = _req_str(operation, "articulation", label)
+        if name not in ARTICULATION_ACTIONS:
+            raise batch_ops.BatchError(
+                f"{label}.articulation must be one of: {', '.join(ARTICULATION_ACTIONS)} "
+                "(MuseScore's plug-ins can only add these by name)"
+            )
+        out["articulation"] = name
+    elif op == "add-tempo":
+        out["text"] = _req_str(operation, "text", label)
+        if "bpm" in operation:
+            out["bpm"] = _req_int(operation, "bpm", label, 1, 1000)
+    elif op == "add-rehearsal-mark" and "text" in operation:
+        out["text"] = _req_str(operation, "text", label)
+    return out
+
+
+EXTRA_OPS: batch_ops.ExtraOps = {
+    "add-rest": _validate_rest, "add-tuplet": _validate_tuplet, "add-clef": _validate_clef,
+    **{op: _validate_note_op for op in NOTE_OPS},
+}
+
+
+def note_value(ticks: int, division: int) -> Fraction | None:
+    """ticks as a fraction of a whole note, if it is one note value with up to 3 dots."""
+    whole = 4 * division
+    base = Fraction(2 * whole)  # a breve
+    while base >= 1:
+        for dots in range(4):
+            if base * (2 - Fraction(1, 2 ** dots)) == ticks:
+                return Fraction(ticks, whole)
+        base /= 2
+    return None
+
+
+def _length(units: int, division: int, label: str, what: str = "duration") -> tuple[int, Fraction]:
+    ticks = to_ticks(units, division, f"{label}.{what}")
+    value = note_value(ticks, division)
+    if value is None:
+        raise MuseScoreBatchError(
+            f"{label}.{what} {units} is not a single note value (with up to three dots); "
+            "split it into several notes"
+        )
+    return ticks, value
+
+
+def _at(operation: dict[str, Any], label: str, bar_info: dict[int, dict[str, Any]], division: int,
+        staff: int | None = None, length: int = 0) -> dict[str, Any]:
+    """Where an op adds: staff, bar, absolute tick and track; checks the bar holds it."""
+    staff = operation["staff"] if staff is None else staff
+    bar = bar_info.get(operation["bar"])
+    if bar is None:
+        raise MuseScoreBatchError(f"{label}: no bar {operation['bar']}")
+    ticks = to_ticks(operation["position"], division, f"{label}.position")
+    if ticks >= bar["ticks"] or ticks + length > bar["ticks"]:
+        raise MuseScoreBatchError(
+            f"{label}: bar {operation['bar']} is {to_units(bar['ticks'], division)} long; "
+            "an added note or rest cannot cross the barline"
+        )
+    voice = operation.get("voice", 1)
+    real = max(staff, 1)
+    return {"staff": staff, "bar": operation["bar"], "tick": bar["tick"] + ticks,
+            "track": (real - 1) * 4 + voice - 1}
+
+
+def _spelled(pitch: int, spelling: Any, staff: dict[str, Any], label: str) -> dict[str, int]:
+    try:
+        letter = intervals.spelling_letter(pitch, spelling if isinstance(spelling, str) and spelling else None)
+    except ValueError as exc:
+        raise MuseScoreBatchError(f"{label}: {exc}") from exc
+    concert = tpc(letter, intervals.alteration(pitch, letter))
+    return {"pitch": pitch, "tpc1": concert, "tpc2": written_tpc(concert, staff)}
+
+
+def _adding(
+    original: dict[str, Any], operation: dict[str, Any], label: str, by_staff: dict[int, dict[str, Any]],
+    bar_info: dict[int, dict[str, Any]], division: int, objects: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    op = operation["op"]
+    staff = by_staff.get(operation["staff"]) if operation["staff"] != SYSTEM_STAFF else {}
+    if staff is None:
+        raise MuseScoreBatchError(f"{label}: no staff {operation['staff']}")
+    if op == "add-note":
+        ticks, value = _length(operation["duration"], division, label)
+        spellings = original.get("spellings")
+        if spellings is not None and (not isinstance(spellings, list) or len(spellings) != len(operation["pitches"])):
+            raise MuseScoreBatchError(f"{label}.spellings must list one spelling (or null) per pitch")
+        if len(set(operation["pitches"])) != len(operation["pitches"]):
+            raise MuseScoreBatchError(f"{label}.pitches has the same pitch twice")
+        # Without a spelling MuseScore spells the note for the key.
+        notes = [_spelled(p, s, staff, label) if s else {"pitch": p}
+                 for p, s in zip(operation["pitches"], spellings or [None] * len(operation["pitches"]))]
+        at = _at(operation, label, bar_info, division, length=ticks)
+        out = [{"op": "add-note", "at": at, "ticks": ticks, "z": value.numerator, "n": value.denominator,
+                "notes": notes}]
+        if operation["tied"]:
+            out.append({"op": "tie-at", "at": at, "pitches": operation["pitches"]})
+        return out
+    if op == "add-rest":
+        ticks, value = _length(operation["duration"], division, label)
+        at = _at(operation, label, bar_info, division, length=ticks)
+        return [{"op": "add-rest", "at": at, "ticks": ticks, "z": value.numerator, "n": value.denominator}]
+    if op == "add-tuplet":
+        ticks = to_ticks(operation["duration"], division, f"{label}.duration")
+        base = Fraction(ticks, operation["normal"])
+        if base.denominator != 1 or note_value(int(base), division) is None:
+            raise MuseScoreBatchError(
+                f"{label}: duration / normal ({operation['duration']} / {operation['normal']}) must be one note value"
+            )
+        total, unit = Fraction(ticks, 4 * division), Fraction(int(base), 4 * division)
+        at = _at(operation, label, bar_info, division, length=ticks)
+        return [{"op": "add-tuplet", "at": at, "ticks": ticks, "z": total.numerator, "n": total.denominator,
+                 "actual": operation["actual"], "normal": operation["normal"],
+                 "baseZ": unit.numerator, "baseN": unit.denominator,
+                 "notes": [[{"pitch": p} for p in chord] for chord in operation["notes"]]}]
+    if op == "add-clef":
+        return [{"op": "add-clef", "at": _at(operation, label, bar_info, division),
+                 "clefType": CLEF_TYPES[operation["clef"]]}]
+    if op == "add-text":
+        system = operation["staff"] == SYSTEM_STAFF
+        element = "SYSTEM_TEXT" if system else TEXT_ELEMENTS.get(operation["styleId"], "STAFF_TEXT")
+        return [{"op": "add-text", "at": _at(operation, label, bar_info, division), "element": element,
+                 "text": operation["text"]}]
+    if op == "add-lyric":
+        verse = original.get("verse", 1)
+        if not isinstance(verse, int) or isinstance(verse, bool) or not 1 <= verse <= 99:
+            raise MuseScoreBatchError(f"{label}.verse must be an integer 1-99")
+        ticks = to_ticks(operation["duration"], division, f"{label}.duration")
+        return [{"op": "add-lyric", "at": _at(operation, label, bar_info, division), "text": operation["text"],
+                 "verse": verse - 1, "hyphen": operation["syllableType"] == "middle", "ticks": ticks}]
+    if op == "add-line":
+        kind = LINE_STYLES.get(operation["styleId"])
+        for prefix, reason in LINES_REFUSED.items():
+            if operation["styleId"].startswith(prefix):
+                raise MuseScoreBatchError(f"{label}: {reason}")
+        if kind is None:
+            raise MuseScoreBatchError(
+                f"{label}: MuseScore can add these lines: {', '.join(sorted(LINE_STYLES))}; "
+                f"not {operation['styleId']}"
+            )
+        if operation["duration"] < 1:
+            raise MuseScoreBatchError(f"{label}: a line's duration must be positive")
+        at = _at(operation, label, bar_info, division)
+        return [{"op": "add-line", "at": at, "line": kind,
+                 "endTick": at["tick"] + to_ticks(operation["duration"], division, f"{label}.duration")}]
+    raise MuseScoreBatchError(f"{label}: {op} is not handled")  # pragma: no cover
+
+
+def _note_op(
+    original: dict[str, Any], operation: dict[str, Any], label: str, item: dict[str, Any],
+    objects: list[dict[str, Any]], bar_info: dict[int, dict[str, Any]], division: int,
+) -> dict[str, Any]:
+    """A Dorico note op at the note or rest it names."""
+    op = operation["op"]
+    if item["type"] != "NoteRest":
+        raise MuseScoreBatchError(f"{label}: {op} needs a note or rest, not a {item['msType']}")
+    at = {"staff": item["staff"], "bar": item["bar"], "tick": item["_ref"]["tick"],
+          "track": (item["staff"] - 1) * 4 + item["voice"] - 1}
+    if op in {"set-articulation", "add-slur"}:
+        _chord(item, op, label)
+    if op == "add-dynamic":
+        text = "".join(f"<sym>{_DYNAMIC_SYMBOLS[c]}</sym>" for c in operation["dynamic"])
+        return {"op": "add-dynamic", "at": at, "text": text, "dynamicType": DYNAMIC_TYPES[operation["dynamic"]]}
+    if op == "set-articulation":
+        return {"op": "articulation", "at": at, "action": ARTICULATION_ACTIONS[operation["articulation"]]}
+    if op == "add-slur":
+        return {"op": "add-line", "at": at, "line": "slur", "endTick": None}
+    if op == "add-tempo":
+        bpm = operation.get("bpm") or _bpm_in(operation["text"])
+        if bpm is None:
+            raise MuseScoreBatchError(
+                f"{label}: give bpm (quarter notes per minute) or a text with a metronome mark such as "
+                "'q = 120': a MuseScore tempo mark always sets the playback tempo"
+            )
+        return {"op": "add-tempo", "at": {**at, "track": 0}, "text": _tempo_text(operation["text"]),
+                "tempo": bpm / 60}
+    # add-rehearsal-mark: the next letter after the marks before it, unless given.
+    text = operation.get("text")
+    if text is None:
+        before = [o for o in objects if o.get("msType") == "RehearsalMark"
+                  and (o["bar"], o["position"]) < (item["bar"], item["position"])]
+        text = _mark_letter(len(before))
+    return {"op": "add-rehearsal-mark", "at": {**at, "track": 0}, "text": text}
+
+
+_METRONOME = re.compile(r"^\s*(?:q|♩|crotchet|quarter)\s*=\s*(\d+)\s*$", re.IGNORECASE)
+
+
+def _bpm_in(text: str) -> int | None:
+    match = re.search(r"=\s*(\d+)", text)
+    return int(match.group(1)) if match else None
+
+
+def _tempo_text(text: str) -> str:
+    """Dorico-style "q = 120" as MuseScore's metronome mark; other text as given."""
+    match = _METRONOME.match(text)
+    return f"<sym>metNoteQuarterUp</sym> = {match.group(1)}" if match else text
+
+
+def _mark_letter(count: int) -> str:
+    letters = ""
+    count += 1
+    while count:
+        count, rest = divmod(count - 1, 26)
+        letters = chr(ord("A") + rest) + letters
+    return letters
 
 
 def _target(

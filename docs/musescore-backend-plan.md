@@ -303,7 +303,7 @@ phase 0 list below, and **M** is the milestone that delivers it.
 | `add-rest`, `add-tuplet` (MuseScore and Dorico) | `Cursor.addRest`, `addTuplet(ratio, duration)` [src] | P4 | 3 |
 | `add-text` | `newElement` STAFF_TEXT / SYSTEM_TEXT / EXPRESSION / TEMPO_TEXT / REHEARSAL_MARK + `Cursor.add` (undoable [src]); styleId mapped | P4 | 3 |
 | `add-lyric` | `newElement(LYRICS)` + `Cursor.add` onto the chord; `verse` (0-based), `syllabic` (0 single, 1 begin, 2 end, 3 middle), `lyricTicks` [seen] | P9 | 3 |
-| `add-line` | **Open.** Slurs: select a note + `cmd("add-slur")`, to the next chord [seen]. Never `Cursor.add` [seen]. Octave lines: `cmd("add-8va")` is a plain edit on the selection [src]. Hairpins: `cmd("add-hairpin")` then end its interactive edit (`action://notation/cancel`) before the batch ends [src]. Ranges selected before the batch. To be tried in milestone 3, one isolated step at a time | P7 | 3 |
+| `add-line` | **Partly.** Slurs: select a note + `cmd("add-slur")`, to the next chord [seen]. Never `Cursor.add` [seen]. Octave lines: `cmd("add-8va")` is a plain edit on the selection [src]. Hairpins: `cmd("add-hairpin")` then end its interactive edit (`action://notation/cancel`) before the batch ends [src]. Ranges selected before the batch. Milestone 3: slurs (two notes selected, so no interactive edit [src]) and octave lines work [seen]; a hairpin crashed MuseScore a second time [seen], so add-line refuses them | P7 | 3 |
 | `add-dynamic`, `set-articulation`, `add-tempo`, `add-rehearsal-mark`, `add-slur`, `add-clef` (Dorico ops) | `newElement` + `Cursor.add` for DYNAMIC, TEMPO_TEXT (`tempo` in beats per second) and REHEARSAL_MARK [seen]; ARTICULATION with a numeric `symbol` id (623 = staccato in 4.7.5), or select a note + `cmd("add-staccato")` / `"add-tenuto"` / `"add-marcato"` / `"add-sforzato"` [seen]; CLEF (`Cursor.add` handles placement [src]) | P4 | 3 |
 | `transpose` | per note: `pitch` + `tpc` with the shared `transpose_spelled`; there is no transpose call in the plug-in API [src]. Key signatures in range too | P6, P10 | 4 |
 | `copy-passage` | `selectRange` + `cmd("copy")` **before** `startCmd` (inside a batch the copy crashed MuseScore [seen]); then, in the batch, select the destination + `cmd("paste")`. Untested: milestone 4, isolated | P11 | 4 |
@@ -407,8 +407,11 @@ the undo count with a marker edit.
    `query_score`, `score_overview`; `ApplyBatch` with resolve, guards,
    rollback, dry run and backup; set, set-pitch, tie, bracket, flip-stem,
    nudge, delete, beam.
-3. **Adding:** add-note, add-rest, add-tuplet, add-text, add-lyric,
-   add-line, and the Dorico note ops.
+3. **Adding** (done 2026-10-03; see
+   [musescore.md](musescore.md#our-back-end-in-progress)): add-note,
+   add-rest, add-tuplet, add-text, add-lyric, add-line (slurs and octave
+   lines; hairpins refused after a second crash), add-clef and the Dorico
+   note ops.
 4. **Structure:** `musicxml_read.py` and `score_structure`; transpose,
    copy-passage, set-key, set-time, set-break, set-barline, add-bars,
    set-bar-number, set-layout, hide-empty-staves, delete-voice.

@@ -104,7 +104,23 @@ MuseScore {
         var out = [];
         var start = ticksOf(measure.tick), end = start + ticksOf(measure.ticks);
         var tuplets = {};
+        // MuseScore keeps a clef that starts a bar at the end of the bar
+        // before; it is reported, and found again, in the bar it starts.
+        var prev = measure.prevMeasure;
+        if (staffIdx >= 0 && prev) {
+            for (var ps = prev.firstSegment; ps; ps = ps.nextInMeasure) {
+                if (ps.tick !== start)
+                    continue;
+                for (var pt = staffIdx * 4; pt < staffIdx * 4 + 4; pt++) {
+                    var pe = ps.elementAt(pt);
+                    if (pe && !pe.generated && pe.name === "Clef")
+                        out.push({ kind: "Clef", el: pe, tick: start, track: pt });
+                }
+            }
+        }
         for (var seg = measure.firstSegment; seg; seg = seg.nextInMeasure) {
+            if (staffIdx >= 0 && seg.tick >= end)
+                continue;
             if (staffIdx >= 0) {
                 for (var track = staffIdx * 4; track < staffIdx * 4 + 4; track++) {
                     var el = seg.elementAt(track);
@@ -275,27 +291,441 @@ MuseScore {
     // "tie" toggles: it adds a tie to the next note of the same pitch, or
     // removes one. Adding where there is no such note would add notes, so
     // that is refused; the result is checked either way.
-    function setTie(chord, on) {
-        for (var n = 0; n < chord.notes.length; n++) {
-            var note = chord.notes[n];
-            if (!!note.tieForward === on)
-                continue;
-            if (on) {
-                var next = nextChordRest(chord);
-                var found = false;
-                if (next && next.name === "Chord")
-                    for (var k = 0; k < next.notes.length; k++)
-                        if (next.notes[k].pitch === note.pitch)
-                            found = true;
-                if (!found)
-                    throw new Error("no next note of pitch " + note.pitch + " to tie to");
-            }
-            curScore.selection.clear();
-            curScore.selection.select(note, false);
-            root.cmd("tie");
-            if (!!note.tieForward !== on)
-                throw new Error("MuseScore did not " + (on ? "add" : "remove") + " the tie on pitch " + note.pitch);
+    function tieNote(chord, note, on) {
+        if (!!note.tieForward === on)
+            return;
+        if (on) {
+            var next = nextChordRest(chord);
+            var found = false;
+            if (next && next.name === "Chord")
+                for (var k = 0; k < next.notes.length; k++)
+                    if (next.notes[k].pitch === note.pitch)
+                        found = true;
+            if (!found)
+                throw new Error("no next note of pitch " + note.pitch + " to tie to");
         }
+        curScore.selection.clear();
+        curScore.selection.select(note, false);
+        root.cmd("tie");
+        if (!!note.tieForward !== on)
+            throw new Error("MuseScore did not " + (on ? "add" : "remove") + " the tie on pitch " + note.pitch);
+    }
+
+    function setTie(chord, on) {
+        for (var n = 0; n < chord.notes.length; n++)
+            tieNote(chord, chord.notes[n], on);
+    }
+
+    // ------------------------------------------------------------ adding
+    //
+    // Adding primitives name a place, {staff, bar, tick, track}, not an
+    // object. seat() puts a cursor there: where nothing in the voice starts
+    // at that tick, it splits the rest that covers it (never a note), or,
+    // in an empty voice 2-4, borrows voice 1's position [seen].
+
+    function gcd(a, b) {
+        return b ? gcd(b, a % b) : a;
+    }
+
+    function wholeFraction(ticks) {
+        var whole = 4 * root.division, g = gcd(ticks, whole);
+        return { z: ticks / g, n: whole / g };
+    }
+
+    // A gap as plain note values, longest first, for rests that split one.
+    function gapValues(ticks) {
+        var out = [];
+        for (var d = 8 * root.division; d >= 1 && ticks > 0; d = d / 2) {
+            if (d !== Math.floor(d))
+                break;
+            while (ticks >= d) {
+                out.push(d);
+                ticks -= d;
+            }
+        }
+        if (ticks)
+            throw new Error("cannot split a rest at that position");
+        return out;
+    }
+
+    // Chords and rests of a track that overlap [from, to), with their ticks.
+    function overlapping(measure, track, from, to) {
+        var out = [];
+        for (var seg = measure.firstSegment; seg; seg = seg.nextInMeasure) {
+            var el = seg.elementAt(track);
+            if (!el || (el.name !== "Chord" && el.name !== "Rest"))
+                continue;
+            var start = seg.tick, end = start + ticksOf(el.actualDuration);
+            if (start < to && end > from)
+                out.push({ el: el, start: start, end: end });
+        }
+        return out;
+    }
+
+    function voiceName(track) {
+        return "staff " + (Math.floor(track / 4) + 1) + " voice " + (track % 4 + 1);
+    }
+
+    function cursorAt(track, tick) {
+        var c = curScore.newCursor();
+        c.track = track;
+        c.rewindToTick(tick);
+        return c.segment && c.tick === tick && c.element ? c : null;
+    }
+
+    function seat(at, measure) {
+        var c = cursorAt(at.track, at.tick);
+        if (c)
+            return c;
+        var covering = overlapping(measure, at.track, at.tick, at.tick + 1);
+        if (!covering.length) {
+            c = cursorAt(at.track - at.track % 4, at.tick);
+            if (c) {
+                c.track = at.track;
+                return c;
+            }
+            throw new Error(voiceName(at.track) + " is empty there, and voice 1 has nothing starting at that "
+                            + "position to place it by");
+        }
+        var cr = covering[0];
+        if (cr.el.name !== "Rest")
+            throw new Error("a note in " + voiceName(at.track) + " covers that position (it starts "
+                            + (cr.start - ticksOf(measure.tick)) + " ticks into the bar); delete it first");
+        if (cr.el.tuplet)
+            throw new Error("that position is inside a tuplet in " + voiceName(at.track));
+        c = cursorAt(at.track, cr.start);
+        var gaps = gapValues(at.tick - cr.start);
+        for (var i = 0; i < gaps.length; i++) {
+            var f = wholeFraction(gaps[i]);
+            c.setDuration(f.z, f.n);
+            c.addRest();
+        }
+        c = cursorAt(at.track, at.tick);
+        if (!c)
+            throw new Error("could not make a position at tick " + at.tick + " in " + voiceName(at.track));
+        return c;
+    }
+
+    function hasPitch(chord, pitch) {
+        for (var n = 0; n < chord.notes.length; n++)
+            if (chord.notes[n].pitch === pitch)
+                return true;
+        return false;
+    }
+
+    function spell(chord, notes) {
+        for (var i = 0; i < notes.length; i++) {
+            if (notes[i].tpc1 === undefined)
+                continue;
+            var note = noteWithPitch(chord, notes[i].pitch);
+            note.tpc1 = notes[i].tpc1;
+            note.tpc2 = notes[i].tpc2;
+        }
+    }
+
+    // Chords for add-note and add-tuplet: the first pitch replaces what is
+    // at the cursor, the rest join it; the cursor moves on after the first.
+    function addChord(c, at, pitches, tick) {
+        c.addNote(pitches[0], false);
+        for (var i = 1; i < pitches.length; i++) {
+            var back = cursorAt(at.track, tick);
+            back.addNote(pitches[i], true);
+        }
+    }
+
+    function addNote(p, measure) {
+        var at = p.at, c = seat(at, measure), existing = null;
+        var found = overlapping(measure, at.track, at.tick, at.tick + p.ticks);
+        for (var i = 0; i < found.length; i++) {
+            var o = found[i];
+            if (o.el.tuplet)
+                throw new Error("a tuplet in " + voiceName(at.track) + " overlaps the new note");
+            if (o.el.name !== "Chord")
+                continue;
+            if (o.start === at.tick && o.end - o.start === p.ticks)
+                existing = o.el;
+            else
+                throw new Error("a note in " + voiceName(at.track) + " already sounds there with a different "
+                                + "start or length; delete it first, or add a rest over it");
+        }
+        var pitches = p.notes.map(function (n) { return n.pitch; });
+        if (existing) {
+            for (var k = 0; k < pitches.length; k++) {
+                if (hasPitch(existing, pitches[k]))
+                    throw new Error("the chord there already has pitch " + pitches[k]);
+                cursorAt(at.track, at.tick).addNote(pitches[k], true);
+            }
+        } else {
+            c.setDuration(p.z, p.n);
+            addChord(c, at, pitches, at.tick);
+        }
+        var check = cursorAt(at.track, at.tick);
+        var chord = check ? check.element : null;
+        if (!chord || chord.name !== "Chord" || ticksOf(chord.actualDuration) !== p.ticks)
+            throw new Error("MuseScore did not add the note as asked");
+        for (var j = 0; j < pitches.length; j++)
+            if (!hasPitch(chord, pitches[j]))
+                throw new Error("MuseScore did not add pitch " + pitches[j]);
+        spell(chord, p.notes);
+        return { kind: "NoteRest", el: chord, tick: at.tick, track: at.track };
+    }
+
+    function addRest(p, measure) {
+        var at = p.at, c = seat(at, measure);
+        var found = overlapping(measure, at.track, at.tick, at.tick + p.ticks);
+        for (var i = 0; i < found.length; i++)
+            if (found[i].el.tuplet)
+                throw new Error("a tuplet in " + voiceName(at.track) + " overlaps the new rest");
+        c.setDuration(p.z, p.n);
+        c.addRest();
+        var check = cursorAt(at.track, at.tick);
+        if (!check || check.element.name !== "Rest" || ticksOf(check.element.actualDuration) !== p.ticks)
+            throw new Error("MuseScore did not add the rest as asked");
+        return { kind: "NoteRest", el: check.element, tick: at.tick, track: at.track };
+    }
+
+    function addTuplet(p, measure) {
+        var at = p.at, c = seat(at, measure);
+        var found = overlapping(measure, at.track, at.tick, at.tick + p.ticks);
+        for (var i = 0; i < found.length; i++)
+            if (found[i].el.name === "Chord" || found[i].el.tuplet)
+                throw new Error("notes or a tuplet in " + voiceName(at.track) + " already sound there; "
+                                + "delete them first");
+        c.addTuplet(root.fraction(p.actual, p.normal), root.fraction(p.z, p.n));
+        c = cursorAt(at.track, at.tick);
+        if (!c || !c.element.tuplet)
+            throw new Error("MuseScore did not add the tuplet");
+        var tuplet = c.element.tuplet;
+        for (var k = 0; k < p.notes.length; k++) {
+            if (!c.segment || !c.element || !c.element.tuplet)
+                throw new Error("the tuplet ended before its notes did");
+            var tick = c.tick;
+            c.setDuration(p.baseZ, p.baseN);
+            var pitches = p.notes[k].map(function (n) { return n.pitch; });
+            if (pitches.length)
+                addChord(c, at, pitches, tick);
+            else
+                c.addRest();
+        }
+        return { kind: "Tuplet", el: tuplet, tick: at.tick, track: at.track };
+    }
+
+    function addElement(c, el, kind, at) {
+        c.add(el);
+        return { kind: kind, el: el, tick: at.tick, track: at.track };
+    }
+
+    function addText(p, measure) {
+        var c = seat(p.at, measure);
+        var el = root.newElement(Element[p.element]);
+        el.text = p.text;
+        return addElement(c, el, "Text", p.at);
+    }
+
+    function addClef(p, measure) {
+        var c = seat(p.at, measure);
+        var el = root.newElement(Element.CLEF);
+        el.concertClefType = p.clefType;
+        el.transposingClefType = p.clefType;
+        c.add(el);
+        var staff = curScore.staves[Math.floor(p.at.track / 4)];
+        if (staff.clefType(root.fraction(p.at.tick, 4 * root.division)) !== p.clefType)
+            throw new Error("MuseScore did not add the clef");
+        var items = walk(measure, Math.floor(p.at.track / 4));
+        for (var i = 0; i < items.length; i++)
+            if (items[i].kind === "Clef" && items[i].tick === p.at.tick)
+                return items[i];
+        return null;
+    }
+
+    // The lyric of a verse on the closest earlier chord that has one, up to
+    // eight bars back: it decides whether the new syllable continues a word.
+    function previousLyric(at, verse) {
+        var all = measures();
+        var best = null, bestTick = -1;
+        for (var b = at.bar; b >= Math.max(1, at.bar - 8) && !best; b--) {
+            for (var seg = all[b - 1].firstSegment; seg; seg = seg.nextInMeasure) {
+                if (seg.tick >= at.tick)
+                    break;
+                var el = seg.elementAt(at.track);
+                if (!el || el.name !== "Chord" || !el.lyrics)
+                    continue;
+                for (var l = 0; l < el.lyrics.length; l++)
+                    if (el.lyrics[l].verse === verse && seg.tick > bestTick) {
+                        best = el.lyrics[l];
+                        bestTick = seg.tick;
+                    }
+            }
+        }
+        return best;
+    }
+
+    // syllabic: SINGLE 0, BEGIN 1, END 2, MIDDLE 3 [src].
+    function addLyric(p, measure) {
+        var at = p.at, c = cursorAt(at.track, at.tick);
+        if (!c || c.element.name !== "Chord")
+            throw new Error("a lyric needs a note starting there in " + voiceName(at.track));
+        var chord = c.element;
+        for (var l = 0; l < chord.lyrics.length; l++)
+            if (chord.lyrics[l].verse === p.verse)
+                throw new Error("that note already has a lyric in verse " + (p.verse + 1) + "; set its Text instead");
+        var prev = previousLyric(at, p.verse);
+        var continues = !!prev && (prev.syllabic === 1 || prev.syllabic === 3);
+        var el = root.newElement(Element.LYRICS);
+        el.text = p.text;
+        el.verse = p.verse;
+        el.syllabic = continues ? (p.hyphen ? 3 : 2) : (p.hyphen ? 1 : 0);
+        c.add(el);
+        // A melisma: MuseScore measures it to the start of its last note.
+        var end = at.tick + p.ticks, last = at.tick, walk = cursorAt(at.track, at.tick);
+        while (walk.next() && walk.tick < end)
+            if (walk.element && walk.element.name === "Chord")
+                last = walk.tick;
+        if (last > at.tick)
+            el.lyricTicks = root.fraction(last - at.tick, 4 * root.division);
+        return { kind: "LyricItem", el: el, tick: at.tick, track: at.track };
+    }
+
+    // No hairpins: add-hairpin crashed MuseScore twice (docs/musescore.md).
+    readonly property var lineActions: ({ "slur": "add-slur", "8va": "add-8va", "8vb": "add-8vb" })
+    readonly property var lineNames: ({ "slur": "Slur", "8va": "Ottava", "8vb": "Ottava" })
+
+    function spannerKeys(name) {
+        var keys = {}, spanners = curScore.spanners;
+        for (var s = 0; s < spanners.length; s++) {
+            var sp = spanners[s];
+            if (sp.name !== name)
+                continue;
+            var key = ticksOf(sp.spannerTick) + ":" + ticksOf(sp.spannerTicks) + ":" + sp.track;
+            keys[key] = (keys[key] || 0) + 1;
+        }
+        return keys;
+    }
+
+    function newSpanner(name, before) {
+        var seen = {}, spanners = curScore.spanners;
+        for (var s = 0; s < spanners.length; s++) {
+            var sp = spanners[s];
+            if (sp.name !== name)
+                continue;
+            var key = ticksOf(sp.spannerTick) + ":" + ticksOf(sp.spannerTicks) + ":" + sp.track;
+            seen[key] = (seen[key] || 0) + 1;
+            if (seen[key] > (before[key] || 0))
+                return sp;
+        }
+        return null;
+    }
+
+    function selectable(cr) {
+        return cr.name === "Chord" ? cr.notes[0] : cr;
+    }
+
+    // Lines are made the way a user makes them: select the first and last
+    // chord or rest (a list selection, never a range: see plan, Batches)
+    // and run the action. With two items selected, a slur starts no
+    // interactive edit [src]; an octave line never does.
+    function addLine(p, measure) {
+        var at = p.at, c = seat(at, measure);
+        var first = c.element, last = first;
+        if (p.line === "slur" && first.name !== "Chord")
+            throw new Error("a slur starts on a note");
+        var walk = cursorAt(at.track, at.tick);
+        if (p.endTick === null) {
+            if (walk.next())
+                last = walk.element;
+        } else {
+            while (walk.next() && walk.tick < p.endTick)
+                last = walk.element;
+        }
+        if (p.line === "slur" && (last === first || !last || last.name !== "Chord"))
+            throw new Error("a slur needs a later note in " + voiceName(at.track) + " to end on");
+        var name = lineNames[p.line], before = spannerKeys(name);
+        curScore.selection.clear();
+        curScore.selection.select(selectable(first), false);
+        if (last !== first)
+            curScore.selection.select(selectable(last), true);
+        if (!lineActions[p.line])
+            throw new Error("cannot add a " + p.line);
+        root.cmd(lineActions[p.line]);
+        var sp = newSpanner(name, before);
+        if (!sp)
+            throw new Error("MuseScore did not add the " + p.line);
+        if (p.endTick !== null && name !== "Slur" && ticksOf(sp.spannerTick) + ticksOf(sp.spannerTicks) !== p.endTick)
+            sp.spannerTicks = root.fraction(p.endTick - ticksOf(sp.spannerTick), 4 * root.division);
+        return { kind: "Line", el: sp, tick: ticksOf(sp.spannerTick), track: sp.track };
+    }
+
+    function addDynamic(p, measure) {
+        var c = cursorAt(p.at.track, p.at.tick);
+        var el = root.newElement(Element.DYNAMIC);
+        el.text = p.text;
+        el.dynamicType = p.dynamicType;
+        return addElement(c, el, "Text", p.at);
+    }
+
+    // The articulation actions toggle, so one already there is put back.
+    function articulation(p) {
+        var c = cursorAt(p.at.track, p.at.tick), chord = c.element;
+        var before = chord.articulations.length;
+        curScore.selection.clear();
+        curScore.selection.select(chord.notes[0], false);
+        root.cmd(p.action);
+        var after = chord.articulations.length;
+        if (after < before) {
+            root.cmd(p.action);
+            return { kind: "NoteRest", el: chord, tick: p.at.tick, track: p.at.track, note: "already there" };
+        }
+        if (after === before)
+            throw new Error("MuseScore did not add the articulation");
+        return { kind: "NoteRest", el: chord, tick: p.at.tick, track: p.at.track };
+    }
+
+    function addTempo(p, measure) {
+        var c = seat(p.at, measure);
+        var el = root.newElement(Element.TEMPO_TEXT);
+        el.text = p.text;
+        el.tempo = p.tempo;
+        el.tempoFollowText = false;
+        var added = addElement(c, el, "Text", p.at);
+        el.tempo = p.tempo;
+        return added;
+    }
+
+    function addRehearsalMark(p, measure) {
+        var c = seat(p.at, measure);
+        var el = root.newElement(Element.REHEARSAL_MARK);
+        el.text = p.text;
+        return addElement(c, el, "Text", p.at);
+    }
+
+    function tieAt(p) {
+        var c = cursorAt(p.at.track, p.at.tick);
+        if (!c || c.element.name !== "Chord")
+            throw new Error("no chord to tie at tick " + p.at.tick);
+        for (var i = 0; i < p.pitches.length; i++)
+            tieNote(c.element, noteWithPitch(c.element, p.pitches[i]), true);
+        return { kind: "NoteRest", el: c.element, tick: p.at.tick, track: p.at.track };
+    }
+
+    function runAdding(p, all) {
+        var measure = all[p.at.bar - 1];
+        if (!measure)
+            throw new Error("no bar " + p.at.bar);
+        switch (p.op) {
+        case "add-note": return addNote(p, measure);
+        case "add-rest": return addRest(p, measure);
+        case "add-tuplet": return addTuplet(p, measure);
+        case "add-text": return addText(p, measure);
+        case "add-clef": return addClef(p, measure);
+        case "add-lyric": return addLyric(p, measure);
+        case "add-line": return addLine(p, measure);
+        case "add-dynamic": return addDynamic(p, measure);
+        case "articulation": return articulation(p);
+        case "add-tempo": return addTempo(p, measure);
+        case "add-rehearsal-mark": return addRehearsalMark(p, measure);
+        case "tie-at": return tieAt(p);
+        }
+        throw new Error("unknown primitive " + p.op);
     }
 
     function runPrimitive(p, item) {
@@ -349,22 +779,43 @@ MuseScore {
         }
         var cache = {}, items = [], results = [];
         for (var i = 0; i < args.primitives.length; i++) {
-            var item = resolve(args.primitives[i].ref, all, cache);
+            var ref = args.primitives[i].ref;
+            var item = ref ? resolve(ref, all, cache) : null;
             items.push(item);
-            results.push({ before: describe(item) });
+            results.push(item ? { before: describe(item) } : {});
+        }
+        // Objects named by ref are described once the object ops are done,
+        // before any adding op, which may replace them.
+        var described = false;
+        function describeChanged() {
+            if (described)
+                return;
+            described = true;
+            if (args.dryRun)
+                s.doLayout(root.fraction(0, 1), root.fraction(-1, 1));
+            for (var r = 0; r < items.length; r++)
+                if (items[r] && args.primitives[r].op !== "delete")
+                    results[r].after = describe(items[r]);
         }
         s.startCmd("AI batch");
         var done = 0;
         try {
             for (var j = 0; j < items.length; j++) {
-                runPrimitive(args.primitives[j], items[j]);
+                var p = args.primitives[j];
+                if (items[j]) {
+                    runPrimitive(p, items[j]);
+                } else {
+                    describeChanged();
+                    var added = runAdding(p, all);
+                    if (added) {
+                        results[j].added = describe(added);
+                        if (added.note)
+                            results[j].note = added.note;
+                    }
+                }
                 done++;
             }
-            if (args.dryRun)
-                s.doLayout(root.fraction(0, 1), root.fraction(-1, 1));
-            for (var r = 0; r < items.length; r++)
-                if (args.primitives[r].op !== "delete")
-                    results[r].after = describe(items[r]);
+            describeChanged();
         } catch (e) {
             s.endCmd(true);
             curScore.selection.clear();
