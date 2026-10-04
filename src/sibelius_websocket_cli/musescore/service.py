@@ -112,8 +112,12 @@ async def apply(bridge: MuseScoreBridge, operations: list[dict[str, Any]], *, dr
     as a record (MuseScore's plug-ins cannot write .mscz).
     """
     snap = await snapshot(bridge)
-    primitives, digests = score.prepare_batch(
+    needs_style = isinstance(operations, list) and any(
+        isinstance(o, dict) and o.get("op") == "set-layout" for o in operations
+    )
+    primitives, digests, copy = score.prepare_batch(
         operations, snap.objects, snap.staves, snap.read["division"], snap.digests, snap.read["bars"],
+        await bridge.structure(1, 1) if needs_style else None,
     )
     result: dict[str, Any] = {}
     if not dry_run:
@@ -124,7 +128,7 @@ async def apply(bridge: MuseScoreBridge, operations: list[dict[str, Any]], *, dr
         if not written.get("written") or not path.exists():
             raise MuseScoreError(f"could not write the backup copy {path}; nothing was changed")
         result["backup"] = str(path)
-    applied = await bridge.apply(primitives, snap.expect, digests, dry_run=dry_run)
+    applied = await bridge.apply(primitives, snap.expect, digests, dry_run=dry_run, copy=copy)
     bars = {b["bar"]: b["tick"] for b in snap.read["bars"]}
     division = snap.read["division"]
 
@@ -147,15 +151,24 @@ async def apply(bridge: MuseScoreBridge, operations: list[dict[str, Any]], *, dr
 
 def _result(primitive: dict[str, Any], raw: dict[str, Any], view: Any) -> dict[str, Any]:
     """One primitive's report: the object before and after, or what it added."""
-    place = primitive.get("ref") or primitive["at"]
+    place = primitive.get("ref") or primitive.get("at")
     out = {"op": primitive["label"], "primitive": primitive["op"]}
     if "ref" in primitive:
         out.update(before=view(raw.get("before"), place), after=view(raw.get("after"), place))
-    else:
+    elif place:
         out["added"] = view(raw.get("added"), place)
+    else:  # structural: bars or the whole score
+        out.update({k: primitive[k] for k in ("bar", "count", "type", "number", "values") if k in primitive})
     if raw.get("note"):
         out["note"] = raw["note"]
     return out
+
+
+async def structure(bridge: MuseScoreBridge, from_bar: int | None = None,
+                    to_bar: int | None = None) -> dict[str, Any]:
+    raw = await bridge.structure(from_bar, to_bar)
+    staves = await bridge.call("GetStaves")
+    return score.structure_report(raw, staves)
 
 
 async def undo(bridge: MuseScoreBridge, steps: int = 1) -> dict[str, Any]:

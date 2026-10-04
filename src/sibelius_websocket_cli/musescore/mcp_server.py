@@ -2,7 +2,7 @@
 
 Run with `uv run musescore-mcp` (stdio). It mirrors the Sibelius server's
 tools as the MuseScore back end gains them (docs/musescore-backend-plan.md):
-so far score_overview, query_score, apply_batch and undo. One connection is
+so far score_overview, score_structure, query_score, apply_batch and undo. One connection is
 kept and calls are serialized.
 """
 
@@ -117,6 +117,23 @@ async def score_overview() -> dict[str, Any]:
 
 
 @server.tool(annotations=READ_ONLY)
+async def score_structure(bars: str | None = None) -> dict[str, Any]:
+    """Key and time signatures, special barlines and repeats, system/page
+    breaks, bar number changes and irregular bars, for bars such as "1-40"
+    (default all), plus the page layout (mm) and staff spacing (spaces).
+
+    Names are the ones apply_batch's structural ops take. A barline or break
+    at bar B is at the end of bar B; a start repeat at bar B starts bar B.
+    Keys are concert keys; writtenKeys lists staves written in another key.
+    """
+    try:
+        first, last = parse_bar_range(bars=bars) if bars else (None, None)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    return await session.run(lambda bridge: service.structure(bridge, first, last), retry=True)
+
+
+@server.tool(annotations=READ_ONLY)
 async def query_score(
     staves: list[str] | None = None,
     bars: str | None = None,
@@ -204,7 +221,35 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
       add-tempo ("text":"q = 96" or "text" plus "bpm"), add-rehearsal-mark
       (next letter, or "text")
 
-    Structural operations are not available on MuseScore yet.
+    Structural ops come last; bars are as read before the batch, and no op
+    may name a bar after a set-time or add-bars (before a bar) moves it:
+
+    - {"op":"transpose","fromBar":A,"toBar":B,"topStaff":T,"bottomStaff":U,
+      "fromNote":"C","toNote":"D","direction":"up"[,"octaves":N]} (or degree
+      and intervalType): respells notes; key signatures in range move too
+    - {"op":"copy-passage","fromBar":A,"toBar":B,"topStaff":T,
+      "bottomStaff":U,"destStaff":S,"destBar":D[,"destPosition":P]}:
+      overwrites the destination, through the clipboard; one per batch
+    - {"op":"set-key","bar":B,"key":"Bb"[,"minor":true]}: every staff,
+      written keys worked out for transposing instruments
+    - {"op":"set-time","bar":B,"numerator":N,"denominator":D
+      [,"symbol":"common"|"cut"]}: re-bars what follows
+    - {"op":"set-break","bar":B,"type":"system"|"page"|"none"}
+    - {"op":"set-barline","bar":B,"type":T}: double, final, dashed, dotted,
+      thick, invisible, normal/none at the end of bar B; start_repeat
+      starts bar B, end_repeat ends it
+    - {"op":"set-bar-number","bar":B,"number":N[,"skip":true]}: skip leaves
+      bar B out of the count and gives the next bar N
+    - {"op":"add-bars","count":N[,"bar":B,"length":L]}: append, or insert
+      before bar B; length makes irregular bars
+    - {"op":"set-layout",...}: pageSize, orientation, staffSize, margins,
+      stave gaps (mm), spacesBetweenStaves, spacesBetweenSystems
+    - {"op":"hide-empty-staves","fromBar":1,"toBar":LAST}: whole score only
+    - {"op":"delete-voice","staff":S,"voice":V,"fromBar":A,"toBar":B}:
+      voice 1 notes become rests; voices 2-4 are emptied
+
+    transpose and delete-voice change notes as read, so they cannot follow
+    adding ops or a set-time/add-bars in the same batch.
     """
     return await session.run(lambda bridge: service.apply(bridge, operations, dry_run=dry_run), retry=False)
 

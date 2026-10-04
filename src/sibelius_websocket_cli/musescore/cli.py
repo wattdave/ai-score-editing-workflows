@@ -30,6 +30,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("install-plugin", help="write the bridge plug-in into MuseScore's plug-in folder")
     sub.add_parser("overview", help="versions, score name, metadata, staves and bar count")
+    structure = sub.add_parser("structure", help="key and time signatures, barlines, breaks, bar numbers, layout")
+    structure.add_argument("--bars", help="e.g. 1-40 (default all)")
     query = sub.add_parser("query", help="find objects by staff, bars, type, voice and conditions")
     query.add_argument("--staff", action="append", dest="staves", help="number, part name, or 0/system")
     query.add_argument("--bars", help="e.g. 5 or 12-20")
@@ -53,6 +55,9 @@ async def run(args: argparse.Namespace) -> Any:
         bridge = MuseScoreBridge(client)
         if args.command == "overview":
             return await service.overview(bridge)
+        if args.command == "structure":
+            first, last = parse_bar_range(bars=args.bars) if args.bars else (None, None)
+            return await service.structure(bridge, first, last)
         if args.command == "query":
             first, last = parse_bar_range(bars=args.bars) if args.bars else (None, None)
             return await service.query(

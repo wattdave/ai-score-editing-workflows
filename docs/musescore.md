@@ -127,7 +127,8 @@ uv run musescore-cli query --staff 1 --bars 1-4 --where 'Pitch>=72'
 uv run musescore-cli apply --dry-run --file batch.json
 uv run musescore-cli apply --file batch.json
 uv run musescore-cli undo --steps 1
-uv run musescore-mcp                  # score_overview, query_score, apply_batch, undo
+uv run musescore-cli structure --bars 1-40
+uv run musescore-mcp                  # score_overview, score_structure, query_score, apply_batch, undo
 ```
 
 After installing, enable "sibwscli bridge" once in Plugins → Manage
@@ -197,6 +198,62 @@ added object; the real run read back as asked and was one undo step, and one
 changed: a note inside another note, a note overlapping a longer one, voice 3
 where voice 1 had no position, a pitch already in the chord, a lyric with no
 note, a tie with no next note, a slur with no later note.
+
+Milestone 4 (bridge version 4) adds `score_structure` (`musescore-cli
+structure`) and the structural ops: transpose, copy-passage, set-key,
+set-time, set-break, set-barline, set-bar-number, add-bars, set-layout,
+hide-empty-staves and delete-voice. Everything is read live through the
+plug-in API, so no MusicXML reader was needed. How they behave:
+
+- **transpose** respells each note from its own spelling (C up a minor
+  third is E♭, B is D) and writes concert and written spelling; key
+  signatures in the range move by the same interval, keeping their mode.
+- **set-key** sets every staff, with the written key worked out for
+  transposing instruments (kept within seven sharps or flats). MuseScore
+  does not add a double barline, unlike Sibelius.
+- **Key signatures are replaced, not edited.** Writing `concertKey` on one
+  already in the score changed nothing, and setting `keysig_mode` on a new
+  one before adding it **crashed MuseScore**: the setter updates the
+  staff's key list, and an element not yet in the score has no staff
+  (`KeySig::setProperty`, `staff()->setKey`). So the bridge removes the old
+  one, adds a new one, and sets the mode afterwards.
+- **set-time** re-bars what follows, as on Sibelius; `symbol` gives common
+  or cut time.
+- **set-break** and **set-barline** work at the end of bar B, as on
+  Sibelius; a start repeat starts bar B and an end repeat ends it.
+  MuseScore has no between-staves, tick, short or triple barline.
+- **set-bar-number** is absolute, as on Sibelius. MuseScore's offset is
+  relative, so bars inserted later in the same batch would move the number;
+  the bridge numbers bars at the end of the batch, after layout. `skip`
+  leaves bar B out of the count and gives the next bar the number.
+- **add-bars** appends, or inserts before bar B (one `insert-measure` per
+  bar); `length` makes irregular bars.
+- **set-layout** converts millimetres to MuseScore's inches, staff size to
+  spatium, and the right margin to a printable width; both odd and even
+  pages change. Sibelius page sizes without agreed dimensions (octavo,
+  hymn, quarto, folio, us-band) and the extra gap below vocal staves are
+  refused.
+- **hide-empty-staves** only for the whole score (the style setting);
+  MuseScore does not hide staves over a range of bars.
+- **delete-voice** turns voice-1 notes into rests and empties voices 2-4.
+- **copy-passage** selects and copies the source before the command opens,
+  and pastes inside it. It overwrites the clipboard, even in a dry run.
+  One per batch.
+- transpose and delete-voice change notes as read, so they cannot follow
+  adding ops or a set-time/add-bars in the same batch; set-time must come
+  before set-bar-number.
+
+Checked live on 4.7.5 (2026-10-03, ScratchScore): every structural op ran
+and rolled back in a dry run. A real batch of ten (transpose bars 1-2 up a
+minor third, 3/4 at bar 20, D major at bar 3, a system break, a double
+barline, a repeat over bars 5-6, bar 8 numbered 20, A4 page with a 6 mm
+staff and 20 mm left margin, two bars appended) read back as asked: key
+E♭ at bar 1 with the clarinet in F, 40 bars. One undo restored
+`score_structure` exactly. A second batch (delete-voice, E minor, bar 5
+skipped and the next numbered 10, empty staves hidden, two 3/4 bars
+inserted before bar 3) read back as asked, numbering included, and one undo
+restored it. copy-passage of bars 2-3 on two staves to bar 10 matched the
+source note for note, and undo restored the destination.
 
 Starting two plug-ins that listen (the bridge and the probe) does not give
 two servers: MuseScore has one WebSocket server, the second `listen` only

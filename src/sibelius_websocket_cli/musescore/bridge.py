@@ -76,9 +76,19 @@ class MuseScoreBridge:
         return await self.call("Read", args)
 
     async def apply(self, primitives: list[dict[str, Any]], expect: dict[str, Any], digests: dict[str, str],
-                    dry_run: bool = False) -> dict[str, Any]:
-        return await self.call("ApplyBatch", {"primitives": primitives, "expect": expect, "digests": digests,
-                                              "dryRun": dry_run})
+                    dry_run: bool = False, copy: dict[str, Any] | None = None) -> dict[str, Any]:
+        args = {"primitives": primitives, "expect": expect, "digests": digests, "dryRun": dry_run}
+        if copy:
+            args["copy"] = copy
+        return await self.call("ApplyBatch", args)
+
+    async def structure(self, from_bar: int | None = None, to_bar: int | None = None) -> dict[str, Any]:
+        args: dict[str, Any] = {}
+        if from_bar is not None:
+            args["fromBar"] = from_bar
+        if to_bar is not None:
+            args["toBar"] = to_bar
+        return await self.call("GetStructure", args)
 
     async def write_copy(self, path: str, format: str = "musicxml") -> dict[str, Any]:
         return await self.call("WriteCopy", {"path": path, "format": format})
