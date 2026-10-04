@@ -105,6 +105,19 @@ These steps happen in Sibelius, so the user does them; guide and wait.
    must click OK. `connection` should report a bridge version. If it says
    Sibelius is busy, a dialog is open in Sibelius and they must close it.
 
+## 4b. MuseScore (optional)
+
+Only if the user wants to work in MuseScore 4 (free from musescore.org).
+Claude Code starts the MuseScore MCP server from `.mcp.json` and, the first
+time, downloads it and copies its plug-in into
+`~/Documents/MuseScore4/Plugins`. The user then:
+
+1. Opens MuseScore with a score.
+2. Goes to Plugins → Plugin Manager, enables "MuseScore API Server" and
+   clicks OK (once only).
+3. Runs Plugins → MuseScore API Server in every MuseScore session before
+   asking Claude to work on the score.
+
 ## 5. Finish
 
 Run `scripts/setup_check.sh --connect` one last time and show the result.

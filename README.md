@@ -253,6 +253,24 @@ and batches follow the Sibelius tools; Dorico's scripting exposes less
 preview export). [docs/dorico.md](docs/dorico.md) has the parity table, the
 gaps and how the bridge works.
 
+## MuseScore (third party)
+
+`.mcp.json` also registers [ghchen99/mcp-musescore](https://github.com/ghchen99/mcp-musescore),
+an outside MCP server for MuseScore 4 that is not part of this project.
+`scripts/musescore_mcp.sh` starts it. On first run it downloads the pinned
+commit into `.vendor/mcp-musescore` (ignored by git) and copies its plug-in,
+`musescore-mcp-websocket.qml`, into `~/Documents/MuseScore4/Plugins`
+(`MUSESCORE_PLUGIN_DIR` overrides this). To update it, change `commit` in the
+script after reviewing the new upstream code.
+
+To use it, open a score in MuseScore, enable "MuseScore API Server" once in
+Plugins → Plugin Manager, then run it from the Plugins menu each session. It
+listens on `ws://localhost:8765`. Its tools work through a cursor
+(`go_to_measure`, `add_note`, `add_lyrics`, `processSequence` and so on). They
+do not share the address, batch and guard model of the Sibelius and Dorico
+tools; [docs/musescore.md](docs/musescore.md) compares them and lists what
+parity would take. The `musescore` skill (`/musescore`) covers using it.
+
 ## Multi-Agent Skills (Claude, Antigravity, Cursor)
 
 The canonical Sibelius skill lives in `.claude/skills/sibelius/`. Its concise

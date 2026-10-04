@@ -7,6 +7,10 @@
     "dorico": {
       "command": "uv",
       "args": ["run", "--directory", ".", "dorico-mcp"]
+    },
+    "musescore": {
+      "command": "bash",
+      "args": ["scripts/musescore_mcp.sh"]
     }
   }
 }
