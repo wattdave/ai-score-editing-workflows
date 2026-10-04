@@ -134,6 +134,11 @@ MuseScore {
                             out.push({ kind: "Tuplet", el: el.tuplet, tick: ticksOf(el.tuplet.fraction), track: track });
                         }
                     }
+                    // Grace notes hang off their main chord, not the segment;
+                    // they share its tick and are listed (read-only) just before it.
+                    if (el.name === "Chord" && el.graceNotes)
+                        for (var g = 0; g < el.graceNotes.length; g++)
+                            out.push({ kind: "GraceNote", el: el.graceNotes[g], tick: seg.tick, track: track });
                     out.push({ kind: segmentKinds[el.name], el: el, tick: seg.tick, track: track });
                     if (el.lyrics)
                         for (var l = 0; l < el.lyrics.length; l++)
@@ -169,7 +174,18 @@ MuseScore {
         var el = item.el;
         var d = { kind: item.kind, type: el.name, tick: item.tick, track: item.track,
                   visible: el.visible, offsetX: el.offsetX, offsetY: el.offsetY };
-        if (item.kind === "NoteRest") {
+        if (item.kind === "GraceNote") {
+            d.duration = ticksOf(el.actualDuration);
+            d.small = el.small;
+            d.noteType = Number(el.noteType);
+            d.notes = [];
+            for (var gn = 0; gn < el.notes.length; gn++) {
+                var gnote = el.notes[gn];
+                d.notes.push({ pitch: gnote.pitch, tpc1: gnote.tpc1, tpc2: gnote.tpc2,
+                               tieForward: !!gnote.tieForward, tieBack: !!gnote.tieBack,
+                               parentheses: Number(gnote.hasParentheses) });
+            }
+        } else if (item.kind === "NoteRest") {
             d.duration = ticksOf(el.actualDuration);
             d.small = el.small;
             d.beamMode = el.beamMode;

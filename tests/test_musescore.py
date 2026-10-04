@@ -280,6 +280,27 @@ def test_present_shapes(objects) -> None:
     assert at(objects, 0, 1, 0)["text"] == "Allegro" and "voice" not in at(objects, 0, 1, 0)
 
 
+def test_grace_notes_are_listed_before_their_chord_and_read_only() -> None:
+    read = make_read()
+    grace = {**chord(2400, [71], duration=240), "kind": "GraceNote", "noteType": 1}
+    for key in ("beamMode", "inTuplet", "stemDirection", "up"):
+        grace.pop(key)
+    bar2 = read["content"][3]["objects"]
+    bar2.insert(bar2.index(next(o for o in bar2 if o["tick"] == 2400)), grace)
+    objects = score.locate(read)
+    found = [o for o in objects if o["type"] == "GraceNote"]
+    assert len(found) == 1
+    g = found[0]
+    assert g["graceType"] == "acciaccatura" and g["position"] == 256 and g["notes"][0]["pitch"] == 71
+    assert at(objects, 1, 2, g["index"] + 1)["notes"][0]["pitch"] == 69
+    assert score.query(objects, {"staves": [], "types": ["GraceNote"], "where": [], "fields": [], "voice": 0,
+                                 "limit": 10})["count"] == 1
+    digests = {(c["staff"], c["bar"]): c["digest"] for c in read["content"]}
+    with pytest.raises(MuseScoreBatchError, match="read-only"):
+        score.prepare_batch([{"op": "nudge", "staff": 1, "bar": 2, "index": g["index"], "dx": 1, "dy": 0}],
+                            objects, STAVES, 480, digests, read["bars"])
+
+
 def test_query_filters(objects) -> None:
     def q(**kw):
         selector = {"staves": [], "types": [], "where": [], "fields": [], "voice": 0, "limit": 500, **kw}

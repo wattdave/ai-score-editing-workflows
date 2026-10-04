@@ -13,7 +13,7 @@ import secrets
 from pathlib import Path
 
 #: Bump when msbridge.qml.in changes; the client refuses an older bridge.
-BRIDGE_VERSION = 6
+BRIDGE_VERSION = 7
 DEFAULT_PORT = 8766
 PLUGIN_TITLE = "sibwscli bridge"
 TEMPLATE = Path(__file__).with_name("msbridge.qml.in")

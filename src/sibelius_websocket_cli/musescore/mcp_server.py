@@ -149,8 +149,8 @@ async def query_score(
 
     staves: staff numbers or part names (default all); 0 or "system" is the
     system staff (only when asked for). bars: "12-20" or "5". types:
-    NoteRest (or Chord, Rest), LyricItem, Text, Clef, KeySignature,
-    TimeSignature, Tuplet, Line, a line type such as Slur or Hairpin, or a
+    NoteRest (or Chord, Rest), GraceNote (read-only), LyricItem, Text, Clef,
+    KeySignature, TimeSignature, Tuplet, Line, a line type such as Slur or Hairpin, or a
     MuseScore type such as Dynamic or StaffText. voice: 1-4. where:
     conditions that must all hold, e.g. "Pitch>=72", "Bracketed=true" (any
     note of a chord), "StemFlipped=true", "Hidden=true", "Text='dolce'".
