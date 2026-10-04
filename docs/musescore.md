@@ -214,3 +214,26 @@ probe ran in its own `startCmd` and was rolled back unless noted.
 - So the plan's `.mscx` structure read and `.mscz` backups need another
   route. Any failed export opens that dialog, so the bridge must only
   request formats known to work.
+
+### Exports and lines (P16, P7), 2026-10-03
+
+- `writeScore` picks an export mode from what the format's writer supports
+  [src]: per page for PNG and SVG; per part for PDF, MusicXML (`musicxml`,
+  `xml`, `mxl`), MIDI, MEI, MNX and the audio formats. With one score each of
+  these writes one file (PNG and SVG one per page). Only `.mscz` and `.mscx`
+  fail (above).
+- `writeScore(curScore, path, "musicxml")` wrote the whole score (both
+  parts, 32 bars each) in 4 ms and left `scoreName` unchanged. MusicXML is
+  the route for structure the plug-in API does not show.
+- **A slur:** select a note, `cmd("add-slur")`: it slurs to the next chord.
+  `curScore.spanners` reads it back (type, track, `spannerTick`,
+  `spannerTicks`, start and end chords), and rollback removes it.
+- **Never add a spanner with `Cursor.add`.** `newElement(Element.HAIRPIN)`
+  and `Cursor.add` fall through to adding it to a segment, which does not
+  hold spanners: MuseScore logged "Segment::add() unknown HairPin" (and
+  "Segment::remove() unknown HairPin" on rollback). The hairpin read back
+  with `spannerTick` -1 and no end element. In a later request, the same
+  step followed by `cmd("add-hairpin")` on a selected note crashed
+  MuseScore (crash dump written), most likely because of the bad hairpin.
+- `cmd("add-hairpin")` with a range selection did nothing ("no one can
+  handle the action: add-hairpin").
