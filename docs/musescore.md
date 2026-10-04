@@ -304,3 +304,32 @@ All rolled back cleanly unless noted.
 - **Metadata:** `metaTag` reads workTitle, composer, lyricist and so on.
   `setMetaTag` is **not** undone by rollback (it kept "PROBE"), as the
   source shows, so it was put back by hand.
+
+### Beams, articulations, layout, parts, size (P5, P18, P19), 2026-10-03
+
+- **Beams:** `beamMode` is writable after all: BeamMode is AUTO 0, NONE 1,
+  BEGIN 2, BEGIN16 3, BEGIN32 4, ... [src]. Setting 2 on the third of four
+  eighths split them into two beamed pairs, checked in a MusicXML export.
+  The earlier tries set 3 (BEGIN16), which does nothing to eighths, or
+  beamed quarters.
+- **Articulations:** `symbol` takes MuseScore's numeric symbol id, not a
+  name: 623 is `articStaccatoAbove` in 4.7.5 (ids come from `symid.h` and
+  can change between versions). With a note selected, the actions
+  `add-staccato`, `add-tenuto`, `add-marcato` and `add-sforzato` (an
+  accent) add the same thing; they toggle. With nothing
+  selected they start note input instead [src], so always select first.
+- **Layout mid-batch:** `curScore.doLayout(fraction(0, 1), fraction(-1, 1))`
+  (since 4.6) updated bar 3's displayed number from 2 to 11 after a
+  `noOffset` change, inside the batch; rollback restored it.
+- **MusicXML exports written pitch** for transposing instruments (the
+  clarinet's concert C4 came out as D4), so a MusicXML read converts back
+  with the part's `<transpose>`.
+- **Parts:** `appendPart("flute")` added a Flute part (4 staves) and was
+  rolled back. `Staff.playbackVoice1` (to 4) is writable and rolled back;
+  whether it silences playback was not listened to.
+- **Size:** inside a rolled-back batch, 300 bars filled with eighths on all
+  three staves (7,200 notes) took 41 ms to write; reading every non-generated
+  element with pitches and spellings took 38 ms; the request took 0.17 s.
+  Reads do not need to be split into chunks. (Layout runs at the end of a
+  command, so these times exclude it.)
+- `root.scores`, the list of open scores, read as empty with a score open.
