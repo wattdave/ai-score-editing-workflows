@@ -102,20 +102,30 @@ These steps happen in Sibelius, so the user does them; guide and wait.
 
 ## 4b. MuseScore (optional)
 
-Only if the user wants to work in MuseScore 4 (free from musescore.org).
-Claude Code starts the MuseScore MCP server from `.mcp.json` and, the first
-time, downloads it and copies its plug-in into
-`~/Documents/MuseScore4/Plugins`. The user then:
+Only if the user wants to work in MuseScore 4.6 or newer (free from
+musescore.org). Claude Code starts the MuseScore MCP server from
+`.mcp.json`; the plug-in it talks to is installed with:
 
-1. Opens MuseScore with a score.
-2. Goes to Plugins → Plugin Manager, enables "musescore-mcp-websocket" and
-   clicks OK (once only).
-3. Runs Plugins → musescore-mcp-websocket in every MuseScore session before
-   asking Claude to work on the score. Enabling it does not start it.
+```bash
+uv run musescore-cli install-plugin
+```
 
-Tell the user that while the plug-in runs, anyone on the same network can
-edit the open score (it accepts connections from the network without a
-password), so it is best not run on shared Wi-Fi.
+Then the user:
+
+1. Quits and reopens MuseScore (a new or changed plug-in only loads at
+   startup) and opens a score.
+2. Goes to Plugins → Manage plugins, enables "sibwscli bridge" and clicks
+   OK (once only).
+3. Chooses Plugins → sibwscli bridge in the score's window in every
+   MuseScore session before asking Claude to work on the score. Enabling it
+   does not start it.
+
+Check with `uv run musescore-cli overview`: it should name the score. The
+bridge only answers requests with the token that `install-plugin` stored,
+so it is safe on shared networks. If the user has the older
+"musescore-mcp-websocket" plug-in installed, suggest deleting it from
+`~/Documents/MuseScore4/Plugins`: it accepts edits from anyone on the
+network.
 
 ## 5. Finish
 

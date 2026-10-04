@@ -1,73 +1,95 @@
 ---
-description: Inspect, compose and edit the score open in MuseScore 4 (notes, rests, chords, tuplets, lyrics, adding or deleting bars, time signatures, tempo, adding instruments) through the third-party musescore MCP server (ghchen99/mcp-musescore) and its WebSocket plug-in. Use for MuseScore score requests and /musescore.
+description: Inspect, compose and edit the score open in MuseScore 4 (notes, pitches, chords, rests, tuplets, text, lyrics, dynamics, articulations, slurs, octave lines, clefs, tempo, transposition, key/time signatures, barlines, breaks, bar numbers, adding bars, copying bars, deleting voices, page layout, metadata, saving, exporting PDF/MusicXML/MIDI/audio, adding instruments, silencing staves) through this repository's MuseScore back end, the musescore MCP tools or musescore-cli. Use for MuseScore score requests and /musescore.
 globs: *
 alwaysApply: false
 ---
 
 # Driving MuseScore
 
-The `musescore` MCP server is [ghchen99/mcp-musescore](https://github.com/ghchen99/mcp-musescore)
-(MIT, see [LICENSE](LICENSE)). It is not part of this repository's own back
-ends and works differently from the Sibelius and Dorico tools: it moves a
-cursor and types at it, with no addresses, guards, dry runs or one-step
-batches. [docs/musescore.md](../../../docs/musescore.md) compares it with the
-Sibelius tools.
-
-- Read [references/tools.md](../../.claude/skills/musescore/references/tools.md) before choosing a tool or
-  writing a `processSequence`. It lists the 26 tools, their parameters and
-  the ones that do not do what their names say.
-- Read [references/architecture.md](../../.claude/skills/musescore/references/architecture.md) when
-  diagnosing connection, plug-in, port or response problems.
+The `musescore` MCP server (`score_overview`, `score_structure`,
+`query_score`, `apply_batch`, `undo`, `save_score`, `export_score`,
+`project_info`, `set_project_info`, `read_lyrics`, `edit_lyrics`,
+`add_instrument`, `set_staff_playback`) and `uv run musescore-cli` drive the
+score open in MuseScore 4.6+, through this repository's plug-in
+"sibwscli bridge". Read [docs/musescore.md](../../../docs/musescore.md)
+before anything unusual: it has the parity table and what MuseScore's
+plug-in API can and cannot do.
 
 ## Setup
 
-`.mcp.json` starts the server through `scripts/musescore_mcp.sh`, which
-downloads the pinned commit into `.vendor/mcp-musescore` and copies
-`musescore-mcp-websocket.qml` into `~/Documents/MuseScore4/Plugins`. In
-MuseScore the user must:
+1. `uv run musescore-cli install-plugin`, then restart MuseScore (a changed
+   plug-in only loads at startup).
+2. Plugins → Manage plugins: enable "sibwscli bridge" (once).
+3. Plugins → sibwscli bridge, in the window of the score to work on, every
+   session. Each MuseScore window is its own process; the bridge serves the
+   window it was started in.
 
-1. Open a score.
-2. Enable "musescore-mcp-websocket" once in Plugins → Plugin Manager.
-   MuseScore 4 names plug-ins by their `title:` line or, failing that, their
-   file name; this plug-in has no `title:`, so its `menuPath` name
-   ("MuseScore API Server") never appears.
-3. Run Plugins → musescore-mcp-websocket in every MuseScore session.
-   Enabling it does not start it. The plug-in listens on port 8765; the
-   Python server only connects to it.
-
-MuseScore's plug-in WebSocket server listens on every network interface, not
-just localhost, and this plug-in has no authentication: while it runs, any
-device on the same network can edit the open score. Tell the user, and
-suggest quitting MuseScore (or not running the plug-in) on shared networks.
-
-To check the bridge without MCP:
-
-```bash
-uv run --no-project --with websockets python .claude/skills/musescore/scripts/probe-musescore-bridge.py
-```
+If a tool says the bridge is not running, ask the user to do step 3. If it
+says the bridge is an older version, steps 1-3. The bridge needs a token
+(written by `install-plugin`), so other devices on the network cannot use
+it.
 
 ## Workflow
 
-1. `ping_musescore`. If it reports `Not connected to MuseScore`, ask the user
-   to run the plug-in; do not retry edits until a ping returns `pong`.
-2. `get_score` before editing. It returns the raw envelope; the score is in
-   `result.analysis`. Ticks are 480 per quarter note, not this repository's
-   256. Measures and staves are zero-based in the tools, one-based in
-   MuseScore's display.
-3. Place the cursor (`go_to_measure`, `select_custom_range`, `next_staff`)
-   and check the returned selection before writing.
-4. Make one or two edits directly, or a known sequence with `processSequence`.
-5. `get_score` again and report only what it shows.
+1. `score_overview` (or `musescore-cli overview`): score, metadata, staves
+   with transposition, bar count.
+2. `query_score` to find objects. Each has staff, bar, index, type and
+   position (its address), plus `ticks` (480 per quarter, exact for
+   tuplets). Staff 0 is the system staff (tempo, system text, rehearsal
+   marks); it is only listed when asked for.
+3. `apply_batch` with `dry_run: true`, then for real. A dry run really makes
+   the edits and rolls them back, so it catches what would fail. A real
+   batch is one undo step and writes a MusicXML backup first.
+4. Read back with `query_score` / `score_structure` and report exact results.
 
-## Guardrails
+Units are the Sibelius tools': 1/256 of a quarter note, position within the
+bar, MIDI pitches (concert). Bars count every measure from 1.
 
-- Every tool call, and every step in a `processSequence`, is a separate undo
-  step. `undo` reverts one; count the steps before undoing a sequence.
-- `processSequence` keeps going after a failing step and still reports
-  success. Verify with `get_score`.
-- `set_staff_mute` hides the staff instead of muting it. `set_instrument_sound`
-  only opens MuseScore's Instruments panel. Do not use either for playback.
-- `delete_selection` deletes whatever is selected. Check the selection first.
-- There is no save or export tool. Ask the user to save in MuseScore
-  (Cmd+S) and to export from File → Export.
-- `undo` reverts whatever was done last, the user's own edits included.
+## Batch order
+
+Object ops (set, set-pitch, tie, bracket, flip-stem, nudge, delete, beam)
+come first, then adding ops (add-note, add-rest, add-tuplet, add-text,
+add-lyric, add-line, add-clef, add-dynamic, set-articulation, add-slur,
+add-tempo, add-rehearsal-mark), then structural ops. transpose and
+delete-voice cannot follow adding ops or set-time/add-bars; set-time comes
+before set-bar-number; one copy-passage per batch. The `apply_batch`
+description lists every op's fields.
+
+## Limits
+
+- **No hairpins.** add-line refuses them: adding one crashed MuseScore
+  twice. Slurs and octave lines work. Ask the user to add hairpins by hand.
+- An empty voice 2-4 can only start where voice 1 has a note or rest
+  starting. Durations are single note values (up to three dots) in the bar.
+- `set` Beam takes MuseScore beam modes (0 auto, 1 none, 2 begin,
+  5 middle); a lyric melisma is `Duration`, not `NumNotes`.
+- hide-empty-staves is whole-score only. set-layout has no octavo, hymn,
+  quarto, folio or us-band page sizes.
+- `save_score` saves in place (as Cmd-S) and can copy the saved `.mscz` to a
+  path. A score never saved is refused: ask the user to save it once.
+- `export_score`: pdf, png, svg (one file per page when there are several),
+  musicxml (`.musicxml`/`.xml`), mxl, mid, mp3, wav, flac, ogg.
+- `set_project_info` is **not undoable**: the result has the old values.
+  The title frame on the page is separate text and does not change.
+- `edit_lyrics` needs the same syllable count; add or delete syllables with
+  add-lyric / delete in a batch.
+- `set_staff_playback` silences the notes there now (MuseScore's mixer is
+  out of reach): notes added later still play until it is run again.
+
+## Rules
+
+- Never call `undo` unless the last change was yours and a read-back shows
+  it happened: undo reverts the user's own edits too. Undo exactly the
+  reported `undoSteps`.
+- copy-passage overwrites the clipboard, even in a dry run.
+- If a call says MuseScore did not answer, a dialog is open in MuseScore:
+  ask the user to dismiss it; do not retry.
+- `scripts/musescore_live_check.py` checks the whole back end on a scratch
+  score; never run it on the user's own score.
+
+The third-party server this replaced, ghchen99/mcp-musescore, is described
+in [references/upstream-tools.md](../../.claude/skills/musescore/references/upstream-tools.md) and
+[references/upstream-architecture.md](../../.claude/skills/musescore/references/upstream-architecture.md)
+for history only. Its plug-in has no authentication; if the user still runs
+"musescore-mcp-websocket", suggest removing it from
+`~/Documents/MuseScore4/Plugins`.

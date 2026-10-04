@@ -321,7 +321,7 @@ phase 0 list below, and **M** is the milestone that delivers it.
 | `export_score` | `writeScore(score, path, ext)` for pdf, png, svg, musicxml, mxl, mid, mei, mnx, wav, mp3, ogg, flac or aac [src]; musicxml checked [seen]. Never `.mscz`/`.mscx`, which open a dialog [seen] | P16 | 5 |
 | `project_info`, `set_project_info` | `metaTag` / `setMetaTag`; not undone or rolled back [seen], so it runs outside batches and says so | P17 | 5 |
 | `add_instrument` (upstream) | `appendPart(id)` [seen]; also `insertPart`, `replacePart`, `removeParts` [src] | P18 | 6 |
-| staff mute (upstream does this wrong) | `Channel.mute` does nothing in MuseScore 4 [src]. The nearest is turning off a staff's `playbackVoice1`-`4`, which is writable [seen]; whether that silences playback is still to be heard | P18 | 6 |
+| staff mute (upstream does this wrong) | `Channel.mute` does nothing in MuseScore 4 [src]. The staff's `playbackVoice1`-`4` are writable but audio ignores them [seen]; each note's `play` flag silences it [seen] | P18 | 6 |
 
 ## Phase 0: probes
 
@@ -403,30 +403,34 @@ the undo count with a marker edit.
    `install.py`; `musescore-cli install-plugin | overview | undo`; a
    conftest guard that fails any test connecting to port 8766.
 2. **Reads and addressed edits** (done 2026-10-03; see
-   [musescore.md](musescore.md#our-back-end-in-progress)): `Read`, `score.py` locating and indexing,
+   [musescore.md](musescore.md#our-back-end)): `Read`, `score.py` locating and indexing,
    `query_score`, `score_overview`; `ApplyBatch` with resolve, guards,
    rollback, dry run and backup; set, set-pitch, tie, bracket, flip-stem,
    nudge, delete, beam.
 3. **Adding** (done 2026-10-03; see
-   [musescore.md](musescore.md#our-back-end-in-progress)): add-note,
+   [musescore.md](musescore.md#our-back-end)): add-note,
    add-rest, add-tuplet, add-text, add-lyric, add-line (slurs and octave
    lines; hairpins refused after a second crash), add-clef and the Dorico
    note ops.
 4. **Structure** (done 2026-10-03; see
-   [musescore.md](musescore.md#our-back-end-in-progress)): `score_structure`
+   [musescore.md](musescore.md#our-back-end)): `score_structure`
    (read live; no MusicXML reader was needed); transpose, copy-passage,
    set-key, set-time, set-break, set-barline, add-bars, set-bar-number,
    set-layout, hide-empty-staves (whole score only), delete-voice.
 5. **Files and metadata** (done 2026-10-03; see
-   [musescore.md](musescore.md#our-back-end-in-progress)): save_score
+   [musescore.md](musescore.md#our-back-end)): save_score
    (File > Save, the file found through the window's AXDocument, copied for
    a path), export_score (every writeScore format but .mscz/.mscx),
    project_info, set_project_info (not undoable), read_lyrics,
    edit_lyrics.
-6. **Switch-over:** add_instrument and staff playback; a recorded live
-   check; the `musescore` skill rewritten for the new tools (the upstream
-   notes kept as history); README, setup skill, `docs/musescore.md` parity
-   table; `.mcp.json` points `musescore` at `musescore-mcp`.
+6. **Switch-over** (done 2026-10-04; see
+   [musescore.md](musescore.md#live-check)): add_instrument and
+   set_staff_playback (through each note's `play`, since audio ignores the
+   staff's voice flags); `scripts/musescore_live_check.py`, 28/28; the
+   `musescore` skill rewritten (the upstream notes kept as history); README,
+   setup skill, `docs/musescore.md` parity table; `.mcp.json` points
+   `musescore` at `musescore-mcp`, and the upstream server is no longer
+   registered.
 
 ## Testing
 

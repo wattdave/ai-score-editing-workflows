@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Send one real ping through the MuseScore plugin WebSocket."""
+"""Send one real ping through the upstream (mcp-musescore) plug-in WebSocket, port 8765.
+
+History: the current back end is checked with `uv run musescore-cli overview`.
+"""
 
 import asyncio
 import json

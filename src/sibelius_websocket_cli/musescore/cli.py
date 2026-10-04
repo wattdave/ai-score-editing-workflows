@@ -62,6 +62,15 @@ def build_parser() -> argparse.ArgumentParser:
     edit.add_argument("--staff", required=True, help="number or part name")
     edit.add_argument("--verse", type=int, default=1)
     edit.add_argument("--text", required=True)
+    instrument = sub.add_parser("add-instrument", help="append a part by MuseScore instrument id or name")
+    instrument.add_argument("instrument", help="e.g. violin, soprano, bb-clarinet")
+    instrument.add_argument("--dry-run", action="store_true")
+    playback = sub.add_parser("playback", help="silence or restore staves in playback")
+    playback.add_argument("--staff", action="append", dest="staves", required=True, help="number or part name")
+    playback.add_argument("--voice", action="append", type=int, dest="voices", help="1-4 (default all)")
+    state = playback.add_mutually_exclusive_group(required=True)
+    state.add_argument("--off", action="store_false", dest="play")
+    state.add_argument("--on", action="store_true", dest="play")
     return parser
 
 
@@ -95,6 +104,10 @@ async def run(args: argparse.Namespace) -> Any:
             if len(fields) != len(args.field):
                 raise ValueError("each --field is NAME=VALUE")
             return await service.set_project_info(bridge, fields)
+        if args.command == "add-instrument":
+            return await service.add_instrument(bridge, args.instrument, dry_run=args.dry_run)
+        if args.command == "playback":
+            return await service.set_staff_playback(bridge, args.staves, args.play, args.voices)
         if args.command == "lyrics":
             return await service.read_lyrics(bridge, args.staff, args.verse)
         if args.command == "edit-lyrics":

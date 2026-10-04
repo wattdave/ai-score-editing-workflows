@@ -1,5 +1,7 @@
 # Architecture and connection model
 
+> **History.** This describes the third-party server [ghchen99/mcp-musescore](https://github.com/ghchen99/mcp-musescore) (MIT, see [../LICENSE](../LICENSE)), which was registered as `musescore` until this repository's own back end replaced it. It is no longer registered; `scripts/musescore_mcp.sh` can still start it by hand.
+
 ```text
 Claude Code / Codex / another MCP client
                  │ MCP stdio
