@@ -223,6 +223,9 @@ tmp/
 thoughts/
 .claude/config/
 
+# Git worktrees Claude Code creates for isolated subagents
+.claude/worktrees/
+
 # Transcriptions of Avid's ManuScript Language Guide (Avid's copyright);
 # see docs/avid-reference.md
 docs/manuscript-object-tree.md

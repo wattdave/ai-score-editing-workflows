@@ -263,9 +263,11 @@ commit into `.vendor/mcp-musescore` (ignored by git) and copies its plug-in,
 (`MUSESCORE_PLUGIN_DIR` overrides this). To update it, change `commit` in the
 script after reviewing the new upstream code.
 
-To use it, open a score in MuseScore, enable "MuseScore API Server" once in
-Plugins → Plugin Manager, then run it from the Plugins menu each session. It
-listens on `ws://localhost:8765`. Its tools work through a cursor
+To use it, open a score in MuseScore, enable "musescore-mcp-websocket" once in
+Plugins → Plugin Manager, then run Plugins → musescore-mcp-websocket each
+session (enabling it does not start it). It listens on port 8765 of every
+network interface, with no authentication, so while it runs any device on the
+same network can edit the open score; avoid running it on shared networks. Its tools work through a cursor
 (`go_to_measure`, `add_note`, `add_lyrics`, `processSequence` and so on). They
 do not share the address, batch and guard model of the Sibelius and Dorico
 tools; [docs/musescore.md](docs/musescore.md) compares them and lists what

@@ -108,10 +108,14 @@ time, downloads it and copies its plug-in into
 `~/Documents/MuseScore4/Plugins`. The user then:
 
 1. Opens MuseScore with a score.
-2. Goes to Plugins → Plugin Manager, enables "MuseScore API Server" and
+2. Goes to Plugins → Plugin Manager, enables "musescore-mcp-websocket" and
    clicks OK (once only).
-3. Runs Plugins → MuseScore API Server in every MuseScore session before
-   asking Claude to work on the score.
+3. Runs Plugins → musescore-mcp-websocket in every MuseScore session before
+   asking Claude to work on the score. Enabling it does not start it.
+
+Tell the user that while the plug-in runs, anyone on the same network can
+edit the open score (it accepts connections from the network without a
+password), so it is best not run on shared Wi-Fi.
 
 ## 5. Finish
 

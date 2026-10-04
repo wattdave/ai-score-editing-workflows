@@ -27,7 +27,7 @@ open score in MuseScore Studio
 
 1. Start MuseScore Studio and open a score.
 2. Enable the plugin once in MuseScore's plugin manager.
-3. Run `Plugins > MuseScore API Server`.
+3. Run `Plugins > musescore-mcp-websocket` (MuseScore 4 shows the file name, since the plug-in has no `title:`). It listens on port 8765 of every network interface, with no authentication.
 4. Let Claude Code launch `server.py` over stdio (`scripts/musescore_mcp.sh` via `.mcp.json`).
 5. Call `ping_musescore` before using a score tool.
 

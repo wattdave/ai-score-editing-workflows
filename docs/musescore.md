@@ -27,7 +27,7 @@ The [musescore skill](../.claude/skills/musescore/SKILL.md) covers how to use it
 | Errors | Batch refused, nothing changed | `processSequence` ignores failing steps and reports success |
 | Reads | Filtered queries, structure, overview | `get_score`: the whole score every time, notes, rests and lyrics only |
 | Units | 1/256 quarter, 1-based bars and staves | 480 ticks per quarter, 0-based measures and staves |
-| Connection | Sibelius Connect, approval dialog | Unauthenticated WebSocket on localhost:8765 that any local process can use |
+| Connection | Sibelius Connect, approval dialog | Unauthenticated WebSocket on port 8765 of every network interface (MuseScore listens on `QHostAddress::Any`), so any device on the network can use it |
 
 ## Parity with the Sibelius back end
 
@@ -63,6 +63,9 @@ The [musescore skill](../.claude/skills/musescore/SKILL.md) covers how to use it
 | `export_score` | ❌ | |
 
 ## What parity needs
+
+[musescore-backend-plan.md](musescore-backend-plan.md) turns this outline
+into a phased plan with probes and milestones.
 
 Patching the upstream tools one by one would not get there. The gap is the
 model: Sibelius parity needs addresses, guards, checked batches and filtered
