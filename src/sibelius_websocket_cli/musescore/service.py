@@ -113,7 +113,7 @@ async def apply(bridge: MuseScoreBridge, operations: list[dict[str, Any]], *, dr
     """
     snap = await snapshot(bridge)
     primitives, digests = score.prepare_batch(
-        operations, snap.objects, snap.staves, snap.read["division"], snap.digests,
+        operations, snap.objects, snap.staves, snap.read["division"], snap.digests, snap.read["bars"],
     )
     result: dict[str, Any] = {}
     if not dry_run:
@@ -136,17 +136,26 @@ async def apply(bridge: MuseScoreBridge, operations: list[dict[str, Any]], *, dr
     result.update(
         dryRun=dry_run,
         applied=applied["applied"],
-        results=[
-            {"op": p["label"], "primitive": p["op"], "before": view(r["before"], p["ref"]),
-             "after": view(r.get("after"), p["ref"])}
-            for p, r in zip(primitives, applied["results"])
-        ],
+        results=[_result(p, r, view) for p, r in zip(primitives, applied["results"])],
     )
     if dry_run:
         result["note"] = "The batch ran and was rolled back; nothing changed."
     else:
         result["undoSteps"] = 1
     return result
+
+
+def _result(primitive: dict[str, Any], raw: dict[str, Any], view: Any) -> dict[str, Any]:
+    """One primitive's report: the object before and after, or what it added."""
+    place = primitive.get("ref") or primitive["at"]
+    out = {"op": primitive["label"], "primitive": primitive["op"]}
+    if "ref" in primitive:
+        out.update(before=view(raw.get("before"), place), after=view(raw.get("after"), place))
+    else:
+        out["added"] = view(raw.get("added"), place)
+    if raw.get("note"):
+        out["note"] = raw["note"]
+    return out
 
 
 async def undo(bridge: MuseScoreBridge, steps: int = 1) -> dict[str, Any]:

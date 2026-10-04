@@ -156,6 +156,53 @@ the new note worked in one batch; a tie with no matching next note was
 refused and rolled back. The real run was one undo step, and one `undo`
 restored all seven, including the deleted chord.
 
+Milestone 3 (bridge version 3) adds the adding ops: add-note (chords,
+voices 1-4, spellings, ties), add-rest, add-tuplet, add-text, add-lyric,
+add-line (slurs and octave lines), add-clef, and Dorico's note ops
+add-dynamic, set-articulation, add-slur, add-tempo and add-rehearsal-mark.
+They come after the object ops in a batch, place by staff, bar, position and
+voice, and report what they added. How they behave:
+
+- Where nothing in the voice starts at the position, the rest covering it
+  is split; a note covering it is never split, and add-note refuses to
+  overlap a note unless it starts and ends with it (then the pitches join
+  that chord, as Sibelius's add-note does). add-rest replaces anything.
+- An empty voice 2-4 can only start where voice 1 has a note or rest
+  starting [seen, milestone 0].
+- Durations must be one note value with up to three dots, inside the bar:
+  the cursor silently turns any other length into a quarter [src].
+- Notes without a spelling are spelled by MuseScore for the key, which is
+  usually better than the Sibelius default.
+- add-lyric works out begin/middle/end from the previous syllable of that
+  verse; a melisma (duration longer than the note) runs to the start of the
+  last note it covers, which is how MuseScore measures `lyricTicks`.
+- add-tempo needs a metronome value (a "q = 96" text or `bpm`): a MuseScore
+  tempo mark always sets the playback tempo. add-text on staff 0 makes
+  system text, which does not.
+- set-articulation does staccato, tenuto, marcato and accent (the actions
+  that add them by name); one already there is left as it was.
+- **Hairpins are refused.** `add-hairpin` crashed MuseScore again on
+  2026-10-03, with two notes selected and the interactive edit cancelled
+  straight after, inside a command. That makes two crashes; hairpins are
+  added by hand for now.
+- A clef that starts a bar is stored at the end of the bar before; the
+  read reports it in the bar it starts, at position 0, as Sibelius does.
+
+Checked live on 4.7.5 (2026-10-03, ScratchScore): a dry run of 19 ops (every
+adding op, a chord added to, a G♯ spelled, voice 2 in an empty voice, a rest
+split from a bar rest, a triplet with a chord, a hyphenated three-syllable
+word, a slur over three notes, an 8va over a bar, a tied pair) reported each
+added object; the real run read back as asked and was one undo step, and one
+`undo` restored bars 3-5 exactly. Refused in the bridge, with nothing
+changed: a note inside another note, a note overlapping a longer one, voice 3
+where voice 1 had no position, a pitch already in the chord, a lyric with no
+note, a tie with no next note, a slur with no later note.
+
+Starting two plug-ins that listen (the bridge and the probe) does not give
+two servers: MuseScore has one WebSocket server, the second `listen` only
+logs "QTcpServer::listen() called when already listening", and the second
+plug-in's handler answers on the first one's port. Start only the bridge.
+
 ## Probe results (MuseScore Studio 4.7.5, macOS)
 
 Milestone 0 of [musescore-backend-plan.md](musescore-backend-plan.md).

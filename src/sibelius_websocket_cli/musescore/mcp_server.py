@@ -176,7 +176,35 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
     - {"op":"delete",...}: a deleted chord becomes a rest
     - {"op":"beam","staff":S,"bar":B,"firstIndex":I,"lastIndex":J}
 
-    Adding and structural operations are not available on MuseScore yet.
+    Adding ops come after the ops above. They place by staff, bar, position
+    and voice (1-4); where nothing starts at the position, the rest covering
+    it is split (never a note). An empty voice 2-4 can only start where
+    voice 1 has a note or rest starting. Durations are single note values
+    (up to three dots) within the bar:
+
+    - {"op":"add-note","staff":S,"bar":B,"position":P,"duration":D,
+      "pitches":[..][,"voice":V,"tied":true,"spellings":["Db",null]]}:
+      joins a chord of the same start and length there; replaces rests;
+      refuses to overlap other notes. Unspelled notes follow the key
+    - {"op":"add-rest",...,"duration":D}: replaces whatever is there
+    - {"op":"add-tuplet",...,"duration":D,"actual":3,"normal":2,
+      "notes":[[60],[],[64,67]]}: chords of duration/normal each ([] rest)
+    - {"op":"add-text",...,"text":T[,"styleId":"text.staff.expression"]}:
+      expression, other staff styles make staff text; staff 0 system text
+    - {"op":"add-lyric",...,"duration":D,"text":T[,"syllableType":"middle",
+      "verse":N]}: on a note starting there; hyphens follow the verse
+    - {"op":"add-line",...,"duration":D,"styleId":S}: line.staff.slur(.up/
+      .down), line.staff.octava.plus8/.minus8; no hairpins (they crashed
+      MuseScore)
+    - {"op":"add-clef",...,"clef":"treble"|"treble-8vb"|"treble-8va"|
+      "alto"|"tenor"|"bass"|"bass-8vb"|"percussion"}
+    - At a note or rest by staff/bar/index (Dorico's ops):
+      add-dynamic ("dynamic":"mf"), set-articulation ("articulation":
+      staccato|tenuto|marcato|accent), add-slur (to the next note),
+      add-tempo ("text":"q = 96" or "text" plus "bpm"), add-rehearsal-mark
+      (next letter, or "text")
+
+    Structural operations are not available on MuseScore yet.
     """
     return await session.run(lambda bridge: service.apply(bridge, operations, dry_run=dry_run), retry=False)
 

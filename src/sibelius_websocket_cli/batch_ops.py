@@ -26,7 +26,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+
+#: Validators for operations another back end adds, by op name; each takes
+#: (operation, label) and returns the normalized operation.
+ExtraOps = dict[str, Callable[[dict[str, Any], str], dict[str, Any]]]
 
 from .intervals import compute_transposition
 
@@ -125,23 +129,29 @@ def load_batch(path: str) -> list[dict[str, Any]]:
     return validate_batch(payload)
 
 
-def validate_batch(payload: Any) -> list[dict[str, Any]]:
-    """Validate a batch and return it normalized for the bridge."""
+def validate_batch(payload: Any, extra: ExtraOps | None = None) -> list[dict[str, Any]]:
+    """Validate a batch and return it normalized for the bridge.
+
+    `extra` lets a back end accept operations of its own (the MuseScore back
+    end takes Dorico's note ops); they are treated as object operations.
+    """
     if not isinstance(payload, list) or not payload:
         raise BatchError("a batch must be a non-empty JSON array")
-    normalized = [_validate(operation, i) for i, operation in enumerate(payload)]
+    normalized = [_validate(operation, i, extra or {}) for i, operation in enumerate(payload)]
     _reject_use_after_delete(normalized)
     _check_structural_order(normalized)
     return normalized
 
 
-def _validate(operation: Any, i: int) -> dict[str, Any]:
+def _validate(operation: Any, i: int, extra: ExtraOps) -> dict[str, Any]:
     label = f"op {i}"
     if not isinstance(operation, dict):
         raise BatchError(f"{label} must be an object")
     op = operation.get("op")
+    if op in extra and op not in OPERATIONS:
+        return extra[op](operation, label)
     if op not in OPERATIONS:
-        raise BatchError(f"{label}.op must be one of: {', '.join(sorted(OPERATIONS))}")
+        raise BatchError(f"{label}.op must be one of: {', '.join(sorted(OPERATIONS | set(extra)))}")
     if op in STRUCTURAL:
         return _validate_structural(operation, op, label)
     out: dict[str, Any] = {"op": op}
