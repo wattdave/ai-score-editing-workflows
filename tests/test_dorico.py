@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from pathlib import Path
@@ -477,7 +478,7 @@ async def test_export_pdf_answers_overwrite_and_reads_path_from_log(tmp_path: Pa
     pdf = tmp_path / "01 - Full score - Song.pdf"
     clicked: list[tuple[str, ...]] = []
 
-    def fake_osascript(script: str, *args: str) -> str:
+    async def fake_osascript(script: str, *args: str) -> str:
         if script is export._DIALOGS:
             return "" if clicked else "2\tOne or more output files already exist. Do you want to overwrite them?"
         clicked.append(args)
@@ -497,6 +498,149 @@ async def test_export_pdf_answers_overwrite_and_reads_path_from_log(tmp_path: Pa
     assert await export.export_pdf(client, log) == pdf  # type: ignore[arg-type]
     assert client.commands == ["Print.ExportCurrentLayoutAsPDF"]
     assert clicked == [("2", "Overwrite")]
+
+
+
+class _FakeOsascript:
+    """Stands in for an osascript child process; never runs a real one."""
+
+    def __init__(self, stdout: bytes = b"", stderr: bytes = b"", returncode: int = 0, hang: bool = False) -> None:
+        self.stdout, self.stderr, self.hang = stdout, stderr, hang
+        self.result = returncode
+        self.returncode: int | None = None
+        self.input: bytes | None = None
+        self.killed = False
+        self.waited = False
+
+    async def communicate(self, data: bytes) -> tuple[bytes, bytes]:
+        self.input = data
+        if self.hang:
+            await asyncio.sleep(3600)
+        self.returncode = self.result
+        return self.stdout, self.stderr
+
+    def kill(self) -> None:
+        self.killed = True
+
+    async def wait(self) -> int:
+        self.waited = True
+        self.returncode = -9
+        return -9
+
+
+def _spawn(monkeypatch: pytest.MonkeyPatch, process: _FakeOsascript) -> list[tuple[Any, ...]]:
+    from sibelius_websocket_cli.dorico import export
+
+    calls: list[tuple[Any, ...]] = []
+
+    async def fake_exec(*args: Any, **kwargs: Any) -> _FakeOsascript:
+        calls.append(args)
+        assert kwargs["stdin"] == kwargs["stdout"] == kwargs["stderr"] == asyncio.subprocess.PIPE
+        return process
+
+    monkeypatch.setattr(export.asyncio, "create_subprocess_exec", fake_exec)
+    return calls
+
+
+async def test_osascript_runs_without_blocking_and_decodes_like_text_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    from sibelius_websocket_cli.dorico import export
+
+    process = _FakeOsascript(stdout="Titre\tSérénade\rsecond line\r\n".encode())
+    calls = _spawn(monkeypatch, process)
+    out = await export._osascript('tell process "%(process)s" to item 1 of argv', "a b", "c")
+    assert calls == [("osascript", "-", "a b", "c")]
+    assert process.input == 'tell process "Dorico 6" to item 1 of argv'.encode()
+    assert out == "Titre\tSérénade\nsecond line"
+
+
+@pytest.mark.parametrize(
+    ("stderr", "message"),
+    [
+        (b"execution error: osascript is not allowed assistive access. (-1719)\n", "Accessibility permission"),
+        (b"syntax error: oops (-2741)\n", r"UI scripting failed: syntax error: oops \(-2741\)$"),
+    ],
+)
+async def test_osascript_failure_messages(monkeypatch: pytest.MonkeyPatch, stderr: bytes, message: str) -> None:
+    from sibelius_websocket_cli.dorico import export
+
+    _spawn(monkeypatch, _FakeOsascript(stderr=stderr, returncode=1))
+    with pytest.raises(DoricoError, match=message):
+        await export._osascript("script")
+
+
+async def test_osascript_timeout_kills_the_child(monkeypatch: pytest.MonkeyPatch) -> None:
+    import subprocess
+
+    from sibelius_websocket_cli.dorico import export
+
+    process = _FakeOsascript(hang=True)
+    _spawn(monkeypatch, process)
+    monkeypatch.setattr(export, "OSASCRIPT_TIMEOUT", 0.01)
+    with pytest.raises(subprocess.TimeoutExpired):  # as subprocess.run raised, not an OSError
+        await export._osascript("script", "x")
+    assert process.killed and process.waited
+
+
+async def test_osascript_cancellation_kills_the_child(monkeypatch: pytest.MonkeyPatch) -> None:
+    from sibelius_websocket_cli.dorico import export
+
+    process = _FakeOsascript(hang=True)
+    _spawn(monkeypatch, process)
+    task = asyncio.create_task(export._osascript("script"))
+    await asyncio.sleep(0.01)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert process.killed and process.waited
+
+
+async def test_bridge_wait_for_polls_without_blocking(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    response = tmp_path / "response.json"
+
+    async def answer_later() -> None:
+        await asyncio.sleep(0.05)  # runs only if the poll yields to the event loop
+        response.write_text(json.dumps({"ok": True}))
+
+    writer = asyncio.create_task(answer_later())
+    assert await DoricoBridge._wait_for(response) == {"ok": True}
+    await writer
+    monkeypatch.setattr(bridge_mod, "RESPONSE_TIMEOUT", 0.05)
+    with pytest.raises(DoricoError, match="did not answer"):
+        await DoricoBridge._wait_for(tmp_path / "never.json")
+
+
+async def test_read_project_info_drives_the_dialog(monkeypatch: pytest.MonkeyPatch) -> None:
+    from sibelius_websocket_cli.dorico import project_info
+
+    state = {"open": False}
+    scripts: list[tuple[str, ...]] = []
+
+    async def fake_osascript(script: str, *args: str) -> str:
+        scripts.append(args)
+        if script is project_info._OPEN:
+            return "yes" if state["open"] else "no"
+        if script is project_info._READ:
+            return "Title\tSong\nComposer\tMe\nNot a field\tx"
+        if script is project_info._PRESS:
+            state["open"] = False
+            return "clicked"
+        raise AssertionError(script)
+
+    async def front() -> None:
+        scripts.append(("front",))
+
+    class Client:
+        async def command(self, command: str) -> None:
+            assert command == "File.ScoreInfo"
+            state["open"] = True
+
+    class Bridge:
+        client = Client()
+
+    monkeypatch.setattr(project_info, "_osascript", fake_osascript)
+    monkeypatch.setattr(project_info, "bring_to_front", front)
+    assert await project_info.read_project_info(Bridge()) == {"Title": "Song", "Composer": "Me"}  # type: ignore[arg-type]
+    assert ("front",) in scripts and ("Close",) in scripts and not state["open"]
 
 
 # ------------------------------------------------------------------ voice layout
@@ -910,7 +1054,10 @@ async def test_type_lyrics_moves_down_a_verse_per_kept_text(monkeypatch: pytest.
     class Bridge:
         client = Client()
 
-    monkeypatch.setattr(service, "bring_to_front", lambda: None)
+    async def front() -> None:
+        pass
+
+    monkeypatch.setattr(service, "bring_to_front", front)
     monkeypatch.setattr(service, "POPOVER_OPEN_DELAY", 0)
     monkeypatch.setattr(service, "SYLLABLE_DELAY", 0)
     steps = await service._type_lyrics(Bridge(), [["u", "kHyphenateCurrentWord"], ["no", "kEndInput"]],  # type: ignore[arg-type]
@@ -974,7 +1121,10 @@ async def test_read_undoes_only_its_own_selections(
 
     bridge = Bridge()
     bridge.client = client  # type: ignore[attr-defined]
-    monkeypatch.setattr(lyrics_dialog, "_osascript", lambda script, *args: client.title())
+    async def menu_title(script: str, *args: str) -> str:
+        return client.title()
+
+    monkeypatch.setattr(lyrics_dialog, "_osascript", menu_title)
     monkeypatch.setattr(lyrics_dialog, "MENU_POLL", 0)
     result = await lyrics_dialog._undo_read_steps(bridge, ["Undo Filter Lyrics", "Undo Select All"])  # type: ignore[arg-type]
     assert result is kept and client.commands.count("Edit.Undo") == undone

@@ -120,17 +120,17 @@ end run
 """
 
 
-def _is_open() -> bool:
-    return _osascript(_OPEN) == "yes"
+async def _is_open() -> bool:
+    return await _osascript(_OPEN) == "yes"
 
 
 async def _open(bridge: DoricoBridge) -> None:
-    if _is_open():
+    if await _is_open():
         raise DoricoError("Dorico's Project Info dialog is already open; close it first")
-    bring_to_front()
+    await bring_to_front()
     await bridge.client.command("File.ScoreInfo")
     deadline = time.monotonic() + DIALOG_TIMEOUT
-    while not _is_open():
+    while not await _is_open():
         if time.monotonic() > deadline:
             raise DoricoError("Dorico did not open its Project Info dialog")
         await asyncio.sleep(0.2)
@@ -138,14 +138,14 @@ async def _open(bridge: DoricoBridge) -> None:
 
 
 async def _close() -> None:
-    if _is_open():
-        _osascript(_PRESS, "Close")
+    if await _is_open():
+        await _osascript(_PRESS, "Close")
         await asyncio.sleep(0.5)
 
 
-def _read_fields() -> dict[str, str]:
+async def _read_fields() -> dict[str, str]:
     fields: dict[str, str] = {}
-    for line in _osascript(_READ).splitlines():
+    for line in (await _osascript(_READ)).splitlines():
         name, _, value = line.partition("\t")
         if name in FIELDS:
             fields[name] = value
@@ -156,7 +156,7 @@ async def read_project_info(bridge: DoricoBridge) -> dict[str, str]:
     """The project-level Project Info fields, by their dialog names."""
     await _open(bridge)
     try:
-        return _read_fields()
+        return await _read_fields()
     finally:
         await _close()
 
@@ -173,10 +173,10 @@ async def set_project_info(bridge: DoricoBridge, fields: dict[str, str]) -> dict
             raise DoricoError(f"{name} must be a single-line string")
     await _open(bridge)
     try:
-        before = _read_fields()
+        before = await _read_fields()
         for name, value in fields.items():
-            _osascript(_TYPE, name, value)
-        if _osascript(_PRESS, "Apply") != "clicked":
+            await _osascript(_TYPE, name, value)
+        if await _osascript(_PRESS, "Apply") != "clicked":
             raise DoricoError("could not press Apply in the Project Info dialog")
         await asyncio.sleep(0.5)
     finally:

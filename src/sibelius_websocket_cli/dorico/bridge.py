@@ -11,6 +11,7 @@ are worked out here from the bar lengths `measure_bars` finds.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import os
@@ -181,7 +182,7 @@ class DoricoBridge:
         )
         try:
             await self.client.command(f"Script.RunScript?ScriptPath={request_path}")
-            payload = self._wait_for(response_path)
+            payload = await self._wait_for(response_path)
         finally:
             request_path.unlink(missing_ok=True)
             response_path.unlink(missing_ok=True)
@@ -190,7 +191,7 @@ class DoricoBridge:
         return payload.get("result")
 
     @staticmethod
-    def _wait_for(path: Path) -> dict[str, Any]:
+    async def _wait_for(path: Path) -> dict[str, Any]:
         deadline = time.monotonic() + RESPONSE_TIMEOUT
         while not path.exists():
             if time.monotonic() > deadline:
@@ -198,7 +199,7 @@ class DoricoBridge:
                     "the Dorico bridge did not answer; check Dorico's Script console "
                     "(Script > Show Console) or application.log"
                 )
-            time.sleep(0.02)
+            await asyncio.sleep(0.02)
         return json.loads(path.read_text())
 
     async def overview(self, flow: int = 1) -> dict[str, Any]:

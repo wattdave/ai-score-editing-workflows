@@ -773,7 +773,7 @@ async def _type_lyrics(bridge: DoricoBridge, syllables: list[list[str]], keep: l
     keep holds the text already at that note in each verse below the target;
     each is accepted again with kIncrementVerseNumber to move down a line.
     """
-    bring_to_front()
+    await bring_to_front()
     await bridge.client.command("NoteInput.StartLyricInput")
     await asyncio.sleep(POPOVER_OPEN_DELAY)
     for text in keep:
