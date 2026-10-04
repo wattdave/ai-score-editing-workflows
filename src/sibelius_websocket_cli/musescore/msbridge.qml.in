@@ -61,6 +61,332 @@ MuseScore {
         return out;
     }
 
+    // ------------------------------------------------------------ reading
+    //
+    // A bar of one staff is walked in a fixed order (segments in tick order;
+    // in each, the staff's clefs, key and time signatures, chords and rests
+    // with their tuplets and lyrics, then annotations; then the spanners
+    // that start in the bar). An object's place in that walk is its "raw"
+    // ordinal: Read reports it, and ApplyBatch walks the bar again to find
+    // the object. score.py turns the walk into staff/bar/index addresses.
+    // Staff index -1 is the system staff: system text, tempo, rehearsal
+    // marks and voltas. Generated elements (system-start clefs, ordinary
+    // barlines) are skipped.
+
+    readonly property var segmentKinds: ({ "Clef": "Clef", "KeySig": "KeySignature", "TimeSig": "TimeSignature",
+                                           "Chord": "NoteRest", "Rest": "NoteRest" })
+    readonly property var systemAnnotations: ({ "SystemText": true, "Tempo": true, "RehearsalMark": true })
+    readonly property var lineTypes: ({ "Slur": true, "HairPin": true, "Ottava": true, "Pedal": true,
+                                        "Trill": true, "TextLine": true, "Volta": true })
+
+    function requireScore() {
+        if (!curScore)
+            throw new Error("no score is open in this MuseScore window");
+        return curScore;
+    }
+
+    function measures() {
+        var out = [];
+        for (var m = requireScore().firstMeasure; m; m = m.nextMeasure)
+            out.push(m);
+        return out;
+    }
+
+    function ticksOf(fraction) {
+        return fraction ? fraction.ticks : null;
+    }
+
+    function inStaff(track, staffIdx) {
+        return track >= staffIdx * 4 && track < staffIdx * 4 + 4;
+    }
+
+    function walk(measure, staffIdx) {
+        var out = [];
+        var start = ticksOf(measure.tick), end = start + ticksOf(measure.ticks);
+        var tuplets = {};
+        for (var seg = measure.firstSegment; seg; seg = seg.nextInMeasure) {
+            if (staffIdx >= 0) {
+                for (var track = staffIdx * 4; track < staffIdx * 4 + 4; track++) {
+                    var el = seg.elementAt(track);
+                    if (!el || el.generated || !segmentKinds[el.name])
+                        continue;
+                    if (el.tuplet) {
+                        var key = track + ":" + ticksOf(el.tuplet.fraction);
+                        if (!tuplets[key]) {
+                            tuplets[key] = true;
+                            out.push({ kind: "Tuplet", el: el.tuplet, tick: ticksOf(el.tuplet.fraction), track: track });
+                        }
+                    }
+                    out.push({ kind: segmentKinds[el.name], el: el, tick: seg.tick, track: track });
+                    if (el.lyrics)
+                        for (var l = 0; l < el.lyrics.length; l++)
+                            out.push({ kind: "LyricItem", el: el.lyrics[l], tick: seg.tick, track: track });
+                }
+            }
+            var annotations = seg.annotations;
+            for (var a = 0; a < annotations.length; a++) {
+                var ann = annotations[a];
+                if (ann.generated)
+                    continue;
+                var system = !!systemAnnotations[ann.name];
+                if (staffIdx < 0 ? system : (!system && inStaff(ann.track, staffIdx)))
+                    out.push({ kind: "Text", el: ann, tick: seg.tick, track: ann.track });
+            }
+        }
+        var spanners = curScore.spanners;
+        for (var s = 0; s < spanners.length; s++) {
+            var sp = spanners[s];
+            if (!lineTypes[sp.name])
+                continue;
+            var tick = ticksOf(sp.spannerTick);
+            if (tick < start || tick >= end)
+                continue;
+            var systemLine = sp.name === "Volta";
+            if (staffIdx < 0 ? systemLine : (!systemLine && inStaff(sp.track, staffIdx)))
+                out.push({ kind: "Line", el: sp, tick: tick, track: sp.track });
+        }
+        return out;
+    }
+
+    function describe(item) {
+        var el = item.el;
+        var d = { kind: item.kind, type: el.name, tick: item.tick, track: item.track,
+                  visible: el.visible, offsetX: el.offsetX, offsetY: el.offsetY };
+        if (item.kind === "NoteRest") {
+            d.duration = ticksOf(el.actualDuration);
+            d.small = el.small;
+            d.beamMode = el.beamMode;
+            d.inTuplet = !!el.tuplet;
+            if (el.name === "Chord") {
+                d.stemDirection = Number(el.stemDirection);
+                d.up = el.up;
+                d.notes = [];
+                for (var n = 0; n < el.notes.length; n++) {
+                    var note = el.notes[n];
+                    d.notes.push({ pitch: note.pitch, tpc1: note.tpc1, tpc2: note.tpc2,
+                                   tieForward: !!note.tieForward, tieBack: !!note.tieBack,
+                                   parentheses: Number(note.hasParentheses) });
+                }
+            }
+        } else if (item.kind === "LyricItem") {
+            d.text = el.plainText;
+            d.verse = el.verse;
+            d.syllabic = el.syllabic;
+            d.lyricTicks = ticksOf(el.lyricTicks);
+        } else if (item.kind === "Text") {
+            d.text = String(el.text);
+        } else if (item.kind === "Tuplet") {
+            d.actualNotes = el.actualNotes;
+            d.normalNotes = el.normalNotes;
+            d.duration = ticksOf(el.actualDuration);
+        } else if (item.kind === "Line") {
+            d.duration = ticksOf(el.spannerTicks);
+        } else if (item.kind === "KeySignature") {
+            d.concertKey = el.concertKey;
+            d.actualKey = el.actualKey;
+        } else if (item.kind === "TimeSignature") {
+            var sig = el.timesig;
+            d.numerator = sig ? sig.numerator : null;
+            d.denominator = sig ? sig.denominator : null;
+        } else if (item.kind === "Clef") {
+            d.clefType = Number(el.concertClefType);
+        }
+        return d;
+    }
+
+    // A short hash of a bar's objects as Read describes them. ApplyBatch
+    // refuses to run if a bar it changes no longer matches.
+    function digest(objects) {
+        var text = JSON.stringify(objects), h = 5381;
+        for (var i = 0; i < text.length; i++)
+            h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
+        return h.toString(16);
+    }
+
+    function readBar(measure, staffIdx) {
+        var items = walk(measure, staffIdx), objects = [];
+        for (var i = 0; i < items.length; i++)
+            objects.push(describe(items[i]));
+        return objects;
+    }
+
+    // args: fromBar, toBar (1-based, inclusive), staves (1-based; 0 is the
+    // system staff). Defaults: every bar, every staff and the system staff.
+    function read(args) {
+        var s = requireScore(), all = measures();
+        var from = args.fromBar || 1, to = Math.min(args.toBar || all.length, all.length);
+        var staves = args.staves;
+        if (!staves || !staves.length) {
+            staves = [0];
+            for (var k = 1; k <= s.nstaves; k++)
+                staves.push(k);
+        }
+        var bars = [], content = [];
+        for (var b = from; b <= to; b++) {
+            var m = all[b - 1];
+            bars.push({ bar: b, tick: ticksOf(m.tick), ticks: ticksOf(m.ticks), no: m.no,
+                        noOffset: m.noOffset, irregular: m.irregular });
+            for (var i = 0; i < staves.length; i++) {
+                var objects = readBar(m, staves[i] - 1);
+                content.push({ staff: staves[i], bar: b, digest: digest(objects), objects: objects });
+            }
+        }
+        return { division: root.division, barCount: all.length, bars: bars, content: content };
+    }
+
+    // ------------------------------------------------------------ batches
+    //
+    // score.py sends primitives that name objects by ref {staff, bar, raw,
+    // type, tick}. Every ref is resolved, and every touched bar checked
+    // against its digest, before the first edit. The primitives then run
+    // between startCmd and endCmd: one undo step. A failure, or a dry run,
+    // ends with endCmd(true), which rolls everything back.
+
+    function resolve(ref, all, cache) {
+        var key = ref.staff + ":" + ref.bar;
+        if (!cache[key]) {
+            if (ref.bar < 1 || ref.bar > all.length)
+                throw new Error("no bar " + ref.bar);
+            cache[key] = walk(all[ref.bar - 1], ref.staff - 1);
+        }
+        var item = cache[key][ref.raw];
+        if (!item || item.el.name !== ref.type || item.tick !== ref.tick)
+            throw new Error("staff " + ref.staff + " bar " + ref.bar + " has changed since it was read");
+        return item;
+    }
+
+    function noteWithPitch(chord, pitch) {
+        for (var n = 0; n < chord.notes.length; n++)
+            if (chord.notes[n].pitch === pitch)
+                return chord.notes[n];
+        throw new Error("no note with pitch " + pitch);
+    }
+
+    // The next chord or rest in the same track, which a tie would join.
+    function nextChordRest(chord) {
+        var cursor = curScore.newCursor();
+        cursor.track = chord.track;
+        cursor.rewindToTick(ticksOf(chord.fraction));
+        if (!cursor.next())
+            return null;
+        return cursor.element;
+    }
+
+    // "tie" toggles: it adds a tie to the next note of the same pitch, or
+    // removes one. Adding where there is no such note would add notes, so
+    // that is refused; the result is checked either way.
+    function setTie(chord, on) {
+        for (var n = 0; n < chord.notes.length; n++) {
+            var note = chord.notes[n];
+            if (!!note.tieForward === on)
+                continue;
+            if (on) {
+                var next = nextChordRest(chord);
+                var found = false;
+                if (next && next.name === "Chord")
+                    for (var k = 0; k < next.notes.length; k++)
+                        if (next.notes[k].pitch === note.pitch)
+                            found = true;
+                if (!found)
+                    throw new Error("no next note of pitch " + note.pitch + " to tie to");
+            }
+            curScore.selection.clear();
+            curScore.selection.select(note, false);
+            root.cmd("tie");
+            if (!!note.tieForward !== on)
+                throw new Error("MuseScore did not " + (on ? "add" : "remove") + " the tie on pitch " + note.pitch);
+        }
+    }
+
+    function runPrimitive(p, item) {
+        var el = item.el;
+        switch (p.op) {
+        case "set":
+            // Lengths (lyricTicks, spannerTicks) are fractions: ticks / (4 * division).
+            el[p.prop] = p.ticks !== undefined ? root.fraction(p.ticks, 4 * root.division) : p.value;
+            return;
+        case "nudge":
+            el.offsetX = el.offsetX + p.dx;
+            el.offsetY = el.offsetY + p.dy;
+            return;
+        case "set-pitch":
+            var note = noteWithPitch(el, p.oldPitch);
+            note.pitch = p.pitch;
+            note.tpc1 = p.tpc1;
+            note.tpc2 = p.tpc2;
+            return;
+        case "tie":
+            setTie(el, p.on);
+            return;
+        case "bracket":
+            for (var n = 0; n < el.notes.length; n++)
+                el.notes[n].hasParentheses = p.on ? 3 : 0;
+            return;
+        case "flip-stem":
+            el.stemDirection = el.up ? 2 : 1;
+            return;
+        case "delete":
+            root.removeElement(el);
+            return;
+        }
+        throw new Error("unknown primitive " + p.op);
+    }
+
+    // args: expect {name, measures, staves}, digests {"staff:bar": hash},
+    // primitives [{op, ref, ...}], dryRun.
+    function applyBatch(args) {
+        var s = requireScore(), all = measures();
+        var expect = args.expect || {};
+        if (s.scoreName !== expect.name || all.length !== expect.measures || s.nstaves !== expect.staves)
+            throw new Error("the score in MuseScore is not the one that was read (now " + s.scoreName + ", "
+                            + all.length + " bars, " + s.nstaves + " staves)");
+        var digests = args.digests || {};
+        for (var key in digests) {
+            var parts = key.split(":");
+            var bar = Number(parts[1]);
+            if (bar < 1 || bar > all.length || digest(readBar(all[bar - 1], Number(parts[0]) - 1)) !== digests[key])
+                throw new Error("staff " + parts[0] + " bar " + parts[1] + " has changed since it was read");
+        }
+        var cache = {}, items = [], results = [];
+        for (var i = 0; i < args.primitives.length; i++) {
+            var item = resolve(args.primitives[i].ref, all, cache);
+            items.push(item);
+            results.push({ before: describe(item) });
+        }
+        s.startCmd("AI batch");
+        var done = 0;
+        try {
+            for (var j = 0; j < items.length; j++) {
+                runPrimitive(args.primitives[j], items[j]);
+                done++;
+            }
+            if (args.dryRun)
+                s.doLayout(root.fraction(0, 1), root.fraction(-1, 1));
+            for (var r = 0; r < items.length; r++)
+                if (args.primitives[r].op !== "delete")
+                    results[r].after = describe(items[r]);
+        } catch (e) {
+            s.endCmd(true);
+            curScore.selection.clear();
+            throw new Error("primitive " + done + " (" + args.primitives[done].op + ") failed: "
+                            + (e && e.message ? e.message : e) + "; nothing was changed");
+        }
+        s.endCmd(!!args.dryRun);
+        curScore.selection.clear();
+        return { applied: items.length, dryRun: !!args.dryRun, results: results };
+    }
+
+    // Only formats known to export without a dialog: a failed export shows
+    // a Retry/Abort dialog, and .mscz/.mscx always fail (docs/musescore.md).
+    readonly property var copyFormats: ({ "musicxml": true, "mxl": true, "pdf": true, "mid": true })
+
+    function writeCopy(args) {
+        var s = requireScore();
+        if (!copyFormats[args.format])
+            throw new Error("cannot write format " + args.format);
+        return { written: root.writeScore(s, args.path, args.format), path: args.path };
+    }
+
     // Undo is only dispatched when something can be undone, so asking for
     // more steps than there are does nothing (no dialog).
     function undo(args) {
@@ -75,6 +401,9 @@ MuseScore {
         case "GetBridgeVersion": return { version: root.bridgeVersion };
         case "GetScoreInfo": return getScoreInfo();
         case "GetStaves": return getStaves();
+        case "Read": return read(args);
+        case "ApplyBatch": return applyBatch(args);
+        case "WriteCopy": return writeCopy(args);
         case "Undo": return undo(args);
         }
         throw new Error("unknown method: " + method);

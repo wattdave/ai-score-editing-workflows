@@ -20,6 +20,7 @@ sibelius-mcp = "sibelius_websocket_cli.mcp_server:main"
 dorico-cli = "sibelius_websocket_cli.dorico.cli:main"
 dorico-mcp = "sibelius_websocket_cli.dorico.mcp_server:main"
 musescore-cli = "sibelius_websocket_cli.musescore.cli:main"
+musescore-mcp = "sibelius_websocket_cli.musescore.mcp_server:main"
 
 [build-system]
 requires = ["uv_build>=0.12.6,<0.13.0"]

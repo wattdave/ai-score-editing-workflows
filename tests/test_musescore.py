@@ -162,3 +162,283 @@ def test_cli_install_plugin(config, capsys) -> None:
     assert cli.main(["install-plugin"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["installed"].endswith("sibwscli-bridge/msbridge.qml")
+
+
+# ------------------------------------------------------------------ milestone 2: reads and batches
+
+from sibelius_websocket_cli.musescore import score, service  # noqa: E402
+from sibelius_websocket_cli.musescore.score import MuseScoreBatchError  # noqa: E402
+
+STAVES = [
+    {"staff": 1, "partName": "Clarinet in B♭", "shortName": "Cl.", "transposeChromatic": -2, "transposeDiatonic": -1},
+    {"staff": 2, "partName": "Piano", "shortName": "Pno.", "transposeChromatic": 0, "transposeDiatonic": 0},
+]
+
+
+def chord(tick, pitches, track=0, duration=480, **extra):
+    notes = [{"pitch": p, "tpc1": 14, "tpc2": 16, "tieForward": False, "tieBack": False, "parentheses": 0}
+             for p in pitches]
+    return {"kind": "NoteRest", "type": "Chord", "tick": tick, "track": track, "visible": True, "offsetX": 0,
+            "offsetY": 0, "duration": duration, "small": False, "beamMode": 0, "inTuplet": False,
+            "stemDirection": 0, "up": True, "notes": notes, **extra}
+
+
+def rest(tick, track=0, duration=480):
+    return {"kind": "NoteRest", "type": "Rest", "tick": tick, "track": track, "visible": True, "offsetX": 0,
+            "offsetY": 0, "duration": duration, "small": False, "beamMode": 0, "inTuplet": False}
+
+
+def make_read():
+    """Two bars of 4/4 on staff 1, one on the system staff, in the bridge's walk order."""
+    bar1 = [
+        chord(0, [60]),
+        {"kind": "LyricItem", "type": "Lyrics", "tick": 0, "track": 0, "visible": True, "offsetX": 0,
+         "offsetY": 0, "text": "Glo", "verse": 0, "syllabic": 1, "lyricTicks": 0},
+        chord(480, [62, 65]),
+        rest(960, duration=960),
+        {"kind": "Text", "type": "Dynamic", "tick": 0, "track": 0, "visible": True, "offsetX": 0,
+         "offsetY": 0, "text": "mf"},
+        {"kind": "Clef", "type": "Clef", "tick": 0, "track": 0, "visible": True, "offsetX": 0, "offsetY": 0,
+         "clefType": 0},
+        {"kind": "Line", "type": "Slur", "tick": 0, "track": 0, "visible": True, "offsetX": 0, "offsetY": 0,
+         "duration": 480},
+    ]
+    bar2 = [
+        {"kind": "Tuplet", "type": "Tuplet", "tick": 1920, "track": 0, "visible": True, "offsetX": 0,
+         "offsetY": 0, "actualNotes": 3, "normalNotes": 2, "duration": 480},
+        chord(1920, [67], duration=160, beamMode=0, inTuplet=True),
+        chord(2080, [67], duration=160, inTuplet=True),
+        chord(2240, [67], duration=160, inTuplet=True),
+        chord(2400, [69], duration=240),
+        chord(2640, [71], duration=240),
+        chord(2880, [72], duration=960),
+        chord(1920, [48], track=1, duration=1920),
+    ]
+    system = [{"kind": "Text", "type": "Tempo", "tick": 0, "track": 0, "visible": True, "offsetX": 0,
+               "offsetY": 0, "text": "Allegro"}]
+    return {
+        "division": 480, "barCount": 2,
+        "bars": [{"bar": 1, "tick": 0, "ticks": 1920, "no": 0, "noOffset": 0, "irregular": False},
+                 {"bar": 2, "tick": 1920, "ticks": 1920, "no": 1, "noOffset": 0, "irregular": False}],
+        "content": [
+            {"staff": 0, "bar": 1, "digest": "s1", "objects": system},
+            {"staff": 0, "bar": 2, "digest": "s2", "objects": []},
+            {"staff": 1, "bar": 1, "digest": "a1", "objects": bar1},
+            {"staff": 1, "bar": 2, "digest": "a2", "objects": bar2},
+        ],
+    }
+
+
+@pytest.fixture
+def objects():
+    return score.locate(make_read())
+
+
+def at(objects, staff, bar, index):
+    return next(o for o in objects if (o["staff"], o["bar"], o["index"]) == (staff, bar, index))
+
+
+def prepare(objects, ops):
+    digests = {(c["staff"], c["bar"]): c["digest"] for c in make_read()["content"]}
+    return score.prepare_batch(ops, objects, STAVES, 480, digests)
+
+
+def test_index_order_is_pinned(objects) -> None:
+    bar1 = [(o["type"], o["position"]) for o in objects if o["staff"] == 1 and o["bar"] == 1]
+    assert bar1 == [("Clef", 0), ("Text", 0), ("NoteRest", 0), ("LyricItem", 0), ("Line", 0),
+                    ("NoteRest", 256), ("NoteRest", 512)]
+    # The raw ordinal is the bridge's walk position, whatever the index.
+    assert at(objects, 1, 1, 0)["_ref"] == {"staff": 1, "bar": 1, "raw": 5, "type": "Clef", "tick": 0}
+    bar2 = [(o["type"], o.get("voice")) for o in objects if o["staff"] == 1 and o["bar"] == 2][:3]
+    assert bar2 == [("Tuplet", 1), ("NoteRest", 1), ("NoteRest", 2)]
+
+
+def test_units_and_tuplet_ticks(objects) -> None:
+    triplet = [o for o in objects if o["bar"] == 2 and o.get("inTuplet")]
+    assert [o["position"] for o in triplet] == [0, 85, 171]
+    assert [o["ticks"] for o in triplet] == [0, 160, 320]
+    assert triplet[0]["duration"] == 85 and triplet[0]["durationTicks"] == 160
+    assert score.to_units(480, 480) == 256 and score.to_units(240, 480) == 128
+    with pytest.raises(MuseScoreBatchError, match="whole number"):
+        score.to_ticks(1, 480, "op 0")
+
+
+def test_present_shapes(objects) -> None:
+    lyric = at(objects, 1, 1, 3)
+    assert lyric["text"] == "Glo" and lyric["verse"] == 1 and lyric["syllabic"] == 1
+    assert at(objects, 1, 1, 4)["lineType"] == "Slur"
+    rest_ = at(objects, 1, 1, 6)
+    assert rest_["rest"] and "notes" not in rest_
+    assert at(objects, 0, 1, 0)["text"] == "Allegro" and "voice" not in at(objects, 0, 1, 0)
+
+
+def test_query_filters(objects) -> None:
+    def q(**kw):
+        selector = {"staves": [], "types": [], "where": [], "fields": [], "voice": 0, "limit": 500, **kw}
+        return score.query(objects, selector)
+
+    assert all(o["staff"] != 0 for o in q()["objects"])
+    assert [o["text"] for o in q(staves=[0])["objects"]] == ["Allegro"]
+    assert [o["position"] for o in q(types=["Rest"])["objects"]] == [512]
+    assert q(types=["Dynamic"])["count"] == 1 and q(types=["Slur"])["count"] == 1
+    high = q(where=[{"prop": "Pitch", "op": ">=", "value": 65}])
+    assert [o["notes"][-1]["pitch"] for o in high["objects"]][:2] == [65, 67]
+    assert q(voice=2)["count"] == 1
+    with_fields = q(types=["Chord"], fields=["Dx", "NoteCount"], limit=1)
+    assert with_fields["truncated"] and with_fields["objects"][0]["NoteCount"] == 1
+    assert "_ref" not in with_fields["objects"][0]
+
+
+def test_prepare_set_maps_properties(objects) -> None:
+    primitives, digests = prepare(objects, [
+        {"op": "set", "staff": 1, "bar": 1, "index": 2, "type": "NoteRest", "position": 0, "prop": "Dy", "value": 16},
+        {"op": "set", "staff": 1, "bar": 1, "index": 2, "prop": "Hidden", "value": True},
+        {"op": "set", "staff": 1, "bar": 1, "index": 3, "prop": "Duration", "value": 512},
+        {"op": "set", "staff": 0, "bar": 1, "index": 0, "prop": "Dx", "value": -64},
+    ])
+    assert [(p["prop"], p.get("value"), p.get("ticks")) for p in primitives] == [
+        ("offsetY", -0.5, None), ("visible", False, None), ("lyricTicks", None, 960), ("offsetX", -2.0, None),
+    ]
+    assert digests == {"0:1": "s1", "1:1": "a1"}
+    assert primitives[0]["label"] == "op 0" and primitives[0]["ref"]["raw"] == 0
+
+
+def test_prepare_refusals(objects) -> None:
+    cases = [
+        ({"op": "set", "staff": 1, "bar": 1, "index": 2, "type": "Text", "prop": "Dx", "value": 1}, "not a Text"),
+        ({"op": "set", "staff": 1, "bar": 1, "index": 2, "position": 256, "prop": "Dx", "value": 1}, "position 0"),
+        ({"op": "tie", "staff": 1, "bar": 1, "index": 6}, "needs a chord"),
+        ({"op": "set", "staff": 1, "bar": 1, "index": 9, "prop": "Dx", "value": 1}, "nothing at"),
+        ({"op": "set", "staff": 1, "bar": 1, "index": 3, "prop": "NumNotes", "value": 2}, "Duration instead"),
+        ({"op": "set", "staff": 1, "bar": 1, "index": 2, "prop": "Beam", "value": 9}, "beam mode"),
+        ({"op": "set-pitch", "staff": 1, "bar": 1, "index": 5, "oldPitch": 60, "newPitch": 61}, "no note with pitch 60"),
+        ({"op": "set-pitch", "staff": 1, "bar": 1, "index": 5, "oldPitch": 62, "newPitch": 65}, "already has"),
+        ({"op": "flip-stem", "staff": 1, "bar": 1, "index": 2, "pitch": 61}, "no note of pitch 61"),
+        ({"op": "delete", "staff": 1, "bar": 2, "index": 3, "ticks": 0}, "tick 160"),
+        ({"op": "add-note", "staff": 1, "bar": 1, "position": 0, "duration": 256, "pitches": [60]}, "milestone 3"),
+        ({"op": "set-key", "bar": 1, "key": "D"}, "milestone 4"),
+        ({"op": "frobnicate"}, "must be one of"),
+    ]
+    for op, message in cases:
+        with pytest.raises(MuseScoreBatchError, match=message):
+            prepare(objects, [op])
+
+
+def test_set_pitch_spells_concert_and_written(objects) -> None:
+    [p], _ = prepare(objects, [{"op": "set-pitch", "staff": 1, "bar": 1, "index": 2, "oldPitch": 60, "newPitch": 62}])
+    # Concert D on the B♭ clarinet is written E.
+    assert (p["pitch"], p["tpc1"], p["tpc2"]) == (62, 16, 18)
+    [p], _ = prepare(objects, [{"op": "set-pitch", "staff": 1, "bar": 1, "index": 2, "oldPitch": 60, "newPitch": 63,
+                                "spelling": "D#"}])
+    assert p["tpc1"] == score.tpc("D", 1) == 23 and p["tpc2"] == 25
+    [p], _ = prepare(objects, [{"op": "set-pitch", "staff": 1, "bar": 1, "index": 2, "oldPitch": 60, "newPitch": 63}])
+    assert p["tpc1"] == 11  # E♭ by default
+
+
+def test_tpc_and_transposition() -> None:
+    assert score.tpc("C", 0) == 14 and score.tpc("F", 1) == 20 and score.tpc("B", -1) == 12
+    assert score.fifths_of(-1, -2) == -2  # B♭ instrument: concert = written + down a tone
+    assert score.fifths_of(-2, -3) == 3  # A instrument: concert = written + down a minor third
+    assert score.written_tpc(14, {"transposeDiatonic": -4, "transposeChromatic": -7}) == 15  # F horn: concert C is written G
+    assert score.written_tpc(14, {}) == 14
+
+
+def test_nudge_tie_bracket_flip(objects) -> None:
+    primitives, _ = prepare(objects, [
+        {"op": "nudge", "staff": 1, "bar": 1, "index": 1, "dx": 32, "dy": 16},
+        {"op": "tie", "staff": 1, "bar": 1, "index": 2},
+        {"op": "bracket", "staff": 1, "bar": 1, "index": 5, "remove": True},
+        {"op": "flip-stem", "staff": 1, "bar": 1, "index": 5, "pitch": 65},
+        {"op": "delete", "staff": 1, "bar": 1, "index": 4, "type": "Slur"},
+    ])
+    assert [(p["op"], p.get("dx"), p.get("dy"), p.get("on")) for p in primitives] == [
+        ("nudge", 1.0, -0.5, None), ("tie", None, None, True), ("bracket", None, None, False),
+        ("flip-stem", None, None, None), ("delete", None, None, None),
+    ]
+
+
+def test_beam_marks_begin_middle_and_breaks_after(objects) -> None:
+    primitives, _ = prepare(objects, [{"op": "beam", "staff": 1, "bar": 2, "firstIndex": 1, "lastIndex": 5}])
+    # Index 2 is voice 2, which stays out of a voice-1 beam.
+    modes = [(p["ref"]["raw"], p["value"]) for p in primitives]
+    assert modes == [(1, 2), (2, 5), (3, 5), (4, 5), (5, 2)]
+    with pytest.raises(MuseScoreBatchError, match="endpoints"):
+        prepare(objects, [{"op": "beam", "staff": 1, "bar": 2, "firstIndex": 0, "lastIndex": 3}])
+
+
+def test_plugin_runs_every_primitive_score_emits() -> None:
+    text = install.TEMPLATE.read_text()
+    for method in ("Read", "ApplyBatch", "WriteCopy"):
+        assert f'case "{method}"' in text
+    for primitive in score.SUPPORTED - {"beam"}:
+        assert f'case "{primitive}"' in text
+    # Rolling back on failure and for a dry run, and an exact undo-step name.
+    assert "s.endCmd(true)" in text and "s.endCmd(!!args.dryRun)" in text
+    assert 'startCmd("AI batch")' in text
+
+
+class ScoreBridge(FakeBridge):
+    """A fake bridge with the read above and ApplyBatch/WriteCopy."""
+
+    def __init__(self):
+        super().__init__(handler=self.respond)
+
+    def respond(self, method, args):
+        if method == "GetBridgeVersion":
+            return {"version": install.BRIDGE_VERSION}
+        if method == "GetScoreInfo":
+            return {"name": "Scratch", "measures": 2, "staves": 2}
+        if method == "GetStaves":
+            return STAVES
+        if method == "Read":
+            return make_read()
+        if method == "WriteCopy":
+            from pathlib import Path
+            Path(args["path"]).write_text("<score-partwise/>")
+            return {"written": True, "path": args["path"]}
+        if method == "ApplyBatch":
+            results = []
+            for p in args["primitives"]:
+                before = chord(0, [60])
+                after = dict(before, offsetY=-0.5) if p["op"] == "set" else before
+                results.append({"before": before, "after": after})
+            return {"applied": len(results), "dryRun": args["dryRun"], "results": results}
+        raise KeyError(method)
+
+
+@pytest.fixture
+async def score_bridge():
+    bridge = ScoreBridge()
+    async with websockets.serve(bridge.serve, "127.0.0.1", 0) as server:
+        bridge.port = server.sockets[0].getsockname()[1]
+        yield bridge
+
+
+async def test_service_query_resolves_staff_names(score_bridge) -> None:
+    async with MuseScoreClient(port=score_bridge.port, token=TOKEN) as client:
+        result = await service.query(MuseScoreBridge(client), staves=["clarinet in b♭"], types=["Rest"])
+    assert result["count"] == 1
+    assert score_bridge.requests[-1]["args"]["staves"] == [1]
+
+
+async def test_service_dry_run_and_real_run(score_bridge, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    op = {"op": "set", "staff": 1, "bar": 1, "index": 2, "type": "NoteRest", "position": 0, "prop": "Dy", "value": 16}
+    async with MuseScoreClient(port=score_bridge.port, token=TOKEN) as client:
+        bridge = MuseScoreBridge(client)
+        dry = await service.apply(bridge, [op], dry_run=True)
+        assert dry["dryRun"] and "backup" not in dry
+        assert dry["results"][0]["before"]["position"] == 0 and dry["results"][0]["after"]["dy"] == 16
+        sent = score_bridge.requests[-1]["args"]
+        assert sent["expect"] == {"name": "Scratch", "measures": 2, "staves": 2}
+        assert sent["digests"] == {"1:1": "a1"} and sent["dryRun"] is True
+        real = await service.apply(bridge, [op])
+    assert real["undoSteps"] == 1 and real["applied"] == 1
+    assert real["backup"].startswith(str(tmp_path)) and real["backup"].endswith(".musicxml")
+    methods = [r["method"] for r in score_bridge.requests]
+    assert methods.index("WriteCopy") < len(methods) - 1 and methods[-1] == "ApplyBatch"
+
+
+def test_cli_query_parses(monkeypatch) -> None:
+    args = cli.build_parser().parse_args(["query", "--staff", "1", "--bars", "2-3", "--where", "Pitch>60"])
+    assert args.staves == ["1"] and args.bars == "2-3"

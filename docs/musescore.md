@@ -123,7 +123,11 @@ It needs MuseScore 4.6 or newer.
 ```bash
 uv run musescore-cli install-plugin   # then restart MuseScore
 uv run musescore-cli overview
+uv run musescore-cli query --staff 1 --bars 1-4 --where 'Pitch>=72'
+uv run musescore-cli apply --dry-run --file batch.json
+uv run musescore-cli apply --file batch.json
 uv run musescore-cli undo --steps 1
+uv run musescore-mcp                  # score_overview, query_score, apply_batch, undo
 ```
 
 After installing, enable "sibwscli bridge" once in Plugins → Manage
@@ -132,6 +136,25 @@ to work on, every session. It listens on port 8766 and refuses requests
 without the token stored in `~/.config/sibelius-websocket-cli/musescore-token`.
 Checked live on 4.7.5 (2026-10-03): `overview` read the score, its metadata
 and staves; `undo` reverted a note added by hand.
+
+Milestone 2 (bridge version 2) adds `query` and `apply` with set, set-pitch,
+tie, bracket, flip-stem, nudge, delete and beam. Objects are addressed by
+staff/bar/index, with `ticks` (480 per quarter) beside `position` because
+tuplet positions don't convert exactly. A dry run makes the edits and rolls
+them back, reporting each object before and after. A real run first writes a
+MusicXML copy to `~/.cache/sibelius-websocket-cli/musescore/backups/`.
+Differences from Sibelius: `Beam` takes MuseScore's beam modes (0 auto,
+1 none, 2 begin, 5 middle); a lyric's melisma is set with `Duration`, not
+`NumNotes`; a tie needs a next note of the same pitch. The opening clef is
+generated in MuseScore, so it isn't listed, and grace notes aren't listed yet.
+
+Checked live on 4.7.5 (2026-10-03, ScratchScore): query read bars 1-2 of all
+three staves. A dry run of seven ops (Dy, set-pitch 71→70 spelled B♭ with
+written C, bracket, flip-stem, nudge, Hidden on a rest, delete) reported
+every change and left the score as it was. A set-pitch followed by a tie to
+the new note worked in one batch; a tie with no matching next note was
+refused and rolled back. The real run was one undo step, and one `undo`
+restored all seven, including the deleted chord.
 
 ## Probe results (MuseScore Studio 4.7.5, macOS)
 
