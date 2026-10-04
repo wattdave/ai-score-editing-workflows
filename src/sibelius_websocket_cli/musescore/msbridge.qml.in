@@ -1,0 +1,118 @@
+// sibwscli bridge for MuseScore 4.6+ (see docs/musescore-backend-plan.md).
+//
+// Installed by `musescore-cli install-plugin`, which fills in the token,
+// port and version. MuseScore's WebSocket server listens on every network
+// interface, so every request must carry the token. Requests are
+// {"id", "token", "method", "args"}; replies are {"id", "ok", "result" or
+// "error", "bridge", "mscoreVersion", "score"}.
+//
+// MuseScore reads the properties below as text and stops at the first line
+// ending in "{", so they must stay above every block. A changed file is
+// only loaded after MuseScore restarts.
+
+import QtQuick
+import MuseScore 3.0
+
+MuseScore {
+    id: root
+    title: "sibwscli bridge"
+    description: "Lets sibelius-ai-workflows read and edit the open score"
+    version: "@VERSION@"
+    requiresScore: false
+
+    readonly property string token: "@TOKEN@"
+    readonly property int port: @PORT@
+    readonly property int bridgeVersion: @VERSION@
+
+    function scoreInfo() {
+        var s = curScore;
+        if (!s)
+            return null;
+        return { name: s.scoreName, measures: s.nmeasures, staves: s.nstaves, parts: s.parts.length };
+    }
+
+    function getScoreInfo() {
+        var s = curScore;
+        if (!s)
+            throw new Error("no score is open in this MuseScore window");
+        var tags = {};
+        ["workTitle", "subtitle", "composer", "lyricist", "arranger", "copyright"].forEach(function (t) {
+            tags[t] = s.metaTag(t);
+        });
+        return { name: s.scoreName, title: s.title, measures: s.nmeasures, staves: s.nstaves,
+                 ticksPerQuarter: root.division, metaTags: tags };
+    }
+
+    function getStaves() {
+        var s = curScore;
+        if (!s)
+            throw new Error("no score is open in this MuseScore window");
+        var out = [], index = 0;
+        for (var p = 0; p < s.parts.length; p++) {
+            var part = s.parts[p];
+            for (var k = 0; k < part.staves.length; k++) {
+                var tr = s.staves[index].transpose(root.fraction(0, 1));
+                out.push({ staff: index + 1, part: p + 1, partName: part.longName, shortName: part.shortName,
+                           instrumentId: part.instrumentId, staffInPart: k + 1, partStaves: part.staves.length,
+                           transposeChromatic: tr.chromatic, transposeDiatonic: tr.diatonic });
+                index++;
+            }
+        }
+        return out;
+    }
+
+    // Undo is only dispatched when something can be undone, so asking for
+    // more steps than there are does nothing (no dialog).
+    function undo(args) {
+        var steps = args && args.steps ? args.steps : 1;
+        for (var i = 0; i < steps; i++)
+            root.cmd("action://notation/undo");
+        return { undone: steps };
+    }
+
+    function dispatch(method, args) {
+        switch (method) {
+        case "GetBridgeVersion": return { version: root.bridgeVersion };
+        case "GetScoreInfo": return getScoreInfo();
+        case "GetStaves": return getStaves();
+        case "Undo": return undo(args);
+        }
+        throw new Error("unknown method: " + method);
+    }
+
+    // The WebSocket API has no disconnect callback, so a reply to a client
+    // that has gone cannot be prevented; replying within the message handler
+    // keeps that window as short as possible.
+    function handle(clientId, message) {
+        var request;
+        try {
+            request = JSON.parse(message);
+        } catch (e) {
+            return;
+        }
+        var reply = { id: request.id, bridge: root.bridgeVersion, mscoreVersion: root.mscoreVersion };
+        if (request.token !== root.token) {
+            reply.ok = false;
+            reply.error = "unauthorised";
+        } else {
+            try {
+                reply.result = dispatch(request.method, request.args || {});
+                reply.ok = true;
+            } catch (e) {
+                reply.ok = false;
+                reply.error = String(e && e.message ? e.message : e);
+            }
+            reply.score = scoreInfo();
+        }
+        api.websocketserver.send(clientId, JSON.stringify(reply));
+    }
+
+    onRun: {
+        api.websocketserver.listen(root.port, function (clientId) {
+            api.websocketserver.onMessage(clientId, function (message) {
+                handle(clientId, message);
+            });
+        });
+        console.log("sibwscli bridge " + root.bridgeVersion + " listening on port " + root.port);
+    }
+}

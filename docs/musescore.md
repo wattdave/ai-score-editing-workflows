@@ -114,6 +114,25 @@ The upstream server can stay registered until the back end covers what
 people use it for. Then `.mcp.json` would point `musescore` at the new
 `musescore-mcp`.
 
+## Our back end (in progress)
+
+`musescore-cli` is this repository's own MuseScore back end, built
+milestone by milestone from [musescore-backend-plan.md](musescore-backend-plan.md).
+It needs MuseScore 4.6 or newer.
+
+```bash
+uv run musescore-cli install-plugin   # then restart MuseScore
+uv run musescore-cli overview
+uv run musescore-cli undo --steps 1
+```
+
+After installing, enable "sibwscli bridge" once in Plugins → Manage
+plugins, then choose Plugins → sibwscli bridge in the window of the score
+to work on, every session. It listens on port 8766 and refuses requests
+without the token stored in `~/.config/sibelius-websocket-cli/musescore-token`.
+Checked live on 4.7.5 (2026-10-03): `overview` read the score, its metadata
+and staves; `undo` reverted a note added by hand.
+
 ## Probe results (MuseScore Studio 4.7.5, macOS)
 
 Milestone 0 of [musescore-backend-plan.md](musescore-backend-plan.md).

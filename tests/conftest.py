@@ -1,4 +1,4 @@
-"""Keep the test suite away from a real Sibelius or Dorico.
+"""Keep the test suite away from a real Sibelius, Dorico or MuseScore.
 
 A test that forgets to mock a bridge call would otherwise connect to the
 Sibelius on this machine (launching it if needed, since that happens inside
@@ -10,6 +10,8 @@ import pytest
 from sibelius_websocket_cli import protocol
 from sibelius_websocket_cli.client import SibeliusClient
 from sibelius_websocket_cli.dorico import client as dorico_client
+from sibelius_websocket_cli.musescore import client as musescore_client
+from sibelius_websocket_cli.musescore import install as musescore_install
 
 _real_connect = SibeliusClient.connect
 
@@ -33,7 +35,19 @@ async def _guarded_dorico_connect(self: dorico_client.DoricoClient) -> None:
     await _real_dorico_connect(self)
 
 
+_real_musescore_connect = musescore_client.MuseScoreClient.connect
+
+
+async def _guarded_musescore_connect(self: musescore_client.MuseScoreClient) -> None:
+    if self.port == musescore_install.DEFAULT_PORT:
+        raise RuntimeError(
+            f"a test tried to connect to the MuseScore bridge on port {self.port}; use a fake bridge instead"
+        )
+    await _real_musescore_connect(self)
+
+
 @pytest.fixture(autouse=True)
 def _no_real_sibelius(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(SibeliusClient, "connect", _guarded_connect)
     monkeypatch.setattr(dorico_client.DoricoClient, "connect", _guarded_dorico_connect)
+    monkeypatch.setattr(musescore_client.MuseScoreClient, "connect", _guarded_musescore_connect)
