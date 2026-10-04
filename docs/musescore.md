@@ -64,6 +64,9 @@ The [musescore skill](../.claude/skills/musescore/SKILL.md) covers how to use it
 
 ## What parity needs
 
+[musescore-backend-plan.md](musescore-backend-plan.md) turns this outline
+into a phased plan with probes and milestones.
+
 Patching the upstream tools one by one would not get there. The gap is the
 model: Sibelius parity needs addresses, guards, checked batches and filtered
 reads. Most of the missing operations are things MuseScore's plug-in API can
