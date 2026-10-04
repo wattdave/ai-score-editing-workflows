@@ -758,9 +758,283 @@ MuseScore {
         case "delete":
             root.removeElement(el);
             return;
+        case "repitch":
+            // Every note is found before any changes, so pitches that swap
+            // within a chord still land on the right notes.
+            var notes = [];
+            for (var r = 0; r < p.notes.length; r++)
+                notes.push(noteWithPitch(el, p.notes[r].oldPitch));
+            for (var w = 0; w < notes.length; w++) {
+                notes[w].pitch = p.notes[w].pitch;
+                notes[w].tpc1 = p.notes[w].tpc1;
+                notes[w].tpc2 = p.notes[w].tpc2;
+            }
+            return;
         }
         throw new Error("unknown primitive " + p.op);
     }
+
+    // ------------------------------------------------------------ structure
+    //
+    // Structural primitives name bars, not objects. They run after every
+    // object and adding op, and the bar list is read again after each.
+
+    readonly property var structural: ({ "set-key": true, "set-time": true, "set-break": true,
+                                         "set-barline": true, "set-bar-number": true, "add-bars": true,
+                                         "set-style": true, "paste": true })
+
+    function firstChordRest(measure, track) {
+        for (var seg = measure.firstSegment; seg; seg = seg.nextInMeasure) {
+            var el = seg.elementAt(track);
+            if (el && (el.name === "Chord" || el.name === "Rest"))
+                return el;
+        }
+        return null;
+    }
+
+    function selectInBar(measure) {
+        var cr = firstChordRest(measure, 0);
+        if (!cr)
+            throw new Error("bar has nothing to select on staff 1");
+        curScore.selection.clear();
+        curScore.selection.select(selectable(cr), false);
+    }
+
+    function segmentAt(measure, name, tick, track) {
+        for (var seg = measure.firstSegment; seg; seg = seg.nextInMeasure) {
+            if (seg.tick !== tick)
+                continue;
+            var el = seg.elementAt(track);
+            if (el && el.name === name && !el.generated)
+                return el;
+        }
+        return null;
+    }
+
+    // A key signature is replaced, not edited: writing concertKey or
+    // actualKey on one already in the score does not change it, and its
+    // mode can only be set once it is in the score (setting it on a new
+    // element crashed MuseScore). docs/musescore.md has both.
+    function setKey(p, all) {
+        var m = all[p.bar - 1];
+        for (var i = 0; i < p.staves.length; i++) {
+            var st = p.staves[i], track = st.staffIdx * 4;
+            var old = segmentAt(m, "KeySig", p.tick, track);
+            var mode = p.mode;
+            if (old) {
+                if (mode === null || mode === undefined)
+                    mode = Number(old.keysig_mode);
+                root.removeElement(old);
+            }
+            var el = root.newElement(Element.KEYSIG);
+            el.concertKey = st.concertKey;
+            el.actualKey = st.actualKey;
+            var c = cursorAt(track, p.tick);
+            if (!c)
+                throw new Error("no position at the start of bar " + p.bar);
+            c.add(el);
+            el = segmentAt(m, "KeySig", p.tick, track);
+            if (!el)
+                throw new Error("MuseScore did not add the key signature on staff " + (st.staffIdx + 1));
+            if (mode !== null && mode !== undefined && mode > 0)
+                el.keysig_mode = mode;
+            var key = curScore.staves[st.staffIdx].key(root.fraction(p.tick, 4 * root.division));
+            if (key !== st.actualKey || el.concertKey !== st.concertKey)
+                throw new Error("MuseScore did not set the key on staff " + (st.staffIdx + 1));
+        }
+    }
+
+    function endBarline(measure) {
+        var end = ticksOf(measure.tick) + ticksOf(measure.ticks);
+        for (var seg = measure.firstSegment; seg; seg = seg.nextInMeasure) {
+            var el = seg.elementAt(0);
+            if (seg.tick === end && el && el.name === "BarLine")
+                return el;
+        }
+        throw new Error("no end barline found");
+    }
+
+    function breaksOf(measure) {
+        var out = { page: null, system: null }, els = measure.elements;
+        for (var i = 0; i < els.length; i++) {
+            if (els[i].name !== "LayoutBreak")
+                continue;
+            if (els[i].layoutBreakType === 0)
+                out.page = els[i];
+            else if (els[i].layoutBreakType === 1)
+                out.system = els[i];
+        }
+        return out;
+    }
+
+    // The break actions toggle [seen], so each runs only when it changes something.
+    function setBreak(p, all) {
+        var m = all[p.bar - 1], have = breaksOf(m);
+        var want = { page: p.type === "page", system: p.type === "system" };
+        ["page", "system"].forEach(function (kind) {
+            if (!!have[kind] === want[kind])
+                return;
+            selectInBar(m);
+            root.cmd(kind === "page" ? "page-break" : "system-break");
+        });
+        curScore.selection.clear();
+        have = breaksOf(m);
+        if (!!have.page !== want.page || !!have.system !== want.system)
+            throw new Error("MuseScore did not set the break at bar " + p.bar);
+    }
+
+    function setBarline(p, all) {
+        var m = all[p.bar - 1];
+        if (p.type === "start_repeat") {
+            m.repeatStart = true;
+            return;
+        }
+        var line = endBarline(m);
+        m.repeatEnd = p.type === "end_repeat";
+        if (p.type !== "end_repeat")
+            line.barlineType = p.code;
+        line.visible = p.type !== "invisible";
+    }
+
+    // A bar number offset is relative, so bars inserted later in the batch
+    // would move the number; the bar is noted now (measures survive
+    // inserts) and numbered at the end of the batch, after layout.
+    property var pendingNumbers: []
+
+    function setBarNumber(p, all) {
+        var m = all[p.bar - 1];
+        m.irregular = !!p.skip;
+        var target = p.skip ? m.nextMeasure : m;
+        if (!target)
+            throw new Error("a skipped bar needs a bar after it to carry the number");
+        pendingNumbers.push({ measure: target, number: p.number });
+    }
+
+    function finishBarNumbers() {
+        for (var i = 0; i < pendingNumbers.length; i++) {
+            var pn = pendingNumbers[i];
+            curScore.doLayout(root.fraction(0, 1), root.fraction(-1, 1));
+            pn.measure.noOffset = pn.measure.noOffset + (pn.number - 1 - pn.measure.no);
+        }
+        if (pendingNumbers.length)
+            curScore.doLayout(root.fraction(0, 1), root.fraction(-1, 1));
+        for (var j = 0; j < pendingNumbers.length; j++)
+            if (pendingNumbers[j].measure.no !== pendingNumbers[j].number - 1)
+                throw new Error("MuseScore did not number the bar " + pendingNumbers[j].number);
+        pendingNumbers = [];
+    }
+
+    function addBars(p, all) {
+        var before = all.length, first;
+        if (p.bar) {
+            for (var i = 0; i < p.count; i++) {
+                selectInBar(measures()[p.bar - 1]);
+                root.cmd("insert-measure");
+            }
+            curScore.selection.clear();
+            first = p.bar;
+        } else {
+            curScore.appendMeasures(p.count);
+            first = before + 1;
+        }
+        var now = measures();
+        if (now.length !== before + p.count)
+            throw new Error("MuseScore added " + (now.length - before) + " bars, not " + p.count);
+        if (p.z)
+            for (var b = first; b < first + p.count; b++)
+                now[b - 1].timesigActual = root.fraction(p.z, p.n);
+    }
+
+    function setTime(p, all) {
+        var el = root.newElement(Element.TIMESIG);
+        el.timesig = root.fraction(p.numerator, p.denominator);
+        if (p.timesigType)
+            el.timesigType = p.timesigType;
+        var c = cursorAt(0, p.tick);
+        if (!c)
+            throw new Error("no position at the start of bar " + p.bar);
+        c.add(el);
+        var m = measures()[p.bar - 1];
+        if (ticksOf(m.ticks) * p.denominator !== 4 * root.division * p.numerator)
+            throw new Error("MuseScore did not change the time signature at bar " + p.bar);
+    }
+
+    function setStyle(p) {
+        for (var key in p.values) {
+            curScore.style.setValue(key, p.values[key]);
+            var now = curScore.style.value(key);
+            if (typeof p.values[key] === "number" ? Math.abs(now - p.values[key]) > 1e-6 : now !== p.values[key])
+                throw new Error("MuseScore did not set the style " + key);
+        }
+    }
+
+    function paste(p, all) {
+        var c = seat(p.at, all[p.at.bar - 1]);
+        curScore.selection.clear();
+        curScore.selection.select(selectable(c.element), false);
+        root.cmd("paste");
+        curScore.selection.clear();
+    }
+
+    function runStructural(p, all) {
+        switch (p.op) {
+        case "set-key": setKey(p, all); return null;
+        case "set-time": setTime(p, all); return null;
+        case "set-break": setBreak(p, all); return null;
+        case "set-barline": setBarline(p, all); return null;
+        case "set-bar-number": setBarNumber(p, all); return null;
+        case "add-bars": addBars(p, all); return null;
+        case "set-style": setStyle(p); return null;
+        case "paste": paste(p, all); return null;
+        }
+        throw new Error("unknown primitive " + p.op);
+    }
+
+    // score_structure: signatures, barlines, repeats, breaks and bar
+    // numbers per bar, and the page style.
+    function getStructure(args) {
+        var s = requireScore(), all = measures();
+        var from = args.fromBar || 1, to = Math.min(args.toBar || all.length, all.length);
+        var times = [], keys = [], barlines = [], breaks = [], numbers = [];
+        for (var b = from; b <= to; b++) {
+            var m = all[b - 1], start = ticksOf(m.tick);
+            var ts = segmentAt(m, "TimeSig", start, 0);
+            if (ts)
+                times.push({ bar: b, numerator: ts.timesig.numerator, denominator: ts.timesig.denominator,
+                             timesigType: ts.timesigType });
+            for (var st = 0; st < s.nstaves; st++) {
+                var ks = segmentAt(m, "KeySig", start, st * 4);
+                if (!ks && b > 1 && m.prevMeasure)
+                    ks = segmentAt(m.prevMeasure, "KeySig", start, st * 4);
+                if (ks)
+                    keys.push({ bar: b, staff: st + 1, concertKey: ks.concertKey, actualKey: ks.actualKey,
+                                mode: Number(ks.keysig_mode) });
+            }
+            var line = endBarline(m);
+            if (line.barlineType !== 1 || !line.visible || m.repeatStart || m.repeatEnd)
+                barlines.push({ bar: b, barlineType: line.barlineType, visible: line.visible,
+                                repeatStart: m.repeatStart, repeatEnd: m.repeatEnd });
+            var br = breaksOf(m);
+            if (br.page || br.system)
+                breaks.push({ bar: b, type: br.page ? "page" : "system" });
+            if (m.noOffset || m.irregular)
+                numbers.push({ bar: b, noOffset: m.noOffset, irregular: m.irregular });
+        }
+        var style = {};
+        for (var i = 0; i < styleKeys.length; i++)
+            style[styleKeys[i]] = s.style.value(styleKeys[i]);
+        return { fromBar: from, toBar: to, division: root.division, barCount: all.length, bars: all.slice(from - 1, to).map(function (m, k) {
+                     return { bar: from + k, ticks: ticksOf(m.ticks), no: m.no };
+                 }), timeSignatures: times, keySignatures: keys, barlines: barlines, breaks: breaks,
+                 barNumbers: numbers, style: style };
+    }
+
+    readonly property var styleKeys: ["pageWidth", "pageHeight", "pagePrintableWidth", "pageEvenLeftMargin",
+                                      "pageOddLeftMargin", "pageEvenTopMargin", "pageEvenBottomMargin",
+                                      "pageOddTopMargin", "pageOddBottomMargin", "spatium", "staffDistance",
+                                      "akkoladeDistance", "minSystemDistance", "maxSystemDistance",
+                                      "staffUpperBorder", "staffLowerBorder", "hideEmptyStaves",
+                                      "dontHideStavesInFirstSystem"]
 
     // args: expect {name, measures, staves}, digests {"staff:bar": hash},
     // primitives [{op, ref, ...}], dryRun.
@@ -784,19 +1058,34 @@ MuseScore {
             items.push(item);
             results.push(item ? { before: describe(item) } : {});
         }
-        // Objects named by ref are described once the object ops are done,
-        // before any adding op, which may replace them.
-        var described = false;
-        function describeChanged() {
-            if (described)
+        // Objects named by ref are described after their own ops, before the
+        // next primitive without a ref (adding or structural), which may
+        // replace them.
+        var describedTo = 0, laidOut = false;
+        function describeChanged(upTo) {
+            if (describedTo >= upTo)
                 return;
-            described = true;
-            if (args.dryRun)
+            if (args.dryRun && !laidOut) {
                 s.doLayout(root.fraction(0, 1), root.fraction(-1, 1));
-            for (var r = 0; r < items.length; r++)
+                laidOut = true;
+            }
+            for (var r = describedTo; r < upTo; r++)
                 if (items[r] && args.primitives[r].op !== "delete")
                     results[r].after = describe(items[r]);
+            describedTo = upTo;
         }
+        // A passage to paste is copied before the command opens: a range
+        // selected inside a command is not filled in, and copying one
+        // crashed MuseScore (docs/musescore.md).
+        if (args.copy) {
+            var cp = args.copy;
+            s.selection.clear();
+            if (!s.selection.selectRange(cp.startTick, cp.endTick, cp.staffStart, cp.staffEnd))
+                throw new Error("could not select the passage to copy");
+            root.cmd("copy");
+            s.selection.clear();
+        }
+        pendingNumbers = [];
         s.startCmd("AI batch");
         var done = 0;
         try {
@@ -805,8 +1094,8 @@ MuseScore {
                 if (items[j]) {
                     runPrimitive(p, items[j]);
                 } else {
-                    describeChanged();
-                    var added = runAdding(p, all);
+                    describeChanged(j);
+                    var added = structural[p.op] ? runStructural(p, all) : runAdding(p, all);
                     if (added) {
                         results[j].added = describe(added);
                         if (added.note)
@@ -814,8 +1103,11 @@ MuseScore {
                     }
                 }
                 done++;
+                if (structural[p.op])
+                    all = measures();
             }
-            describeChanged();
+            finishBarNumbers();
+            describeChanged(items.length);
         } catch (e) {
             s.endCmd(true);
             curScore.selection.clear();
@@ -856,6 +1148,7 @@ MuseScore {
         case "ApplyBatch": return applyBatch(args);
         case "WriteCopy": return writeCopy(args);
         case "Undo": return undo(args);
+        case "GetStructure": return getStructure(args);
         }
         throw new Error("unknown method: " + method);
     }

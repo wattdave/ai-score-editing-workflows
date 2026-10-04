@@ -167,6 +167,7 @@ def test_cli_install_plugin(config, capsys) -> None:
 
 # ------------------------------------------------------------------ milestone 2: reads and batches
 
+from sibelius_websocket_cli import intervals  # noqa: E402
 from sibelius_websocket_cli.musescore import score, service  # noqa: E402
 from sibelius_websocket_cli.musescore.score import MuseScoreBatchError  # noqa: E402
 
@@ -241,7 +242,13 @@ def at(objects, staff, bar, index):
 
 def prepare(objects, ops):
     digests = {(c["staff"], c["bar"]): c["digest"] for c in make_read()["content"]}
-    return score.prepare_batch(ops, objects, STAVES, 480, digests, make_read()["bars"])
+    primitives, touched, _ = score.prepare_batch(ops, objects, STAVES, 480, digests, make_read()["bars"])
+    return primitives, touched
+
+
+def prepare_copy(objects, ops, structure=None):
+    digests = {(c["staff"], c["bar"]): c["digest"] for c in make_read()["content"]}
+    return score.prepare_batch(ops, objects, STAVES, 480, digests, make_read()["bars"], structure)
 
 
 def test_index_order_is_pinned(objects) -> None:
@@ -316,7 +323,6 @@ def test_prepare_refusals(objects) -> None:
         ({"op": "set-pitch", "staff": 1, "bar": 1, "index": 5, "oldPitch": 62, "newPitch": 65}, "already has"),
         ({"op": "flip-stem", "staff": 1, "bar": 1, "index": 2, "pitch": 61}, "no note of pitch 61"),
         ({"op": "delete", "staff": 1, "bar": 2, "index": 3, "ticks": 0}, "tick 160"),
-        ({"op": "set-key", "bar": 1, "key": "D"}, "milestone 4"),
         ({"op": "frobnicate"}, "must be one of"),
     ]
     for op, message in cases:
@@ -569,3 +575,173 @@ async def test_service_reports_added_objects(score_bridge) -> None:
     assert report["primitive"] == "add-rest" and "before" not in report
     assert (report["added"]["bar"], report["added"]["position"], report["added"]["rest"]) == (2, 256, True)
     assert score_bridge.requests[-1]["args"]["digests"] == {"1:2": "a2"}
+
+
+# ------------------------------------------------------------------ milestone 4: structure
+
+
+def test_keys_and_spelling_helpers() -> None:
+    assert score.key_fifths("Bb", True) == -2 and score.key_fifths("F#", False) == 3
+    assert score.key_fifths("Cb", True) == -7 and score.key_fifths("A#", False) == 7
+    assert [score.tpc_name(v) for v in (14, 20, 12, 7, 26)] == ["C", "F#", "Bb", "Cb", "B#"]
+    clarinet = STAVES[0]
+    assert score.written_key(0, clarinet) == 2  # concert C, written D
+    assert score.written_key(6, clarinet) == -4  # F# major would be G# (8 sharps): written A♭ instead
+    assert score.key_name(-3, True) == "Eb" and score.key_name(1, False) == "E"
+
+
+def test_set_key_time_break_barline(objects) -> None:
+    primitives, digests = prepare(objects, [
+        {"op": "set-time", "bar": 2, "numerator": 2, "denominator": 2, "symbol": "cut"},
+        {"op": "set-key", "bar": 2, "key": "D"},
+        {"op": "set-break", "bar": 1, "type": "page"},
+        {"op": "set-barline", "bar": 1, "type": "final"},
+        {"op": "set-barline", "bar": 2, "type": "start_repeat"},
+    ])
+    time, key, brk, final, repeat = primitives
+    assert time == {"op": "set-time", "bar": 2, "tick": 1920, "numerator": 2, "denominator": 2,
+                    "timesigType": 2, "label": "op 0"}
+    assert key["mode"] == 1 and key["tick"] == 1920
+    assert key["staves"] == [{"staffIdx": 0, "concertKey": 2, "actualKey": 4},
+                             {"staffIdx": 1, "concertKey": 2, "actualKey": 2}]
+    assert brk["type"] == "page" and final["code"] == 0x20 and repeat["code"] is None
+    assert digests == {}
+    with pytest.raises(MuseScoreBatchError, match="no tick barline"):
+        prepare(objects, [{"op": "set-barline", "bar": 1, "type": "tick"}])
+    with pytest.raises(MuseScoreBatchError, match="no bar 9"):
+        prepare(objects, [{"op": "set-break", "bar": 9, "type": "system"}])
+
+
+def test_bars_numbers_and_hidden_staves(objects) -> None:
+    primitives, _ = prepare(objects, [
+        {"op": "set-bar-number", "bar": 1, "number": 10, "skip": True},
+        {"op": "hide-empty-staves", "fromBar": 1, "toBar": 2},
+        {"op": "add-bars", "count": 2, "bar": 2, "length": 768},
+    ])
+    assert primitives[0]["skip"] and primitives[0]["number"] == 10
+    assert primitives[1]["values"] == {"hideEmptyStaves": True}
+    assert (primitives[2]["count"], primitives[2]["bar"], primitives[2]["z"], primitives[2]["n"]) == (2, 2, 3, 4)
+    cases = [
+        ({"op": "set-bar-number", "bar": 2, "number": 5, "skip": True}, "bar after"),
+        ({"op": "hide-empty-staves", "fromBar": 1, "toBar": 1}, "whole score"),
+        ({"op": "add-bars", "count": 1, "bar": 3}, "no bar 3"),
+    ]
+    for op, message in cases:
+        with pytest.raises(MuseScoreBatchError, match=message):
+            prepare(objects, [op])
+
+
+def test_set_layout_in_inches(objects) -> None:
+    current = {"style": {"pageWidth": 8.5, "pageHeight": 11, "pageOddLeftMargin": 0.59,
+                         "pagePrintableWidth": 7.32, "spatium": 82.68}}
+    [p], _, _ = prepare_copy(objects, [{"op": "set-layout", "pageSize": "a4", "orientation": "landscape",
+                                        "leftMargin": 20, "rightMargin": 10, "staffSize": 6,
+                                        "aboveTopStaveGap": 12, "spacesBetweenSystems": 9}], current)
+    values = p["values"]
+    assert values["pageWidth"] == pytest.approx(297 / 25.4) and values["pageHeight"] == pytest.approx(210 / 25.4)
+    assert values["pageOddLeftMargin"] == values["pageEvenLeftMargin"] == pytest.approx(20 / 25.4)
+    assert values["pagePrintableWidth"] == pytest.approx((297 - 30) / 25.4)
+    assert values["spatium"] == pytest.approx(1.5 / 25.4 * 1200)
+    assert values["staffUpperBorder"] == pytest.approx(8) and values["minSystemDistance"] == 9
+    # Only the margin given changes; the right margin is kept.
+    [p], _, _ = prepare_copy(objects, [{"op": "set-layout", "leftMargin": 25.4}], current)
+    assert p["values"]["pagePrintableWidth"] == pytest.approx(8.5 - 1 - (8.5 - 0.59 - 7.32))
+    for op, message in [({"op": "set-layout", "pageSize": "octavo"}, "not available"),
+                        ({"op": "set-layout", "extraSpacesBelowVocalStaves": 2}, "vocal"),
+                        ({"op": "set-layout", "leftMargin": 150, "rightMargin": 150}, "no room")]:
+        with pytest.raises(MuseScoreBatchError, match=message):
+            prepare_copy(objects, [op], current)
+
+
+def test_transpose_respells_and_moves_keys(objects) -> None:
+    for item in objects:  # the fixture spells every note C; spell them as read from a real score
+        for n in item.get("notes", []):
+            letter = intervals.spelling_letter(n["pitch"])
+            n["tpc1"] = score.tpc(letter, intervals.alteration(n["pitch"], letter))
+    keyed = objects + [{
+        "staff": 1, "bar": 2, "type": "KeySignature", "position": 0, "ticks": 0, "msType": "KeySig",
+        "voice": 1, "hidden": False, "concertKey": -1, "writtenKey": 1, "index": 99,
+        "_ref": {"staff": 1, "bar": 2, "raw": 99, "type": "KeySig", "tick": 1920},
+    }]
+    primitives, _ = prepare(keyed, [{"op": "transpose", "fromBar": 1, "toBar": 2, "topStaff": 1,
+                                     "bottomStaff": 1, "fromNote": "C", "toNote": "Eb", "direction": "up"}])
+    repitch = [p for p in primitives if p["op"] == "repitch"]
+    first = repitch[0]["notes"][0]
+    assert (first["oldPitch"], first["pitch"], first["tpc1"]) == (60, 63, score.tpc("E", -1))
+    assert first["tpc2"] == score.tpc("F", 0)  # written for the B♭ clarinet
+    chord = repitch[1]["notes"]
+    assert [n["pitch"] for n in chord] == [65, 68]  # D, F up a minor third: F, A♭
+    [key] = [p for p in primitives if p["op"] == "set-key"]
+    assert key["mode"] is None and key["staves"] == [{"staffIdx": 0, "concertKey": -4, "actualKey": -2}]
+
+
+def test_delete_voice_and_copy_passage(objects) -> None:
+    primitives, _ = prepare(objects, [{"op": "delete-voice", "staff": 1, "voice": 1, "fromBar": 1, "toBar": 2}])
+    # Voice 1: chords only, not rests, and not tuplet members.
+    assert [p["ref"]["tick"] for p in primitives] == [0, 480, 2400, 2640, 2880]
+    primitives, _ = prepare(objects, [{"op": "delete-voice", "staff": 1, "voice": 2, "fromBar": 2, "toBar": 2}])
+    assert len(primitives) == 1
+    primitives, _, copy = prepare_copy(objects, [{"op": "copy-passage", "fromBar": 1, "toBar": 1, "topStaff": 1,
+                                                  "bottomStaff": 2, "destStaff": 1, "destBar": 2}])
+    assert copy == {"startTick": 0, "endTick": 1920, "staffStart": 0, "staffEnd": 2}
+    assert primitives == [{"op": "paste", "at": {"staff": 1, "bar": 2, "tick": 1920, "track": 0}, "label": "op 0"}]
+    cases = [
+        ({"op": "copy-passage", "fromBar": 1, "toBar": 2, "topStaff": 1, "bottomStaff": 1, "destStaff": 1,
+          "destBar": 2}, "past the last bar"),
+        ({"op": "copy-passage", "fromBar": 1, "toBar": 1, "topStaff": 1, "bottomStaff": 2, "destStaff": 2,
+          "destBar": 2}, "past the last staff"),
+    ]
+    for op, message in cases:
+        with pytest.raises(MuseScoreBatchError, match=message):
+            prepare(objects, [op])
+    copy_op = cases[0][0] | {"toBar": 1}
+    with pytest.raises(MuseScoreBatchError, match="one copy-passage"):
+        prepare(objects, [copy_op, copy_op])
+
+
+def test_structural_ordering(objects) -> None:
+    add = {"op": "add-rest", "staff": 1, "bar": 1, "position": 0, "duration": 256}
+    transpose = {"op": "transpose", "fromBar": 1, "toBar": 1, "topStaff": 1, "bottomStaff": 1, "degree": 1,
+                 "intervalType": 4}
+    with pytest.raises(MuseScoreBatchError, match="as its own batch"):
+        prepare(objects, [add, transpose])
+    with pytest.raises(MuseScoreBatchError, match="as its own batch"):
+        prepare(objects, [{"op": "add-bars", "count": 1}, transpose | {"op": "delete-voice", "staff": 1,
+                                                                        "voice": 2}])
+    with pytest.raises(MuseScoreBatchError, match="set-time must come first"):
+        prepare(objects, [{"op": "set-bar-number", "bar": 1, "number": 3},
+                          {"op": "set-time", "bar": 1, "numerator": 3, "denominator": 4}])
+    with pytest.raises(MuseScoreBatchError, match="changes nothing"):
+        prepare(objects, [{"op": "delete-voice", "staff": 1, "voice": 3, "fromBar": 1, "toBar": 2}])
+
+
+def test_structure_report() -> None:
+    raw = {
+        "division": 480, "barCount": 3,
+        "bars": [{"bar": 1, "ticks": 1920, "no": 0}, {"bar": 2, "ticks": 1440, "no": 1},
+                 {"bar": 3, "ticks": 1920, "no": 9}],
+        "timeSignatures": [{"bar": 1, "numerator": 4, "denominator": 4, "timesigType": 1}],
+        "keySignatures": [{"bar": 1, "staff": 1, "concertKey": -2, "actualKey": 0, "mode": 1},
+                          {"bar": 1, "staff": 2, "concertKey": -2, "actualKey": -2, "mode": 1},
+                          {"bar": 3, "staff": 2, "concertKey": 0, "actualKey": 0, "mode": 2}],
+        "barlines": [{"bar": 1, "barlineType": 2, "visible": True, "repeatStart": False, "repeatEnd": False},
+                     {"bar": 2, "barlineType": 1, "visible": True, "repeatStart": True, "repeatEnd": True}],
+        "breaks": [{"bar": 2, "type": "system"}],
+        "barNumbers": [{"bar": 2, "noOffset": 0, "irregular": True}, {"bar": 3, "noOffset": 8, "irregular": False}],
+        "style": {"pageWidth": 8.5, "pageHeight": 11, "pagePrintableWidth": 7.5, "pageOddLeftMargin": 0.5,
+                  "pageOddTopMargin": 0.59, "pageOddBottomMargin": 0.59, "spatium": 82.68,
+                  "staffUpperBorder": 7, "staffLowerBorder": 7, "staffDistance": 6.5, "minSystemDistance": 8.5,
+                  "hideEmptyStaves": False},
+    }
+    report = score.structure_report(raw, STAVES)
+    assert report["timeSignatures"] == [{"bar": 1, "numerator": 4, "denominator": 4, "symbol": "common"}]
+    assert report["keySignatures"] == [
+        {"bar": 1, "sharps": -2, "major": True, "name": "Bb", "writtenKeys": {1: 0, 2: -2}},
+        {"bar": 3, "sharps": 0, "major": False, "name": "A"},
+    ]
+    assert report["barlines"] == [{"bar": 1, "type": "double"}, {"bar": 2, "type": "start_repeat"},
+                                  {"bar": 2, "type": "end_repeat"}]
+    assert report["barNumbers"] == [{"bar": 2, "skip": True}, {"bar": 3, "shownAs": 10}]
+    assert report["irregularBars"] == [{"bar": 2, "length": 768}]
+    layout = report["layout"]
+    assert layout["pageSize"] == "letter" and layout["staffSize"] == 7.0 and layout["rightMargin"] == 12.7

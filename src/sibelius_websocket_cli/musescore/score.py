@@ -51,7 +51,32 @@ DORICO_OPS = {"add-rest", "add-tuplet", "add-clef"} | NOTE_OPS
 ADDING_OPS = batch_ops.ADDING | DORICO_OPS
 #: Valid batch operations the MuseScore back end does not do yet, with the
 #: milestone of docs/musescore-backend-plan.md that adds them.
-NOT_YET = {op: 4 for op in batch_ops.STRUCTURAL}
+NOT_YET: dict[str, int] = {}
+#: Ops that change bars or the whole score; batch_ops puts them last.
+STRUCTURAL_OPS = batch_ops.STRUCTURAL
+#: Structural ops that move or re-bar what follows; ops that name objects by
+#: ref (transpose, delete-voice) cannot come after them in a batch.
+REBARRING = {"set-time", "add-bars"}
+
+#: set-barline names as MuseScore BarLineType values (types.h, 4.7.5);
+#: start_repeat and end_repeat are the bar's repeat flags instead.
+BARLINE_TYPES = {"normal": 1, "none": 1, "double": 2, "dashed": 0x10, "final": 0x20, "dotted": 0x80,
+                 "thick": 0x200, "invisible": 1, "start_repeat": None, "end_repeat": None}
+#: set-barline types MuseScore has no barline for.
+BARLINES_REFUSED = {"between_staves", "tick", "short", "triple"}
+#: set-time symbols as TimeSigType: FOUR_FOUR 1, ALLA_BREVE 2.
+TIME_SYMBOL_TYPES = {(4, 4): 1, (2, 2): 2}
+#: KeyMode: MAJOR 1, MINOR 2.
+KEY_MODES = {True: 1, False: 2}
+#: set-layout page sizes in millimetres (portrait); the other Sibelius sizes
+#: have no agreed dimensions here and are refused.
+PAGE_SIZES_MM = {
+    "letter": (215.9, 279.4), "legal": (215.9, 355.6), "tabloid": (279.4, 431.8),
+    "executive": (184.15, 266.7), "statement": (139.7, 215.9), "a3": (297, 420), "a4": (210, 297),
+    "a5": (148, 210), "b4": (250, 353), "b5": (176, 250), "concert": (228.6, 304.8),
+    "9.5x12.5": (241.3, 317.5), "10x13": (254, 330.2),
+}
+MM_PER_INCH = 25.4
 
 #: add-text styles as MuseScore element types; other text.staff.* styles
 #: make staff text, every text.system.* style system text (add-tempo makes
@@ -304,18 +329,21 @@ def prepare_batch(
     division: int,
     digests: dict[tuple[int, int], str],
     bars: list[dict[str, Any]] | None = None,
-) -> tuple[list[dict[str, Any]], dict[str, str]]:
-    """Validate a batch against a fresh read; return (primitives, digests of touched bars).
+    structure: dict[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, Any] | None]:
+    """Validate a batch against a fresh read; return (primitives, digests of touched bars, copy).
 
     Object ops name what was read and run first; adding ops place new
     objects by staff, bar, position and voice and run after them, in batch
-    order; ties asked for by add-note run last, once every note exists.
+    order; ties asked for by add-note run once every note exists, before
+    any structural op; structural ops come last. copy says what a
+    copy-passage copies before the batch opens (None without one).
     """
     try:
         normalized = batch_ops.validate_batch(operations, EXTRA_OPS)
     except batch_ops.BatchError as exc:
         raise MuseScoreBatchError(str(exc)) from exc
-    first_adding = None
+    first_adding = rebarred = numbered = None
     for i, operation in enumerate(normalized):
         op = operation["op"]
         if op in NOT_YET:
@@ -330,15 +358,36 @@ def prepare_batch(
                 f"op {i} ({op}) comes after op {first_adding} ({normalized[first_adding]['op']}); "
                 "ops that change objects by index must come before ops that add objects"
             )
+        if op in {"transpose", "delete-voice"} and (first_adding is not None or rebarred is not None):
+            earlier = first_adding if rebarred is None else rebarred
+            raise MuseScoreBatchError(
+                f"op {i} ({op}) changes notes as read, and op {earlier} ({normalized[earlier]['op']}) "
+                "adds notes or moves bars first; send it as its own batch, or before them"
+            )
+        if op == "set-time" and numbered is not None:
+            raise MuseScoreBatchError(
+                f"op {i} (set-time) comes after op {numbered} (set-bar-number); re-barring replaces the "
+                "bars after it, so set-time must come first"
+            )
+        if op == "set-bar-number" and numbered is None:
+            numbered = i
+        if op in REBARRING and rebarred is None:
+            rebarred = i
+    if sum(o["op"] == "copy-passage" for o in normalized) > 1:
+        raise MuseScoreBatchError("one copy-passage per batch: it goes through the clipboard")
     by_address = {(o["staff"], o["bar"], o["index"]): o for o in objects}
     by_staff = {s["staff"]: s for s in staves}
     bar_info = {b["bar"]: b for b in bars or []}
     primitives: list[dict[str, Any]] = []
     ties: list[dict[str, Any]] = []
     touched: set[tuple[int, int]] = set()
+    copy: dict[str, Any] | None = None
     for i, (original, operation) in enumerate(zip(operations, normalized)):
         label = f"op {i}"
         op = operation["op"]
+        if op in STRUCTURAL_OPS and ties:
+            primitives += ties  # ties join notes added before the bars move
+            ties = []
         if op == "beam":
             made = _beam(operation, label, by_address, objects)
         elif op in NOTE_OPS:
@@ -346,6 +395,10 @@ def prepare_batch(
             made = [_note_op(original, operation, label, target, objects, bar_info, division)]
         elif op in ADDING_OPS:
             made = _adding(original, operation, label, by_staff, bar_info, division, objects)
+        elif op == "copy-passage":
+            copy, made = _copy_passage(operation, label, by_staff, bar_info, division)
+        elif op in STRUCTURAL_OPS:
+            made = _structural(original, operation, label, objects, staves, bar_info, division, structure)
         else:
             target = _target(original, operation, label, by_address)
             if "spelling" in original:  # set-pitch's optional spelling, which validate_batch drops
@@ -353,12 +406,315 @@ def prepare_batch(
             made = [_addressed(operation, label, target, by_staff, division)]
         for primitive in made:
             primitive["label"] = label
-            where = primitive.get("ref") or primitive["at"]
-            touched.add((where["staff"], where["bar"]))
+            where = primitive.get("ref") or primitive.get("at")
+            if where:
+                touched.add((where["staff"], where["bar"]))
             (ties if primitive["op"] == "tie-at" else primitives).append(primitive)
     primitives += ties
-    return primitives, {f"{staff}:{bar}": digests[(staff, bar)] for staff, bar in sorted(touched)
-                        if (staff, bar) in digests}
+    if not primitives:
+        raise MuseScoreBatchError("the batch changes nothing (a transpose or delete-voice range may be empty)")
+    digests_out = {f"{staff}:{bar}": digests[(staff, bar)] for staff, bar in sorted(touched)
+                   if (staff, bar) in digests}
+    return primitives, digests_out, copy
+
+
+# ------------------------------------------------------------------ structure
+
+def _structural(
+    original: dict[str, Any], operation: dict[str, Any], label: str, objects: list[dict[str, Any]],
+    staves: list[dict[str, Any]], bar_info: dict[int, dict[str, Any]], division: int,
+    structure: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    op = operation["op"]
+    last_bar = max(bar_info) if bar_info else 0
+    for field in ("bar", "fromBar", "toBar"):
+        if field in operation and operation[field] > last_bar and not (op == "add-bars" and field == "bar"):
+            raise MuseScoreBatchError(f"{label}: no bar {operation[field]}; the score has {last_bar}")
+    if op == "transpose":
+        return _transpose(operation, label, objects, {s["staff"]: s for s in staves})
+    if op == "delete-voice":
+        return _delete_voice(operation, label, objects, staves)
+    if op == "set-key":
+        return [_set_key(operation, label, staves, bar_info)]
+    if op == "set-time":
+        primitive = {"op": "set-time", "bar": operation["bar"], "tick": bar_info[operation["bar"]]["tick"],
+                     "numerator": operation["numerator"], "denominator": operation["denominator"]}
+        if operation["symbol"]:
+            primitive["timesigType"] = TIME_SYMBOL_TYPES[(operation["numerator"], operation["denominator"])]
+        return [primitive]
+    if op == "set-break":
+        return [{"op": "set-break", "bar": operation["bar"], "type": operation["type"]}]
+    if op == "set-barline":
+        kind = operation["type"]
+        if kind in BARLINES_REFUSED:
+            raise MuseScoreBatchError(f"{label}: MuseScore has no {kind} barline; it has: "
+                                      f"{', '.join(sorted(BARLINE_TYPES))}")
+        return [{"op": "set-barline", "bar": operation["bar"], "type": kind, "code": BARLINE_TYPES[kind]}]
+    if op == "set-bar-number":
+        if operation["skip"] and operation["bar"] >= last_bar:
+            raise MuseScoreBatchError(f"{label}: skip needs a bar after bar {operation['bar']} to carry the number")
+        return [{"op": "set-bar-number", "bar": operation["bar"], "number": operation["number"],
+                 "skip": operation["skip"]}]
+    if op == "add-bars":
+        primitive: dict[str, Any] = {"op": "add-bars", "count": operation["count"]}
+        if "bar" in operation:
+            if operation["bar"] > last_bar:
+                raise MuseScoreBatchError(f"{label}: no bar {operation['bar']} to insert before; leave out "
+                                          "bar to add bars at the end")
+            primitive["bar"] = operation["bar"]
+        if "length" in operation:
+            length = Fraction(operation["length"], 4 * UNITS_PER_QUARTER)
+            primitive.update(z=length.numerator, n=length.denominator)
+        return [primitive]
+    if op == "set-layout":
+        return [{"op": "set-style", "values": layout_style(operation, label, (structure or {}).get("style") or {})}]
+    if op == "hide-empty-staves":
+        if operation["fromBar"] != 1 or operation["toBar"] != last_bar:
+            raise MuseScoreBatchError(
+                f"{label}: MuseScore hides empty staves for the whole score, not a range of bars; "
+                f"use fromBar 1 and toBar {last_bar}"
+            )
+        return [{"op": "set-style", "values": {"hideEmptyStaves": True}}]
+    raise MuseScoreBatchError(f"{label}: {op} is not handled")  # pragma: no cover
+
+
+def key_fifths(key: str, major: bool) -> int:
+    """A key name as sharps (+) or flats (-) in its signature."""
+    step, semitones = intervals.parse_note(key)
+    letter = intervals.LETTERS[step]
+    fifths = _FIFTHS[letter] + 7 * intervals.alteration(semitones, letter)
+    return fifths if major else fifths - 3
+
+
+def written_key(concert: int, staff: dict[str, Any]) -> int:
+    """The written key of a concert key on a staff, kept within seven sharps or flats."""
+    written = concert - fifths_of(staff.get("transposeDiatonic", 0), staff.get("transposeChromatic", 0))
+    while written > 7:
+        written -= 12
+    while written < -7:
+        written += 12
+    return written
+
+
+def _set_key(operation: dict[str, Any], label: str, staves: list[dict[str, Any]],
+             bar_info: dict[int, dict[str, Any]]) -> dict[str, Any]:
+    concert = key_fifths(operation["key"], operation["major"])
+    return {"op": "set-key", "bar": operation["bar"], "tick": bar_info[operation["bar"]]["tick"],
+            "mode": KEY_MODES[operation["major"]],
+            "staves": [{"staffIdx": s["staff"] - 1, "concertKey": concert, "actualKey": written_key(concert, s)}
+                       for s in staves]}
+
+
+def tpc_name(value: int) -> str:
+    """A tonal pitch class as a note name: 14 is C, 20 F#, 12 Bb."""
+    letter = "FCGDAEB"[(value + 1) % 7]
+    alter = (value + 1) // 7 - 2
+    return letter + ("#" * alter if alter > 0 else "b" * -alter)
+
+
+def _transpose(operation: dict[str, Any], label: str, objects: list[dict[str, Any]],
+               by_staff: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
+    degree, kind = operation["degree"], operation["intervalType"]
+    sign = -1 if degree < 0 else 1
+    steps = abs(degree)
+    semitones = sign * (intervals.REFERENCE_SEMITONES[steps % 7] + 12 * (steps // 7) + kind - 5)
+    fifths = fifths_of(degree, semitones)
+    out = []
+    for item in objects:
+        if not (operation["topStaff"] <= item["staff"] <= operation["bottomStaff"]
+                and operation["fromBar"] <= item["bar"] <= operation["toBar"]):
+            continue
+        if item["type"] == "NoteRest" and not item["rest"]:
+            notes = []
+            for n in item["notes"]:
+                try:
+                    pitch, letter = intervals.transpose_spelled(tpc_name(n["tpc1"]), n["pitch"], degree, semitones)
+                except ValueError as exc:
+                    raise MuseScoreBatchError(f"{label}: staff {item['staff']} bar {item['bar']}: {exc}") from exc
+                concert = tpc(letter, intervals.alteration(pitch, letter))
+                notes.append({"oldPitch": n["pitch"], "pitch": pitch, "tpc1": concert,
+                              "tpc2": written_tpc(concert, by_staff[item["staff"]])})
+            out.append({"op": "repitch", "ref": item["_ref"], "notes": notes})
+        elif item["type"] == "KeySignature" and item.get("concertKey") is not None:
+            concert = item["concertKey"] + fifths
+            while concert > 7:
+                concert -= 12
+            while concert < -7:
+                concert += 12
+            # Replaced, keeping its mode (the bridge cannot edit one in place).
+            out.append({"op": "set-key", "bar": item["bar"], "tick": item["_ref"]["tick"], "mode": None,
+                        "staves": [{"staffIdx": item["staff"] - 1, "concertKey": concert,
+                                    "actualKey": written_key(concert, by_staff[item["staff"]])}]})
+    return out
+
+
+def _delete_voice(operation: dict[str, Any], label: str, objects: list[dict[str, Any]],
+                  staves: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Every chord in the voice over the bars; and, in voices 2-4, every rest.
+
+    Voice 1 always holds something, so its chords become rests.
+    """
+    if not any(s["staff"] == operation["staff"] for s in staves):
+        raise MuseScoreBatchError(f"{label}: no staff {operation['staff']}")
+    voice = operation["voice"]
+    return [
+        {"op": "delete", "ref": o["_ref"]} for o in objects
+        if o["staff"] == operation["staff"] and o.get("voice") == voice and o["type"] == "NoteRest"
+        and operation["fromBar"] <= o["bar"] <= operation["toBar"] and (voice > 1 or not o["rest"])
+        and not o.get("inTuplet")
+    ]
+
+
+def _copy_passage(operation: dict[str, Any], label: str, by_staff: dict[int, dict[str, Any]],
+                  bar_info: dict[int, dict[str, Any]], division: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Copy bars fromBar-toBar of staves top-bottom, before the batch, and paste at the destination."""
+    top, bottom, dest = operation["topStaff"], operation["bottomStaff"], operation["destStaff"]
+    if bottom not in by_staff or dest + bottom - top not in by_staff:
+        raise MuseScoreBatchError(f"{label}: the staves run past the last staff ({max(by_staff)})")
+    first, last = bar_info[operation["fromBar"]], bar_info[operation["toBar"]]
+    start, end = first["tick"], last["tick"] + last["ticks"]
+    if operation["destBar"] not in bar_info:
+        raise MuseScoreBatchError(f"{label}: no bar {operation['destBar']}")
+    at = _at({"bar": operation["destBar"], "position": operation["destPosition"], "voice": 1}, label,
+             bar_info, division, staff=dest)
+    final = bar_info[max(bar_info)]
+    if at["tick"] + end - start > final["tick"] + final["ticks"]:
+        raise MuseScoreBatchError(f"{label}: the passage would run past the last bar; add bars first")
+    copy = {"startTick": start, "endTick": end, "staffStart": top - 1, "staffEnd": bottom}
+    return copy, [{"op": "paste", "at": at}]
+
+
+def layout_style(operation: dict[str, Any], label: str, current: dict[str, Any]) -> dict[str, Any]:
+    """Sibelius set-layout settings (mm, staff spaces) as MuseScore style values.
+
+    MuseScore keeps page sizes and margins in inches, spatium in 1/1200 inch
+    and the stave gaps in staff spaces [seen]; it has no right margin, only a
+    printable width, and odd and even pages have margins of their own.
+    """
+    if "extraSpacesBelowVocalStaves" in operation:
+        raise MuseScoreBatchError(f"{label}: MuseScore has no extra gap below vocal staves")
+    inch = lambda mm: mm / MM_PER_INCH  # noqa: E731
+    values: dict[str, Any] = {}
+    width, height = current.get("pageWidth"), current.get("pageHeight")
+    if "pageSize" in operation:
+        name = batch_ops.PAGE_SIZES[operation["pageSize"]]
+        if name not in PAGE_SIZES_MM:
+            raise MuseScoreBatchError(f"{label}: page size {name} is not available on MuseScore; use one of "
+                                      f"{', '.join(PAGE_SIZES_MM)}")
+        width, height = (inch(v) for v in PAGE_SIZES_MM[name])
+    if width is None or height is None:
+        raise MuseScoreBatchError(f"{label}: the current page size could not be read")
+    landscape = width > height
+    if "orientation" in operation:
+        landscape = batch_ops.ORIENTATIONS[operation["orientation"]] == "landscape"
+    if landscape != (width > height):
+        width, height = height, width
+    if "pageSize" in operation or "orientation" in operation:
+        values.update(pageWidth=width, pageHeight=height)
+    left = inch(operation["leftMargin"]) if "leftMargin" in operation else current.get("pageOddLeftMargin", 0)
+    old_right = (current.get("pageWidth", width) - current.get("pageOddLeftMargin", 0)
+                 - current.get("pagePrintableWidth", width))
+    right = inch(operation["rightMargin"]) if "rightMargin" in operation else old_right
+    if {"leftMargin", "rightMargin", "pageSize", "orientation"} & operation.keys():
+        if width - left - right <= 0:
+            raise MuseScoreBatchError(f"{label}: the margins leave no room on the page")
+        values.update(pageOddLeftMargin=left, pageEvenLeftMargin=left, pagePrintableWidth=width - left - right)
+    for field, keys in (("topMargin", ("pageOddTopMargin", "pageEvenTopMargin")),
+                        ("bottomMargin", ("pageOddBottomMargin", "pageEvenBottomMargin"))):
+        if field in operation:
+            values.update({k: inch(operation[field]) for k in keys})
+    if "staffSize" in operation:
+        # A staff is four spaces; spatium is in 1/1200 inch [seen].
+        values["spatium"] = inch(operation["staffSize"] / 4) * 1200
+    spaces = lambda mm: mm / (operation["staffSize"] / 4 if "staffSize" in operation  # noqa: E731
+                              else current.get("spatium", 1) / 1200 * MM_PER_INCH)
+    if "aboveTopStaveGap" in operation:
+        values["staffUpperBorder"] = spaces(operation["aboveTopStaveGap"])
+    if "belowBottomStaveGap" in operation:
+        values["staffLowerBorder"] = spaces(operation["belowBottomStaveGap"])
+    if "spacesBetweenStaves" in operation:
+        values["staffDistance"] = operation["spacesBetweenStaves"]
+    if "spacesBetweenSystems" in operation:
+        values["minSystemDistance"] = operation["spacesBetweenSystems"]
+    return values
+
+
+def structure_report(raw: dict[str, Any], staves: list[dict[str, Any]]) -> dict[str, Any]:
+    """GetStructure in score_structure's terms (set-key, set-barline, ... names; mm)."""
+    names = {v: k for k, v in BARLINE_TYPES.items() if v is not None and k not in {"none", "invisible"}}
+    barlines = []
+    for b in raw["barlines"]:
+        if b["repeatStart"]:
+            barlines.append({"bar": b["bar"], "type": "start_repeat"})
+        if b["repeatEnd"]:
+            barlines.append({"bar": b["bar"], "type": "end_repeat"})
+        elif not b["visible"]:
+            barlines.append({"bar": b["bar"], "type": "invisible"})
+        elif b["barlineType"] != 1:
+            barlines.append({"bar": b["bar"], "type": names.get(b["barlineType"], str(b["barlineType"]))})
+    keys = []
+    for k in raw["keySignatures"]:
+        if keys and keys[-1]["bar"] == k["bar"]:
+            keys[-1].setdefault("writtenKeys", {})[k["staff"]] = k["actualKey"]
+            continue
+        major = k["mode"] != 2
+        keys.append({"bar": k["bar"], "sharps": k["concertKey"], "major": major,
+                     "name": key_name(k["concertKey"], major), "writtenKeys": {k["staff"]: k["actualKey"]}})
+    for k in keys:  # only worth listing where a staff is written in another key
+        if all(v == k["sharps"] for v in k["writtenKeys"].values()):
+            del k["writtenKeys"]
+    style = raw["style"]
+    mm = lambda inches: round(inches * MM_PER_INCH, 2)  # noqa: E731
+    space_mm = style["spatium"] / 1200 * MM_PER_INCH
+    layout = {
+        "pageWidth": mm(style["pageWidth"]), "pageHeight": mm(style["pageHeight"]),
+        "orientation": "landscape" if style["pageWidth"] > style["pageHeight"] else "portrait",
+        "staffSize": round(space_mm * 4, 2), "topMargin": mm(style["pageOddTopMargin"]),
+        "bottomMargin": mm(style["pageOddBottomMargin"]), "leftMargin": mm(style["pageOddLeftMargin"]),
+        "rightMargin": mm(style["pageWidth"] - style["pageOddLeftMargin"] - style["pagePrintableWidth"]),
+        "aboveTopStaveGap": round(style["staffUpperBorder"] * space_mm, 2),
+        "belowBottomStaveGap": round(style["staffLowerBorder"] * space_mm, 2),
+    }
+    for name, (w, h) in PAGE_SIZES_MM.items():
+        if {round(w, 1), round(h, 1)} == {round(layout["pageWidth"], 1), round(layout["pageHeight"], 1)}:
+            layout["pageSize"] = name
+    return {
+        "timeSignatures": [{"bar": t["bar"], "numerator": t["numerator"], "denominator": t["denominator"],
+                            **({"symbol": {1: "common", 2: "cut"}[t["timesigType"]]}
+                               if t.get("timesigType") in {1, 2} else {})} for t in raw["timeSignatures"]],
+        "keySignatures": keys,
+        "barlines": barlines,
+        "breaks": raw["breaks"],
+        "barNumbers": [{"bar": n["bar"], "skip": True} if n["irregular"] else
+                       {"bar": n["bar"], "shownAs": next(b["no"] + 1 for b in raw["bars"] if b["bar"] == n["bar"])}
+                       for n in raw["barNumbers"]],
+        "irregularBars": [{"bar": b["bar"], "length": to_units(b["ticks"], raw.get("division", 480))}
+                          for b in raw["bars"] if _irregular(b, raw)],
+        "barCount": raw["barCount"],
+        "layout": layout,
+        "engraving": {"spacesBetweenStaves": style["staffDistance"],
+                      "spacesBetweenSystems": style["minSystemDistance"]},
+        "hideEmptyStaves": bool(style["hideEmptyStaves"]),
+    }
+
+
+def _irregular(bar: dict[str, Any], raw: dict[str, Any]) -> bool:
+    """A bar shorter or longer than its time signature."""
+    current = None
+    for t in raw["timeSignatures"]:
+        if t["bar"] <= bar["bar"]:
+            current = t
+    if current is None:
+        return False
+    return bar["ticks"] * current["denominator"] != 4 * raw.get("division", 480) * current["numerator"]
+
+
+_KEY_NAMES_MAJOR = ["Cb", "Gb", "Db", "Ab", "Eb", "Bb", "F", "C", "G", "D", "A", "E", "B", "F#", "C#"]
+_KEY_NAMES_MINOR = ["Ab", "Eb", "Bb", "F", "C", "G", "D", "A", "E", "B", "F#", "C#", "G#", "D#", "A#"]
+
+
+def key_name(fifths: int, major: bool) -> str:
+    return (_KEY_NAMES_MAJOR if major else _KEY_NAMES_MINOR)[fifths + 7]
 
 
 # ------------------------------------------------------------------ adding

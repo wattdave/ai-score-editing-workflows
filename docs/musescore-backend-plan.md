@@ -412,9 +412,11 @@ the undo count with a marker edit.
    add-rest, add-tuplet, add-text, add-lyric, add-line (slurs and octave
    lines; hairpins refused after a second crash), add-clef and the Dorico
    note ops.
-4. **Structure:** `musicxml_read.py` and `score_structure`; transpose,
-   copy-passage, set-key, set-time, set-break, set-barline, add-bars,
-   set-bar-number, set-layout, hide-empty-staves, delete-voice.
+4. **Structure** (done 2026-10-03; see
+   [musescore.md](musescore.md#our-back-end-in-progress)): `score_structure`
+   (read live; no MusicXML reader was needed); transpose, copy-passage,
+   set-key, set-time, set-break, set-barline, add-bars, set-bar-number,
+   set-layout, hide-empty-staves (whole score only), delete-voice.
 5. **Files and metadata:** save_score, export_score, project_info,
    read_lyrics, edit_lyrics.
 6. **Switch-over:** add_instrument and staff playback; a recorded live
