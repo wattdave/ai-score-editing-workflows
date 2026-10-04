@@ -253,25 +253,39 @@ and batches follow the Sibelius tools; Dorico's scripting exposes less
 preview export). [docs/dorico.md](docs/dorico.md) has the parity table, the
 gaps and how the bridge works.
 
-## MuseScore (third party)
+## MuseScore
 
-`.mcp.json` also registers [ghchen99/mcp-musescore](https://github.com/ghchen99/mcp-musescore),
-an outside MCP server for MuseScore 4 that is not part of this project.
-`scripts/musescore_mcp.sh` starts it. On first run it downloads the pinned
-commit into `.vendor/mcp-musescore` (ignored by git) and copies its plug-in,
-`musescore-mcp-websocket.qml`, into `~/Documents/MuseScore4/Plugins`
-(`MUSESCORE_PLUGIN_DIR` overrides this). To update it, change `commit` in the
-script after reviewing the new upstream code.
+`musescore-mcp` offers the same tools for the score open in MuseScore 4.6+,
+plus metadata, lyrics, adding instruments and silencing staves, through
+this repository's plug-in "sibwscli bridge". `.mcp.json` registers it as
+`musescore`; `musescore-cli` exposes it on the command line:
 
-To use it, open a score in MuseScore, enable "musescore-mcp-websocket" once in
-Plugins → Plugin Manager, then run Plugins → musescore-mcp-websocket each
-session (enabling it does not start it). It listens on port 8765 of every
-network interface, with no authentication, so while it runs any device on the
-same network can edit the open score; avoid running it on shared networks. Its tools work through a cursor
-(`go_to_measure`, `add_note`, `add_lyrics`, `processSequence` and so on). They
-do not share the address, batch and guard model of the Sibelius and Dorico
-tools; [docs/musescore.md](docs/musescore.md) compares them and lists what
-parity would take. The `musescore` skill (`/musescore`) covers using it.
+```bash
+uv run musescore-cli install-plugin   # once, then restart MuseScore
+uv run musescore-cli overview
+uv run musescore-cli query --staff 1 --bars 1-4 --where 'Pitch>=72'
+uv run musescore-cli apply --file batch.json --dry-run
+uv run musescore-cli export --format pdf --path score.pdf
+uv run musescore-cli undo
+```
+
+After installing, enable "sibwscli bridge" once in Plugins → Manage
+plugins, then run Plugins → sibwscli bridge in the score's window each
+session. It listens on port 8766 and refuses requests without the token
+that `install-plugin` stores in `~/.config/sibelius-websocket-cli/`.
+Addresses, units and batches follow the Sibelius tools, and a dry run
+really runs the batch and rolls it back. Hairpins can't be added (they
+crashed MuseScore). [docs/musescore.md](docs/musescore.md) has the parity
+table, the probe results and a live check
+(`scripts/musescore_live_check.py`); the `musescore` skill (`/musescore`)
+covers using it.
+
+This replaced the third-party [ghchen99/mcp-musescore](https://github.com/ghchen99/mcp-musescore)
+server, which is no longer registered. `scripts/musescore_mcp.sh` can still
+start it by hand. Its plug-in, "musescore-mcp-websocket", has no
+authentication: while it runs, any device on the same network can edit the
+open score, so remove it from `~/Documents/MuseScore4/Plugins` if it is
+still installed.
 
 ## Multi-Agent Skills (Claude, Antigravity, Cursor)
 

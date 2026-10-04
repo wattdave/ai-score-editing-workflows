@@ -54,7 +54,8 @@ MuseScore {
                 var tr = s.staves[index].transpose(root.fraction(0, 1));
                 out.push({ staff: index + 1, part: p + 1, partName: part.longName, shortName: part.shortName,
                            instrumentId: part.instrumentId, staffInPart: k + 1, partStaves: part.staves.length,
-                           transposeChromatic: tr.chromatic, transposeDiatonic: tr.diatonic });
+                           transposeChromatic: tr.chromatic, transposeDiatonic: tr.diatonic,
+                           playback: [1, 2, 3, 4].map(function (v) { return s.staves[index]["playbackVoice" + v]; }) });
                 index++;
             }
         }
@@ -1168,6 +1169,75 @@ MuseScore {
         return { before: before, after: getMetaTags() };
     }
 
+    // appendPart falls back to a default instrument for an unknown id, so
+    // the new part's id is checked and the command rolled back on a mismatch.
+    function addPart(args) {
+        var s = requireScore();
+        var before = s.parts.length;
+        s.startCmd("AI add instrument");
+        var part = null;
+        try {
+            s.appendPart(args.instrumentId);
+            part = s.parts.length > before ? s.parts[s.parts.length - 1] : null;
+            if (!part || part.instrumentId !== args.instrumentId)
+                throw new Error("MuseScore has no instrument " + args.instrumentId);
+        } catch (e) {
+            s.endCmd(true);
+            throw e;
+        }
+        var added = { partName: part.longName, instrumentId: part.instrumentId, staves: part.staves.length };
+        s.endCmd(!!args.dryRun);
+        return { added: added, dryRun: !!args.dryRun };
+    }
+
+    // Playback per voice of a staff. MuseScore 4's audio ignores the staff's
+    // playbackVoice flags (only MIDI export reads them [src]), so each note's
+    // play flag in those voices is set too; notes added later still play.
+    function setNotesPlay(chord, on) {
+        var changed = 0;
+        var chords = [chord];
+        for (var g = 0; g < chord.graceNotes.length; g++)
+            chords.push(chord.graceNotes[g]);
+        chords.forEach(function (c) {
+            for (var n = 0; n < c.notes.length; n++) {
+                if (c.notes[n].play !== on) {
+                    c.notes[n].play = on;
+                    changed++;
+                }
+            }
+        });
+        return changed;
+    }
+
+    function setStaffPlayback(args) {
+        var s = requireScore();
+        var staff = s.staves[args.staff - 1];
+        if (!staff)
+            throw new Error("no staff " + args.staff);
+        var changed = 0;
+        s.startCmd("AI staff playback");
+        try {
+            for (var v = 0; v < 4; v++) {
+                var on = args.voices[v];
+                if (on === null || on === undefined)
+                    continue;
+                staff["playbackVoice" + (v + 1)] = !!on;
+                var track = (args.staff - 1) * 4 + v;
+                for (var seg = s.firstSegment(); seg; seg = seg.next) {
+                    var el = seg.elementAt(track);
+                    if (el && el.type === Element.CHORD)
+                        changed += setNotesPlay(el, !!on);
+                }
+            }
+        } catch (e) {
+            s.endCmd(true);
+            throw e;
+        }
+        s.endCmd(false);
+        return { staff: args.staff, notesChanged: changed,
+                 playback: [1, 2, 3, 4].map(function (k) { return staff["playbackVoice" + k]; }) };
+    }
+
     // Undo is only dispatched when something can be undone, so asking for
     // more steps than there are does nothing (no dialog).
     function undo(args) {
@@ -1190,6 +1260,8 @@ MuseScore {
         case "Save": return save(args);
         case "GetMetaTags": return getMetaTags();
         case "SetMetaTags": return setMetaTags(args);
+        case "AddPart": return addPart(args);
+        case "SetStaffPlayback": return setStaffPlayback(args);
         }
         throw new Error("unknown method: " + method);
     }

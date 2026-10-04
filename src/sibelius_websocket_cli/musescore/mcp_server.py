@@ -3,7 +3,8 @@
 Run with `uv run musescore-mcp` (stdio). It mirrors the Sibelius server's
 tools as the MuseScore back end gains them (docs/musescore-backend-plan.md):
 score_overview, score_structure, query_score, apply_batch, undo, save_score,
-export_score, project_info, set_project_info, read_lyrics and edit_lyrics. One
+export_score, project_info, set_project_info, read_lyrics, edit_lyrics,
+add_instrument and set_staff_playback. One
 connection is kept and calls are serialized.
 """
 
@@ -316,6 +317,27 @@ async def edit_lyrics(staff: str, text: str, verse: int = 1) -> dict[str, Any]:
     to add or remove syllables.
     """
     return await session.run(lambda bridge: service.edit_lyrics(bridge, staff, text, verse), retry=False)
+
+
+@server.tool(annotations=WRITE)
+async def add_instrument(instrument: str, dry_run: bool = False) -> dict[str, Any]:
+    """Add a part at the bottom of the score: a MuseScore instrument id
+    (violin, flute, soprano, alto, tenor, bass, piano, bb-clarinet, ...), a
+    MusicXML sound id (strings.violin) or an instrument name. One undo step;
+    a dry run adds it and rolls it back. Returns the new part's staves."""
+    return await session.run(lambda bridge: service.add_instrument(bridge, instrument, dry_run=dry_run),
+                             retry=False)
+
+
+@server.tool(annotations=WRITE)
+async def set_staff_playback(staves: list[str], play: bool, voices: list[int] | None = None) -> dict[str, Any]:
+    """Silence (play=false) or restore (play=true) staves in playback and
+    audio export, for voices 1-4 (default all). staves are numbers or part
+    names. MuseScore's mixer is out of reach of plug-ins, so this turns off
+    each note's playback and the staff's voice playback flags: notes added
+    later still play until it is run again, and play=true also restores
+    notes silenced one by one. One undo step per staff."""
+    return await session.run(lambda bridge: service.set_staff_playback(bridge, staves, play, voices), retry=False)
 
 
 def main() -> None:

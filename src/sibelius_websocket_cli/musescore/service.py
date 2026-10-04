@@ -19,7 +19,7 @@ from sibelius_websocket_cli.query import build_selector
 
 from . import score
 from .bridge import MuseScoreBridge
-from . import window
+from . import instruments, window
 from .client import MuseScoreError
 
 
@@ -328,3 +328,36 @@ async def edit_lyrics(bridge: MuseScoreBridge, staff: str, text: str, verse: int
     if after["text"] != expected:
         result["warning"] = f"the verse reads back differently from the text sent: {expected}"
     return result
+
+
+# ------------------------------------------------------------------ parts and playback
+
+async def add_instrument(bridge: MuseScoreBridge, instrument: str, *, dry_run: bool = False) -> dict[str, Any]:
+    """Append a part at the bottom of the score, as one undo step."""
+    args = instruments.resolve(instrument)
+    result = await bridge.call("AddPart", {**args, "dryRun": dry_run})
+    if dry_run:
+        result["note"] = "The part was added and rolled back; nothing changed."
+    else:
+        result["undoSteps"] = 1
+        staves = await bridge.call("GetStaves")
+        last = max(s["part"] for s in staves)
+        result["staves"] = [s for s in staves if s["part"] == last]  # appendPart adds at the bottom
+    return result
+
+
+async def set_staff_playback(bridge: MuseScoreBridge, staves: list[str], play: bool,
+                             voices: list[int] | None = None) -> dict[str, Any]:
+    """Silence or restore staves in playback, per voice, as one undo step per staff."""
+    wanted = voices or [1, 2, 3, 4]
+    if not wanted or any(v not in {1, 2, 3, 4} for v in wanted):
+        raise MuseScoreError("voices are 1-4")
+    numbers = [s for s in resolve_staves(staves, await bridge.call("GetStaves")) if s != score.SYSTEM_STAFF]
+    if not numbers:
+        raise MuseScoreError("no staves given (the system staff has no notes)")
+    results = []
+    for staff in dict.fromkeys(numbers):
+        flags = [play if v in wanted else None for v in (1, 2, 3, 4)]
+        results.append(await bridge.call("SetStaffPlayback", {"staff": staff, "voices": flags}))
+    return {"staves": results, "undoSteps": len(results),
+            "note": "notes added later play until this is run again"}

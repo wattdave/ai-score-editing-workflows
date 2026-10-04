@@ -896,3 +896,61 @@ def test_cli_files_commands_parse() -> None:
     assert parser.parse_args(["export", "--format", "png", "--path", "x.png"]).format == "png"
     assert parser.parse_args(["set-info", "--field", "composer=Anon."]).field == ["composer=Anon."]
     assert parser.parse_args(["edit-lyrics", "--staff", "1", "--text", "a b"]).verse == 1
+
+
+# ------------------------------------------------------------------ milestone 6: parts and playback
+
+from sibelius_websocket_cli.musescore import instruments  # noqa: E402
+
+
+def test_plugin_has_milestone_6_methods() -> None:
+    text = install.TEMPLATE.read_text()
+    for method in ("AddPart", "SetStaffPlayback"):
+        assert f'case "{method}"' in text
+    assert "part.instrumentId !== args.instrumentId" in text and ".play = on" in text
+
+
+def test_instrument_lookup() -> None:
+    assert instruments.resolve("violin") == {"instrumentId": "violin"}
+    assert instruments.resolve("Violin") == {"instrumentId": "violin"}
+    assert instruments.resolve("voice.soprano") == {"instrumentId": "soprano"}
+    with pytest.raises(MuseScoreError, match="several instruments.*bb-clarinet"):
+        instruments.resolve("Clarinet")
+    with pytest.raises(MuseScoreError, match="close: violin"):
+        instruments.resolve("violn")
+
+
+class PartsBridge(ScoreBridge):
+    def respond(self, method, args):
+        if method == "AddPart":
+            return {"added": {"partName": "Violin", "instrumentId": args["instrumentId"], "staves": 1},
+                    "dryRun": args["dryRun"]}
+        if method == "SetStaffPlayback":
+            return {"staff": args["staff"], "notesChanged": 2,
+                    "playback": [v is None for v in args["voices"]]}
+        if method == "GetStaves":
+            return [dict(s, part=s["staff"], instrumentId="x") for s in STAVES]
+        return super().respond(method, args)
+
+
+@pytest.fixture
+async def parts_bridge():
+    bridge = PartsBridge()
+    async with websockets.serve(bridge.serve, "127.0.0.1", 0) as server:
+        bridge.port = server.sockets[0].getsockname()[1]
+        yield bridge
+
+
+async def test_add_instrument_and_playback(parts_bridge) -> None:
+    async with MuseScoreClient(port=parts_bridge.port, token=TOKEN) as client:
+        bridge = MuseScoreBridge(client)
+        dry = await service.add_instrument(bridge, "Violin", dry_run=True)
+        assert dry["dryRun"] and "undoSteps" not in dry
+        assert parts_bridge.requests[-1]["args"] == {"instrumentId": "violin", "dryRun": True}
+        real = await service.add_instrument(bridge, "violin")
+        assert real["undoSteps"] == 1 and real["staves"][0]["staff"] == 2
+        result = await service.set_staff_playback(bridge, ["Piano", "1", "2"], False, [1, 3])
+        assert [s["staff"] for s in result["staves"]] == [2, 1] and result["undoSteps"] == 2
+        assert parts_bridge.requests[-1]["args"]["voices"] == [False, None, False, None]
+        with pytest.raises(MuseScoreError, match="voices are 1-4"):
+            await service.set_staff_playback(bridge, ["1"], True, [5])

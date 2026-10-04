@@ -1,7 +1,9 @@
 #!/bin/bash
-# Start the MuseScore MCP server (github.com/ghchen99/mcp-musescore) over stdio.
+# Start the third-party MuseScore MCP server (github.com/ghchen99/mcp-musescore) over stdio.
 #
-# .mcp.json runs this when Claude Code starts in this folder. On first run it
+# History: .mcp.json now registers this repository's own musescore-mcp as
+# "musescore" (docs/musescore.md). This script is kept to run the upstream
+# server by hand, e.g. registered as "musescore-upstream". On first run it
 # downloads the server at the pinned commit into .vendor/mcp-musescore and
 # copies its plug-in into MuseScore's plug-ins folder; later runs reuse both.
 # uv supplies Python and the server's two packages, outside the project's venv.

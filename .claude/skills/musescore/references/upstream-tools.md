@@ -1,5 +1,7 @@
 # Public MCP tool reference
 
+> **History.** This describes the third-party server [ghchen99/mcp-musescore](https://github.com/ghchen99/mcp-musescore) (MIT, see [../LICENSE](../LICENSE)), which was registered as `musescore` until this repository's own back end replaced it. It is no longer registered; `scripts/musescore_mcp.sh` can still start it by hand.
+
 This reference describes the tools currently registered by `server.py` and the JSON actions sent to the MuseScore QML plugin. Use the Python function names when calling MCP. Use the camelCase action names only inside `processSequence`.
 
 The server currently registers 26 public tools.

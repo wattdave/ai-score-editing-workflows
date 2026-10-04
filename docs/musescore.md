@@ -1,123 +1,71 @@
-# MuseScore (third party)
+# MuseScore
 
-The `musescore` MCP server is [ghchen99/mcp-musescore](https://github.com/ghchen99/mcp-musescore),
-pinned in `scripts/musescore_mcp.sh`. It has two parts:
+`musescore-mcp` drives the score open in MuseScore 4.6+ with the same model
+as `sibelius-mcp` and `dorico-mcp`: staff/bar/index addresses with type and
+position guards, 1/256-quarter units, MIDI pitches, checked batches that
+are one undo step, and a dry run (a real one: the batch runs and is rolled
+back). It talks to this repository's plug-in, "sibwscli bridge", over a
+WebSocket on port 8766 with a token. `.mcp.json` registers it as
+`musescore`; the [musescore skill](../.claude/skills/musescore/SKILL.md)
+covers using it.
 
 ```text
-Claude Code ─stdio─> server.py (FastMCP, 26 tools)
-                        │ JSON {"action", "params"} over ws://localhost:8765
+Claude Code ─stdio─> musescore-mcp (Python: planning, guards, units)
+                        │ JSON {"id", "token", "method", "args"} over ws://127.0.0.1:8766
                         ▼
-              musescore-mcp-websocket.qml (MuseScore 4 plug-in, WebSocket server)
-                        │ MuseScore plug-in API: curScore, Cursor, cmd()
+              msbridge.qml ("sibwscli bridge", MuseScore 4 plug-in)
+                        │ MuseScore plug-in API: curScore, Cursor, startCmd/endCmd, cmd()
                         ▼
                   the open score
 ```
 
-This page compares it with `sibelius-mcp`, based on reading the code at
-commit `66416a1`. It has not yet been tested against a running MuseScore.
-The [musescore skill](../.claude/skills/musescore/SKILL.md) covers how to use it.
+## Setup
 
-## How it differs
+```bash
+uv run musescore-cli install-plugin   # writes the plug-in with a fresh token
+```
 
-| | `sibelius-mcp` | `mcp-musescore` |
-|---|---|---|
-| Model | Address objects (staff, bar, index) and send batches | Move a cursor and type at it |
-| Edits | `apply_batch`: every operation checked first, one undo step, backup before a real run | One undo step per call; `processSequence` runs steps one by one with no checks or rollback |
-| Dry run and guards | `dry_run`, plus type/position guards on each address | None |
-| Errors | Batch refused, nothing changed | `processSequence` ignores failing steps and reports success |
-| Reads | Filtered queries, structure, overview | `get_score`: the whole score every time, notes, rests and lyrics only |
-| Units | 1/256 quarter, 1-based bars and staves | 480 ticks per quarter, 0-based measures and staves |
-| Connection | Sibelius Connect, approval dialog | Unauthenticated WebSocket on port 8765 of every network interface (MuseScore listens on `QHostAddress::Any`), so any device on the network can use it |
+Restart MuseScore, enable "sibwscli bridge" once in Plugins → Manage
+plugins, then choose Plugins → sibwscli bridge in the window of the score to
+work on, every session (each MuseScore window is its own process, and the
+bridge serves its own window). A tool that cannot connect says so.
+`save_score` reads the score's file from its window, which needs
+Accessibility permission for the terminal.
 
 ## Parity with the Sibelius back end
 
-✅ equivalent, ⚠️ partial, ❌ missing.
+✅ equivalent, ⚠️ partial, ❌ missing. Checked live on MuseScore 4.7.5
+(see [Live check](#live-check)).
 
 | Sibelius tool / op | MuseScore | Notes |
 |---|---|---|
-| `score_overview` | ⚠️ | `get_score` gives title, measure count and staves as `staff0`... with short names; no instrument names, file or selection (`get_cursor_info` has the selection) |
-| `score_structure` | ❌ | no key or time signatures, barlines, breaks or layout |
-| `query_score` | ⚠️ | no filters: dumps every Chord and Rest with pitch, spelling, tie, tuplet flag and lyrics; no text, clefs, key/time signatures, lines, articulations or dynamics; no addresses for later edits |
-| `apply_batch` + `dry_run` | ❌ | `processSequence` has none of the checks, atomicity or error reporting |
-| `set` (Dx, Dy, Hidden, CueSize, Beam, ...) | ❌ | |
-| `set-pitch` | ❌ | |
-| `tie`, `bracket`, `flip-stem`, `nudge`, `beam` | ❌ | |
-| `delete` | ⚠️ | `delete_selection`: the current selection or a whole measure |
-| `add-note` | ⚠️ | `add_note` at the cursor, chords with `add_to_chord`; voice 1 only; overwrites what is there |
-| (MuseScore only) `add_rest`, `add_tuplet` | ✅ | at the cursor |
-| `add-text` | ❌ | only tempo text, through `processSequence`'s `setTempo` |
-| `add-line` | ❌ | no slurs, hairpins or other lines |
-| `add-lyric` | ⚠️ | `add_lyrics`: syllables onto consecutive notes from the cursor, verse number; no syllable type, melisma or editing existing lyrics |
-| `transpose` | ❌ | |
-| `copy-passage` | ❌ | |
-| `set-key` | ❌ | |
-| `set-time` | ⚠️ | `set_time_signature` at the cursor; no common/cut symbol |
-| `set-break`, `set-barline`, `set-bar-number` | ❌ | |
-| `add-bars` | ⚠️ | `append_measure`, `insert_measure` at the cursor; no irregular bars |
-| `set-layout`, `hide-empty-staves` | ❌ | |
-| `delete-voice` | ❌ | |
-| (MuseScore only) `add_instrument` | ✅ | by MuseScore instrument id |
-| (MuseScore only) `set_staff_mute`, `set_instrument_sound` | ❌ | the first hides the staff instead of muting it; the second only opens the Instruments panel |
-| `undo` | ⚠️ | one step per call, no count; it is wrapped in its own `startCmd`/`endCmd` |
-| `save_score` | ❌ | |
-| `export_score` | ❌ | |
+| `score_overview` | ✅ | versions, score, metadata, staves with transposition, bar count |
+| `score_structure` | ✅ | keys, times, barlines, repeats, breaks, bar numbers, layout |
+| `query_score` | ✅ | plus `ticks` (exact for tuplets) and `msType`; grace notes not listed yet |
+| `apply_batch` + `dry_run` | ✅ | the dry run really runs and rolls back; a MusicXML backup before a real run |
+| `set` | ⚠️ | Dx, Dy, Hidden, CueSize, Beam (MuseScore modes), RestPosition, Text, Duration; lyric `NumNotes` is `Duration` |
+| `set-pitch`, `tie`, `bracket`, `flip-stem`, `nudge`, `delete`, `beam` | ✅ | set-pitch keeps ties, lyrics and articulations |
+| `add-note`, `add-rest`, `add-tuplet`, `add-text`, `add-lyric`, `add-clef` | ✅ | voices 2-4 only where voice 1 has a note or rest starting |
+| `add-line` | ⚠️ | slurs and octave lines; **hairpins refused** (they crashed MuseScore twice) |
+| Dorico's note ops (`add-dynamic`, `set-articulation`, `add-slur`, `add-tempo`, `add-rehearsal-mark`) | ✅ | |
+| `transpose`, `copy-passage`, `set-key`, `set-time` | ✅ | copy-passage goes through the clipboard, one per batch |
+| `set-break`, `set-barline`, `set-bar-number`, `add-bars` | ✅ | no between-staves, tick, short or triple barlines in MuseScore |
+| `set-layout` | ⚠️ | no octavo/hymn/quarto/folio/us-band sizes, no extra gap below vocal staves |
+| `hide-empty-staves` | ⚠️ | whole score only |
+| `delete-voice` | ✅ | |
+| `undo` | ✅ | by steps |
+| `save_score` | ⚠️ | saves in place (File > Save) and copies the file; a never-saved score is refused |
+| `export_score` | ✅ | pdf, png, svg, musicxml, mxl, mid, mp3, wav, flac, ogg |
+| `project_info`, `set_project_info` (Dorico) | ⚠️ | not undoable in MuseScore; the old values are returned |
+| `read_lyrics`, `edit_lyrics` (Dorico) | ✅ | edit is one undo step, same syllable count |
+| `add_instrument` (MuseScore) | ✅ | by id, MusicXML sound id or name; unknown ids refused |
+| `set_staff_playback` (MuseScore) | ⚠️ | silences the notes there now (each note's `play`); the mixer is out of reach |
 
-## What parity needs
-
-[musescore-backend-plan.md](musescore-backend-plan.md) turns this outline
-into a phased plan with probes and milestones.
-
-Patching the upstream tools one by one would not get there. The gap is the
-model: Sibelius parity needs addresses, guards, checked batches and filtered
-reads. Most of the missing operations are things MuseScore's plug-in API can
-already do. The upstream plug-in just doesn't expose them.
-
-The most direct route is a MuseScore back end in this repository, built the
-way `dorico/` was: a `musescore-mcp` with the same seven tools, reusing
-`batch_ops` validation, `query` selectors and the result shapes. It would talk
-to a QML bridge plug-in that this repository owns and installs, using the
-upstream plug-in's WebSocket setup as the starting point. Parts the MuseScore
-API seems to support, to confirm on MuseScore 4.7:
-
-1. **Bridge.** A QML plug-in with one entry point per call, shaped like
-   `sibwscli`: `GetScoreInfo`, `GetStaves`, `Query`, `ApplyBatch`, `Save`,
-   `Export`. Add a token or origin check so other local processes cannot
-   drive it.
-2. **Reads.** Walk `curScore` segments and tracks for chords, rests, notes,
-   lyrics, clefs, key and time signatures, and segment annotations
-   (staff/system text, dynamics, tempo). Give each object staff, bar, index,
-   type and position in 1/256 quarters (`ticks * 256 / 480`). For
-   `score_structure` and anything the API hides, such as some spanners, read
-   a MusicXML copy written with `writeScore`, as the Dorico back end does
-   with its MusicXML export.
-3. **Batches.** Run every operation of a batch between one
-   `curScore.startCmd()` and `endCmd()`, so a batch is one undo step. For
-   `dry_run`, apply the batch and call `endCmd(true)` to roll it back.
-   MuseScore can roll back where Sibelius and Dorico can't, so a dry run would
-   test the real edits rather than only checking them first.
-4. **Edit operations,** grouped by how they would be done:
-   - element properties: `set` (offset, `visible`, `small`), `set-pitch`
-     (`pitch`, `tpc1`/`tpc2`), lyric `text`/`syllabic`, beam mode;
-   - selection plus `cmd()`: `tie`, `flip-stem`, `bracket`, `copy-passage`
-     (copy/paste), `transpose`, `delete`, slurs and hairpins;
-   - `newElement` plus `Cursor.add`: `add-note` in any voice, `add-text`,
-     `add-lyric`, `set-key`, `set-time`, `set-break` (layout breaks);
-   - measure and style properties: `set-barline`, `set-bar-number`
-     (number offset, exclude from count), irregular bars for `add-bars`,
-     `set-layout` and `hide-empty-staves` (`curScore.style`).
-5. **Save and export.** `writeScore(curScore, path, ext)` for `.mscz`,
-   MusicXML, MXL, PDF, MIDI and PNG.
-6. **Tests and live check.** Unit tests for the Python side as for Dorico,
-   then a recorded live check like `docs/dorico.md`'s.
-
-The upstream server can stay registered until the back end covers what
-people use it for. Then `.mcp.json` would point `musescore` at the new
-`musescore-mcp`.
-
-## Our back end (in progress)
+## Our back end
 
 `musescore-cli` is this repository's own MuseScore back end, built
 milestone by milestone from [musescore-backend-plan.md](musescore-backend-plan.md).
+`.mcp.json` registers it as `musescore`.
 It needs MuseScore 4.6 or newer.
 
 ```bash
@@ -300,6 +248,43 @@ add-lyric read back as "Ma-king a joy-ful noise now"; edit_lyrics to
 "Mak-ing a-joy ful noise now" changed five syllables, hyphens included, as
 shown on the page; one undo restored it, and a two-syllable text was
 refused.
+
+Milestone 6 (bridge version 6) adds `add_instrument` and
+`set_staff_playback` and makes this back end the `musescore` server:
+
+- **add_instrument** appends a part with `appendPart(id)` inside a command,
+  so it is one undo step and a dry run rolls it back. `appendPart` quietly
+  adds a default instrument for an id it doesn't know [src]; the bridge
+  checks the new part's `instrumentId` and rolls back on a mismatch, and
+  Python checks the id first against `instruments.tsv` (the 644 ids of
+  4.7.5's `instruments.xml`), accepting a MusicXML sound id
+  (`strings.violin`) or an unambiguous name and suggesting close ids.
+- **set_staff_playback** silences or restores a staff's voices. The staff's
+  `playbackVoice1`-`4` flags are writable, but MuseScore 4's audio ignores
+  them: only the old MIDI code reads them [src], and a WAV export with
+  voice 1 off was as loud as before (peak -17 dB) [seen]. Audio does honour
+  each note's `play` flag (`NoteRenderer` skips notes that don't play
+  [src]), so the bridge sets both: the export with the clarinet silenced
+  this way peaked at -91 dB, and undo brought it back [seen]. Notes added
+  later still play.
+
+## Live check
+
+`scripts/musescore_live_check.py` runs a fixed scenario on the open score
+(it refuses scores whose name lacks "Scratch" unless `--force`): a marker
+text, then a dry run of a batch with every kind of adding and structural op
+(the score must read back identical), the same batch for real (one undo
+must restore it), lyrics read/edit/undo, every export format, metadata,
+add_instrument (dry and real) and staff playback, each undone, with the
+marker surviving every undo; finally the marker is undone and the score
+must read back exactly as it started. "Identical" compares every object
+`query_score` reports, `score_structure` and the staves.
+
+Run on 2026-10-04, MuseScore 4.7.5, ScratchScore (33 bars, three staves):
+28/28 passed. The batch had 14 ops (15 primitives: chords, a tie, a rest, a
+triplet with a rest and a chord, a C♭, expression text, a lyric, an 8va,
+an alto clef, E♭ major, a system break, a double barline, bar 100). Exports:
+png 1.8 s, audio 0.7-1.1 s, the rest under 0.1 s.
 
 Starting two plug-ins that listen (the bridge and the probe) does not give
 two servers: MuseScore has one WebSocket server, the second `listen` only
@@ -565,3 +550,120 @@ All rolled back cleanly unless noted.
   closing a score with unsaved changes asks whether to save, a dialog that
   blocks the plug-in, and the API can't tell whether there are unsaved
   changes. Not tried.
+
+## The upstream server (history)
+
+Until milestone 6 the `musescore` MCP server was [ghchen99/mcp-musescore](https://github.com/ghchen99/mcp-musescore),
+pinned in `scripts/musescore_mcp.sh`. It has two parts:
+
+```text
+Claude Code ─stdio─> server.py (FastMCP, 26 tools)
+                        │ JSON {"action", "params"} over ws://localhost:8765
+                        ▼
+              musescore-mcp-websocket.qml (MuseScore 4 plug-in, WebSocket server)
+                        │ MuseScore plug-in API: curScore, Cursor, cmd()
+                        ▼
+                  the open score
+```
+
+This page compares it with `sibelius-mcp`, based on reading the code at
+commit `66416a1`. It has not yet been tested against a running MuseScore.
+Its tool notes are kept in the musescore skill's
+[references/upstream-tools.md](../.claude/skills/musescore/references/upstream-tools.md).
+
+### How it differs
+
+| | `sibelius-mcp` | `mcp-musescore` |
+|---|---|---|
+| Model | Address objects (staff, bar, index) and send batches | Move a cursor and type at it |
+| Edits | `apply_batch`: every operation checked first, one undo step, backup before a real run | One undo step per call; `processSequence` runs steps one by one with no checks or rollback |
+| Dry run and guards | `dry_run`, plus type/position guards on each address | None |
+| Errors | Batch refused, nothing changed | `processSequence` ignores failing steps and reports success |
+| Reads | Filtered queries, structure, overview | `get_score`: the whole score every time, notes, rests and lyrics only |
+| Units | 1/256 quarter, 1-based bars and staves | 480 ticks per quarter, 0-based measures and staves |
+| Connection | Sibelius Connect, approval dialog | Unauthenticated WebSocket on port 8765 of every network interface (MuseScore listens on `QHostAddress::Any`), so any device on the network can use it |
+
+### Its parity with the Sibelius back end
+
+✅ equivalent, ⚠️ partial, ❌ missing.
+
+| Sibelius tool / op | MuseScore | Notes |
+|---|---|---|
+| `score_overview` | ⚠️ | `get_score` gives title, measure count and staves as `staff0`... with short names; no instrument names, file or selection (`get_cursor_info` has the selection) |
+| `score_structure` | ❌ | no key or time signatures, barlines, breaks or layout |
+| `query_score` | ⚠️ | no filters: dumps every Chord and Rest with pitch, spelling, tie, tuplet flag and lyrics; no text, clefs, key/time signatures, lines, articulations or dynamics; no addresses for later edits |
+| `apply_batch` + `dry_run` | ❌ | `processSequence` has none of the checks, atomicity or error reporting |
+| `set` (Dx, Dy, Hidden, CueSize, Beam, ...) | ❌ | |
+| `set-pitch` | ❌ | |
+| `tie`, `bracket`, `flip-stem`, `nudge`, `beam` | ❌ | |
+| `delete` | ⚠️ | `delete_selection`: the current selection or a whole measure |
+| `add-note` | ⚠️ | `add_note` at the cursor, chords with `add_to_chord`; voice 1 only; overwrites what is there |
+| (MuseScore only) `add_rest`, `add_tuplet` | ✅ | at the cursor |
+| `add-text` | ❌ | only tempo text, through `processSequence`'s `setTempo` |
+| `add-line` | ❌ | no slurs, hairpins or other lines |
+| `add-lyric` | ⚠️ | `add_lyrics`: syllables onto consecutive notes from the cursor, verse number; no syllable type, melisma or editing existing lyrics |
+| `transpose` | ❌ | |
+| `copy-passage` | ❌ | |
+| `set-key` | ❌ | |
+| `set-time` | ⚠️ | `set_time_signature` at the cursor; no common/cut symbol |
+| `set-break`, `set-barline`, `set-bar-number` | ❌ | |
+| `add-bars` | ⚠️ | `append_measure`, `insert_measure` at the cursor; no irregular bars |
+| `set-layout`, `hide-empty-staves` | ❌ | |
+| `delete-voice` | ❌ | |
+| (MuseScore only) `add_instrument` | ✅ | by MuseScore instrument id |
+| (MuseScore only) `set_staff_mute`, `set_instrument_sound` | ❌ | the first hides the staff instead of muting it; the second only opens the Instruments panel |
+| `undo` | ⚠️ | one step per call, no count; it is wrapped in its own `startCmd`/`endCmd` |
+| `save_score` | ❌ | |
+| `export_score` | ❌ | |
+
+### What parity needed (the plan's starting point)
+
+[musescore-backend-plan.md](musescore-backend-plan.md) turns this outline
+into a phased plan with probes and milestones.
+
+Patching the upstream tools one by one would not get there. The gap is the
+model: Sibelius parity needs addresses, guards, checked batches and filtered
+reads. Most of the missing operations are things MuseScore's plug-in API can
+already do. The upstream plug-in just doesn't expose them.
+
+The most direct route is a MuseScore back end in this repository, built the
+way `dorico/` was: a `musescore-mcp` with the same seven tools, reusing
+`batch_ops` validation, `query` selectors and the result shapes. It would talk
+to a QML bridge plug-in that this repository owns and installs, using the
+upstream plug-in's WebSocket setup as the starting point. Parts the MuseScore
+API seems to support, to confirm on MuseScore 4.7:
+
+1. **Bridge.** A QML plug-in with one entry point per call, shaped like
+   `sibwscli`: `GetScoreInfo`, `GetStaves`, `Query`, `ApplyBatch`, `Save`,
+   `Export`. Add a token or origin check so other local processes cannot
+   drive it.
+2. **Reads.** Walk `curScore` segments and tracks for chords, rests, notes,
+   lyrics, clefs, key and time signatures, and segment annotations
+   (staff/system text, dynamics, tempo). Give each object staff, bar, index,
+   type and position in 1/256 quarters (`ticks * 256 / 480`). For
+   `score_structure` and anything the API hides, such as some spanners, read
+   a MusicXML copy written with `writeScore`, as the Dorico back end does
+   with its MusicXML export.
+3. **Batches.** Run every operation of a batch between one
+   `curScore.startCmd()` and `endCmd()`, so a batch is one undo step. For
+   `dry_run`, apply the batch and call `endCmd(true)` to roll it back.
+   MuseScore can roll back where Sibelius and Dorico can't, so a dry run would
+   test the real edits rather than only checking them first.
+4. **Edit operations,** grouped by how they would be done:
+   - element properties: `set` (offset, `visible`, `small`), `set-pitch`
+     (`pitch`, `tpc1`/`tpc2`), lyric `text`/`syllabic`, beam mode;
+   - selection plus `cmd()`: `tie`, `flip-stem`, `bracket`, `copy-passage`
+     (copy/paste), `transpose`, `delete`, slurs and hairpins;
+   - `newElement` plus `Cursor.add`: `add-note` in any voice, `add-text`,
+     `add-lyric`, `set-key`, `set-time`, `set-break` (layout breaks);
+   - measure and style properties: `set-barline`, `set-bar-number`
+     (number offset, exclude from count), irregular bars for `add-bars`,
+     `set-layout` and `hide-empty-staves` (`curScore.style`).
+5. **Save and export.** `writeScore(curScore, path, ext)` for `.mscz`,
+   MusicXML, MXL, PDF, MIDI and PNG.
+6. **Tests and live check.** Unit tests for the Python side as for Dorico,
+   then a recorded live check like `docs/dorico.md`'s.
+
+The upstream server can stay registered until the back end covers what
+people use it for. Then `.mcp.json` would point `musescore` at the new
+`musescore-mcp`.

@@ -1,0 +1,645 @@
+# MuseScore instrument ids (share/instruments/instruments.xml, v4.7.5): id, track name, MusicXML id
+winds	Winds	wind.group
+eb-piccolo	Piccolo	wind.flutes.flute.piccolo
+db-piccolo	Piccolo	wind.flutes.flute.piccolo
+piccolo	Piccolo	wind.flutes.flute.piccolo
+treble-flute	Treble Flute	wind.flutes.flute
+danso	Danso	wind.flutes.danso
+daegeum	Daegeum	
+soprano-flute	Soprano Flute	wind.flutes.flute
+irish-flute	Irish Flute	wind.flutes.flute.irish
+traverso	Traverso	wind.flutes.flute
+flute	Flute	wind.flutes.flute
+alto-flute	Alto Flute	wind.flutes.flute.alto
+bass-flute	Bass Flute	wind.flutes.flute.bass
+contra-alto-flute	Contra-alto Flute	wind.flutes.flute.contra-alto
+contrabass-flute	Contrabass Flute	wind.flutes.flute.contrabass
+subcontra-alto-flute	Sub Contra-alto Flute	wind.flutes.flute.subcontrabass
+double-contrabass-flute	Double Contrabass Flute	wind.flutes.flute.double-contrabass
+hyperbass-flute	Hyperbass Flute	wind.flutes.flute.double-contrabass
+a-dizi	Dizi	wind.flutes.di-zi
+g-dizi	Dizi	wind.flutes.di-zi
+f-dizi	Dizi	wind.flutes.di-zi
+e-dizi	Dizi	wind.flutes.di-zi
+d-dizi	Dizi	wind.flutes.di-zi
+c-dizi	Dizi	wind.flutes.di-zi
+shakuhachi	Shakuhachi	wind.flutes.shakuhachi
+hichiriki	Hichiriki	wind.reed.hichiriki
+fife	Fife	wind.flutes.fife
+d-tin-whistle	Tin Whistle	wind.flutes.whistle.tin.d
+c-tin-whistle	Tin Whistle	wind.flutes.whistle.tin
+bflat-tin-whistle	Tin Whistle	wind.flutes.whistle.tin.bflat
+slide-whistle	Slide Whistle	wind.flutes.slide
+french-flageolet	French Flageolet	wind.flutes.flageolet
+english-flageolet	English Flageolet	wind.flutes.flageolet
+flageolet		wind.flutes.flageolet
+garklein-recorder	Garklein Recorder	wind.flutes.recorder.garklein
+sopranino-recorder	Sopranino Recorder	wind.flutes.recorder.sopranino
+soprano-recorder	Soprano Recorder	wind.flutes.recorder.soprano
+recorder		wind.flutes.recorder
+alto-recorder	Alto Recorder	wind.flutes.recorder.alto
+tenor-recorder	Tenor Recorder	wind.flutes.recorder.tenor
+bass-recorder	Bass Recorder	wind.flutes.recorder.bass
+greatbass-recorder	Greatbass Recorder	wind.flutes.recorder.great-bass
+contrabass-recorder	Contrabass Recorder	wind.flutes.recorder.contrabass
+c-soprano-ocarina	Soprano Ocarina	wind.flutes.ocarina
+ocarina		wind.flutes.ocarina
+bb-soprano-ocarina	Soprano Ocarina	wind.flutes.ocarina
+g-soprano-ocarina	Soprano Ocarina	wind.flutes.ocarina
+f-soprano-ocarina	Soprano Ocarina	wind.flutes.ocarina
+c-alto-ocarina	Alto Ocarina	wind.flutes.ocarina
+bb-alto-ocarina	Alto Ocarina	wind.flutes.ocarina
+g-alto-ocarina	Alto Ocarina	wind.flutes.ocarina
+f-alto-ocarina	Alto Ocarina	wind.flutes.ocarina
+c-bass-ocarina	Bass Ocarina	wind.flutes.ocarina
+gemshorn		wind.flutes.gemshorn
+soprano-gemshorn	Soprano Gemshorn	wind.flutes.gemshorn
+alto-gemshorn	Alto Gemshorn	wind.flutes.gemshorn
+tenor-gemshorn	Tenor Gemshorn	wind.flutes.gemshorn
+bass-gemshorn	Bass Gemshorn	wind.flutes.gemshorn
+pan-flute	Pan Flute	wind.flutes.panpipes
+quena		wind.flutes.quena
+c-quena	Quena	wind.flutes.quena
+g-quena	Quena	wind.flutes.quena
+f-quena	Quena	wind.flutes.quena
+d-quena	Quena	wind.flutes.quena
+fs-castilian-dulzaina	Castilian Dulzaina	wind.reed.dulzaina
+piccolo-heckelphone	Piccolo Heckelphone	wind.reed.heckelphone.piccolo
+piccolo-oboe	Piccolo Oboe	wind.reed.oboe.piccolo
+baroque-oboe	Baroque Oboe	wind.reed.oboe
+oboe	Oboe	wind.reed.oboe
+oboe-d'amore	Oboe d’amore	wind.reed.oboe-damore
+oboe-da-caccia	Oboe da caccia	wind.reed.oboe-da-caccia
+english-horn	English Horn	wind.reed.english-horn
+bass-oboe	Bass Oboe	wind.reed.oboe.bass
+heckelphone	Heckelphone	wind.reed.heckelphone
+lupophone	Lupophone	wind.reed.heckelphone
+sopranino-shawm	Sopranino Shawm	wind.reed.shawm
+soprano-shawm	Soprano Shawm	wind.reed.shawm
+alto-shawm	Alto Shawm	wind.reed.shawm
+tenor-shawm	Tenor Shawm	wind.reed.shawm
+bass-shawm	Bass Shawm	wind.reed.shawm
+great-bass-shawm	Great Bass Shawm	wind.reed.shawm
+cromorne	Cromorne	wind.reed.cromorne
+crumhorn		wind.reed.crumhorn
+soprano-crumhorn	Soprano Crumhorn	wind.reed.crumhorn.soprano
+alto-crumhorn	Alto Crumhorn	wind.reed.crumhorn.alto
+tenor-crumhorn	Tenor Crumhorn	wind.reed.crumhorn.tenor
+bass-crumhorn	Bass Crumhorn	wind.reed.crumhorn.bass
+greatbass-crumhorn	Greatbass Crumhorn	wind.reed.crumhorn.great-bass
+cornamuse		wind.reed.cornamuse
+soprano-cornamuse	Soprano Cornamuse	wind.reed.cornamuse
+alto-cornamuse	Alto Cornamuse	wind.reed.cornamuse
+tenor-cornamuse	Tenor Cornamuse	wind.reed.cornamuse
+bass-cornamuse	Bass Cornamuse	wind.reed.cornamuse
+soprano-kelhorn	Soprano Kelhorn	
+alto-kelhorn	Alto Kelhorn	
+tenor-kelhorn	Tenor Kelhorn	
+bass-kelhorn	Bass Kelhorn	
+greatbass-kelhorn	Greatbass Kelhorn	
+sopranino-rauschpfeife	Sopranino Rauschpfeife	wind.reed.rauschpfeife
+rauschpfeife		wind.reed.rauschpfeife
+soprano-rauschpfeife	Soprano Rauschpfeife	wind.reed.rauschpfeife
+f-duduk	Duduk	wind.reed.duduk
+e-duduk	Duduk	wind.reed.duduk
+d-duduk	Duduk	wind.reed.duduk
+c-duduk	Duduk	wind.reed.duduk
+b-duduk	Duduk	wind.reed.duduk
+bb-duduk	Duduk	wind.reed.duduk
+duduk		wind.reed.duduk
+a-duduk	Duduk	wind.reed.duduk
+g-duduk	Duduk	wind.reed.duduk
+a-bass-duduk	Bass Duduk	wind.reed.duduk
+shenai	Shenai	wind.reed.shenai
+piccolo-clarinet	Piccolo Clarinet	wind.reed.clarinet.piccolo.aflat
+soprano-clarinet	Soprano Clarinet	wind.reed.clarinet
+eb-clarinet	Clarinet	wind.reed.clarinet.eflat
+d-clarinet	Clarinet	wind.reed.clarinet
+c-clarinet	Clarinet	wind.reed.clarinet
+bb-clarinet	Clarinet	wind.reed.clarinet.bflat
+clarinet		wind.reed.clarinet
+a-clarinet	Clarinet	wind.reed.clarinet.a
+g-clarinet	Clarinet	wind.reed.clarinet
+basset-clarinet	Basset Clarinet	wind.reed.clarinet.basset
+alto-clarinet	Alto Clarinet	wind.reed.clarinet.alto
+basset-horn	Basset Horn	wind.reed.basset-horn
+bass-clarinet		wind.reed.clarinet.bass
+bb-bass-clarinet	Bass Clarinet	wind.reed.clarinet.bass
+bb-bass-clarinet-bass-clef	Bass Clarinet (bass clef)	wind.reed.clarinet.bass
+a-bass-clarinet	Bass Clarinet	wind.reed.clarinet.bass
+a-bass-clarinet-bass-clef)	Bass Clarinet (bass clef)	wind.reed.clarinet.bass
+contra-alto-clarinet	Contra-alto Clarinet	wind.reed.clarinet.contra-alto
+contrabass-clarinet	Contrabass Clarinet	wind.reed.clarinet.contrabass
+sopranino-chalumeau	Sopranino Chalumeau	wind.reed.chalumeau
+soprano-chalumeau	Soprano Chalumeau	wind.reed.chalumeau
+alto-chalumeau	Alto Chalumeau	wind.reed.chalumeau
+chalumeau		wind.reed.chalumeau
+tenor-chalumeau	Tenor Chalumeau	wind.reed.chalumeau
+bass-chalumeau	Bass Chalumeau	wind.reed.chalumeau
+d-xaphoon	Pocket Sax	wind.reed.xaphoon
+xaphoon	Pocket Sax	wind.reed.xaphoon
+bb-xaphoon	Pocket Sax	wind.reed.xaphoon
+g-xaphoon	Pocket Sax	wind.reed.xaphoon
+tarogato	Tarogato	wind.reed.tarogato
+octavin	Octavin	wind.reed.octavin
+sopranissimo-saxophone	Sopranissimo Saxophone	wind.reed.saxophone.sopraninissimo
+sopranino-saxophone	Sopranino Saxophone	wind.reed.saxophone.sopranino
+aulochrome	Aulochrome	wind.reed.saxophone.aulochrome
+soprano-saxophone	Soprano Saxophone	wind.reed.saxophone.soprano
+mezzo-soprano-saxophone	Mezzo-Soprano Saxophone	wind.reed.saxophone.mezzo-soprano
+heckelphone-clarinet	Heckelphone-clarinet	wind.reed.heckelphone-clarinet
+alto-saxophone	Alto Saxophone	wind.reed.saxophone.alto
+melody-saxophone	Melody Saxophone	wind.reed.saxophone.melody
+saxophone		wind.reed.saxophone
+tenor-saxophone	Tenor Saxophone	wind.reed.saxophone.tenor
+baritone-saxophone	Baritone Saxophone	wind.reed.saxophone.baritone
+bass-saxophone	Bass Saxophone	wind.reed.saxophone.bass
+contrabass-saxophone	Contrabass Saxophone	wind.reed.saxophone.contrabass
+subcontrabass-saxophone	Subcontrabass Saxophone	wind.reed.saxophone.subcontrabass
+bassoon	Bassoon	wind.reed.bassoon
+contrabassoon	Contrabassoon	wind.reed.contrabassoon
+reed-contrabass	Reed Contrabass	wind.reed.contrabass
+dulcian	Dulcian	wind.reed.dulcian
+rackett	Rackett	wind.reed.rackett
+sopranino-sarrusophone	Sopranino Sarrusophone	wind.reed.sarrusaphone
+sarrusophone		wind.reed.sarrusaphone
+soprano-sarrusophone	Soprano Sarrusophone	wind.reed.sarrusaphone
+alto-sarrusophone	Alto Sarrusophone	wind.reed.sarrusaphone
+tenor-sarrusophone	Tenor Sarrusophone	wind.reed.sarrusaphone
+baritone-sarrusophone	Baritone Sarrusophone	wind.reed.sarrusaphone
+bass-sarrusophone	Bass Sarrusophone	wind.reed.sarrusaphone
+contrabass-sarrusophone	Contrabass Sarrusophone	wind.reed.sarrusaphone
+bagpipe	Bagpipe	wind.pipes.bagpipes
+accordion	Accordion	keyboard.accordion
+bandoneon	Bandoneon	keyboard.bandoneon
+concertina	Concertina	keyboard.concertina
+harmonica		wind.reed.harmonica
+harmonica-d10high-g	10-Hole Diatonic Harmonica	wind.reed.harmonica
+harmonica-d10f	10-Hole Diatonic Harmonica	wind.reed.harmonica
+harmonica-d10d	10-Hole Diatonic Harmonica	wind.reed.harmonica
+harmonica-d10c	10-Hole Diatonic Harmonica	wind.reed.harmonica
+harmonica-d10a	10-Hole Diatonic Harmonica	wind.reed.harmonica
+harmonica-d10g	10-Hole Diatonic Harmonica	wind.reed.harmonica
+harmonica-d10low-d	10-Hole Diatonic Harmonica	wind.reed.harmonica
+harmonica-c12c	12-Hole Chromatic Harmonica	wind.reed.harmonica
+harmonica-c12g	12-Hole Chromatic Harmonica	wind.reed.harmonica
+harmonica-c12tenor-c	12-Hole Chromatic Harmonica	wind.reed.harmonica
+harmonica-c14c	14-Hole Chromatic Harmonica	wind.reed.harmonica
+harmonica-c16c	16-Hole Chromatic Harmonica	wind.reed.harmonica
+harmonica-chordet	20-Hole Chordet Harmonica	wind.reed.harmonica
+bass-harmonica-hohner	Bass Hohner Harmonica	wind.reed.harmonica.bass
+bass-harmonica-huang	Bass Huang Harmonica	wind.reed.harmonica.bass
+bass-harmonica	Bass Harmonica	wind.reed.harmonica.bass
+melodica	Melodica	wind.reed.melodica
+sho	Shō	wind.reed.sheng
+sheng		wind.reed.sheng
+soprano-sheng	Soprano Sheng	wind.reed.sheng
+alto-sheng	Alto Sheng	wind.reed.sheng
+tenor-sheng	Tenor Sheng	wind.reed.sheng
+bass-sheng	Bass Sheng	wind.reed.sheng
+brass	Brass	brass.group
+c-horn-alto	Horn	brass.natural-horn
+bb-horn-alto	Horn	brass.french-horn
+a-horn	Horn	brass.natural-horn
+ab-horn	Horn	brass.natural-horn
+g-horn	Horn	brass.natural-horn
+e-horn	Horn	brass.natural-horn
+eb-horn	Horn	brass.natural-horn
+d-horn	Horn	brass.natural-horn
+horn	Horn	brass.french-horn
+c-horn	Horn	brass.natural-horn
+c-horn-bass	Horn (bass clef)	brass.natural-horn
+bb-horn-basso	Horn	brass.natural-horn
+vienna-horn	Vienna Horn	brass.vienna-horn
+bb-wagner-tuba	Wagner Tuba	brass.wagner-tuba
+f-wagner-tuba	Wagner Tuba	brass.wagner-tuba
+wagner-tuba		brass.wagner-tuba
+eb-cornet	Cornet	brass.cornet.soprano
+c-cornet	Cornet	brass.cornet
+bb-cornet	Cornet	brass.cornet
+a-cornet	Cornet	brass.cornet
+saxhorn	Saxhorn	brass.saxhorn
+f-alto-horn	Alto Horn	brass.alto-horn
+eb-alto-horn	Alto Horn	brass.alto-horn
+baritone-horn	Baritone Horn	brass.baritone-horn
+baritone-horn-treble	Baritone Horn (treble clef)	brass.baritone-horn
+baritone-horn-central-europe-treble	Baritone Horn (Central European, treble clef)	brass.baritone-horn
+baritone-horn-central-europe	Baritone Horn (Central European)	brass.baritone-horn
+posthorn	Posthorn	brass.posthorn
+bb-piccolo-trumpet	Piccolo Trumpet	brass.trumpet.piccolo
+piccolo-trumpet		brass.trumpet.piccolo
+a-piccolo-trumpet	Piccolo Trumpet	brass.trumpet.piccolo
+f-trumpet	Trumpet	brass.trumpet
+e-trumpet	Trumpet	brass.trumpet
+eb-trumpet	Trumpet	brass.trumpet
+d-trumpet	Trumpet	brass.trumpet.d
+c-trumpet	Trumpet	brass.trumpet.c
+trumpet		brass.trumpet
+bb-trumpet	Trumpet	brass.trumpet.bflat
+a-trumpet	Trumpet	brass.trumpet
+pocket-trumpet	Pocket Trumpet	brass.trumpet.pocket
+slide-trumpet	Slide Trumpet	brass.trumpet.slide
+tenor-trumpet	Tenor Trumpet	brass.trumpet.tenor
+eb-bass-trumpet	Bass Trumpet	brass.trumpet.bass
+c-bass-trumpet	Bass Trumpet	brass.trumpet.bass
+bass-trumpet		brass.trumpet.bass
+bb-bass-trumpet	Bass Trumpet	brass.trumpet.bass
+f-baroque-trumpet	Baroque Trumpet	brass.trumpet.baroque
+eb-baroque-trumpet	Baroque Trumpet	brass.trumpet.baroque
+d-baroque-trumpet	Baroque Trumpet	brass.trumpet.baroque
+c-baroque-trumpet	Baroque Trumpet	brass.trumpet.baroque
+bb-baroque-trumpet	Baroque Trumpet	brass.trumpet.baroque
+baroque-trumpet		brass.trumpet.baroque
+bugle	Bugle	brass.bugle
+soprano-bugle	Soprano Bugle	brass.bugle.soprano
+alto-bugle	Alto Bugle	brass.bugle.alto
+mellophone	Mellophone	brass.mellophone
+baritone-bugle	Baritone Bugle	brass.bugle.baritone
+euphonium-bugle	Euphonium Bugle	brass.bugle.euphonium-bugle
+mellophon-bugle	Mellophone Bugle	brass.bugle.mellophone-bugle
+contrabass-bugle	Contrabass Bugle	brass.bugle.contrabass
+fiscorn	Fiscorn	brass.fiscorn
+flugelhorn	Flugelhorn	brass.flugelhorn
+kuhlohorn	Kuhlohorn	brass.kuhlohorn
+f-alto-ophicleide	Alto Ophicleide	brass.ophicleide
+eb-alto-ophicleide	Alto Ophicleide	brass.ophicleide
+ophicleide		brass.ophicleide
+c-bass-ophicleide	Bass Ophicleide	brass.ophicleide
+bb-bass-ophicleide	Bass Ophicleide	brass.ophicleide
+eb-contrabass-ophicleide	Contrabass Ophicleide	brass.ophicleide
+cornettino	Cornettino	brass.cornettino
+cornett		brass.cornett
+soprano-cornett	Soprano Cornett	brass.cornett
+alto-cornett	Alto Cornett	brass.cornett
+tenor-cornett	Tenor Cornett	brass.cornett.tenor
+serpent	Serpent	brass.serpent
+soprano-trombone	Soprano Trombone	brass.trombone
+alto-trombone	Alto Trombone	brass.trombone.alto
+tenor-trombone	Tenor Trombone	brass.trombone.tenor
+trombone	Trombone	brass.trombone
+trombone-treble	Trombone (treble clef)	brass.trombone
+bass-trombone	Bass Trombone	brass.trombone.bass
+contrabass-trombone	Contrabass Trombone	brass.trombone.contrabass
+cimbasso	Cimbasso	brass.cimbasso
+alto-sackbut	Alto Sackbut	brass.sackbutt.alto
+tenor-sackbut	Tenor Sackbut	brass.sackbutt.tenor
+bass-sackbut	Bass Sackbut	brass.sackbutt.bass
+euphonium	Euphonium	brass.euphonium
+euphonium-treble	Euphonium (treble clef)	brass.euphonium
+tuba	Tuba (unspecified)	brass.tuba
+f-tuba		brass.tuba
+eb-tuba		brass.tuba
+bass-eb-tuba	Bass Tuba	brass.tuba.bass
+bass-f-tuba	Bass Tuba	brass.tuba.bass
+eb-tuba-treble	Bass Tuba (treble clef)	brass.tuba
+c-tuba	Contrabass Tuba	brass.tuba
+bb-tuba	Contrabass Tuba	brass.tuba
+bb-tuba-treble	Contrabass Tuba (treble clef)	brass.tuba
+subcontrabass-tuba	Sub-Contrabass Tuba	brass.tuba.subcontrabass
+bb-sousaphone	Sousaphone	brass.sousaphone
+bb-sousaphone-treble	Sousaphone (treble clef)	brass.sousaphone
+sousaphone	Sousaphone (concert pitch)	brass.sousaphone
+helicon	Helicon	brass.helicon
+conch	Conch	brass.conch-shell
+horagai	Horagai	brass.horagai
+alphorn	Alphorn	brass.alphorn
+rag-dung	Rag Dung	brass.rag-dung
+didgeridoo	Didgeridoo	brass.didgeridoo
+shofar	Shofar	brass.shofar
+vuvuzela	Vuvuzela	brass.vuvuzela
+timpani	Timpani	drum.timpani
+roto-toms	Roto-Toms	drum.rototom
+tubaphone	Tubaphone	
+soprano-steel-drums	Lead Steel Pan	metal.steel-drums
+alto-steel-drums	Double Tenor Steel Pans	metal.steel-drums
+tenor-steel-drums	Double Second Steel Pans	metal.steel-drums
+guitar-steel-drums	Guitar Steel Pans	metal.steel-drums
+cello-steel-drums	Triple Cello Steel Pans	metal.steel-drums
+cello-steel-drums-four	Four Cello Steel Pans	metal.steel-drums
+tenor-bass-steel-drums	Tenor Bass Steel Pans	metal.steel-drums
+steel-drums	Steel Pans	metal.steel-drums
+bass-steel-drums	Bass Steel Pans	metal.steel-drums
+glockenspiel	Glockenspiel	pitched-percussion.glockenspiel
+xylophone	Xylophone	pitched-percussion.xylophone
+xylomarimba	Xylomarimba	pitched-percussion.xylomarimba
+vibraphone	Vibraphone	pitched-percussion.vibraphone
+dulcimer	Dulcimer	pitched-percussion.hammer-dulcimer
+cimbalom	Cimbalom	pitched-percussion.cimbalom
+marimba	Marimba (grand staff)	pitched-percussion.marimba
+marimba-single	Marimba (single staff)	pitched-percussion.marimba
+bass-marimba	Bass Marimba	pitched-percussion.marimba.bass
+contrabass-marimba	Contrabass Marimba	pitched-percussion.marimba.bass
+crotales	Crotales	metal.crotales
+almglocken	Almglocken	metal.bells.almglocken
+tubular-bells	Chimes	pitched-percussion.tubular-bells
+carillon	Carillon	metal.bells.carillon
+tuned-gongs	Tuned Gongs	metal.gong
+hand-bells	Handbells	pitched-percussion.handbells
+hand-chimes	Handchimes	pitched-percussion.handchimes
+orff-soprano-glockenspiel	Orff Soprano Glockenspiel	pitched-percussion.glockenspiel.soprano
+orff-alto-glockenspiel	Orff Alto Glockenspiel	pitched-percussion.glockenspiel.alto
+orff-soprano-metallophone	Orff Soprano Metallophone	pitched-percussion.metallophone.soprano
+orff-soprano-xylophone	Orff Soprano Xylophone	pitched-percussion.xylophone.soprano
+metallophone		pitched-percussion.metallophone
+orff-alto-metallophone	Orff Alto Metallophone	pitched-percussion.metallophone.alto
+orff-alto-xylophone	Orff Alto Xylophone	pitched-percussion.xylophone.alto
+orff-bass-metallophone	Orff Bass Metallophone	pitched-percussion.metallophone.bass
+orff-bass-xylophone	Orff Bass Xylophone	pitched-percussion.xylophone.soprano
+flexatone	Flexatone	metal.flexatone
+musical-saw	Musical Saw	metal.musical-saw
+musical-glasses	Musical Glasses	pitched-percussion.crystal-glasses
+glass-harmonica	Glass Harmonica	pitched-percussion.glass-harmonica
+tuned-klaxon-horns	Tuned Klaxon Horns	
+alto-kalimba	Alto Kalimba	pitched-percussion.kalimba
+kalimba	Kalimba	pitched-percussion.kalimba
+treble-kalimba	Treble Kalimba	pitched-percussion.kalimba
+automobile-brake-drums	Automobile Brake Drums	metal.brake-drums
+bongos	Bongos	drum.bongo
+janggu	Janggu	drum.jang-gu
+samul-janggu	Samul Janggu	drum.jang-gu
+sanjo-janggu	Sanjo Janggu	drum.jang-gu
+ko-tsuzumi	Ko-Tsuzumi	drum.tsuzumi
+o-tsuzumi	O-Tsuzumi	drum.tsuzumi
+chinese-tom-toms	Chinese Tom-Toms	drum.group.chinese
+sogo	Sogo	drum.sogo
+bass-drum	Bass Drum	drum.bass-drum
+okedo-daiko	Okedo-Daiko	drum.okedo-daiko
+snare-drum	Snare Drum	drum.snare-drum
+tom-toms	Concert Toms	drum.tom-tom
+congas	Congas	drum.conga
+shime-daiko	Shime-Daiko	drum.shime-daiko
+kakko	Kakko	drum.kakko
+xiaogu	Xiaogu	
+doumbek	Doumbek	drum.dumbek
+djembe	Djembe	drum.djembe
+cajon	Cajón	drum.cajon
+cuica	Cuíca	drum.cuica
+drumset	Drum Kit (large)	drum.group.set
+drum-kit-4	Drum Kit (minimal)	drum.group.set
+drum-kit-5	Drum Kit (common)	drum.group.set
+military-drum	Field Drum	drum.snare-drum
+frame-drum	Frame Drum	drum.frame-drum
+bangu	Bangu	
+piccolo-snare-drum	Piccolo Snare	drum.snare-drum
+slit-drum	Slit Drum	drum.slit-drum
+tablas	Tablas	drum.tabla
+timbales	Timbales	drum.timbale
+buk	Buk	
+samul-buk	Samul Buk	
+sori-buk	Sori Buk	
+taiko	Taiko	drum.taiko
+tsuri-daiko	Tsuri-Daiko	drum.taiko
+miya-daiko	Miya-Daiko	drum.nagado-daiko
+dagu	Dagu	
+anvil	Anvil	metal.anvil
+shoko	Shōko	
+kane	Kane	
+bell-plate	Bell Plate	metal.bells.bell-plate
+bell-tree	Bell Tree	metal.bells.bell-tree
+bowl-gongs	Bowl Gongs	metal.gong
+chains	Chains	
+china-cymbal	China Cymbal	metal.cymbal.chinese
+opera-gong	Opera Gong	metal.gong.luo
+wind-gong	Wind Gong	metal.cymbal.chinese
+daluo	Daluo	metal.gong.luo
+xiaoluo	Xiaoluo	metal.gong.luo
+dabo	Dabo	metal.cymbal.bo
+naobo	Naobo	metal.cymbal.bo
+kkwaenggwari	Kkwaenggwari	metal.gong.kkwenggwari
+cowbell	Cowbell	metal.bells.cowbell
+agogo-bells	Agogô Bells	metal.bells.agogo
+crash-cymbal	Suspended Cymbal	metal.cymbal.crash
+cymbal	Hand Cymbals	metal.cymbal.crash
+finger-cymbals	Finger Cymbals	metal.cymbal.finger
+hi-hat	Hi-hat	metal.hi-hat
+iron-pipes	Iron Pipes	
+mark-tree	Mark Tree	metal.bells.mark-tree
+metal-castanets	Metal Castanets	
+metal-wind-chimes	Metal Wind Chimes	metal.bells.wind-chimes
+ride-cymbal	Ride Cymbal	metal.cymbal.ride
+sleigh-bells	Sleigh Bells	metal.bells.sleigh-bells
+splash-cymbal	Splash Cymbal	metal.cymbal.splash
+tam-tam	Tam-tam	metal.tamtam
+jing	Jing	
+thundersheet	Thundersheet	metal.thundersheet
+triangle	Triangle	metal.triangle
+bamboo-wind-chimes	Bamboo Wind Chimes	metal.bells.wind-chimes
+castanets	Castanets	wood.castanets
+claves	Claves	wood.claves
+ban	Ban	wood.guban
+guiro	Güiro	wood.guiro
+temple-blocks	Temple Blocks	wood.temple-block
+log-drum	Log Drum	drum.log-drum
+wood-blocks	Wood Blocks	wood.wood-block
+bangzi	Bangzi	
+wooden-wind-chimes	Wooden Wind Chimes	metal.bells.wind-chimes
+cabasa	Cabasa	rattle.cabasa
+glass-wind-chimes	Glass Wind Chimes	metal.bells.wind-chimes
+maracas	Maracas	rattle.maraca
+quijada	Quijada	rattle.jawbone
+ratchet	Ratchet	rattle.ratchet
+sandpaper-blocks	Sandpaper Blocks	wood.sand-block
+shaker	Shaker	rattle.shaker
+shekere	Shekere	rattle.shekere
+shell-wind-chimes	Shell Wind Chimes	metal.bells.wind-chimes
+stones	Stones	rattle.lava-stones
+tambourine	Tambourine	drum.tambourine
+tubo	Tubo	
+vibraslap	Vibraslap	rattle.vibraslap
+whip	Whip	effect.whip
+cannon	Cannon	effect.gunshot
+bird-call	Bird Call	effect.bird
+ocean-drum	Ocean Drum	
+percussion-synthesizer	General MIDI Percussion	drum.group
+percussion	Mixed Percussion	drum.group.set
+marching-snare	Marching Snare Drum	drum.snare-drum
+marching-tenor-drums	Marching Tenor Drums	drum.tenor-drum
+marching-show-tenors	Show-Style Tenors	
+marching-bass-drums	Marching Bass Drums	drum.bass-drum
+marching-cymbals	Marching Cymbals	metal.cymbal.crash
+finger-snap	Finger Snap	effect.snap
+hand-clap	Hand Clap	effect.hand-clap
+slap	Slap	effect.slap
+stamp	Stamp	effect.stamp
+boy-soprano	Boy Soprano	voice.child
+soprano	Soprano	voice.soprano
+soprano-c-clef	Soprano (C clef)	voice.soprano
+mezzo-soprano	Mezzo-soprano	voice.mezzo-soprano
+mezzo-soprano-c-clef	Mezzo-soprano (C clef)	voice.mezzo-soprano
+countertenor	Countertenor	voice.countertenor
+alto	Alto	voice.alto
+alto-c-clef	Alto (C clef)	voice.alto
+contralto	Contralto	voice.alto
+tenor	Tenor	voice.tenor
+tenor-c-clef	Tenor (C clef)	voice.tenor
+baritone	Baritone	voice.baritone
+baritone-c-clef	Baritone (C clef)	voice.baritone
+voice	Voice	voice.vocals
+bass	Bass	voice.bass
+women	Women	voice.female
+men	Men	voice.male
+kazoo	Kazoo	voice.kazoo
+celesta	Celesta	keyboard.celesta
+clavichord	Clavichord	keyboard.clavichord
+clavinet	Clavinet	keyboard.clavichord.synth
+harpsichord	Harpsichord	keyboard.harpsichord
+virginal	Virginal	keyboard.virginal
+electric-piano	Electric Piano	keyboard.piano.electric
+grand-piano	Grand Piano	keyboard.piano.grand
+honky-tonk-piano	Honky Tonk Piano	keyboard.piano.honky-tonk
+piano	Piano	keyboard.piano
+toy-piano	Toy Piano	keyboard.piano.toy
+upright-piano	Upright Piano	keyboard.piano.upright
+hammond-organ	Hammond Organ	keyboard.organ.drawbar
+organ	Organ	keyboard.organ
+percussive-organ	Percussive Organ	keyboard.organ.percussive
+pipe-organ	Pipe Organ	keyboard.organ.pipe
+rotary-organ	Rotary Organ	keyboard.organ.rotary
+harmonium	Harmonium	keyboard.harmonium
+reed-organ	Reed Organ	keyboard.organ.reed
+mallet-synthesizer	Mallet Synthesizer	synth.group
+ondes-martenot	Ondes Martenot	keyboard.ondes-martenot
+atmosphere-synth	Atmosphere Synthesizer	synth.effects.atmosphere
+bass-synthesizer	Bass Synthesizer	pluck.bass.synth
+bowed-synth	Bowed Synthesizer	synth.pad.bowed
+brass-synthesizer	Brass Synthesizer	brass.group.synth
+brightness-synth	Brightness Synthesizer	synth.effects.brightness
+choir-synth	Choir Synthesizer	synth.pad.choir
+crystal-synth	Crystal Synthesizer	synth.effects.crystal
+echoes-synth	Echoes Synthesizer	synth.effects.echoes
+effect-synth	Effect Synthesizer	synth.effects
+goblins-synth	Goblins Synthesizer	synth.effects.goblins
+halo-synth	Halo Synthesizer	synth.pad.halo
+metallic-synth	Metallic Synthesizer	synth.pad.metallic
+new-age-synth	New Age Synthesizer	synth.pad
+pad-synth	Pad Synthesizer	synth.pad
+poly-synth	Poly Synthesizer	synth.pad.polysynth
+rain-synth	Rain Synthesizer	synth.effects.rain
+saw-synth	Saw Synthesizer	synth.tone.sawtooth
+sci-fi-synth	Sci-fi Synthesizer	synth.effects.sci-fi
+sine-synth	Sine Synthesizer	synth.tone.sine
+soundtrack-synth	Soundtrack Synthesizer	synth.effects.soundtrack
+square-synth	Square Synthesizer	synth.tone.sine
+string-synthesizer	String Synthesizer	strings.group.synth
+sweep-synth	Sweep Synthesizer	synth.pad.warm
+theremin	Theremin	synth.theremin
+warm-synth	Warm Synthesizer	synth.pad.warm
+harp	Harp	pluck.harp
+cavaquinho	Cavaquinho	pluck.guitar
+cavaquinho-tablature	Cavaquinho (tablature)	pluck.guitar
+soprano-guitar	Soprano Guitar	pluck.guitar
+alto-guitar	Alto Guitar	pluck.guitar
+electric-guitar	Electric Guitar	pluck.guitar.electric
+electric-guitar-treble-clef	Electric Guitar (treble clef)	pluck.guitar.electric
+guitar-steel	Acoustic Guitar	pluck.guitar.acoustic
+guitar-steel-treble-clef	Acoustic Guitar (treble clef)	pluck.guitar.acoustic
+guitar-nylon	Classical Guitar	pluck.guitar.nylon-string
+guitar-nylon-treble-clef	Guitar (treble clef)	pluck.guitar.nylon-string
+electric-guitar-tablature	Electric Guitar (tablature)	
+guitar-nylon-tablature	Classical Guitar (tablature)	pluck.guitar.nylon-string
+guitar-steel-tablature	Acoustic Guitar (tablature)	pluck.guitar.acoustic
+pedal-steel-guitar	Pedal Steel Guitar	pluck.guitar.pedal-steel
+baritone-guitar	Baritone Guitar	pluck.guitar
+contra-guitar	Contra Guitar	pluck.guitar
+7-string-guitar	7-string Guitar	pluck.guitar.nylon-string
+7-string-guitar-tablature	7-string Guitar (tablature)	pluck.guitar.nylon-string
+11-string-alto-guitar	11-string Alto Guitar	pluck.guitar
+12-string-guitar	12-string Guitar	pluck.guitar
+5-string-electric-bass	5-str. Electric Bass	pluck.bass.electric
+5-string-electric-bass-high-c	5-str. Electric Bass (high C/tenor)	pluck.bass.electric
+5-string-electric-bass-tab	5-str. Electric Bass (tablature)	
+5-string-electric-bass-tab-high-c	5-str. Electric Bass (high C/tenor) (tablature)	
+6-string-electric-bass	6-str. Electric Bass	pluck.bass.electric
+6-string-electric-bass-tab	6-str. Electric Bass (tablature)	
+bass-guitar	Bass Guitar	pluck.bass
+electric-bass	Electric Bass	pluck.bass.electric
+fretless-electric-bass	Fretless Electric Bass	pluck.bass.fretless
+acoustic-bass	Acoustic Bass	pluck.bass.acoustic
+bass-guitar-tablature	Bass Guitar (tablature)	pluck.bass
+electric-bass-4-str-tab	Electric Bass (tablature)	pluck.bass.electric
+banjo	Banjo	pluck.banjo
+tenor-banjo	Tenor Banjo	pluck.banjo.tenor
+banjo-tablature	Banjo (tablature)	pluck.banjo
+irish-tenor-banjo	Irish Tenor Banjo	pluck.banjo.tenor
+irish-tenor-banjo-tablature	Irish Tenor Banjo (tablature)	pluck.banjo.tenor
+tenor-ukulele	Tenor Ukulele	pluck.ukulele.tenor
+ukulele	Ukulele	pluck.ukulele
+ukulele-low-g	Ukulele (low G)	pluck.ukulele
+ukulele-4-str-tab	Ukulele (tablature)	pluck.ukulele
+baritone-ukulele	Baritone Ukulele	pluck.ukulele.tenor
+mandolin	Mandolin	pluck.mandolin
+mandolin-tablature	Mandolin (tablature)	pluck.mandolin
+alto-mandola	Alto Mandola	pluck.mandola
+mandola	Mandola	pluck.mandola
+tenor-mandola	Tenor Mandola	pluck.mandola
+octave-mandolin	Octave Mandolin	pluck.mandolin.octave
+mandocello	Mandocello	pluck.mandocello
+mtn-dulcimer-std	Mtn. Dulcimer	pluck.dulcimer
+mtn-dulcimer-std-chrom-tab	Mtn. Dulcimer (tablature)	
+mtn-dulcimer-baritone	Mtn. Dulcimer - Baritone	pluck.dulcimer
+mtn-dulcimer-bartn-chrom-tab	Mtn. Dulcimer - Baritone (tablature)	
+mtn-dulcimer-bass	Mtn. Dulcimer - Bass	pluck.dulcimer
+mtn-dulcimer-bass-chrom-tab	Mtn. Dulcimer - Bass (tablature)	
+lute	Lute	pluck.lute
+lute-tablature	Lute (tablature)	pluck.lute
+ren.-tenor-lute-5-course	Tenor Lute	pluck.lute
+ren.-tenor-lute-6-course	Tenor Lute	pluck.lute
+ren.-tenor-lute-7-course	Tenor Lute	pluck.lute
+ren.-tenor-lute-8-course	Tenor Lute	pluck.lute
+ren.-tenor-lute-9-course	Tenor Lute	pluck.lute
+ren.-tenor-lute-10-course	Tenor Lute	pluck.lute
+baroque-lute-13-course	Tenor Lute	pluck.lute
+theorbo-14-course	Theorbo	pluck.theorbo
+archlute-14-course	Archlute	pluck.archlute
+balalaika-piccolo	Piccolo Balalaika	pluck.balalaika.piccolo
+balalaika		pluck.balalaika
+balalaika-prima	Prima Balalaika	pluck.balalaika.prima
+balalaika-secunda	Secunda Balalaika	pluck.balalaika.secunda
+balalaika-alto	Alto Balalaika	pluck.balalaika.alto
+balalaika-bass	Bass Balalaika	pluck.balalaika.bass
+balalaika-contrabass	Contrabass Balalaika	pluck.balalaika.contrabass
+bouzouki-3-course	Bouzouki	pluck.bouzouki
+bouzouki-4-course	Bouzouki	pluck.bouzouki
+guzheng	Guzheng	pluck.guzheng
+guqin	Guqin	pluck.guqin
+pipa	Pipa	pluck.pipa
+yangqin	Yangqin	pitched-percussion.yangqin
+gayageum	Gayageum	pluck.kayagum
+koto	Koto	pluck.koto
+oud	Oud	pluck.oud
+shamisen	Shamisen	pluck.shamisen
+sitar	Sitar	pluck.sitar
+prim	Prim	pluck.tambura
+brac	Brač	pluck.tambura
+bugarija	Bugarija	pluck.tambura
+berda	Berda	pluck.tambura
+celo	Čelo	pluck.tambura
+bandurria	Bandurria	pluck.bandurria
+bandurria-tablature	Bandurria (tablature)	pluck.bandurria
+laud	Laúd	pluck.laud
+laud-tablature	Laúd (tablature)	pluck.laud
+timple-canario	Canarian Timple	pluck.timple
+timple-canario-tablature	Canarian Timple (tablature)	pluck.timple
+strings	Strings	strings.group
+double-bass		
+violin	Violin	strings.violin
+violins	Violins (section)	strings.group
+viola	Viola	strings.viola
+violas	Violas (section)	strings.group
+violoncello	Violoncello	strings.cello
+violoncellos	Violoncellos (section)	strings.group
+contrabass	Contrabass	strings.contrabass
+contrabasses	Contrabasses (section)	strings.group
+treble-viol	Treble Viol	strings.viol.treble
+alto-viol	Alto Viol	strings.viol.alto
+pardessus-de-viole	Pardessus de viole	strings.viol
+tenor-viol	Tenor Viol	strings.viol.tenor
+baryton	Baryton	strings.baryton
+viola-da-gamba	Bass Viol	
+viola-da-gamba-tablature	Bass Viol (tablature)	
+violone	Violone	strings.viol.violone
+d-violone	Violone	strings.viol.violone
+octobass	Octobass	strings.octobass
+erhu	Erhu	strings.erhu
+nyckelharpa	Nyckelharpa	strings.nyckelharpa
+ajaeng	Ajaeng	strings.ajaeng
