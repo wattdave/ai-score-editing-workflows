@@ -61,7 +61,8 @@ class MuseScoreClient:
     async def __aexit__(self, *exc: object) -> None:
         await self.close()
 
-    async def call(self, method: str, args: dict[str, Any] | None = None) -> Any:
+    async def call(self, method: str, args: dict[str, Any] | None = None,
+                   timeout: float | None = None) -> Any:
         if self._ws is None:
             await self.connect()
         async with self._lock:
@@ -69,7 +70,7 @@ class MuseScoreClient:
             await self._ws.send(json.dumps({"id": request_id, "token": self.token, "method": method,
                                             "args": args or {}}))
             try:
-                reply = json.loads(await asyncio.wait_for(self._ws.recv(), self.timeout))
+                reply = json.loads(await asyncio.wait_for(self._ws.recv(), timeout or self.timeout))
             except TimeoutError:
                 raise MuseScoreError("MuseScore did not answer: a dialog may be open there; "
                                      "dismiss it and try again") from None

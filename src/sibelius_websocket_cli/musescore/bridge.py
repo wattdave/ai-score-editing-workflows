@@ -48,10 +48,11 @@ class MuseScoreBridge:
                             f"({TESTED_MSCORE[0]}.{TESTED_MSCORE[1]})")
         return {"bridge": bridge, "mscore": version_text(mscore), "warnings": warnings}
 
-    async def call(self, method: str, args: dict[str, Any] | None = None) -> Any:
+    async def call(self, method: str, args: dict[str, Any] | None = None,
+                   timeout: float | None = None) -> Any:
         if not self._checked:
             await self.check()
-        return await self.client.call(method, args)
+        return await self.client.call(method, args, timeout)
 
     async def overview(self) -> dict[str, Any]:
         versions = await self.check()
@@ -90,5 +91,14 @@ class MuseScoreBridge:
             args["toBar"] = to_bar
         return await self.call("GetStructure", args)
 
-    async def write_copy(self, path: str, format: str = "musicxml") -> dict[str, Any]:
-        return await self.call("WriteCopy", {"path": path, "format": format})
+    async def write_copy(self, path: str, format: str = "musicxml", timeout: float | None = None) -> dict[str, Any]:
+        return await self.call("WriteCopy", {"path": path, "format": format}, timeout)
+
+    async def save(self) -> dict[str, Any]:
+        return await self.call("Save")
+
+    async def meta_tags(self) -> dict[str, str]:
+        return await self.call("GetMetaTags")
+
+    async def set_meta_tags(self, tags: dict[str, str]) -> dict[str, Any]:
+        return await self.call("SetMetaTags", {"tags": tags})

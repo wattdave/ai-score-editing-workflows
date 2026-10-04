@@ -317,7 +317,7 @@ phase 0 list below, and **M** is the milestone that delivers it.
 | `hide-empty-staves` | style `hideEmptyStaves` (score-wide), or per system with `System.setHideStaffIfEmpty(staffIdx, hide)` [src], which might allow a bar range | P14 | 4 |
 | `delete-voice` | `removeElement` on every chord and rest in that track over the range | P4 | 4 |
 | `undo` | `cmd("action://notation/undo")` × steps [seen]; nothing happens when nothing is left to undo [src] | P15 | 1 |
-| `save_score` | `cmd("file-save")` for a score already saved (the API has no save call [src]); whether it opens a dialog is still to probe. No "save a copy", since `writeScore` can't write `.mscz` [seen] | P16 | 5 |
+| `save_score` | `cmd("file-save")` for a score already saved (the API has no save call [src]); no dialog [seen]; the file is found through the window's `AXDocument` and copied for a path [seen]. No "save a copy", since `writeScore` can't write `.mscz` [seen] | P16 | 5 |
 | `export_score` | `writeScore(score, path, ext)` for pdf, png, svg, musicxml, mxl, mid, mei, mnx, wav, mp3, ogg, flac or aac [src]; musicxml checked [seen]. Never `.mscz`/`.mscx`, which open a dialog [seen] | P16 | 5 |
 | `project_info`, `set_project_info` | `metaTag` / `setMetaTag`; not undone or rolled back [seen], so it runs outside batches and says so | P17 | 5 |
 | `add_instrument` (upstream) | `appendPart(id)` [seen]; also `insertPart`, `replacePart`, `removeParts` [src] | P18 | 6 |
@@ -417,8 +417,12 @@ the undo count with a marker edit.
    (read live; no MusicXML reader was needed); transpose, copy-passage,
    set-key, set-time, set-break, set-barline, add-bars, set-bar-number,
    set-layout, hide-empty-staves (whole score only), delete-voice.
-5. **Files and metadata:** save_score, export_score, project_info,
-   read_lyrics, edit_lyrics.
+5. **Files and metadata** (done 2026-10-03; see
+   [musescore.md](musescore.md#our-back-end-in-progress)): save_score
+   (File > Save, the file found through the window's AXDocument, copied for
+   a path), export_score (every writeScore format but .mscz/.mscx),
+   project_info, set_project_info (not undoable), read_lyrics,
+   edit_lyrics.
 6. **Switch-over:** add_instrument and staff playback; a recorded live
    check; the `musescore` skill rewritten for the new tools (the upstream
    notes kept as history); README, setup skill, `docs/musescore.md` parity

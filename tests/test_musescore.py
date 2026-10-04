@@ -745,3 +745,154 @@ def test_structure_report() -> None:
     assert report["irregularBars"] == [{"bar": 2, "length": 768}]
     layout = report["layout"]
     assert layout["pageSize"] == "letter" and layout["staffSize"] == 7.0 and layout["rightMargin"] == 12.7
+
+
+# ------------------------------------------------------------------ milestone 5: files, metadata, lyrics
+
+from sibelius_websocket_cli.musescore import window  # noqa: E402
+
+
+def syllable(bar, ticks, text, syllabic, voice=1, verse=1):
+    return {"type": "LyricItem", "staff": 1, "bar": bar, "ticks": ticks, "voice": voice, "verse": verse,
+            "text": text, "syllabic": syllabic, "_ref": {"staff": 1, "bar": bar, "raw": ticks, "type": "Lyrics"}}
+
+
+def test_plugin_has_milestone_5_methods() -> None:
+    text = install.TEMPLATE.read_text()
+    for method in ("Save", "GetMetaTags", "SetMetaTags"):
+        assert f'case "{method}"' in text
+    assert 'root.cmd("file-save")' in text
+    for ext in ("xml", "png", "svg", "mp3", "wav", "flac", "ogg"):
+        assert f'"{ext}": true' in text
+
+
+def test_lyric_text_and_split() -> None:
+    line = [syllable(2, 240, "king", 2), syllable(2, 0, "Ma", 1), syllable(3, 0, "a", 0),
+            syllable(3, 0, "x", 0, verse=2), syllable(3, 480, "joy", 1), syllable(4, 0, "ful", 2)]
+    ordered = score.lyric_line(line, 1, 1)
+    assert [s["text"] for s in ordered] == ["Ma", "king", "a", "joy", "ful"]
+    assert score.lyric_text(ordered) == "Ma-king a joy-ful"
+    assert score.split_lyrics("Ma-king  a joy-ous-ly") == [
+        ("Ma", 1), ("king", 2), ("a", 0), ("joy", 1), ("ous", 3), ("ly", 2)]
+    assert score.lyric_text([syllable(1, 0, "dan", 1)]) == "dan"
+
+
+def test_lyric_edits_change_only_what_differs() -> None:
+    line = [syllable(2, 0, "Ma", 1), syllable(2, 240, "king", 2), syllable(3, 0, "a", 0)]
+    digests = {(1, 2): "d2", (1, 3): "d3"}
+    primitives, touched = score.lyric_edits(line, "Mak-ing a", digests, 1, 1)
+    assert [(p["prop"], p["value"]) for p in primitives] == [("text", "Mak"), ("text", "ing")]
+    assert touched == {"1:2": "d2"}
+    primitives, touched = score.lyric_edits(line, "Ma king-a", digests, 1, 1)
+    assert [(p["prop"], p["value"]) for p in primitives] == [("syllabic", 0), ("syllabic", 1), ("syllabic", 2)]
+    assert touched == {"1:2": "d2", "1:3": "d3"}
+    with pytest.raises(MuseScoreBatchError, match="2 syllables"):
+        score.lyric_edits(line, "Making a", digests, 1, 1)
+    with pytest.raises(MuseScoreBatchError, match="no lyrics"):
+        score.lyric_edits([], "x", digests, 1, 2)
+
+
+def test_score_file_from_window_documents() -> None:
+    found = [("Other", "file:///tmp/Other.mscz"),
+             ("My Score", "file:///Users/me/Scores/My%20Score.mscz")]
+    assert str(window.score_file("My Score", found)) == "/Users/me/Scores/My Score.mscz"
+    assert window.score_file("Untitled", found) is None
+
+
+def test_metadata_names() -> None:
+    known = ["workTitle", "composer", "lyricist"]
+    assert service._tag_name("Title", known) == "workTitle"
+    assert service._tag_name("Composer", known) == "composer"
+    with pytest.raises(MuseScoreError, match="unknown metadata field"):
+        service._tag_name("Publisher", known)
+
+
+class FilesBridge(ScoreBridge):
+    """ScoreBridge plus Save, metadata and lyric edits."""
+
+    def __init__(self, scorefile):
+        super().__init__()
+        self.scorefile = scorefile
+        self.tags = {"workTitle": "Untitled", "composer": "", "lyricist": ""}
+
+    def respond(self, method, args):
+        if method == "Save":
+            self.scorefile.write_bytes(self.scorefile.read_bytes() + b"!")
+            return {"saved": True}
+        if method == "GetMetaTags":
+            return dict(self.tags)
+        if method == "SetMetaTags":
+            before = {t: self.tags[t] for t in args["tags"]}
+            self.tags.update(args["tags"])
+            return {"before": before, "after": dict(self.tags)}
+        if method == "WriteCopy":
+            from pathlib import Path
+            path = Path(args["path"])
+            if args["format"] in {"png", "svg"}:
+                for page in (1, 2):
+                    path.with_name(f"{path.stem}-{page}{path.suffix}").write_text("page")
+            else:
+                path.write_text("data")
+            return {"written": True, "path": args["path"]}
+        return super().respond(method, args)
+
+
+@pytest.fixture
+async def files_bridge(tmp_path):
+    scorefile = tmp_path / "Scratch.mscz"
+    scorefile.write_bytes(b"PK")
+    bridge = FilesBridge(scorefile)
+    async with websockets.serve(bridge.serve, "127.0.0.1", 0) as server:
+        bridge.port = server.sockets[0].getsockname()[1]
+        yield bridge
+
+
+async def test_save_writes_in_place_and_copies(files_bridge, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(window, "windows", lambda: [("Scratch", files_bridge.scorefile.as_uri())])
+    async with MuseScoreClient(port=files_bridge.port, token=TOKEN) as client:
+        bridge = MuseScoreBridge(client)
+        result = await service.save(bridge, str(tmp_path / "out" / "copy.mscz"))
+        assert result["saved"] == str(files_bridge.scorefile)
+        assert (tmp_path / "out" / "copy.mscz").read_bytes() == b"PK!"
+        with pytest.raises(MuseScoreError, match="must end in .mscz"):
+            await service.save(bridge, str(tmp_path / "copy.pdf"))
+        monkeypatch.setattr(window, "windows", lambda: [])
+        with pytest.raises(MuseScoreError, match="never been saved"):
+            await service.save(bridge)
+
+
+async def test_export_formats_and_pages(files_bridge, tmp_path) -> None:
+    async with MuseScoreClient(port=files_bridge.port, token=TOKEN) as client:
+        bridge = MuseScoreBridge(client)
+        pdf = await service.export(bridge, "pdf", str(tmp_path / "s.pdf"))
+        assert pdf == {"files": [str(tmp_path / "s.pdf")]}
+        xml = await service.export(bridge, "musicxml", str(tmp_path / "s.xml"))
+        assert files_bridge.requests[-1]["args"]["format"] == "xml" and xml["files"] == [str(tmp_path / "s.xml")]
+        png = await service.export(bridge, "png", str(tmp_path / "p.png"))
+        assert png["files"] == [str(tmp_path / "p-1.png"), str(tmp_path / "p-2.png")]
+        with pytest.raises(MuseScoreError, match="must end in .pdf"):
+            await service.export(bridge, "pdf", str(tmp_path / "s.png"))
+        with pytest.raises(MuseScoreError, match="format must be one of"):
+            await service.export(bridge, "mscz", str(tmp_path / "s.mscz"))
+
+
+async def test_project_info_round_trip(files_bridge) -> None:
+    async with MuseScoreClient(port=files_bridge.port, token=TOKEN) as client:
+        bridge = MuseScoreBridge(client)
+        result = await service.set_project_info(bridge, {"Title": "Gloria", "composer": "Anon."})
+        assert result["before"] == {"workTitle": "Untitled", "composer": ""}
+        assert result["after"] == {"workTitle": "Gloria", "composer": "Anon."}
+        assert (await service.project_info(bridge))["fields"]["workTitle"] == "Gloria"
+
+
+async def test_read_lyrics_from_fixture(score_bridge) -> None:
+    async with MuseScoreClient(port=score_bridge.port, token=TOKEN) as client:
+        result = await service.read_lyrics(MuseScoreBridge(client), "Clarinet in B♭")
+    assert result == {"staff": 1, "verse": 1, "text": "Glo", "syllables": 1, "bars": "1-1"}
+
+
+def test_cli_files_commands_parse() -> None:
+    parser = cli.build_parser()
+    assert parser.parse_args(["export", "--format", "png", "--path", "x.png"]).format == "png"
+    assert parser.parse_args(["set-info", "--field", "composer=Anon."]).field == ["composer=Anon."]
+    assert parser.parse_args(["edit-lyrics", "--staff", "1", "--text", "a b"]).verse == 1
