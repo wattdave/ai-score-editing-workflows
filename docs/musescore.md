@@ -350,3 +350,26 @@ All rolled back cleanly unless noted.
   "connection refused". Closing the last score of the only window (start
   screen left open) was not tried.
 - `root.scores` is not implemented in 4.7.5 (`NOT_IMPLEMENTED`) [src].
+
+### Starting the plug-in and opening scores by script (P1), 2026-10-03
+
+- **MuseScore's menus are native macOS menus.** With Accessibility
+  permission for the terminal, System Events listed the menu bar of the
+  `mscore` process (Apple, MuseScore Studio, File, Edit, View, Add, Format,
+  Tools, Plugins, Help) and the Plugins menu (Manage plugins…, sibwscli
+  probe, musescore-mcp-websocket). Each window's process can be targeted
+  by its unix id.
+- **Clicking Plugins → sibwscli probe by AppleScript started the plug-in**
+  on the start screen, with no score open: it answered, with `curScore`
+  null. So a launcher can start the bridge in a given window without the
+  user, once Accessibility is granted.
+- **`readScore(path)` from the start screen opened the score in the same
+  process**: no new window, the plug-in kept running and saw the score
+  (3 staves) from the next request. (The probe passes `curScore` to each
+  snippet as it was at the start of the request, so the opening request
+  itself still saw null.)
+- With a score already open, MuseScore 4 opens another in a new process
+  (above), where the plug-in isn't running. `closeScore()` exists, but
+  closing a score with unsaved changes asks whether to save, a dialog that
+  blocks the plug-in, and the API can't tell whether there are unsaved
+  changes. Not tried.
