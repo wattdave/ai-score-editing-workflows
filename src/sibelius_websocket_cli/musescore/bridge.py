@@ -65,3 +65,20 @@ class MuseScoreBridge:
         if not 1 <= steps <= MAX_UNDO_STEPS:
             raise MuseScoreError(f"steps must be 1-{MAX_UNDO_STEPS}")
         return await self.call("Undo", {"steps": steps})
+
+    async def read(self, from_bar: int | None = None, to_bar: int | None = None,
+                   staves: list[int] | None = None) -> dict[str, Any]:
+        args: dict[str, Any] = {"staves": staves or []}
+        if from_bar is not None:
+            args["fromBar"] = from_bar
+        if to_bar is not None:
+            args["toBar"] = to_bar
+        return await self.call("Read", args)
+
+    async def apply(self, primitives: list[dict[str, Any]], expect: dict[str, Any], digests: dict[str, str],
+                    dry_run: bool = False) -> dict[str, Any]:
+        return await self.call("ApplyBatch", {"primitives": primitives, "expect": expect, "digests": digests,
+                                              "dryRun": dry_run})
+
+    async def write_copy(self, path: str, format: str = "musicxml") -> dict[str, Any]:
+        return await self.call("WriteCopy", {"path": path, "format": format})

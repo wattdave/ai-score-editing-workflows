@@ -402,7 +402,8 @@ the undo count with a marker edit.
    `GetScoreInfo`, `GetStaves` and `Undo`; `client.py`, `bridge.py`,
    `install.py`; `musescore-cli install-plugin | overview | undo`; a
    conftest guard that fails any test connecting to port 8766.
-2. **Reads and addressed edits:** `Read`, `score.py` locating and indexing,
+2. **Reads and addressed edits** (done 2026-10-03; see
+   [musescore.md](musescore.md#our-back-end-in-progress)): `Read`, `score.py` locating and indexing,
    `query_score`, `score_overview`; `ApplyBatch` with resolve, guards,
    rollback, dry run and backup; set, set-pitch, tie, bracket, flip-stem,
    nudge, delete, beam.
