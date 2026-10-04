@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from sibelius_websocket_cli.intervals import LETTERS
+
 from . import layout, musicxml_read, score
 from .bridge import BarMap, DoricoBridge, fingerprint
 from .client import DoricoError
@@ -542,7 +544,6 @@ def _delete_steps(op: dict[str, Any]) -> int:
     return 2 if op.get("type") in score.TYPE_ALIASES["Note"] else 1
 
 
-LETTERS = "CDEFGAB"
 #: Ops that select a temporary rest where a bar has nothing to select.
 TEMP_REST_OPS = {"set-time", "set-key", "set-barline", "set-break", "add-line", "add-bars"}
 #: Undo steps a temporary rest adds to one of them: creating it (Lua) and

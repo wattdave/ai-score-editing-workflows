@@ -1,0 +1,107 @@
+// Development probe for MuseScore 4's plug-in API (milestone 0 of
+// docs/musescore-backend-plan.md). Not part of the back end.
+//
+// It runs JavaScript sent over a WebSocket and returns the result as JSON.
+// MuseScore's WebSocket server listens on every network interface and the
+// plug-in API can start processes, so every request must carry the token
+// that scripts/musescore_probe.py writes in at install time. Stop the probe
+// (quit MuseScore) when you are done with it.
+
+import QtQuick
+import MuseScore 3.0
+
+MuseScore {
+    id: root
+    // MuseScore reads these properties as text and stops at the first line
+    // ending in "{", so they must stay above every block.
+    title: "sibwscli probe"
+    description: "Runs API probes for sibelius-ai-workflows"
+    version: "1"
+    requiresScore: false
+
+    readonly property string token: "@TOKEN@"
+    readonly property int port: @PORT@
+
+    // Snippets are function bodies. They see these names as parameters,
+    // since a Function made at run time does not see the QML scope. (A
+    // function named "run" would clash with the plug-in's run signal.)
+    function evaluate(code) {
+        var f = new Function("root", "api", "curScore", "cmd", "newElement",
+                             "removeElement", "fraction", "writeScore",
+                             "Element", "Cursor", "describe", code);
+        return f(root, api, curScore, function (name) { root.cmd(name); },
+                 function (type) { return root.newElement(type); },
+                 function (item) { root.removeElement(item); },
+                 function (n, d) { return root.fraction(n, d); },
+                 function (score, path, ext) { return root.writeScore(score, path, ext); },
+                 Element, Cursor, describe);
+    }
+
+    // A plain description of an element, safe to serialise.
+    function describe(e) {
+        if (!e)
+            return null;
+        var d = { type: e.type, name: e.name };
+        try { d.track = e.track; } catch (x) {}
+        try { d.generated = e.generated; } catch (x) {}
+        try { d.visible = e.visible; } catch (x) {}
+        return d;
+    }
+
+    // QObjects can hold cycles; keep only plain values, arrays and objects.
+    function plain(value, depth) {
+        if (value === null || value === undefined)
+            return null;
+        var t = typeof value;
+        if (t === "number" || t === "string" || t === "boolean")
+            return value;
+        if (depth > 6)
+            return String(value);
+        if (Array.isArray(value)) {
+            var out = [];
+            for (var i = 0; i < value.length; i++)
+                out.push(plain(value[i], depth + 1));
+            return out;
+        }
+        if (t === "object") {
+            if (value.toString && /^\w+(_QML_\d+)?\(0x/.test(String(value)))
+                return String(value);
+            var obj = {};
+            for (var k in value)
+                obj[k] = plain(value[k], depth + 1);
+            return obj;
+        }
+        return String(value);
+    }
+
+    function handle(clientId, message) {
+        var request;
+        try {
+            request = JSON.parse(message);
+        } catch (e) {
+            return;
+        }
+        if (request.token !== root.token) {
+            api.websocketserver.send(clientId, JSON.stringify({ id: request.id, ok: false, error: "unauthorised" }));
+            return;
+        }
+        var reply = { id: request.id };
+        try {
+            reply.result = plain(evaluate(request.code), 0);
+            reply.ok = true;
+        } catch (e) {
+            reply.ok = false;
+            reply.error = String(e) + (e && e.stack ? "\n" + e.stack : "");
+        }
+        api.websocketserver.send(clientId, JSON.stringify(reply));
+    }
+
+    onRun: {
+        api.websocketserver.listen(root.port, function (clientId) {
+            api.websocketserver.onMessage(clientId, function (message) {
+                handle(clientId, message);
+            });
+        });
+        console.log("sibwscli probe listening on port " + root.port);
+    }
+}

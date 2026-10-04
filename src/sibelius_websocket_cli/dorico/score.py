@@ -13,16 +13,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from sibelius_websocket_cli import intervals, lyrics
 from sibelius_websocket_cli.batch_ops import LAYOUT_NUMBERS, ORIENTATIONS, PAGE_SIZES
-from sibelius_websocket_cli.intervals import compute_transposition, parse_note
 
 from .bridge import BarMap
-
-LETTERS = "CDEFGAB"
-NATURAL = [0, 2, 4, 5, 7, 9, 11]
-REFERENCE_SEMITONES = [0, 2, 4, 5, 7, 9, 11]
-#: Spelling for a pitch class when none is given.
-DEFAULT_SPELLING = {0: "C", 1: "C#", 2: "D", 3: "Eb", 4: "E", 5: "F", 6: "F#", 7: "G", 8: "Ab", 9: "A", 10: "Bb", 11: "B"}
 
 TYPE_ALIASES: dict[str, set[str]] = {
     "NoteRest": {"NoteEvent", "GraceNoteEvent", "RestEvent", "BarRestEvent"},
@@ -138,59 +132,30 @@ class DoricoBatchError(ValueError):
 
 
 # ------------------------------------------------------------------ spelling
+# The shared helpers raise ValueError; batches report DoricoBatchError.
 
 def spelling_letter(pitch: int, spelling: str | None = None) -> str:
     """The letter name to spell `pitch` with, checking an explicit spelling fits."""
-    name = spelling or DEFAULT_SPELLING[pitch % 12]
     try:
-        step, semitones = parse_note(name)
+        return intervals.spelling_letter(pitch, spelling)
     except ValueError as exc:
         raise DoricoBatchError(str(exc)) from exc
-    if semitones != pitch % 12:
-        raise DoricoBatchError(f"spelling {name} does not match MIDI pitch {pitch}")
-    return LETTERS[step]
-
-
-def _alteration(pitch: int, letter: str) -> int:
-    return (pitch % 12 - NATURAL[LETTERS.index(letter)] + 6) % 12 - 6
 
 
 def transpose_spelled(name: str | None, pitch: int, steps: int, semitones: int) -> tuple[int, str]:
     """(new pitch, new letter) for a note moved by diatonic steps and semitones."""
-    new_pitch = pitch + semitones
-    if not 0 <= new_pitch <= 127:
-        raise DoricoBatchError(f"transposing {pitch} by {semitones} leaves the MIDI range")
-    if not name:
-        return new_pitch, spelling_letter(new_pitch)
-    letter = LETTERS[(LETTERS.index(name[0]) + steps) % 7]
-    if abs(_alteration(new_pitch, letter)) > 2:
-        raise DoricoBatchError(f"{name} transposed would need more than a double accidental")
-    return new_pitch, letter
+    try:
+        return intervals.transpose_spelled(name, pitch, steps, semitones)
+    except ValueError as exc:
+        raise DoricoBatchError(str(exc)) from exc
 
 
 def interval_of(operation: dict[str, Any], label: str) -> tuple[int, int]:
     """(signed diatonic steps, signed semitones) for a transpose operation."""
-    if "semitones" in operation:
-        semitones = _int(operation, "semitones", label, -36, 36)
-        steps = operation.get("steps")
-        if steps is None:
-            steps = round(semitones * 7 / 12)
-        elif not isinstance(steps, int) or isinstance(steps, bool):
-            raise DoricoBatchError(f"{label}.steps must be an integer")
-        return steps, semitones
-    direction = operation.get("direction")
-    if direction not in {"up", "down"}:
-        raise DoricoBatchError(f"{label}.direction must be 'up' or 'down'")
-    octaves = _int({"octaves": 0, **operation}, "octaves", label, 0, 2)
     try:
-        degree, interval_type = compute_transposition(
-            _str(operation, "fromNote", label), _str(operation, "toNote", label), direction == "up"
-        )
-    except (KeyError, ValueError) as exc:
-        raise DoricoBatchError(f"{label}: {exc}") from exc
-    sign = 1 if direction == "up" else -1
-    semitones = REFERENCE_SEMITONES[abs(degree)] + interval_type - 5
-    return degree + 7 * octaves * sign, sign * (semitones + 12 * octaves)
+        return intervals.interval_of(operation, label)
+    except ValueError as exc:
+        raise DoricoBatchError(str(exc)) from exc
 
 
 # ------------------------------------------------------------------ reading
@@ -698,6 +663,11 @@ END_WORD = "kEndOrExtendCurrentWord"
 END_INPUT = "kEndInput"
 
 
+#: The popover advance each syllable kind ends with.
+ADVANCE = {lyrics.BEGIN: HYPHENATE, lyrics.MIDDLE: HYPHENATE, lyrics.END: END_WORD,
+           lyrics.SINGLE: END_WORD, lyrics.MELISMA: END_WORD}
+
+
 def parse_lyrics(text: str) -> list[tuple[str, str]]:
     """Syllables and how each ends: "ma-king lyr-ics _ now" ->
     [("ma", hyphen), ("king", end), ("lyr", hyphen), ("ics", end), ("", end), ("now", end input)].
@@ -705,17 +675,10 @@ def parse_lyrics(text: str) -> list[tuple[str, str]]:
     Spaces separate words, a hyphen splits a word into syllables, and "_"
     continues the previous syllable over the next note (a melisma).
     """
-    syllables: list[tuple[str, str]] = []
-    for word in text.split():
-        if word == "_":
-            syllables.append(("", END_WORD))
-            continue
-        parts = [p for p in word.split("-") if p]
-        if not parts:
-            raise DoricoBatchError(f"lyric word {word!r} has no syllables")
-        syllables += [(p, HYPHENATE) for p in parts[:-1]] + [(parts[-1], END_WORD)]
-    if not syllables:
-        raise DoricoBatchError("lyrics text is empty")
+    try:
+        syllables = [(text, ADVANCE[kind]) for text, kind in lyrics.split_syllables(text)]
+    except ValueError as exc:
+        raise DoricoBatchError(str(exc)) from exc
     last_text, _ = syllables[-1]
     syllables[-1] = (last_text, END_INPUT)
     return syllables

@@ -113,3 +113,263 @@ API seems to support, to confirm on MuseScore 4.7:
 The upstream server can stay registered until the back end covers what
 people use it for. Then `.mcp.json` would point `musescore` at the new
 `musescore-mcp`.
+
+## Probe results (MuseScore Studio 4.7.5, macOS)
+
+Milestone 0 of [musescore-backend-plan.md](musescore-backend-plan.md).
+Probes ran through `scripts/musescore_probe.py` and its plug-in on a
+throwaway score (Clarinet in B♭ and Piano). The plug-in requires a token,
+because MuseScore's WebSocket server listens on every interface (checked:
+`*:8767`; requests with a wrong or missing token were refused). Each edit
+probe ran in its own `startCmd` and was rolled back unless noted.
+
+### Plug-in loading (P1, partly), 2026-10-03
+
+- A plug-in function named `run` clashes with the plug-in's `run` signal:
+  MuseScore logs "Duplicate method name" and then fails the whole file
+  with "Cannot assign to non-existent property onRun".
+- **A changed plug-in file is not reloaded until MuseScore restarts.**
+  After fixing the file, running the plug-in again failed with the old
+  file's error and line number. Every bridge update needs a restart.
+- MuseScore reads `title:` and the other properties as text and stops at
+  the first line ending in `{`, so they must stay above every block.
+- **Replying to a client that has disconnected hits an assertion**
+  (`WebSocketServerApi::send ... it != m_clients.end()`), and MuseScore
+  crashed right after it (crash dump written). The bridge has to keep track
+  of disconnects and not send to a closed client.
+
+### Reading (P8), 2026-10-03
+
+- `generated` is true for system-start header clefs and for ordinary
+  barlines (begin and end). The opening key and time signatures in bar 1
+  are real elements (`generated` false), unlike Sibelius, where they are
+  not bar objects.
+- Parts report `longName`, `instrumentId`, `startTrack`, `endTrack` and
+  their staves; tracks are 4 per staff.
+
+### Undo and rollback (P2, P3, P15), 2026-10-03
+
+- Two edits between `startCmd()` and `endCmd()` are **one** undo step.
+- `endCmd(true)` restores the score at once (the same request reads the old
+  values), and leaves no undo step behind: the next undo reverted the edit
+  before it.
+- **`cmd("undo")` does nothing in 4.7.** `cmd()` translates only a few old
+  names (`copy`, `paste`, `delete`, ...); the undo action is
+  `action://notation/undo` (and `action://notation/redo`). With that name,
+  undo takes effect before `cmd()` returns. The upstream plug-in's `undo`
+  tool sends `cmd("undo")`, so it never worked.
+- Undo is only dispatched when something can be undone (`canUndo`), so an
+  empty history cannot open a dialog [src].
+- **`cmd()` joins the batch.** In one `startCmd`: a pitch change through
+  the API, then selecting the previous note and `cmd("tie")`. The tie
+  existed before `cmd()` returned, one undo reverted both, and
+  `endCmd(true)` rolled both back. (The undo-stack lock that makes this
+  work arrived in 4.6.0: it is absent from `score.cpp` at v4.5.2.)
+
+### Properties and spelling (P5, P6), 2026-10-03
+
+- Writable, and rolled back: `offsetX`/`offsetY` (staff spaces), `visible`,
+  `small`, `stemDirection` (0 auto, 1 up, 2 down).
+- `hasParentheses` takes 0 or 3 (both sides); `true` (1, left only) logs
+  "Notes cannot set left & right parens individually". `cmd("add-parentheses")`
+  on a selected note sets 3.
+- `beamMode` always read 0 and did not change when set to 2, 3 or "BEGIN",
+  nor after `cmd("beam-break-left")`; not yet known whether the write or the
+  read fails.
+- **Setting `pitch` keeps the old spelling** (pitch 74 with tpc1 still C),
+  so set-pitch must write `pitch`, `tpc1` and `tpc2` together. On the
+  clarinet `tpc1` was 14 (C, concert) and `tpc2` 16 (D, written); `tpc`
+  writes the spelling of the current concert/transposed view only.
+  `curScore.staves[0].transpose(fraction(0, 1))` gave chromatic -2,
+  diatonic -1.
+- `selection.select()` refuses a Chord ("Cannot select element of type
+  Chord"); select a note.
+
+### Adding notes (P4), 2026-10-03
+
+- Cursor at track 0, `rewindToTick`, `setDuration(1, 8)`, `addNote` three
+  times wrote three eighths and filled the bar with rests.
+- `addNote(p, true)` after rewinding adds to the chord.
+- **Adding where a note is replaces it** (bar 1 beat 1: 72 became 60).
+- `addTuplet(fraction(3, 2), fraction(1, 4))`, then rewinding and adding
+  eighths, wrote three 160-tick tuplet notes and carried on after it.
+- **Voice 2 needs a position from voice 1.** `rewindToTick` on track 1 in a
+  bar with no voice-2 content leaves no position ("cursor location is
+  undefined") and `addNote` adds nothing. Rewinding on track 0 and then
+  setting `track = 1` without rewinding works; this only reaches ticks
+  where voice 1 has a chord or rest.
+- In one request, `addNote` failed after earlier rolled-back probes in the
+  same request ("cursor location is undefined"), where the same steps
+  worked as the first probe. Not yet explained.
+
+### writeScore (P16, partly), 2026-10-03
+
+- **`writeScore` cannot write `.mscz` or `.mscx` in 4.7.5.** It exports
+  through the File → Export path, choosing per-page, per-part or
+  multi-part output by what the writer supports. The `.msc*` writer only
+  supports multi-part, and its multi-part function returns "Not supported"
+  (`MscNotationWriter::writeList`). The export then shows a Retry/Abort
+  dialog, which blocks the plug-in; every Retry failed again. After Abort,
+  MuseScore crashed (see above). An empty file was left at the path.
+- So the plan's `.mscx` structure read and `.mscz` backups need another
+  route. Any failed export opens that dialog, so the bridge must only
+  request formats known to work.
+
+### Exports and lines (P16, P7), 2026-10-03
+
+- `writeScore` picks an export mode from what the format's writer supports
+  [src]: per page for PNG and SVG; per part for PDF, MusicXML (`musicxml`,
+  `xml`, `mxl`), MIDI, MEI, MNX and the audio formats. With one score each of
+  these writes one file (PNG and SVG one per page). Only `.mscz` and `.mscx`
+  fail (above).
+- `writeScore(curScore, path, "musicxml")` wrote the whole score (both
+  parts, 32 bars each) in 4 ms and left `scoreName` unchanged. MusicXML is
+  the route for structure the plug-in API does not show.
+- **A slur:** select a note, `cmd("add-slur")`: it slurs to the next chord.
+  `curScore.spanners` reads it back (type, track, `spannerTick`,
+  `spannerTicks`, start and end chords), and rollback removes it.
+- **Never add a spanner with `Cursor.add`.** `newElement(Element.HAIRPIN)`
+  and `Cursor.add` fall through to adding it to a segment, which does not
+  hold spanners: MuseScore logged "Segment::add() unknown HairPin" (and
+  "Segment::remove() unknown HairPin" on rollback). The hairpin read back
+  with `spannerTick` -1 and no end element. In a later request, the same
+  step followed by `cmd("add-hairpin")` on a selected note crashed
+  MuseScore (crash dump written), most likely because of the bad hairpin.
+- `cmd("add-hairpin")` with a range selection did nothing ("no one can
+  handle the action: add-hairpin"): it needs a note or rest selected
+  [src], and a range selected inside a batch is not filled in yet (see
+  Selections below). With a single note selected, adding one hairpin
+  also starts dragging its end handle (`startEditGrip`) [src], an
+  interactive edit that a rollback would cut from under; that may be what
+  crashed. Hairpins and other lines stay open.
+
+### Selections, copy and paste (P11), 2026-10-03
+
+- **Make range selections outside a batch.** Inside an open command,
+  `selection.selectRange` only records the ticks and fills in the selection
+  when the command ends (`setRangeTicks`) [src].
+- `selectRange(0, 1920, 0, 1)` inside a batch followed by `cmd("copy")`
+  crashed MuseScore (crash dump written), most likely because the copy
+  serialised that unfilled selection. The clipboard was unchanged
+  (fingerprint compared before and after). copy-passage would select and
+  copy before `startCmd`, since copying changes nothing, and paste inside
+  the batch; not yet tried.
+
+### More editing (P9, P10, P12, P13, P14, P17), 2026-10-03
+
+All rolled back cleanly unless noted.
+
+- **Lyrics:** `newElement(Element.LYRICS)` + `Cursor.add` attaches to the
+  chord at the cursor. `text`, `syllabic` (0 single, 1 begin, 2 end,
+  3 middle [src]), `verse` (0-based) and `lyricTicks` (melisma length,
+  480 = a quarter) read and write.
+- **Key signatures:** the property is `actualKey`, not `key`. Adding one
+  with `Cursor.add` on each staff's track 0 works, but MuseScore does not
+  derive the written key: concert D (`concertKey` 2) on the B♭ clarinet
+  came out `actualKey` 2. Setting `concertKey` 2 and `actualKey` 4 before
+  adding gave concert D, written E. `Staff.key(tick)` returns the written
+  key (2 for the clarinet in concert C).
+- **Barlines and repeats:** `repeatStart`/`repeatEnd` are writable;
+  `barlineType` 2 (double) set on staff 0's end barline changed all three
+  staves (barlines span the system).
+- **Bar numbers:** `noOffset` and `irregular` are writable, but `no` (the
+  displayed number) of later bars did not change inside the batch: layout
+  runs when the command ends. A dry run's "after" view needs
+  `curScore.doLayout` for derived values; not yet tried.
+- **Layout breaks:** with a note selected, `cmd("system-break")` and
+  `cmd("page-break")` add a break, and the same command again removes it
+  (they toggle). `measure.elements` lists it as `LayoutBreak` with
+  `layoutBreakType` 1 (system) or 0 (page). This is a plain edit, with no
+  interactive mode [src].
+- **Bars:** `appendMeasures(3)` added three bars; with a note selected,
+  `cmd("insert-measure")` inserted an empty bar before it and moved the
+  music on; `timesigActual = fraction(3, 4)` made bar 5 1440 ticks long and
+  refilled its rests. `insert-measures` (several) takes a count from its
+  dialog [src], so it was not tried.
+- **Time signatures:** `newElement(Element.TIMESIG)`, `timesig =
+  fraction(3, 4)`, `Cursor.add` at bar 3 re-barred everything after it
+  (32 bars became 42).
+- **Deleting:** `removeElement` on a chord leaves a rest, on one note of a
+  chord removes that note, on a chord's only note leaves a rest.
+- **Text and marks:** `newElement` + `Cursor.add` works for STAFF_TEXT,
+  SYSTEM_TEXT, TEMPO_TEXT (`tempo` in beats per second,
+  `tempoFollowText`), DYNAMIC, REHEARSAL_MARK and ARTICULATION (attached
+  to the chord; which symbol it shows is not yet known). They read back as
+  segment `annotations` with `text`.
+- **Style:** `curScore.style.value`/`setValue` work and are undoable and
+  rolled back. Page sizes and margins are in inches (Letter: 8.5 × 11);
+  `spatium` is in 1/1200 inch (82.68 = 1.75 mm); `staffDistance`,
+  `akkoladeDistance` and the system distances are in staff spaces. An
+  unknown key returns null and logs a warning, with no dialog.
+- **Metadata:** `metaTag` reads workTitle, composer, lyricist and so on.
+  `setMetaTag` is **not** undone by rollback (it kept "PROBE"), as the
+  source shows, so it was put back by hand.
+
+### Beams, articulations, layout, parts, size (P5, P18, P19), 2026-10-03
+
+- **Beams:** `beamMode` is writable after all: BeamMode is AUTO 0, NONE 1,
+  BEGIN 2, BEGIN16 3, BEGIN32 4, ... [src]. Setting 2 on the third of four
+  eighths split them into two beamed pairs, checked in a MusicXML export.
+  The earlier tries set 3 (BEGIN16), which does nothing to eighths, or
+  beamed quarters.
+- **Articulations:** `symbol` takes MuseScore's numeric symbol id, not a
+  name: 623 is `articStaccatoAbove` in 4.7.5 (ids come from `symid.h` and
+  can change between versions). With a note selected, the actions
+  `add-staccato`, `add-tenuto`, `add-marcato` and `add-sforzato` (an
+  accent) add the same thing; they toggle. With nothing
+  selected they start note input instead [src], so always select first.
+- **Layout mid-batch:** `curScore.doLayout(fraction(0, 1), fraction(-1, 1))`
+  (since 4.6) updated bar 3's displayed number from 2 to 11 after a
+  `noOffset` change, inside the batch; rollback restored it.
+- **MusicXML exports written pitch** for transposing instruments (the
+  clarinet's concert C4 came out as D4), so a MusicXML read converts back
+  with the part's `<transpose>`.
+- **Parts:** `appendPart("flute")` added a Flute part (4 staves) and was
+  rolled back. `Staff.playbackVoice1` (to 4) is writable and rolled back;
+  whether it silences playback was not listened to.
+- **Size:** inside a rolled-back batch, 300 bars filled with eighths on all
+  three staves (7,200 notes) took 41 ms to write; reading every non-generated
+  element with pitches and spellings took 38 ms; the request took 0.17 s.
+  Reads do not need to be split into chunks. (Layout runs at the end of a
+  command, so these times exclude it.)
+- `root.scores`, the list of open scores, read as empty with a score open.
+
+### Windows and closing (P1), 2026-10-03
+
+- **Each score window is its own MuseScore process.** With ScratchScore
+  open, File → New opened the second score in a new process
+  (`mscore --session-type start-with-new`). The plug-in, started in the
+  first window, kept seeing ScratchScore (`curScore`, `api.engraving.curScore`
+  and a new cursor's score), and `writeScore` exported ScratchScore. Only
+  one process can listen on the port, so the bridge serves the score of the
+  window it was started in; to switch scores, start it in the other window.
+- `curScore` looks up the window's current score on every access, and is
+  null with no score [src].
+- With a second window open, closing ScratchScore ended its whole process
+  normally ("Goodbye!! code: 0"), and the plug-in with it; the client got
+  "connection refused". Closing the last score of the only window (start
+  screen left open) was not tried.
+- `root.scores` is not implemented in 4.7.5 (`NOT_IMPLEMENTED`) [src].
+
+### Starting the plug-in and opening scores by script (P1), 2026-10-03
+
+- **MuseScore's menus are native macOS menus.** With Accessibility
+  permission for the terminal, System Events listed the menu bar of the
+  `mscore` process (Apple, MuseScore Studio, File, Edit, View, Add, Format,
+  Tools, Plugins, Help) and the Plugins menu (Manage plugins…, sibwscli
+  probe, musescore-mcp-websocket). Each window's process can be targeted
+  by its unix id.
+- **Clicking Plugins → sibwscli probe by AppleScript started the plug-in**
+  on the start screen, with no score open: it answered, with `curScore`
+  null. So a launcher can start the bridge in a given window without the
+  user, once Accessibility is granted.
+- **`readScore(path)` from the start screen opened the score in the same
+  process**: no new window, the plug-in kept running and saw the score
+  (3 staves) from the next request. (The probe passes `curScore` to each
+  snippet as it was at the start of the request, so the opening request
+  itself still saw null.)
+- With a score already open, MuseScore 4 opens another in a new process
+  (above), where the plug-in isn't running. `closeScore()` exists, but
+  closing a score with unsaved changes asks whether to save, a dialog that
+  blocks the plug-in, and the API can't tell whether there are unsaved
+  changes. Not tried.

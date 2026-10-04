@@ -8,6 +8,37 @@ from typing import Any
 VOWELS_PATTERN = re.compile(r"[aeiouyáéíóúäëïöüàèìòùâêîôûãõñāēīōūăěǐǒǔ]", re.IGNORECASE)
 
 
+#: Syllable kinds split_syllables reports, as MuseScore names a lyric's
+#: syllabic (plus a melisma continuation, which has no text).
+SINGLE, BEGIN, MIDDLE, END, MELISMA = "single", "begin", "middle", "end", "melisma"
+
+
+def split_syllables(text: str) -> list[tuple[str, str]]:
+    """Syllables of a line of lyrics, one per note, with each one's kind:
+    "ma-king lyr-ics _ now" -> [("ma", begin), ("king", end), ("lyr", begin),
+    ("ics", end), ("", melisma), ("now", single)].
+
+    Spaces separate words, a hyphen splits a word into syllables, and "_"
+    continues the previous syllable over the next note (a melisma). Raises
+    ValueError for empty text or a word made only of hyphens.
+    """
+    syllables: list[tuple[str, str]] = []
+    for word in text.split():
+        if word == "_":
+            syllables.append(("", MELISMA))
+            continue
+        parts = [p for p in word.split("-") if p]
+        if not parts:
+            raise ValueError(f"lyric word {word!r} has no syllables")
+        if len(parts) == 1:
+            syllables.append((parts[0], SINGLE))
+        else:
+            syllables += [(parts[0], BEGIN)] + [(p, MIDDLE) for p in parts[1:-1]] + [(parts[-1], END)]
+    if not syllables:
+        raise ValueError("lyrics text is empty")
+    return syllables
+
+
 def get_syllable_line(syl: dict[str, Any], default: int = 1) -> int:
     """Return the 1-based verse/line number for a syllable if known."""
     if "line" in syl and syl["line"] is not None:
