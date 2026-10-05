@@ -25,9 +25,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from sibelius_websocket_cli.musescore import install, service
-from sibelius_websocket_cli.musescore.bridge import MuseScoreBridge
-from sibelius_websocket_cli.musescore.client import MuseScoreClient
+from ai_score_editing.musescore import install, service
+from ai_score_editing.musescore.bridge import MuseScoreBridge
+from ai_score_editing.musescore.client import MuseScoreClient
 
 MARKER = "live-check marker"
 results: list[tuple[str, bool, str]] = []

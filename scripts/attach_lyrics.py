@@ -15,8 +15,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from sibelius_websocket_cli import batch_ops, protocol
-from sibelius_websocket_cli.client import SibeliusClient
+from ai_score_editing import batch_ops, protocol
+from ai_score_editing.client import SibeliusClient
 
 
 BRIDGE = "sibwscli"

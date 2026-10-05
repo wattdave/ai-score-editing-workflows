@@ -39,7 +39,7 @@ systematic architectural and engraving mistakes:
 
 - **`sibelius` skill** (`.claude/skills/sibelius/SKILL.md`): Used for score inspection, lyric checking, and engraving verification after importing the repaired MusicXML into Sibelius.
 - **`omr_tool.py`** (`scripts/omr_tool.py`): Standalone CLI helper for auditing, unstacking, and validating MusicXML measure structures.
-- **`clean_clefs.py`** (repo root `scripts/clean_clefs.py`, *not* this skill's `scripts/`): Audits and purges redundant `Clef` objects from the score open in Sibelius. Must run under `uv run` so it can import `sibelius_websocket_cli`.
+- **`clean_clefs.py`** (repo root `scripts/clean_clefs.py`, *not* this skill's `scripts/`): Audits and purges redundant `Clef` objects from the score open in Sibelius. Must run under `uv run` so it can import `ai_score_editing`.
 
 ---
 

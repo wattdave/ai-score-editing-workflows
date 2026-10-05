@@ -7,11 +7,11 @@ connect) and edit, back up and save whatever score is open.
 
 import pytest
 
-from sibelius_websocket_cli import protocol
-from sibelius_websocket_cli.client import SibeliusClient
-from sibelius_websocket_cli.dorico import client as dorico_client
-from sibelius_websocket_cli.musescore import client as musescore_client
-from sibelius_websocket_cli.musescore import install as musescore_install
+from ai_score_editing import protocol
+from ai_score_editing.client import SibeliusClient
+from ai_score_editing.dorico import client as dorico_client
+from ai_score_editing.musescore import client as musescore_client
+from ai_score_editing.musescore import install as musescore_install
 
 _real_connect = SibeliusClient.connect
 

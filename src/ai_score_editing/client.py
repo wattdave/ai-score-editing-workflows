@@ -17,8 +17,8 @@ from typing import Any
 
 import websockets
 
-from sibelius_websocket_cli import launcher, protocol
-from sibelius_websocket_cli.token_store import TokenStore
+from ai_score_editing import launcher, protocol
+from ai_score_editing.token_store import TokenStore
 
 logger = logging.getLogger(__name__)
 

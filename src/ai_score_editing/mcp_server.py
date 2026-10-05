@@ -18,8 +18,8 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from sibelius_websocket_cli import batch_ops, protocol
-from sibelius_websocket_cli.cli import (
+from ai_score_editing import batch_ops, protocol
+from ai_score_editing.cli import (
     BRIDGE_PLUGIN,
     EXPORT_FORMATS,
     QUERY_BRIDGE_VERSION,
@@ -33,8 +33,8 @@ from sibelius_websocket_cli.cli import (
     _require_bridge,
     parse_bar_range,
 )
-from sibelius_websocket_cli.client import ConnectionFailed, SibeliusClient
-from sibelius_websocket_cli.query import QueryError, build_selector, resolve_staves
+from ai_score_editing.client import ConnectionFailed, SibeliusClient
+from ai_score_editing.query import QueryError, build_selector, resolve_staves
 
 T = TypeVar("T")
 

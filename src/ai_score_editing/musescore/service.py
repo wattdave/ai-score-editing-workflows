@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from sibelius_websocket_cli.query import build_selector
+from ai_score_editing.query import build_selector
 
 from . import score
 from .bridge import MuseScoreBridge

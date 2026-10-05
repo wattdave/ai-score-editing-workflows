@@ -14,9 +14,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from sibelius_websocket_cli.batch_ops import BatchError
-from sibelius_websocket_cli.cli import parse_bar_range
-from sibelius_websocket_cli.query import QueryError
+from ai_score_editing.batch_ops import BatchError
+from ai_score_editing.cli import parse_bar_range
+from ai_score_editing.query import QueryError
 
 from . import install, service
 from .bridge import MuseScoreBridge

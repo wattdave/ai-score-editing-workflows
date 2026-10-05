@@ -27,7 +27,7 @@ right to share.
    python3 scripts/sync_skills.py --check
    ```
 
-3. If you change the bridge plug-in (`src/sibelius_websocket_cli/manuscript/sibwscli.plg`),
+3. If you change the bridge plug-in (`src/ai_score_editing/manuscript/sibwscli.plg`),
    bump its version, reinstall it with
    `uv run sibelius-websocket-cli install-plugin`, restart Sibelius, and try
    the change on a real score. Say in the pull request what you tested.

@@ -19,7 +19,7 @@ import re
 from fractions import Fraction
 from typing import Any
 
-from sibelius_websocket_cli import batch_ops, intervals
+from ai_score_editing import batch_ops, intervals
 
 UNITS_PER_QUARTER = 256
 SYSTEM_STAFF = 0

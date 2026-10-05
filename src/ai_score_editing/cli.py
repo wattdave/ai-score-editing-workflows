@@ -14,7 +14,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from sibelius_websocket_cli import (
+from ai_score_editing import (
     abc_notation,
     agent_output,
     batch_ops,
@@ -28,9 +28,9 @@ from sibelius_websocket_cli import (
     protocol,
     rehearsal_mix,
 )
-from sibelius_websocket_cli.client import ConnectionFailed, SibeliusClient, run_sync
-from sibelius_websocket_cli.intervals import compute_transposition
-from sibelius_websocket_cli.token_store import TokenStore
+from ai_score_editing.client import ConnectionFailed, SibeliusClient, run_sync
+from ai_score_editing.intervals import compute_transposition
+from ai_score_editing.token_store import TokenStore
 
 EXIT_OK = 0
 EXIT_COMMAND_FAILED = 1
@@ -2402,9 +2402,9 @@ async def _run_split_parts(args: argparse.Namespace) -> int:
         out_path = default_parent / f"{default_stem}_{args.preset}.mxl"
 
     try:
-        from sibelius_websocket_cli.musicxml_split.profiles.polychoral_16 import split_16voices
-        from sibelius_websocket_cli.musicxml_split.profiles.satb import SATBOptions, split_satb
-        from sibelius_websocket_cli.musicxml_split.validation import validate_file
+        from ai_score_editing.musicxml_split.profiles.polychoral_16 import split_16voices
+        from ai_score_editing.musicxml_split.profiles.satb import SATBOptions, split_satb
+        from ai_score_editing.musicxml_split.validation import validate_file
 
         def parse_ranges(value: str | None) -> frozenset[int]:
             bars: set[int] = set()
@@ -2471,8 +2471,8 @@ async def _run_split_parts(args: argparse.Namespace) -> int:
 async def _run_round(args: argparse.Namespace) -> int:
     import xml.etree.ElementTree as ET
 
-    from sibelius_websocket_cli.musicxml_round import RoundOptions, build_round
-    from sibelius_websocket_cli.musicxml_split.io import parse_musicxml, save_musicxml
+    from ai_score_editing.musicxml_round import RoundOptions, build_round
+    from ai_score_editing.musicxml_split.io import parse_musicxml, save_musicxml
 
     source = Path(args.score_file).expanduser().resolve()
     if source.suffix.lower() not in {".xml", ".musicxml", ".mxl"}:

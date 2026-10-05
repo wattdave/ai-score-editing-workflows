@@ -23,10 +23,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from sibelius_websocket_cli.dorico import score
-from sibelius_websocket_cli.dorico.bridge import DoricoBridge
-from sibelius_websocket_cli.dorico.client import DoricoClient, DoricoError
-from sibelius_websocket_cli.dorico.export import APPLICATION_LOG
+from ai_score_editing.dorico import score
+from ai_score_editing.dorico.bridge import DoricoBridge
+from ai_score_editing.dorico.client import DoricoClient, DoricoError
+from ai_score_editing.dorico.export import APPLICATION_LOG
 
 ROOT = Path(__file__).resolve().parent.parent
 BASELINES = ROOT / "docs" / "dorico-baseline"

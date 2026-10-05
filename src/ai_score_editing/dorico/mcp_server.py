@@ -18,7 +18,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from sibelius_websocket_cli.cli import parse_bar_range
+from ai_score_editing.cli import parse_bar_range
 
 from . import lyrics_dialog, service
 from . import project_info as project_info_mod

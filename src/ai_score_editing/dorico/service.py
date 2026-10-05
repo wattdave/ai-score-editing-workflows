@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from sibelius_websocket_cli.intervals import LETTERS
+from ai_score_editing.intervals import LETTERS
 
 from . import layout, musicxml_read, score
 from .bridge import BarMap, DoricoBridge, fingerprint

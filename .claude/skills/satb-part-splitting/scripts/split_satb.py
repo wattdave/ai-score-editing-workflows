@@ -332,7 +332,7 @@ def cmd_split(args: argparse.Namespace) -> int:
 
     # All musical routing now lives in the shared onset-based engine.  This
     # wrapper deliberately keeps SATB-only lyric repair as post-processing.
-    from sibelius_websocket_cli.musicxml_split.profiles.satb import SATBOptions, split_satb
+    from ai_score_editing.musicxml_split.profiles.satb import SATBOptions, split_satb
 
     options = SATBOptions(
         soprano_solo_bars=frozenset(parse_bar_ranges(args.soprano_solo or "")),

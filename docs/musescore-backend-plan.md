@@ -101,7 +101,7 @@ musescore-mcp / musescore-cli
                startCmd/endCmd, cmd(), writeScore
 ```
 
-New package `src/sibelius_websocket_cli/musescore/`, shaped like `dorico/`:
+New package `src/ai_score_editing/musescore/`, shaped like `dorico/`:
 
 | Module | Role |
 |---|---|

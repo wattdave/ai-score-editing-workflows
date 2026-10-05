@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from sibelius_websocket_cli.query import (
+from ai_score_editing.query import (
     COMMON_PROPS,
     READABLE_PROPS,
     QueryError,
@@ -15,7 +15,7 @@ from sibelius_websocket_cli.query import (
     resolve_staves,
 )
 
-PLUGIN = Path(__file__).parent.parent / "src/sibelius_websocket_cli/manuscript/sibwscli.plg"
+PLUGIN = Path(__file__).parent.parent / "src/ai_score_editing/manuscript/sibwscli.plg"
 
 STAVES = [
     {"staffNum": 1, "instrumentName": "S.", "fullInstrumentName": "Soprano"},

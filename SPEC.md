@@ -199,7 +199,7 @@ is the only documented per-call failure signal.
 ### 2.1 Package layout
 
 ```
-src/sibelius_websocket_cli/
+src/ai_score_editing/
   __init__.py      # main() entry point (console script)
   cli.py           # argparse/typer command definitions
   client.py        # SibeliusClient: connect/handshake/send, sync wrapper over asyncio

@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from sibelius_websocket_cli.client import SibeliusClient
-    from sibelius_websocket_cli.cli import _bridge, BRIDGE_PLUGIN, _backup
+    from ai_score_editing.client import SibeliusClient
+    from ai_score_editing.cli import _bridge, BRIDGE_PLUGIN, _backup
     HAVE_CLIENT = True
 except ImportError:
     HAVE_CLIENT = False

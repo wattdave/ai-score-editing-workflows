@@ -11,9 +11,9 @@ import stat
 import pytest
 import websockets
 
-from sibelius_websocket_cli.musescore import cli, install
-from sibelius_websocket_cli.musescore.bridge import MuseScoreBridge, version_text
-from sibelius_websocket_cli.musescore.client import MuseScoreClient, MuseScoreError
+from ai_score_editing.musescore import cli, install
+from ai_score_editing.musescore.bridge import MuseScoreBridge, version_text
+from ai_score_editing.musescore.client import MuseScoreClient, MuseScoreError
 
 TOKEN = "test-token"
 
@@ -167,9 +167,9 @@ def test_cli_install_plugin(config, capsys) -> None:
 
 # ------------------------------------------------------------------ milestone 2: reads and batches
 
-from sibelius_websocket_cli import intervals  # noqa: E402
-from sibelius_websocket_cli.musescore import score, service  # noqa: E402
-from sibelius_websocket_cli.musescore.score import MuseScoreBatchError  # noqa: E402
+from ai_score_editing import intervals  # noqa: E402
+from ai_score_editing.musescore import score, service  # noqa: E402
+from ai_score_editing.musescore.score import MuseScoreBatchError  # noqa: E402
 
 STAVES = [
     {"staff": 1, "partName": "Clarinet in B♭", "shortName": "Cl.", "transposeChromatic": -2, "transposeDiatonic": -1},
@@ -770,7 +770,7 @@ def test_structure_report() -> None:
 
 # ------------------------------------------------------------------ milestone 5: files, metadata, lyrics
 
-from sibelius_websocket_cli.musescore import window  # noqa: E402
+from ai_score_editing.musescore import window  # noqa: E402
 
 
 def syllable(bar, ticks, text, syllabic, voice=1, verse=1):
@@ -921,7 +921,7 @@ def test_cli_files_commands_parse() -> None:
 
 # ------------------------------------------------------------------ milestone 6: parts and playback
 
-from sibelius_websocket_cli.musescore import instruments  # noqa: E402
+from ai_score_editing.musescore import instruments  # noqa: E402
 
 
 def test_plugin_has_milestone_6_methods() -> None:

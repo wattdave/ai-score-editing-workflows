@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from sibelius_websocket_cli import lyrics
+from ai_score_editing import lyrics
 
 
 class BatchLyricsError(ValueError):

@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from sibelius_websocket_cli.layout import LayoutPatchError, load_layout_patches
+from ai_score_editing.layout import LayoutPatchError, load_layout_patches
 
 
 def test_load_layout_patches_accepts_supported_operations(tmp_path) -> None:

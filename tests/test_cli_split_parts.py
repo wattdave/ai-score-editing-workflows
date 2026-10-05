@@ -8,14 +8,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from sibelius_websocket_cli.cli import (
+from ai_score_editing.cli import (
     EXIT_COMMAND_FAILED,
     EXIT_OK,
     _run_split_parts,
     build_parser,
     main,
 )
-from sibelius_websocket_cli.polychoral import make_rest, save_musicxml
+from ai_score_editing.polychoral import make_rest, save_musicxml
 import xml.etree.ElementTree as ET
 
 
@@ -131,7 +131,7 @@ async def test_split_parts_with_open_flag(tmp_path: Path) -> None:
 
     parser = build_parser()
     args = parser.parse_args(["split-parts", str(in_file), "-o", str(out_file), "--open"])
-    with patch("sibelius_websocket_cli.launcher.open_score_file") as mock_open:
+    with patch("ai_score_editing.launcher.open_score_file") as mock_open:
         ret = await _run_split_parts(args)
         assert ret == EXIT_OK
         mock_open.assert_called_once_with(out_file, app_path=None)
@@ -179,9 +179,9 @@ async def test_split_parts_active_score_roundtrip(tmp_path: Path, capsys: pytest
     parser = build_parser()
     args = parser.parse_args(["split-parts", "-o", str(out_file)])
 
-    with patch("sibelius_websocket_cli.cli._client", return_value=mock_context), \
-         patch("sibelius_websocket_cli.cli._check_bridge_version", new_callable=AsyncMock), \
-         patch("sibelius_websocket_cli.cli._bridge", side_effect=fake_bridge):
+    with patch("ai_score_editing.cli._client", return_value=mock_context), \
+         patch("ai_score_editing.cli._check_bridge_version", new_callable=AsyncMock), \
+         patch("ai_score_editing.cli._bridge", side_effect=fake_bridge):
         ret = await _run_split_parts(args)
         assert ret == EXIT_OK
         assert out_file.exists()

@@ -76,7 +76,7 @@ def default_workdir() -> Path:
 
 
 def bridge_script() -> Path:
-    return Path(str(resources.files("sibelius_websocket_cli.dorico").joinpath("bridge.lua")))
+    return Path(str(resources.files("ai_score_editing.dorico").joinpath("bridge.lua")))
 
 
 @dataclass

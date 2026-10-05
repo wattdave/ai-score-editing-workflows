@@ -7,7 +7,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from sibelius_websocket_cli.polychoral import demix_16voices, validate_16voices
+from ai_score_editing.polychoral import demix_16voices, validate_16voices
 
 
 def main(argv: list[str] | None = None) -> int:

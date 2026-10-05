@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sibelius_websocket_cli import launcher
+from ai_score_editing import launcher
 
 
 def test_is_local_host() -> None:

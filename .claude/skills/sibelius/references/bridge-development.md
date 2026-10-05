@@ -4,7 +4,7 @@ Read this file when changing the ManuScript bridge or recovering from a bridge
 version mismatch.
 
 - The installed bridge is built from
-  `src/sibelius_websocket_cli/manuscript/sibwscli.plg`.
+  `src/ai_score_editing/manuscript/sibwscli.plg`.
 - After `install-plugin`, restart Sibelius before the new plug-in code is
   loaded. The agent can do this end-to-end through the Sibelius application
   menu: choose **Sibelius → Quit Sibelius**, confirm it has exited, then let

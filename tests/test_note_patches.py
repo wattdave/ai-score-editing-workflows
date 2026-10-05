@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from sibelius_websocket_cli.batch_ops import validate_batch
-from sibelius_websocket_cli.note_patches import (
+from ai_score_editing.batch_ops import validate_batch
+from ai_score_editing.note_patches import (
     NotePatchError,
     batch_operations,
     execution_order,

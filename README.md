@@ -237,7 +237,7 @@ The first call shows Sibelius's connection approval dialog, as the CLI does.
 
 `dorico-mcp` offers the same tools for the project open in Dorico 6.2+,
 through Dorico's Remote Control API and a Lua bridge that Dorico runs
-(`src/sibelius_websocket_cli/dorico/bridge.lua`). `dorico-cli` exposes them
+(`src/ai_score_editing/dorico/bridge.lua`). `dorico-cli` exposes them
 on the command line:
 
 ```bash
@@ -308,7 +308,7 @@ python scripts/sync_skills.py --check  # check for drift without modifying files
 - [`docs/avid-reference.md`](docs/avid-reference.md) — links to Avid's
   ManuScript Language Guide (Sibelius Connect protocol, all 627 command IDs,
   and the object reference for extending the bridge plug-in in
-  `src/sibelius_websocket_cli/manuscript/sibwscli.plg`), plus the places
+  `src/ai_score_editing/manuscript/sibwscli.plg`), plus the places
   where the guide is wrong
 
 ## Development
@@ -326,7 +326,7 @@ export, which is copyrighted and kept out of the repository; it skips unless
 SIBWS_12PP_EXPORT=~/Downloads/export.xml uv run pytest tests/test_polychoral.py
 ```
 
-Sources: `src/sibelius_websocket_cli/` — `protocol.py` (message builders),
+Sources: `src/ai_score_editing/` — `protocol.py` (message builders),
 `client.py` (async client with token/approval handling), `launcher.py` (Sibelius
 process detection and launch), `token_store.py`, `cli.py`, and the bundled bridge plug-in
 under `manuscript/`.

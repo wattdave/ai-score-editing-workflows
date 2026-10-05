@@ -1,4 +1,4 @@
-"""Tests for redundant clef auditing in sibelius_websocket_cli.clefs.
+"""Tests for redundant clef auditing in ai_score_editing.clefs.
 
 Clef cleanup is engraving proofreading, not playback repair -- see the
 "Engraving vs. Playback" note in the hanging-playback-note-repair skill.
@@ -6,7 +6,7 @@ Clef cleanup is engraving proofreading, not playback repair -- see the
 
 from __future__ import annotations
 
-from sibelius_websocket_cli import clefs as clean_clefs
+from ai_score_editing import clefs as clean_clefs
 
 
 def _clef_bar(bar_number: int, *clefs: tuple[int, int, str]) -> dict:

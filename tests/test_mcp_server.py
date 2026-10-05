@@ -7,8 +7,8 @@ import pytest
 import websockets
 from mcp.server.mcpserver.exceptions import ToolError
 
-from sibelius_websocket_cli import mcp_server
-from sibelius_websocket_cli.mcp_server import Session
+from ai_score_editing import mcp_server
+from ai_score_editing.mcp_server import Session
 
 
 class FakeClient:

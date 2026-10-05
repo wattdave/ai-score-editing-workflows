@@ -21,7 +21,7 @@ from typing import Any
 
 import websockets
 
-from sibelius_websocket_cli.token_store import TokenStore, default_path
+from ai_score_editing.token_store import TokenStore, default_path
 
 logger = logging.getLogger(__name__)
 

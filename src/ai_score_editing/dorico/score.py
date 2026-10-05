@@ -13,8 +13,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from sibelius_websocket_cli import intervals, lyrics
-from sibelius_websocket_cli.batch_ops import LAYOUT_NUMBERS, ORIENTATIONS, PAGE_SIZES
+from ai_score_editing import intervals, lyrics
+from ai_score_editing.batch_ops import LAYOUT_NUMBERS, ORIENTATIONS, PAGE_SIZES
 
 from .bridge import BarMap
 
