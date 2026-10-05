@@ -120,8 +120,8 @@ Use `omr_tool.py unstack` to restructure the score:
   uv run python .claude/skills/omr-score-repair/scripts/omr_tool.py validate "path/to/repaired.xml"
   ```
 - Open the score in Sibelius:
-  - Run `uv run sibelius-websocket-cli score-snapshot` to verify staff count, title, keys, and barlines in one call.
-  - Run `uv run sibelius-websocket-cli proofread --lyrics` to check words and hyphens in one report.
+  - Run `uv run sibelius-cli score-snapshot` to verify staff count, title, keys, and barlines in one call.
+  - Run `uv run sibelius-cli proofread --lyrics` to check words and hyphens in one report.
 
 ### Step 6: Purge Redundant Clefs in the Live Score
 Unstacking strips clef restatements at the XML level, but surviving duplicates

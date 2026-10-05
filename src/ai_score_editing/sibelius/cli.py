@@ -39,7 +39,7 @@ EXIT_CONNECTION_FAILED = 2
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="sibelius-websocket-cli",
+        prog="sibelius-cli",
         description="Drive Sibelius via its Sibelius Connect WebSocket interface.",
     )
     parser.add_argument("--host", default=protocol.DEFAULT_HOST)
@@ -750,7 +750,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
     response = await client.invoke_plugin(BRIDGE_PLUGIN, method, call_args)
     if not protocol.is_success(response):
         raise BridgeError(
-            "bridge plug-in not reachable — run 'sibelius-websocket-cli "
+            "bridge plug-in not reachable — run 'sibelius-cli "
             f"install-plugin' and restart Sibelius. Response: {json.dumps(response)}"
         )
     value = protocol.plugin_return_value(response)
@@ -982,7 +982,7 @@ async def _run_bridge_call(
     if not protocol.is_success(response):
         print(
             "error: bridge plug-in not reachable — run "
-            "'sibelius-websocket-cli install-plugin' and restart Sibelius. "
+            "'sibelius-cli install-plugin' and restart Sibelius. "
             f"Response: {json.dumps(response)}",
             file=sys.stderr,
         )

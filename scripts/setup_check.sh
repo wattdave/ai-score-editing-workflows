@@ -80,7 +80,7 @@ else
     report optional python-ly "installed by uv once uv is present"
 fi
 
-if [ -x .venv/bin/sibelius-websocket-cli ]; then
+if [ -x .venv/bin/sibelius-cli ]; then
     report ok project-deps ".venv is set up"
 else
     report missing project-deps "uv sync"
@@ -111,13 +111,13 @@ if [ -z "$support" ]; then
 elif [ -f "$support/Plugins/Websocket CLI/sibwscli.plg" ]; then
     report ok bridge-plugin "$support/Plugins/Websocket CLI/sibwscli.plg"
 else
-    report missing bridge-plugin "uv run sibelius-websocket-cli install-plugin"
+    report missing bridge-plugin "uv run sibelius-cli install-plugin"
 fi
 
 if [ "$1" = --connect ]; then
     if [ -z "$sib" ] || ! pgrep -xq Sibelius; then
         report missing connection "Sibelius is not running"
-    elif out=$(uv run sibelius-websocket-cli --no-launch --timeout 30 bridge-version 2>&1); then
+    elif out=$(uv run sibelius-cli --no-launch --timeout 30 bridge-version 2>&1); then
         report ok connection "$(echo "$out" | tr '\n' ' ')"
     else
         report missing connection "$(echo "$out" | tail -1)"

@@ -125,7 +125,7 @@ async def _call(client: SibeliusClient, method: str, args: list[Any] | None = No
     if not protocol.is_success(response):
         raise ToolError(
             "the sibwscli bridge plug-in is not loaded; run "
-            "'sibelius-websocket-cli install-plugin' and restart Sibelius"
+            "'sibelius-cli install-plugin' and restart Sibelius"
         )
     value = protocol.plugin_return_value(response)
     if isinstance(value, dict) and "error" in value:

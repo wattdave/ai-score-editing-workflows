@@ -4,7 +4,7 @@ After installing a new Dorico, run the checks in
 [dorico-upgrade-checklist.md](dorico-upgrade-checklist.md).
 
 `dorico-mcp` and `dorico-cli` drive the project open in Dorico the way
-`sibelius-mcp` and `sibelius-websocket-cli` drive Sibelius: the same tool
+`sibelius-mcp` and `sibelius-cli` drive Sibelius: the same tool
 names, staff/bar/index addresses, 1/256-quarter units and MIDI pitches, and
 one undo step per batch. Everything here was established by probing Dorico
 6.2.30 Pro on macOS; Steinberg documents none of it.

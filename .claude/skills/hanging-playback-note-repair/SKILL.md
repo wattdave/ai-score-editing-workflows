@@ -40,7 +40,7 @@ boundary timebase mismatch, or a same-pitch re-attack conflict in the playback e
 
 ## Dependencies & Tools
 
-- **`sibwscli` / `sibelius-websocket-cli`**: Used to read note objects, adjust ties, delete unwanted artifacts, and export MIDI files.
+- **`sibwscli` / `sibelius-cli`**: Used to read note objects, adjust ties, delete unwanted artifacts, and export MIDI files.
 - **`hanging_notes.py`** (`scripts/hanging_notes.py`): Standalone CLI helper for:
   - `audit-score`: Scans score bars across one or all staves to detect dangling ties, pitch mismatches, tuplet boundary ties, and same-pitch re-attack conflicts.
   - `audit-midi`: Scans exported MIDI track events for unclosed `Note-On` events or abnormally long sustains.
@@ -101,7 +101,7 @@ python3 .claude/skills/hanging-playback-note-repair/scripts/hanging_notes.py aud
 
 ### 2. Audit Exported MIDI for Runaway Sustain
 ```bash
-uv run sibelius-websocket-cli export --format midi --out /private/tmp/playback_check.mid
+uv run sibelius-cli export --format midi --out /private/tmp/playback_check.mid
 python3 .claude/skills/hanging-playback-note-repair/scripts/hanging_notes.py audit-midi \
   /private/tmp/playback_check.mid --max-beats 8.0
 ```
@@ -136,14 +136,14 @@ Review flagged items:
 ### Step 3A: Repairing Tier 1 Defects (Dangling / Mismatched Ties)
 Remove the invalid tie under `--expect-file` backup protection:
 ```bash
-uv run sibelius-websocket-cli --expect-file "<PATH_TO_SIB>" tie \
+uv run sibelius-cli --expect-file "<PATH_TO_SIB>" tie \
   --staff <STAFF> --bar <BAR> --index <INDEX> --remove
 ```
 
 ### Step 3B: Repairing Tier 2 Defects (Tuplet Boundary Playback Drone)
 1. Remove the engine tie that triggers the playback hang:
    ```bash
-   uv run sibelius-websocket-cli --expect-file "<PATH_TO_SIB>" tie \
+   uv run sibelius-cli --expect-file "<PATH_TO_SIB>" tie \
      --staff <STAFF> --bar <BAR> --index <INDEX> --remove
    ```
 2. Apply a **Slur** across the two noteheads in Sibelius (`S` key) to preserve visual engraving while playing legato cleanly.
@@ -151,14 +151,14 @@ uv run sibelius-websocket-cli --expect-file "<PATH_TO_SIB>" tie \
 ### Step 3C: Repairing Tier 3 Defects (Same-Pitch Re-Attack Conflicts)
 Remove the forward tie on the intermediate note:
 ```bash
-uv run sibelius-websocket-cli --expect-file "<PATH_TO_SIB>" tie \
+uv run sibelius-cli --expect-file "<PATH_TO_SIB>" tie \
   --staff <STAFF> --bar <BAR> --index <INDEX> --remove
 ```
 
 ### Step 4: Save and Verify Playback
 1. Apply all Tier 1–3 tie removals in one batch:
    ```bash
-   uv run sibelius-websocket-cli --expect-file "<PATH_TO_SIB>" patch-notes \
+   uv run sibelius-cli --expect-file "<PATH_TO_SIB>" patch-notes \
      --file /private/tmp/ties.json --save
    ```
 2. Re-run a single `audit-score --staff all` over the range to confirm no

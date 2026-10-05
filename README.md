@@ -1,4 +1,4 @@
-# sibelius-websocket-cli
+# sibelius-cli
 
 A command-line tool for driving Sibelius via **Sibelius Connect** — the
 WebSocket server built into Sibelius 2024.3+ (Ultimate tier). It can fire any
@@ -43,7 +43,7 @@ which both read the skills in `.agents/skills/` (Codex also reads
   `.codex/config.toml`, which connects the `sibelius` tool server.
 - **Antigravity** has a free Individual plan with weekly usage limits. It
   does not load this folder's `sibelius` tool server automatically, but the
-  skills can run the `sibelius-websocket-cli` commands directly instead.
+  skills can run the `sibelius-cli` commands directly instead.
 
 Free tiers have low limits. Setup fits easily; a long editing session may
 run out partway.
@@ -77,7 +77,7 @@ The same steps by hand, in Terminal, from this folder:
 4. Open Sibelius once and quit it, then install the bridge plug-in:
 
    ```bash
-   uv run sibelius-websocket-cli install-plugin
+   uv run sibelius-cli install-plugin
    ```
 
 5. In Sibelius, turn on Sibelius Connect (Sibelius menu → Preferences →
@@ -109,7 +109,7 @@ The same steps by hand, in Terminal, from this folder:
    `score-info`, `staves`, `selection`, `read`):
 
    ```bash
-   uv run sibelius-websocket-cli install-plugin
+   uv run sibelius-cli install-plugin
    ```
 
    Then restart Sibelius so it loads the plug-in.
@@ -125,14 +125,14 @@ The same steps by hand, in Terminal, from this folder:
 Reading the open score (requires the bridge plug-in):
 
 ```bash
-uv run sibelius-websocket-cli score-info          # title, file, staves, bars
-uv run sibelius-websocket-cli inspect             # compact identity, staves, selection
-uv run sibelius-websocket-cli score-snapshot      # compact structural snapshot
-uv run sibelius-websocket-cli proofread            # read-only structural/lyric report
-uv run sibelius-websocket-cli verify-render --format png --out /tmp/score-proof.png
-uv run sibelius-websocket-cli staves              # instrument names per staff
-uv run sibelius-websocket-cli selection           # current passage selection
-uv run sibelius-websocket-cli read --staff 1 --from 1 --to 4
+uv run sibelius-cli score-info          # title, file, staves, bars
+uv run sibelius-cli inspect             # compact identity, staves, selection
+uv run sibelius-cli score-snapshot      # compact structural snapshot
+uv run sibelius-cli proofread            # read-only structural/lyric report
+uv run sibelius-cli verify-render --format png --out /tmp/score-proof.png
+uv run sibelius-cli staves              # instrument names per staff
+uv run sibelius-cli selection           # current passage selection
+uv run sibelius-cli read --staff 1 --from 1 --to 4
                                                   # bar contents: notes (MIDI
                                                   # pitch, name, tie), rests,
                                                   # durations, positions
@@ -142,30 +142,30 @@ Writing (each write backs up first: in-file version + save + timestamped
 `.sib` copy next to the original):
 
 ```bash
-uv run sibelius-websocket-cli check-lyrics                # lint lyrics for typos, collisions, untexted bars
-uv run sibelius-websocket-cli read-lyrics --words         # lyrics grouped by staff and bar into words
-uv run sibelius-websocket-cli read-lyrics                 # all raw lyrics with addresses
-uv run sibelius-websocket-cli read-lyrics --compact       # compact edit addresses
-uv run sibelius-websocket-cli set-lyric --staff 1 --bar 3 --index 2 --text "ry-"
-uv run sibelius-websocket-cli patch-lyrics --file patches.json --font Plantin --font-size 95
-uv run sibelius-websocket-cli patch-layout --file layout-fixes.json --save
-uv run sibelius-websocket-cli patch-notes --file note-fixes.json --save   # pitches, ties, stems, deletes
-uv run sibelius-websocket-cli transpose --from-note C --to-note D --up
-uv run sibelius-websocket-cli set-key --key D             # key signature only
-uv run sibelius-websocket-cli set-time --top 2 --bottom 2 --symbol cut  # cut time
-uv run sibelius-websocket-cli backup                      # backup on demand
-uv run sibelius-websocket-cli bridge-version              # check installed bridge
+uv run sibelius-cli check-lyrics                # lint lyrics for typos, collisions, untexted bars
+uv run sibelius-cli read-lyrics --words         # lyrics grouped by staff and bar into words
+uv run sibelius-cli read-lyrics                 # all raw lyrics with addresses
+uv run sibelius-cli read-lyrics --compact       # compact edit addresses
+uv run sibelius-cli set-lyric --staff 1 --bar 3 --index 2 --text "ry-"
+uv run sibelius-cli patch-lyrics --file patches.json --font Plantin --font-size 95
+uv run sibelius-cli patch-layout --file layout-fixes.json --save
+uv run sibelius-cli patch-notes --file note-fixes.json --save   # pitches, ties, stems, deletes
+uv run sibelius-cli transpose --from-note C --to-note D --up
+uv run sibelius-cli set-key --key D             # key signature only
+uv run sibelius-cli set-time --top 2 --bottom 2 --symbol cut  # cut time
+uv run sibelius-cli backup                      # backup on demand
+uv run sibelius-cli bridge-version              # check installed bridge
 ```
 
 Driving Sibelius with command IDs (fire-and-forget — Sibelius acknowledges
 receipt but never reports whether a command did anything):
 
 ```bash
-uv run sibelius-websocket-cli do undo             # curated friendly names:
+uv run sibelius-cli do undo             # curated friendly names:
                                                   # undo, redo, save, select-all,
                                                   # select-none, delete, add-bar,
                                                   # play, play-stop, transpose-dialog
-uv run sibelius-websocket-cli invoke select_all delete
+uv run sibelius-cli invoke select_all delete
                                                   # raw command IDs, batched;
                                                   # see the guide's Command IDs chapter
 ```
@@ -174,8 +174,8 @@ Splitting MusicXML is performed locally and deterministically (no score is
 edited in Sibelius except optional `.sib` export/opening):
 
 ```bash
-uv run sibelius-websocket-cli split-parts score.mxl --preset satb --out score_satb.mxl
-uv run sibelius-websocket-cli split-parts score.mxl --preset 16voices --audit --json
+uv run sibelius-cli split-parts score.mxl --preset satb --out score_satb.mxl
+uv run sibelius-cli split-parts score.mxl --preset 16voices --audit --json
 ```
 
 The SATB profile accepts `--soprano-solo`, `--tenor-solo`, and
@@ -189,18 +189,18 @@ marks unless given; each voice sings the song `--passes` times (default 2),
 holds its final note and drops out, and the last voice ends under a fermata:
 
 ```bash
-uv run sibelius-websocket-cli round round.musicxml --open
-uv run sibelius-websocket-cli round round.mxl --voices 3 --gap 4 --passes 1 -o out.mxl
+uv run sibelius-cli round round.musicxml --open
+uv run sibelius-cli round round.mxl --voices 3 --gap 4 --passes 1 -o out.mxl
 ```
 
 Calling ManuScript plug-ins and exploring the protocol:
 
 ```bash
-uv run sibelius-websocket-cli plugin sibwscli Echo --args '[1, {"a": true}]'
-uv run sibelius-websocket-cli raw '{"message": "invokeCommands", "commands": []}'
-uv run sibelius-websocket-cli repl                # interactive session
-uv run sibelius-websocket-cli ping                # is Sibelius responding?
-uv run sibelius-websocket-cli forget-token        # drop the cached token
+uv run sibelius-cli plugin sibwscli Echo --args '[1, {"a": true}]'
+uv run sibelius-cli raw '{"message": "invokeCommands", "commands": []}'
+uv run sibelius-cli repl                # interactive session
+uv run sibelius-cli ping                # is Sibelius responding?
+uv run sibelius-cli forget-token        # drop the cached token
 ```
 
 Global options: `--host`, `--port`, `--client-name`, `--timeout` (seconds to
@@ -229,7 +229,7 @@ Sibelius Connect session open and needs the bridge plug-in (v39+).
 | `export_score` | Export as MusicXML, MXL, PDF, MIDI or PNG |
 
 This repository's `.mcp.json` registers it for Claude Code. For another
-client, run `uv run --directory /path/to/sibelius-websocket-cli sibelius-mcp`.
+client, run `uv run --directory /path/to/sibelius-cli sibelius-mcp`.
 `SIBELIUS_HOST` and `SIBELIUS_PORT` override the default `localhost:1898`.
 The first call shows Sibelius's connection approval dialog, as the CLI does.
 

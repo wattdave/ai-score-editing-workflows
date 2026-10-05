@@ -15,7 +15,9 @@ dependencies = [
 ]
 
 [project.scripts]
-sibelius-websocket-cli = "ai_score_editing:main"
+sibelius-cli = "ai_score_editing:main"
+# Deprecated alias for sibelius-cli, kept for one release.
+sibelius-websocket-cli = "ai_score_editing:deprecated_main"
 sibelius-mcp = "ai_score_editing.sibelius.mcp_server:main"
 dorico-cli = "ai_score_editing.dorico.cli:main"
 dorico-mcp = "ai_score_editing.dorico.mcp_server:main"

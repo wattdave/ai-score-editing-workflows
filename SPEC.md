@@ -1,4 +1,4 @@
-# sibelius-websocket-cli — Specification
+# sibelius-cli — Specification
 
 A command-line tool for driving Sibelius via **Sibelius Connect**, the WebSocket
 server built into Sibelius 2024.3+ (Ultimate tier).
@@ -214,17 +214,17 @@ unless subcommand ergonomics justify `typer`.
 ### 2.2 Commands
 
 ```
-sibelius-websocket-cli ping                      # connect + empty invokeCommands
-sibelius-websocket-cli command <CommandName>     # send one command, print JSON response
-sibelius-websocket-cli invoke <id> [<id> ...]    # batch via invokeCommands
-sibelius-websocket-cli repl                      # interactive: read message names/JSON, print replies
-sibelius-websocket-cli raw '<json>'              # send arbitrary JSON (protocol exploration)
-sibelius-websocket-cli plugin <name> [method] [--args JSON]   # invokePlugin
-sibelius-websocket-cli score-info | staves | selection        # bridge reads
-sibelius-websocket-cli read --staff N --from A --to B         # read bar contents
-sibelius-websocket-cli do <operation>           # curated named command IDs
-sibelius-websocket-cli install-plugin           # install bundled sibwscli.plg
-sibelius-websocket-cli forget-token              # delete cached session token
+sibelius-cli ping                      # connect + empty invokeCommands
+sibelius-cli command <CommandName>     # send one command, print JSON response
+sibelius-cli invoke <id> [<id> ...]    # batch via invokeCommands
+sibelius-cli repl                      # interactive: read message names/JSON, print replies
+sibelius-cli raw '<json>'              # send arbitrary JSON (protocol exploration)
+sibelius-cli plugin <name> [method] [--args JSON]   # invokePlugin
+sibelius-cli score-info | staves | selection        # bridge reads
+sibelius-cli read --staff N --from A --to B         # read bar contents
+sibelius-cli do <operation>           # curated named command IDs
+sibelius-cli install-plugin           # install bundled sibwscli.plg
+sibelius-cli forget-token              # delete cached session token
 ```
 
 Global options: `--host` (default `localhost`), `--port` (default `1898`),

@@ -17,7 +17,7 @@ The project requires Python 3.13 or newer and is managed with `uv`.
 
 ```bash
 uv sync
-uv run sibelius-websocket-cli
+uv run sibelius-cli
 uv run pytest
 uv run dorico-cli overview      # Dorico back end, see docs/dorico.md
 python3 scripts/sync_skills.py

@@ -95,13 +95,13 @@ These steps happen in Sibelius, so the user does them; guide and wait.
    this project needs. Do not try to download it for them.
 2. If `sibelius-launched` is missing, ask them to open Sibelius once, then
    quit it.
-3. **Bridge plug-in:** `uv run sibelius-websocket-cli install-plugin`.
+3. **Bridge plug-in:** `uv run sibelius-cli install-plugin`.
 4. **Enable Sibelius Connect:** open Sibelius → Sibelius menu →
    Preferences → Input Devices, turn on Sibelius Connect, keep the port at
    1898, and restart Sibelius so the plug-in loads.
 5. **First connection:** with Sibelius open, run
    `scripts/setup_check.sh --connect`. Warn them first that Sibelius will
-   show a dialog asking to allow "sibelius-websocket-cli" and that they
+   show a dialog asking to allow "sibelius-cli" and that they
    must click OK. `connection` should report a bridge version. If it says
    Sibelius is busy, a dialog is open in Sibelius and they must close it.
 

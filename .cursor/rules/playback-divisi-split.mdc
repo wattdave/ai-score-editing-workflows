@@ -67,9 +67,9 @@ Import silently and save through the bridge (see the `sibelius` skill), rather
 than asking the user to click through the import dialog:
 
 ```bash
-uv run sibelius-websocket-cli plugin sibwscli OpenScore --args '["/abs/Score (playback).xml"]'
-uv run sibelius-websocket-cli plugin sibwscli ExportScore --args '["/abs/Score (playback).sib", "SIBL"]'
-uv run sibelius-websocket-cli plugin sibwscli OpenScore --args '["/abs/Score (playback).sib"]'
+uv run sibelius-cli plugin sibwscli OpenScore --args '["/abs/Score (playback).xml"]'
+uv run sibelius-cli plugin sibwscli ExportScore --args '["/abs/Score (playback).sib", "SIBL"]'
+uv run sibelius-cli plugin sibwscli OpenScore --args '["/abs/Score (playback).sib"]'
 ```
 
 Then:

@@ -9,7 +9,7 @@ alwaysApply: false
 Run all commands from the repository root with:
 
 ```bash
-uv run sibelius-websocket-cli <command>
+uv run sibelius-cli <command>
 ```
 
 The CLI talks to the frontmost score in Sibelius through Sibelius Connect and

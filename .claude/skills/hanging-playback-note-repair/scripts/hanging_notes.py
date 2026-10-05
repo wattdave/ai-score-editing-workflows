@@ -352,7 +352,7 @@ def format_audit_results(results: dict[str, Any]) -> tuple[str, bool]:
         for d in dangling:
             lines.append(f"  • Bar {d['bar']} index {d['index']}: {d['name']} (pitch {d['pitch']})")
             lines.append(f"    Reason: {d['reason']}")
-            lines.append(f"    Suggested Fix: uv run sibelius-websocket-cli tie --staff {staff} --bar {d['bar']} --index {d['index']} --remove\n")
+            lines.append(f"    Suggested Fix: uv run sibelius-cli tie --staff {staff} --bar {d['bar']} --index {d['index']} --remove\n")
 
     if reattacks:
         lines.append(f"\n[!] Flagged {len(reattacks)} SAME-PITCH RE-ATTACK CONFLICT(S) on Staff {staff} (Tier 3 Error - Dropped Note-Off Hazard):")
@@ -360,7 +360,7 @@ def format_audit_results(results: dict[str, Any]) -> tuple[str, bool]:
             lines.append(f"  • Bar {r['bar']} index {r['index']}: {r['name']} (pitch {r['pitch']}) -> Bar {r['next_bar']} index {r['next_index']}")
             lines.append(f"    Hazard: Re-attacks at Bar {r['reattack_bar']} pos {r['reattack_position']} in same voice")
             lines.append(f"    Reason: {r['reason']}")
-            lines.append(f"    Suggested Fix: uv run sibelius-websocket-cli tie --staff {staff} --bar {r['bar']} --index {r['index']} --remove\n")
+            lines.append(f"    Suggested Fix: uv run sibelius-cli tie --staff {staff} --bar {r['bar']} --index {r['index']} --remove\n")
 
     if tuplet_ties:
         lines.append(f"\n[i] Found {len(tuplet_ties)} NOTATIONALLY VALID TUPLET BOUNDARY TIE(S) on Staff {staff} (Tier 2 Playback Engine Bug):")
@@ -368,13 +368,13 @@ def format_audit_results(results: dict[str, Any]) -> tuple[str, bool]:
             lines.append(f"  • Bar {t['bar']} index {t['index']}: {t['name']} (pitch {t['pitch']}) -> Bar {t['next_bar']} index {t['next_index']}")
             lines.append(f"    Notice: Matches sheet music notation. If Sibelius's real-time playback engine hangs on this note,")
             lines.append(f"            remove the tie and replace with a Slur ('S' in Sibelius) to preserve visual engraving and restore clean playback.")
-            lines.append(f"    Workaround: uv run sibelius-websocket-cli tie --staff {staff} --bar {t['bar']} --index {t['index']} --remove\n")
+            lines.append(f"    Workaround: uv run sibelius-cli tie --staff {staff} --bar {t['bar']} --index {t['index']} --remove\n")
 
     return "\n".join(lines), has_errors
 
 
 def cmd_audit_score(args: argparse.Namespace) -> int:
-    """Audit score bars via sibelius-websocket-cli read to detect playback hang hazards."""
+    """Audit score bars via sibelius-cli read to detect playback hang hazards."""
     staff_arg = str(args.staff).lower().strip()
     from_bar = args.from_bar
     to_bar = args.to_bar
@@ -382,7 +382,7 @@ def cmd_audit_score(args: argparse.Namespace) -> int:
     # Determine staves to audit
     target_staves = []
     if staff_arg in ("all", "0"):
-        info_res = subprocess.run(["uv", "run", "sibelius-websocket-cli", "score-info"], capture_output=True, text=True)
+        info_res = subprocess.run(["uv", "run", "sibelius-cli", "score-info"], capture_output=True, text=True)
         if info_res.returncode == 0:
             try:
                 staff_count = json.loads(info_res.stdout).get("staffCount", 16)
@@ -403,10 +403,10 @@ def cmd_audit_score(args: argparse.Namespace) -> int:
     total_clean = 0
 
     for s in target_staves:
-        cmd = ["uv", "run", "sibelius-websocket-cli", "read", "--staff", str(s), "--from", str(from_bar), "--to", str(to_bar)]
+        cmd = ["uv", "run", "sibelius-cli", "read", "--staff", str(s), "--from", str(from_bar), "--to", str(to_bar)]
         res = subprocess.run(cmd, capture_output=True, text=True)
         if res.returncode != 0:
-            print(f"error calling sibelius-websocket-cli for staff {s}: {res.stderr}", file=sys.stderr)
+            print(f"error calling sibelius-cli for staff {s}: {res.stderr}", file=sys.stderr)
             total_issues += 1
             continue
 
