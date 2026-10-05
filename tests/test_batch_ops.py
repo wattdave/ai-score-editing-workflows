@@ -16,7 +16,7 @@ from ai_score_editing.batch_ops import (
 )
 from ai_score_editing.note_patches import batch_operations, execution_order
 
-PLUGIN = Path(__file__).parent.parent / "src/ai_score_editing/manuscript/sibwscli.plg"
+PLUGIN = Path(__file__).parent.parent / "src/ai_score_editing/sibelius/manuscript/sibwscli.plg"
 
 
 def test_python_writable_table_matches_plugin() -> None:
@@ -112,7 +112,7 @@ def test_system_staff_takes_system_text_and_lines() -> None:
 
 
 def test_system_staff_ops_need_bridge_48() -> None:
-    from ai_score_editing.cli import SYSTEM_STAFF_BRIDGE_VERSION, _batch_bridge_version
+    from ai_score_editing.sibelius.cli import SYSTEM_STAFF_BRIDGE_VERSION, _batch_bridge_version
 
     system_text = validate_batch([{"op": "delete", "staff": 0, "bar": 1, "index": 0}])
     staff_line = validate_batch([{"op": "add-line", "staff": 1, "bar": 1, "position": 0,
@@ -254,7 +254,7 @@ def test_barline_names_match_set_barline_types() -> None:
 
 
 def test_layout_batch_ops_validate_and_need_bridge_50() -> None:
-    from ai_score_editing.cli import LAYOUT_BATCH_BRIDGE_VERSION, _batch_bridge_version
+    from ai_score_editing.sibelius.cli import LAYOUT_BATCH_BRIDGE_VERSION, _batch_bridge_version
 
     batch = validate_batch([
         {"op": "set", "staff": 1, "bar": 2, "index": 1, "prop": "NumNotes", "value": 3},
@@ -315,7 +315,7 @@ def test_set_layout_names_zero_valued_settings() -> None:
 
 
 def test_hide_empty_staves_validates_a_bar_range_and_needs_bridge_52() -> None:
-    from ai_score_editing.cli import HIDE_EMPTY_STAVES_BRIDGE_VERSION, _batch_bridge_version
+    from ai_score_editing.sibelius.cli import HIDE_EMPTY_STAVES_BRIDGE_VERSION, _batch_bridge_version
 
     batch = validate_batch([{"op": "hide-empty-staves", "fromBar": 1, "toBar": 43}])
     assert batch == [{"op": "hide-empty-staves", "fromBar": 1, "toBar": 43}]

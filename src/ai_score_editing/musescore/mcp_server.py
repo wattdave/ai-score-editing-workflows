@@ -21,7 +21,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from ai_score_editing.batch_ops import BatchError
-from ai_score_editing.cli import parse_bar_range
+from ai_score_editing.barrange import parse_bar_range
 from ai_score_editing.query import QueryError
 
 from . import install, service

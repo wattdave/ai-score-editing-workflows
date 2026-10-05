@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Helper tool for auditing and cleaning redundant clef objects in Sibelius scores.
 
-The detection rules live in ``ai_score_editing.clefs``, shared with the
+The detection rules live in ``ai_score_editing.sibelius.clefs``, shared with the
 ``remove-redundant-clefs`` operation of ``patch-layout``. This script adds the
 audit report and a standalone strip-and-save command.
 """
@@ -14,9 +14,9 @@ from collections import defaultdict
 import sys
 
 try:
-    from ai_score_editing.cli import _bridge, BRIDGE_PLUGIN, _backup
-    from ai_score_editing.client import SibeliusClient
-    from ai_score_editing.clefs import _staff_default_clef, audit_score_clefs, build_meter_map
+    from ai_score_editing.sibelius.cli import _bridge, BRIDGE_PLUGIN, _backup
+    from ai_score_editing.sibelius.client import SibeliusClient
+    from ai_score_editing.sibelius.clefs import _staff_default_clef, audit_score_clefs, build_meter_map
     HAVE_CLIENT = True
 except ImportError:
     HAVE_CLIENT = False

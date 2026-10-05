@@ -1,7 +1,7 @@
 """Tests for the ManuScript static linter and regression checks."""
 
 from pathlib import Path
-from ai_score_editing.manuscript_linter import (
+from ai_score_editing.sibelius.manuscript_linter import (
     ManuScriptLinter,
     lint_file,
     lint_manuscript,
@@ -14,6 +14,7 @@ def test_lint_current_sibwscli_plg() -> None:
         Path(__file__).parent.parent
         / "src"
         / "ai_score_editing"
+        / "sibelius"
         / "manuscript"
         / "sibwscli.plg"
     )

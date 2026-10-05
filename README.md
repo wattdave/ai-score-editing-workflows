@@ -308,7 +308,7 @@ python scripts/sync_skills.py --check  # check for drift without modifying files
 - [`docs/avid-reference.md`](docs/avid-reference.md) — links to Avid's
   ManuScript Language Guide (Sibelius Connect protocol, all 627 command IDs,
   and the object reference for extending the bridge plug-in in
-  `src/ai_score_editing/manuscript/sibwscli.plg`), plus the places
+  `src/ai_score_editing/sibelius/manuscript/sibwscli.plg`), plus the places
   where the guide is wrong
 
 ## Development

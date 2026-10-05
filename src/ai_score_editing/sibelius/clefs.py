@@ -17,7 +17,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from ai_score_editing import batch_ops, cli
+from ai_score_editing import batch_ops
+from ai_score_editing.sibelius import cli
 
 
 # Sibelius expresses object positions in ticks, where a quarter note is 256.

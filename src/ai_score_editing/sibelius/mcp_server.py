@@ -18,8 +18,9 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from ai_score_editing import batch_ops, protocol
-from ai_score_editing.cli import (
+from ai_score_editing import batch_ops
+from ai_score_editing.sibelius import protocol
+from ai_score_editing.sibelius.cli import (
     BRIDGE_PLUGIN,
     EXPORT_FORMATS,
     QUERY_BRIDGE_VERSION,
@@ -33,7 +34,7 @@ from ai_score_editing.cli import (
     _require_bridge,
     parse_bar_range,
 )
-from ai_score_editing.client import ConnectionFailed, SibeliusClient
+from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient
 from ai_score_editing.query import QueryError, build_selector, resolve_staves
 
 T = TypeVar("T")

@@ -7,8 +7,8 @@ connect) and edit, back up and save whatever score is open.
 
 import pytest
 
-from ai_score_editing import protocol
-from ai_score_editing.client import SibeliusClient
+from ai_score_editing.sibelius import protocol
+from ai_score_editing.sibelius.client import SibeliusClient
 from ai_score_editing.dorico import client as dorico_client
 from ai_score_editing.musescore import client as musescore_client
 from ai_score_editing.musescore import install as musescore_install

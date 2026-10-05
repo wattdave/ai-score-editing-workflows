@@ -19,44 +19,22 @@ from ai_score_editing import (
     agent_output,
     batch_ops,
     batch_lyrics,
-    launcher,
     layout,
     lyrics,
     music,
     note_patches,
     polychoral,
-    protocol,
     rehearsal_mix,
 )
-from ai_score_editing.client import ConnectionFailed, SibeliusClient, run_sync
+from ai_score_editing.barrange import parse_bar_range
 from ai_score_editing.intervals import compute_transposition
+from ai_score_editing.sibelius import launcher, protocol
+from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient, run_sync
 from ai_score_editing.token_store import TokenStore
 
 EXIT_OK = 0
 EXIT_COMMAND_FAILED = 1
 EXIT_CONNECTION_FAILED = 2
-
-
-def parse_bar_range(
-    bar: int | None = None,
-    bars: str | None = None,
-    from_bar: int | None = None,
-    to_bar: int | None = None,
-) -> tuple[int | None, int | None]:
-    """Parse bar range options into (from_bar, to_bar)."""
-    if bars:
-        cleaned = bars.replace("..", "-").strip()
-        if "-" in cleaned:
-            parts = cleaned.split("-", 1)
-            f = int(parts[0].strip()) if parts[0].strip() else None
-            t = int(parts[1].strip()) if parts[1].strip() else None
-            return (f, t)
-        else:
-            b = int(cleaned)
-            return (b, b)
-    if bar is not None:
-        return (bar, bar)
-    return (from_bar, to_bar)
 
 
 def build_parser() -> argparse.ArgumentParser:

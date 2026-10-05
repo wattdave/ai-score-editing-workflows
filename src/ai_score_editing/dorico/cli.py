@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from ai_score_editing.cli import parse_bar_range
+from ai_score_editing.barrange import parse_bar_range
 
 from . import lyrics_dialog, project_info, service
 from .bridge import DoricoBridge

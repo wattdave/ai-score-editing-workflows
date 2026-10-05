@@ -16,7 +16,7 @@ dependencies = [
 
 [project.scripts]
 sibelius-websocket-cli = "ai_score_editing:main"
-sibelius-mcp = "ai_score_editing.mcp_server:main"
+sibelius-mcp = "ai_score_editing.sibelius.mcp_server:main"
 dorico-cli = "ai_score_editing.dorico.cli:main"
 dorico-mcp = "ai_score_editing.dorico.mcp_server:main"
 musescore-cli = "ai_score_editing.musescore.cli:main"

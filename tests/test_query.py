@@ -15,7 +15,7 @@ from ai_score_editing.query import (
     resolve_staves,
 )
 
-PLUGIN = Path(__file__).parent.parent / "src/ai_score_editing/manuscript/sibwscli.plg"
+PLUGIN = Path(__file__).parent.parent / "src/ai_score_editing/sibelius/manuscript/sibwscli.plg"
 
 STAVES = [
     {"staffNum": 1, "instrumentName": "S.", "fullInstrumentName": "Soprano"},
