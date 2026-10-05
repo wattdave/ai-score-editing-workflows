@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "AI-driven score editing for Sibelius, Dorico and MuseScore: CLIs, MCP servers and bridge plug-ins"
 readme = "README.md"
 authors = [
-    { name = "David Watt", email = "sibelius-ai-workflows@dave.wattlink.net" }
+    { name = "David Watt", email = "ai-score-editing-workflows@dave.wattlink.net" }
 ]
 requires-python = ">=3.13"
 dependencies = [
