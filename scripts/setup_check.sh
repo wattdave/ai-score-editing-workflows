@@ -68,7 +68,7 @@ else
     report missing ffmpeg "brew install ffmpeg (needed for rehearsal mixes)"
 fi
 
-# Optional: only needed to convert LilyPond sources (lilypond-to-sibelius skill).
+# Optional: only needed to convert LilyPond sources (lilypond-to-score skill).
 if command -v lilypond >/dev/null 2>&1; then
     report ok lilypond "$(lilypond --version 2>/dev/null | head -1)"
 else

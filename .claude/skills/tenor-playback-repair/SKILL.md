@@ -1,6 +1,6 @@
 ---
 name: tenor-playback-repair
-description: Diagnose and repair octave-high playback in a Sibelius tenor line imported from MusicXML, while preserving the original score.
+description: Sibelius only. Diagnose and repair octave-high playback in a Sibelius tenor line imported from MusicXML, while preserving the original score.
 ---
 
 # Tenor Playback Repair

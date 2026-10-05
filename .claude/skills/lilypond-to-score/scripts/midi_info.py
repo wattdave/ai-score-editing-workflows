@@ -1,7 +1,7 @@
 """Summarize the notes in a MIDI file, one line per track.
 
 Use it to check a conversion: compare LilyPond's MIDI with a MIDI exported
-from the finished Sibelius score. Note counts, ranges and timing should
+from the finished score (Sibelius, Dorico or MuseScore). Note counts, ranges and timing should
 match exactly. Needs only the standard library.
 
 usage: midi_info.py FILE.mid [FILE.mid ...]

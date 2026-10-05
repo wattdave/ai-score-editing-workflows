@@ -1,7 +1,7 @@
 ---
 name: rehearsal-mixes
 description: >
-  Produce practice parts (rehearsal tracks, learning tracks, part-predominant
+  Sibelius only. Produce practice parts (rehearsal tracks, learning tracks, part-predominant
   mixes) from the score open in Sibelius: one MP3 of all voices, plus for each
   sung part an "only" mix (that voice with accompaniment) and a "louder" mix
   (that voice at 3x over the others). Use when the user asks for practice

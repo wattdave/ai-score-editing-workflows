@@ -13,7 +13,7 @@ before scanning anything.
   entries next to the PDFs.
 - **MuseScore.com**: user arrangements; check it is the same edition.
 
-MusicXML is the useful format: Sibelius opens it directly. LilyPond works via
+MusicXML is the useful format: Sibelius, Dorico and MuseScore all open it. LilyPond works via
 the [LilyPond workflow](../SKILL.md). Finale, Capella and NoteWorthy files
 need their own software.
 

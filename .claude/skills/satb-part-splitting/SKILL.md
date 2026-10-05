@@ -1,7 +1,7 @@
 ---
 name: satb-part-splitting
 description: >
-  Demix and transform 2-staff choral/piano scores (S+A in treble, T+B in bass)
+  Sibelius (via sibelius-cli). Demix and transform 2-staff choral/piano scores (S+A in treble, T+B in bass)
   into 4 discrete SATB staves with separate MIDI playback channels, proper
   clefs (including Tenor treble-8vb), preserved lyrics, and clean measure rests.
 ---

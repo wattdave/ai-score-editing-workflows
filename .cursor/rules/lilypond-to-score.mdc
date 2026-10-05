@@ -1,10 +1,10 @@
 ---
-description: Turn a LilyPond (.ly) score, such as a CPDL or IMSLP engraving source, into a readable Sibelius score with correct bars, clefs and lyrics, via python-ly and this skill's re-barring and lyric scripts. Also covers when a MIDI import is enough, and how to find editable editions of a piece. Use when a piece has LilyPond source but no MusicXML, or when asked to find editable versions of scores.
+description: Turn a LilyPond (.ly) score, such as a CPDL or IMSLP engraving source, into a readable MusicXML score (for Sibelius, Dorico or MuseScore) with correct bars, clefs and lyrics, via python-ly and this skill's re-barring and lyric scripts. Also covers when a MIDI import is enough, and how to find editable editions of a piece. Use when a piece has LilyPond source but no MusicXML, or when asked to find editable versions of scores.
 globs: *
 alwaysApply: false
 ---
 
-# LilyPond to Sibelius
+# LilyPond to a score
 
 Many early-music editions on CPDL and IMSLP publish LilyPond source but no
 MusicXML. python-ly can convert LilyPond to MusicXML, but on real engraving
@@ -13,12 +13,12 @@ converts the notes, rebuilds the bars, and re-attaches the lyrics, checking
 each step against LilyPond's own MIDI.
 
 To find an edition in the first place, see
-[finding editions](../../.claude/skills/lilypond-to-sibelius/references/finding-editions.md).
+[finding editions](../../.claude/skills/lilypond-to-score/references/finding-editions.md).
 
 ## Do you need a readable score?
 
 - **Playback only** (notes matter, looks don't): import LilyPond's MIDI into
-  Sibelius (`\midi` block; or the MIDI the edition already ships). It is
+  your score editor (`\midi` block; or the MIDI the edition already ships). It is
   quick, but the score is unreadable: no lyrics or clefs, and rhythms are
   guessed. Remove incipits first (below), or they sound at the start.
 - **A score people read**: follow the steps below.
@@ -63,8 +63,9 @@ Scripts are in this skill's `scripts/`; run each with `python3`.
    copy.ly rebar.xml final.xml P1=NotesS:LyricsS ...`. It refuses to write if
    a part's notes and syllables don't line up.
 6. **Name the parts and title** in the MusicXML (`part-name`, `work-title`,
-   `creator type="composer"`), then import into Sibelius (the MusicXML
-   options dialog needs OK), save as `.sib`, and set instruments. Setting an
+   `creator type="composer"`), then import the MusicXML into your editor
+   (in Sibelius the options dialog needs OK; save as `.sib`), and set
+   instruments. Setting an
    instrument renames the staff; restore names with `set-staff-name --full`.
 
 ## Check every stage
@@ -76,7 +77,7 @@ Scripts are in this skill's `scripts/`; run each with `python3`.
   printed edition.
 - After step 5: syllables placed, and the first words of each part read as
   the text.
-- After import: export MIDI from Sibelius and compare with `midi_info.py`
+- After import: export MIDI from the editor and compare with `midi_info.py`
   again. The notes, ranges and timings must match exactly.
 - Proofread lyric "divergence" errors are expected in polyphony where parts
   sing different words at different times.

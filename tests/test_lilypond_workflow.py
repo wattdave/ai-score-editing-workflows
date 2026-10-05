@@ -1,4 +1,4 @@
-"""Tests for the lilypond-to-sibelius skill scripts."""
+"""Tests for the lilypond-to-score skill scripts."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parent.parent / ".claude" / "skills" / "lilypond-to-sibelius" / "scripts"
+SCRIPTS = Path(__file__).resolve().parent.parent / ".claude" / "skills" / "lilypond-to-score" / "scripts"
 
 
 def load(name: str):

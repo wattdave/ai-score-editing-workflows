@@ -1,7 +1,7 @@
 ---
 name: playback-divisi-split
 description: >
-  Build a playback copy of a choral or ensemble score in which every staff
+  Sibelius (via sibelius-cli). Build a playback copy of a choral or ensemble score in which every staff
   sounds exactly one note at a time: split chords and divisi onto separate
   staves, fill unison openings, and let resting voices double the melody.
   Use when playback (one vocal sample or MIDI channel per singer) drops

@@ -1,5 +1,5 @@
 ---
-description: Diagnose and repair octave-high playback in a Sibelius tenor line imported from MusicXML, while preserving the original score.
+description: Sibelius only. Diagnose and repair octave-high playback in a Sibelius tenor line imported from MusicXML, while preserving the original score.
 globs: *
 alwaysApply: false
 ---

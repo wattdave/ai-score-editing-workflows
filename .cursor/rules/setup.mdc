@@ -1,5 +1,5 @@
 ---
-description: Guide a new user through installing everything this repository needs on a Mac: Homebrew, git, uv, Python 3.13, ffmpeg, the project's Python packages, Sibelius Ultimate 2026.6+, Sibelius Connect and the bridge plug-in. Use on /setup or $setup, when the user asks to set up, install or get started, when a command fails because a tool is missing, or when a user seems new to the project.
+description: Guide a new user through installing everything this repository needs on a Mac: Homebrew, git, uv, Python 3.13, ffmpeg, the project's Python packages, and the score editors it drives (Sibelius Ultimate 2026.6+ with Sibelius Connect, Dorico, MuseScore 4) with their ScoreBridge plug-ins. Use on /setup or $setup, when the user asks to set up, install or get started, when a command fails because a tool is missing, or when a user seems new to the project.
 globs: *
 alwaysApply: false
 ---
@@ -129,6 +129,14 @@ so it is safe on shared networks. If the user has the older
 "musescore-mcp-websocket" plug-in installed, suggest deleting it from
 `~/Documents/MuseScore4/Plugins`: it accepts edits from anyone on the
 network.
+
+## 4c. Dorico (optional)
+
+Only if the user works in Dorico 6.2 or newer. Claude Code starts the
+`dorico` MCP server from `.mcp.json`; read the Dorico section of
+[docs/dorico.md](../../../docs/dorico.md) for how the connection is made
+and approved, and walk the user through it. Check with
+`uv run dorico-cli overview`.
 
 ## 5. Finish
 

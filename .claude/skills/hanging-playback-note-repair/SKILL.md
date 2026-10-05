@@ -1,7 +1,7 @@
 ---
 name: hanging-playback-note-repair
 description: >
-  Diagnose and repair hanging or endlessly sustaining notes during Sibelius
+  Sibelius only. Diagnose and repair hanging or endlessly sustaining notes during Sibelius
   playback caused by dangling ties, ties crossing tuplet boundaries, or same-pitch
   re-attacks. Establish ground truth against original sheet music or PDF scans, verify
   MIDI Note-Off events, and restore clean playback.
