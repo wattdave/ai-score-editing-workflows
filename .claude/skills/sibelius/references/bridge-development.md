@@ -12,7 +12,7 @@ version mismatch.
   restart to the user unless a save/discard choice requires their direction.
 - Batch plug-in edits together and update `GetBridgeVersion` when the bridge
   contract changes, because every plug-in update requires that restart.
-- Use Avid's ManuScript Language Guide and `SPEC.md` as the API authority.
+- Use Avid's ManuScript Language Guide and `docs/sibelius-protocol.md` as the API authority.
   `docs/avid-reference.md` links the guide, maps chapters to the gitignored
   local transcriptions (`docs/manuscript-object-tree.md` and others; use
   them when present), and lists where the guide is wrong, including

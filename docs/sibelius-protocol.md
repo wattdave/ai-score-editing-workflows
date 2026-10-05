@@ -1,4 +1,4 @@
-# sibelius-cli — Specification
+# Sibelius Connect protocol and CLI — specification
 
 A command-line tool for driving Sibelius via **Sibelius Connect**, the WebSocket
 server built into Sibelius 2024.3+ (Ultimate tier).

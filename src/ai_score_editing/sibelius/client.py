@@ -1,6 +1,6 @@
 """Async client for Sibelius Connect, plus a sync convenience wrapper.
 
-Connect flow (SPEC.md 2.3): with a cached token, connect silently (Sibelius
+Connect flow (docs/sibelius-protocol.md 2.3): with a cached token, connect silently (Sibelius
 sends no reply) and verify liveness with an empty invokeCommands. Without a
 token — or if the silent connect turns out dead — do a tokenless connect,
 which pops an approval dialog in Sibelius, and store the new token.

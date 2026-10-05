@@ -1,6 +1,6 @@
 """Persistence for Sibelius Connect session tokens.
 
-Approval in Sibelius is per-token (SPEC.md 1.1), so the token must be
+Approval in Sibelius is per-token (docs/sibelius-protocol.md 1.1), so the token must be
 persisted to avoid an approval dialog on every invocation. Tokens are
 stored in a single JSON file keyed by "host:port".
 

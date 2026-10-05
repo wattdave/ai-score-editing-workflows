@@ -13,7 +13,7 @@ must come after every object operation. Their bars are checked against the
 score before the batch; a set-time re-bars what follows it, and an add-bars
 with a bar inserts before it, so no later operation may name a bar that either
 has moved. Re-barring also erased a special
-barline just before it (SPEC.md 1.3.1), so every set-time must come before any
+barline just before it (docs/sibelius-protocol.md 1.3.1), so every set-time must come before any
 set-key, set-break or set-barline.
 
 Staff 0 is the system staff, which holds tempo and other system text and
@@ -61,7 +61,7 @@ SYSTEM_STAFF = 0
 SYSTEM_STAFF_OPS = {"set", "delete", "nudge", "add-text", "add-line"}
 
 # AddKeySignatureFromText turns an unknown name into C major without an error
-# (SPEC.md 1.3.1), so only the fifteen standard keys of each mode are allowed.
+# (docs/sibelius-protocol.md 1.3.1), so only the fifteen standard keys of each mode are allowed.
 MAJOR_KEYS = {"C", "G", "D", "A", "E", "B", "F#", "C#", "F", "Bb", "Eb", "Ab", "Db", "Gb", "Cb"}
 MINOR_KEYS = {"A", "E", "B", "F#", "C#", "G#", "D#", "A#", "D", "G", "C", "F", "Bb", "Eb", "Ab"}
 TIME_SYMBOLS = {"common": (4, 4), "cut": (2, 2)}
@@ -83,7 +83,7 @@ BREAK_NAMES = {
 }
 
 # Selection.Transpose shows a modal dialog for out-of-range arguments
-# (SPEC.md 1.3.1). Interval types run 0-10; degrees are held to three octaves.
+# (docs/sibelius-protocol.md 1.3.1). Interval types run 0-10; degrees are held to three octaves.
 MAX_TRANSPOSE_DEGREE = 21
 MAX_ADD_BARS = 1000
 # An irregular bar's length, in 1/256 quarters: up to sixteen whole notes.
@@ -267,7 +267,7 @@ def _validate_structural(operation: dict[str, Any], op: str, label: str) -> dict
             raise BatchError(f"{label}.key must be a {mode} key: {', '.join(sorted(keys))}")
         out.update(key=key, major=not minor)
     elif op == "set-time":
-        # AddTimeSignature with a zero numerator crashes Sibelius (SPEC.md 1.3.1).
+        # AddTimeSignature with a zero numerator crashes Sibelius (docs/sibelius-protocol.md 1.3.1).
         top = _int(operation, "numerator", label, minimum=1, maximum=64)
         bottom = _int(operation, "denominator", label, minimum=1, maximum=64)
         if bottom & (bottom - 1):

@@ -7,8 +7,8 @@ new skills and code changes are all welcome.
 
 Follow [Getting started](README.md#getting-started-with-claude-code) in the
 README, or run `scripts/setup_check.sh` and install what it reports missing.
-You need a Mac and Sibelius Ultimate 2026.6 or later to use the tools; the
-test suite runs without Sibelius.
+You need a Mac and one of Sibelius Ultimate 2026.6+, Dorico 6.2+ or
+MuseScore 4.6+ to use the tools; the test suite runs without any of them.
 
 ## Reporting a problem
 

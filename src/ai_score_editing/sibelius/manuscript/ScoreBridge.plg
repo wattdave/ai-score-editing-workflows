@@ -819,7 +819,7 @@
 
 	QueryPropTable "() {
 		// Properties Query may read through obj.@name, per object kind. An
-		// unknown name raises a modal dialog that blocks Sibelius (SPEC.md
+		// unknown name raises a modal dialog that blocks Sibelius (docs/sibelius-protocol.md
 		// 1.3.1), so nothing outside this table is ever dereferenced.
 		// Mirrored by query.py READABLE_PROPS; a test keeps them in sync.
 		common = CreateDictionary(
@@ -1129,7 +1129,7 @@
 			}
 		}
 		if (opName = 'transpose') {
-			// Out-of-range arguments raise a modal dialog (SPEC.md 1.3.1).
+			// Out-of-range arguments raise a modal dialog (docs/sibelius-protocol.md 1.3.1).
 			if (op['intervalType'] < 0 or op['intervalType'] > 10 or op['degree'] < -21 or op['degree'] > 21) {
 				return 'transposition out of range';
 			}
@@ -1156,7 +1156,7 @@
 			}
 		}
 		if (opName = 'set-time') {
-			// A zero numerator crashes Sibelius (SPEC.md 1.3.1).
+			// A zero numerator crashes Sibelius (docs/sibelius-protocol.md 1.3.1).
 			d = op['denominator'];
 			if (op['numerator'] < 1 or op['numerator'] > 64) {
 				return 'numerator must be 1-64';
@@ -1677,7 +1677,7 @@
 		}
 		writable = BatchWritableTable();
 		// Resolve every address before the first edit: later edits shift bar
-		// indices, but references taken now stay valid (SPEC.md 1.3.1).
+		// indices, but references taken now stay valid (docs/sibelius-protocol.md 1.3.1).
 		targets = CreateSparseArray();
 		results = CreateSparseArray();
 		structuralSeen = False;

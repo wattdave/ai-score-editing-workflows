@@ -37,10 +37,10 @@ Found by running code against Sibelius; not in Avid's text.
   method lives on the object whose section lists it; a wrong receiver fails
   only at runtime with "Unknown method".
 - **`utils.CalculateDegree`** and **`return_value` versus `returnValue`**
-  differ from the guide; see `SPEC.md` and the bridge plug-in for the forms
+  differ from the guide; see `docs/sibelius-protocol.md` and the bridge plug-in for the forms
   that work.
 - **The "Hierarchy of Objects" diagram** (start of chapter 4) is an image
   that does not extract as text; rebuild the tree from the containment
   relationships in each object's section.
 - **`Transpose` interval types** must be 0 to 10 (chapter 7 constants);
-  see `SPEC.md` for the argument combinations that work.
+  see `docs/sibelius-protocol.md` for the argument combinations that work.

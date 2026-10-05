@@ -1,14 +1,31 @@
-# sibelius-cli
+# AI score editing workflows
 
-A command-line tool for driving Sibelius via **Sibelius Connect** — the
-WebSocket server built into Sibelius 2024.3+ (Ultimate tier). It can fire any
-of Sibelius's ~627 command IDs, and — via a bundled ManuScript bridge plug-in —
-read score structure and note content back out.
+Command-line tools, MCP servers and agent skills that let an AI assistant
+read and edit the score open in your notation software, and run
+score-conversion workflows (LilyPond, MusicXML, scanned-score repair).
+
+| Editor | Connection | Commands | Status |
+| --- | --- | --- | --- |
+| Sibelius (Ultimate 2026.6+) | Sibelius Connect (WebSocket) plus the ScoreBridge ManuScript plug-in | `sibelius-cli`, `sibelius-mcp` | full |
+| Dorico (6.2+) | Remote Control API plus Lua scripting | `dorico-cli`, `dorico-mcp` | experimental, see [docs/dorico.md](docs/dorico.md) |
+| MuseScore (4.6+) | ScoreBridge QML plug-in (WebSocket) | `musescore-cli`, `musescore-mcp` | see [docs/musescore.md](docs/musescore.md) |
+
+All three share the same tool shapes and units, so a request such as "transpose
+bars 5–8 up a tone" works the same way in each. Ask Claude with the
+`score-editing` skill, or use the app's own skill (`/sibelius`, `/dorico`,
+`/musescore`). The sections below start with Sibelius, the original back end,
+and then cover Dorico and MuseScore.
+
+The Sibelius back end drives **Sibelius Connect** — the WebSocket server built
+into Sibelius 2024.3+ (Ultimate tier). It can fire any of Sibelius's ~627
+command IDs, and — via the bundled ScoreBridge plug-in — read score structure
+and note content back out.
 
 ## Getting started with Claude Code
 
-You do not need to install anything by hand. You need a Mac, Sibelius
-Ultimate 2026.6 or later, and a paid Claude account: Claude Code needs a
+You do not need to install anything by hand. You need a Mac, at least one
+score editor (Sibelius Ultimate 2026.6 or later, Dorico 6.2 or later, or
+MuseScore 4.6 or later), and a paid Claude account: Claude Code needs a
 Pro, Max, Team or Enterprise plan, or a Console (API) account. The free
 Claude plan does not include Claude Code; see
 [Setting up without Claude](#setting-up-without-claude) instead.
@@ -24,7 +41,7 @@ Claude plan does not include Claude Code; see
    asks whether to trust this folder and approve its `sibelius` tool server;
    say yes to both.
 4. Type `/setup`. Claude explains what is missing (Homebrew, git, uv,
-   Python 3.13, ffmpeg, the Sibelius plug-in), asks whether to install it
+   Python 3.13, ffmpeg, the ScoreBridge plug-in for your editor), asks whether to install it
    all at once or one item at a time, and does the work.
 
 `scripts/setup_check.sh` shows what is installed at any time.
@@ -89,12 +106,12 @@ The same steps by hand, in Terminal, from this folder:
    scripts/setup_check.sh --connect
    ```
 
-## Requirements
+## Sibelius: requirements
 
 - Sibelius Ultimate 2026.6 or later, running on the same machine
 - Python 3.13+ and [uv](https://docs.astral.sh/uv/)
 
-## Setup
+## Sibelius: setup
 
 1. **Enable Sibelius Connect** in Sibelius: Preferences → Input Devices
    (default port 1898).
@@ -128,7 +145,7 @@ The same steps by hand, in Terminal, from this folder:
    connect silently. Tokens die with the Sibelius process, so expect one
    dialog per Sibelius launch.
 
-## Usage
+## Sibelius: usage
 
 Reading the open score (requires the bridge plug-in):
 
@@ -221,7 +238,7 @@ if not running, default: true), `--launch-timeout` (seconds to wait for Sibelius
 Exit codes: `0` success, `1` the call failed (plug-in not found, bridge error),
 `2` could not connect to Sibelius.
 
-## MCP server
+## Sibelius: MCP server
 
 `sibelius-mcp` exposes the open score to MCP clients over stdio. It keeps one
 Sibelius Connect session open and needs the bridge plug-in (v39+).
@@ -297,8 +314,9 @@ still installed.
 
 ## Multi-Agent Skills (Claude, Antigravity, Cursor)
 
-The canonical Sibelius skill lives in `.claude/skills/sibelius/`. Its concise
-entrypoint links to focused references that agents read only for the active
+Skills live in `.claude/skills/`: `score-editing` routes a request to the right
+editor, and `sibelius`, `dorico` and `musescore` are the per-editor skills. Each
+concise entrypoint links to focused references that agents read only for the active
 workflow. The complete directory is exposed to Antigravity by symlink; the
 generated Cursor rule links back to the same canonical references without
 automatically loading them. Keep the harness files in sync:
@@ -310,7 +328,7 @@ python scripts/sync_skills.py --check  # check for drift without modifying files
 
 ## Documentation
 
-- [`SPEC.md`](SPEC.md) — the empirically verified Sibelius Connect wire
+- [`docs/sibelius-protocol.md`](docs/sibelius-protocol.md) — the empirically verified Sibelius Connect wire
   protocol (one-step handshake, silent token reconnect, `invokePlugin`
   semantics and gotchas) and the CLI design
 - [`docs/avid-reference.md`](docs/avid-reference.md) — links to Avid's
@@ -334,10 +352,12 @@ export, which is copyrighted and kept out of the repository; it skips unless
 SIBWS_12PP_EXPORT=~/Downloads/export.xml uv run pytest tests/test_polychoral.py
 ```
 
-Sources: `src/ai_score_editing/` — `protocol.py` (message builders),
-`client.py` (async client with token/approval handling), `launcher.py` (Sibelius
-process detection and launch), `token_store.py`, `cli.py`, and the bundled bridge plug-in
-under `manuscript/`.
+Sources: `src/ai_score_editing/`. Each editor has its own subpackage:
+`sibelius/` (`protocol.py` message builders, `client.py` async client with
+token/approval handling, `launcher.py` process detection and launch, `cli.py`,
+`mcp_server.py`, and the ScoreBridge plug-in under `manuscript/`), `dorico/` and
+`musescore/`. Modules at the top level (`batch_ops`, `query`, `lyrics`,
+`intervals`, `token_store`, the MusicXML tools) are shared.
 
 ## Contributing
 

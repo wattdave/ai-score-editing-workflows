@@ -1,4 +1,4 @@
-"""Command-line interface (SPEC.md 2.2)."""
+"""Command-line interface (docs/sibelius-protocol.md 2.2)."""
 
 from __future__ import annotations
 
@@ -695,7 +695,7 @@ EXPORT_FORMATS = {
 
 # Curated friendly names -> ManuScript command IDs (see docs/avid-reference.md).
 # Note these are fire-and-forget: Sibelius acknowledges receipt but never
-# reports whether the command did anything (SPEC.md 1.2).
+# reports whether the command did anything (docs/sibelius-protocol.md 1.2).
 NAMED_OPERATIONS = {
     "undo": "undo",
     "redo": "redo",

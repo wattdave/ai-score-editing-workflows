@@ -1,6 +1,6 @@
 """Sibelius Connect wire protocol: message builders and response parsing.
 
-See SPEC.md section 1 for the empirically verified protocol.
+See docs/sibelius-protocol.md section 1 for the empirically verified protocol.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def connect_message(
     if session_token is not None:
         message["sessionToken"] = session_token
     # The plug-in list is only honored on a tokenless connect; it cannot be
-    # changed when reconnecting with a session token (SPEC.md 1.1).
+    # changed when reconnecting with a session token (docs/sibelius-protocol.md 1.1).
     if plugins:
         message["plugins"] = plugins
     return message

@@ -104,5 +104,5 @@ Do not load unrelated references.
 
 ## Local authority
 
-For new bridge work, use `docs/avid-reference.md` and `SPEC.md`; live-probe
+For new bridge work, use `docs/avid-reference.md` and `docs/sibelius-protocol.md`; live-probe
 changes on a scratch score before applying them to real music.
