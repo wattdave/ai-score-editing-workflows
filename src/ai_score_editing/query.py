@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 # Properties the bridge may read through obj.@name, per object kind. Mirrors
-# QueryPropTable in sibwscli.plg (a test keeps them in sync). The plug-in
+# QueryPropTable in ScoreBridge.plg (a test keeps them in sync). The plug-in
 # enforces its own copy; this one turns typos into errors before connecting,
 # since an unknown name there would silently match nothing.
 COMMON_PROPS = frozenset(

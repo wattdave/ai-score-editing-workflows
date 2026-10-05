@@ -40,7 +40,7 @@ boundary timebase mismatch, or a same-pitch re-attack conflict in the playback e
 
 ## Dependencies & Tools
 
-- **`sibwscli` / `sibelius-cli`**: Used to read note objects, adjust ties, delete unwanted artifacts, and export MIDI files.
+- **`ScoreBridge` / `sibelius-cli`**: Used to read note objects, adjust ties, delete unwanted artifacts, and export MIDI files.
 - **`hanging_notes.py`** (`scripts/hanging_notes.py`): Standalone CLI helper for:
   - `audit-score`: Scans score bars across one or all staves to detect dangling ties, pitch mismatches, tuplet boundary ties, and same-pitch re-attack conflicts.
   - `audit-midi`: Scans exported MIDI track events for unclosed `Note-On` events or abnormally long sustains.

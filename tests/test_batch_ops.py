@@ -16,7 +16,7 @@ from ai_score_editing.batch_ops import (
 )
 from ai_score_editing.note_patches import batch_operations, execution_order
 
-PLUGIN = Path(__file__).parent.parent / "src/ai_score_editing/sibelius/manuscript/sibwscli.plg"
+PLUGIN = Path(__file__).parent.parent / "src/ai_score_editing/sibelius/manuscript/ScoreBridge.plg"
 
 
 def test_python_writable_table_matches_plugin() -> None:

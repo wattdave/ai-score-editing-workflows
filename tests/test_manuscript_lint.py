@@ -8,21 +8,21 @@ from ai_score_editing.sibelius.manuscript_linter import (
 )
 
 
-def test_lint_current_sibwscli_plg() -> None:
-    """The current active sibwscli.plg must have 0 lint errors."""
+def test_lint_current_scorebridge_plg() -> None:
+    """The current active ScoreBridge.plg must have 0 lint errors."""
     plg_path = (
         Path(__file__).parent.parent
         / "src"
         / "ai_score_editing"
         / "sibelius"
         / "manuscript"
-        / "sibwscli.plg"
+        / "ScoreBridge.plg"
     )
     assert plg_path.exists(), f"Plug-in file not found at {plg_path}"
     issues = lint_file(plg_path)
     # If any issues are found, print them for easy debugging
     issue_strs = [str(i) for i in issues]
-    assert not issues, f"Found lint issues in sibwscli.plg:\n" + "\n".join(issue_strs)
+    assert not issues, f"Found lint issues in ScoreBridge.plg:\n" + "\n".join(issue_strs)
 
 
 def test_regression_catches_initialfontname_on_lyricitem() -> None:

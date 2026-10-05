@@ -223,7 +223,7 @@ sibelius-cli plugin <name> [method] [--args JSON]   # invokePlugin
 sibelius-cli score-info | staves | selection        # bridge reads
 sibelius-cli read --staff N --from A --to B         # read bar contents
 sibelius-cli do <operation>           # curated named command IDs
-sibelius-cli install-plugin           # install bundled sibwscli.plg
+sibelius-cli install-plugin           # install bundled ScoreBridge.plg
 sibelius-cli forget-token              # delete cached session token
 ```
 
@@ -257,7 +257,7 @@ Global options: `--host` (default `localhost`), `--port` (default `1898`),
    useful ManuScript command IDs.
 3. **M3 — plug-in bridge** (done): `invokePlugin` support (client method,
    `plugins` list in connect, tokens bound to their declared plug-in list,
-   `plugin`/`score-info`/`install-plugin` subcommands); bundled `sibwscli.plg`
+   `plugin`/`score-info`/`install-plugin` subcommands); bundled `ScoreBridge.plg`
    bridge returning score state.
 4. **M4 — ergonomics** (done): bridge methods GetStaves, GetSelectionInfo,
    ReadBars (notes with pitch/name/tie, durations, positions, per bar);

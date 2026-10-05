@@ -124,7 +124,7 @@ async def _call(client: SibeliusClient, method: str, args: list[Any] | None = No
     _raise_if_busy(response)
     if not protocol.is_success(response):
         raise ToolError(
-            "the sibwscli bridge plug-in is not loaded; run "
+            "the ScoreBridge plug-in is not loaded; run "
             "'sibelius-cli install-plugin' and restart Sibelius"
         )
     value = protocol.plugin_return_value(response)

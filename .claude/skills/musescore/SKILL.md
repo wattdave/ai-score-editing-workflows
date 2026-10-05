@@ -10,7 +10,7 @@ The `musescore` MCP server (`score_overview`, `score_structure`,
 `project_info`, `set_project_info`, `read_lyrics`, `edit_lyrics`,
 `add_instrument`, `set_staff_playback`) and `uv run musescore-cli` drive the
 score open in MuseScore 4.6+, through this repository's plug-in
-"sibwscli bridge". Read [docs/musescore.md](../../../docs/musescore.md)
+"ScoreBridge". Read [docs/musescore.md](../../../docs/musescore.md)
 before anything unusual: it has the parity table and what MuseScore's
 plug-in API can and cannot do.
 
@@ -18,8 +18,8 @@ plug-in API can and cannot do.
 
 1. `uv run musescore-cli install-plugin`, then restart MuseScore (a changed
    plug-in only loads at startup).
-2. Plugins → Manage plugins: enable "sibwscli bridge" (once).
-3. Plugins → sibwscli bridge, in the window of the score to work on, every
+2. Plugins → Manage plugins: enable "ScoreBridge" (once).
+3. Plugins → ScoreBridge, in the window of the score to work on, every
    session. Each MuseScore window is its own process; the bridge serves the
    window it was started in.
 

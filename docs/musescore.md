@@ -4,7 +4,7 @@
 as `sibelius-mcp` and `dorico-mcp`: staff/bar/index addresses with type and
 position guards, 1/256-quarter units, MIDI pitches, checked batches that
 are one undo step, and a dry run (a real one: the batch runs and is rolled
-back). It talks to this repository's plug-in, "sibwscli bridge", over a
+back). It talks to this repository's plug-in, "ScoreBridge", over a
 WebSocket on port 8766 with a token. `.mcp.json` registers it as
 `musescore`; the [musescore skill](../.claude/skills/musescore/SKILL.md)
 covers using it.
@@ -13,7 +13,7 @@ covers using it.
 Claude Code ─stdio─> musescore-mcp (Python: planning, guards, units)
                         │ JSON {"id", "token", "method", "args"} over ws://127.0.0.1:8766
                         ▼
-              msbridge.qml ("sibwscli bridge", MuseScore 4 plug-in)
+              msbridge.qml ("ScoreBridge", MuseScore 4 plug-in)
                         │ MuseScore plug-in API: curScore, Cursor, startCmd/endCmd, cmd()
                         ▼
                   the open score
@@ -25,8 +25,8 @@ Claude Code ─stdio─> musescore-mcp (Python: planning, guards, units)
 uv run musescore-cli install-plugin   # writes the plug-in with a fresh token
 ```
 
-Restart MuseScore, enable "sibwscli bridge" once in Plugins → Manage
-plugins, then choose Plugins → sibwscli bridge in the window of the score to
+Restart MuseScore, enable "ScoreBridge" once in Plugins → Manage
+plugins, then choose Plugins → ScoreBridge in the window of the score to
 work on, every session (each MuseScore window is its own process, and the
 bridge serves its own window). A tool that cannot connect says so.
 `save_score` reads the score's file from its window, which needs
@@ -85,8 +85,8 @@ uv run musescore-cli edit-lyrics --staff 1 --text "Ma-king a joy-ful noise"
 uv run musescore-mcp                  # the Sibelius tools plus project_info, set_project_info, read_lyrics, edit_lyrics
 ```
 
-After installing, enable "sibwscli bridge" once in Plugins → Manage
-plugins, then choose Plugins → sibwscli bridge in the window of the score
+After installing, enable "ScoreBridge" once in Plugins → Manage
+plugins, then choose Plugins → ScoreBridge in the window of the score
 to work on, every session. It listens on port 8766 and refuses requests
 without the token stored in `~/.config/sibelius-websocket-cli/musescore-token`.
 Checked live on 4.7.5 (2026-10-03): `overview` read the score, its metadata
@@ -536,10 +536,10 @@ All rolled back cleanly unless noted.
 - **MuseScore's menus are native macOS menus.** With Accessibility
   permission for the terminal, System Events listed the menu bar of the
   `mscore` process (Apple, MuseScore Studio, File, Edit, View, Add, Format,
-  Tools, Plugins, Help) and the Plugins menu (Manage plugins…, sibwscli
+  Tools, Plugins, Help) and the Plugins menu (Manage plugins…, ScoreBridge
   probe, musescore-mcp-websocket). Each window's process can be targeted
   by its unix id.
-- **Clicking Plugins → sibwscli probe by AppleScript started the plug-in**
+- **Clicking Plugins → ScoreBridge probe by AppleScript started the plug-in**
   on the start screen, with no score open: it answered, with `curScore`
   null. So a launcher can start the bridge in a given window without the
   user, once Accessibility is granted.
@@ -637,7 +637,7 @@ upstream plug-in's WebSocket setup as the starting point. Parts the MuseScore
 API seems to support, to confirm on MuseScore 4.7:
 
 1. **Bridge.** A QML plug-in with one entry point per call, shaped like
-   `sibwscli`: `GetScoreInfo`, `GetStaves`, `Query`, `ApplyBatch`, `Save`,
+   `ScoreBridge`: `GetScoreInfo`, `GetStaves`, `Query`, `ApplyBatch`, `Save`,
    `Export`. Add a token or origin check so other local processes cannot
    drive it.
 2. **Reads.** Walk `curScore` segments and tracks for chords, rests, notes,

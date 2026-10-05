@@ -114,6 +114,14 @@ The same steps by hand, in Terminal, from this folder:
 
    Then restart Sibelius so it loads the plug-in.
 
+   **Upgrading from `sibwscli`:** the bridge is now called ScoreBridge.
+   `install-plugin` removes the old `Websocket CLI/sibwscli.plg` and
+   installs `ScoreBridge/ScoreBridge.plg`. After restarting Sibelius, approve
+   the new plug-in when Sibelius Connect asks. For MuseScore, run
+   `musescore-cli install-plugin` again (it removes the old `sibwscli-bridge`
+   folder), restart MuseScore, then enable "ScoreBridge" in Plugins →
+   Manage plugins.
+
 4. **First connection**: any command will make Sibelius show an approval
    dialog naming the client — click OK. The session token is cached at
    `~/.config/sibelius-websocket-cli/token.json`, so subsequent invocations
@@ -196,7 +204,7 @@ uv run sibelius-cli round round.mxl --voices 3 --gap 4 --passes 1 -o out.mxl
 Calling ManuScript plug-ins and exploring the protocol:
 
 ```bash
-uv run sibelius-cli plugin sibwscli Echo --args '[1, {"a": true}]'
+uv run sibelius-cli plugin ScoreBridge Echo --args '[1, {"a": true}]'
 uv run sibelius-cli raw '{"message": "invokeCommands", "commands": []}'
 uv run sibelius-cli repl                # interactive session
 uv run sibelius-cli ping                # is Sibelius responding?
@@ -257,7 +265,7 @@ gaps and how the bridge works.
 
 `musescore-mcp` offers the same tools for the score open in MuseScore 4.6+,
 plus metadata, lyrics, adding instruments and silencing staves, through
-this repository's plug-in "sibwscli bridge". `.mcp.json` registers it as
+this repository's plug-in "ScoreBridge". `.mcp.json` registers it as
 `musescore`; `musescore-cli` exposes it on the command line:
 
 ```bash
@@ -269,8 +277,8 @@ uv run musescore-cli export --format pdf --path score.pdf
 uv run musescore-cli undo
 ```
 
-After installing, enable "sibwscli bridge" once in Plugins → Manage
-plugins, then run Plugins → sibwscli bridge in the score's window each
+After installing, enable "ScoreBridge" once in Plugins → Manage
+plugins, then run Plugins → ScoreBridge in the score's window each
 session. It listens on port 8766 and refuses requests without the token
 that `install-plugin` stores in `~/.config/sibelius-websocket-cli/`.
 Addresses, units and batches follow the Sibelius tools, and a dry run
@@ -308,7 +316,7 @@ python scripts/sync_skills.py --check  # check for drift without modifying files
 - [`docs/avid-reference.md`](docs/avid-reference.md) — links to Avid's
   ManuScript Language Guide (Sibelius Connect protocol, all 627 command IDs,
   and the object reference for extending the bridge plug-in in
-  `src/ai_score_editing/sibelius/manuscript/sibwscli.plg`), plus the places
+  `src/ai_score_editing/sibelius/manuscript/ScoreBridge.plg`), plus the places
   where the guide is wrong
 
 ## Development

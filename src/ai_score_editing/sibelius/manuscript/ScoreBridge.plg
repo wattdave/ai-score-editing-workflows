@@ -1,10 +1,10 @@
 {
 	Initialize "() {
-		AddToPluginsMenu('Sibelius Websocket CLI Bridge','Run');
+		AddToPluginsMenu('ScoreBridge','Run');
 	}"
 
 	Run "() {
-		Sibelius.MessageBox('This plug-in is the bridge for sibelius-websocket-cli. It is meant to be called over Sibelius Connect (invokePlugin), not from the menu.');
+		Sibelius.MessageBox('This plug-in is the bridge for ai-score-editing-workflows. It is meant to be called over Sibelius Connect (invokePlugin), not from the menu.');
 	}"
 
 	GetBridgeVersion "() {

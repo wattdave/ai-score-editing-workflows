@@ -146,7 +146,7 @@ score (it was started in another window, or the score was reopened).
 - **Methods:** `GetBridgeVersion`, `GetScoreInfo`, `GetStaves`, `Read`
   (bars, staves), `ApplyBatch` (primitives, dryRun), `WriteCopy` (path,
   format), `Undo` (steps), `Save`.
-- **Plug-in name.** `title: "sibwscli bridge"` on its own line, which is the
+- **Plug-in name.** `title: "ScoreBridge"` on its own line, which is the
   name people will see in the menu. Docs, the setup skill and error
   messages use that name.
 

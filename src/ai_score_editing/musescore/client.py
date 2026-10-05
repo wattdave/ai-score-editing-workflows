@@ -1,4 +1,4 @@
-"""WebSocket client for the sibwscli bridge plug-in running in MuseScore.
+"""WebSocket client for the ScoreBridge plug-in running in MuseScore.
 
 One request is in flight at a time: the plug-in runs on MuseScore's UI
 thread and answers each message before reading the next. The client only

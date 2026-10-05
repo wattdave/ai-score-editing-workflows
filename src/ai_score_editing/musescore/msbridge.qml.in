@@ -1,4 +1,4 @@
-// sibwscli bridge for MuseScore 4.6+ (see docs/musescore-backend-plan.md).
+// ScoreBridge for MuseScore 4.6+ (see docs/musescore-backend-plan.md).
 //
 // Installed by `musescore-cli install-plugin`, which fills in the token,
 // port and version. MuseScore's WebSocket server listens on every network
@@ -15,7 +15,7 @@ import MuseScore 3.0
 
 MuseScore {
     id: root
-    title: "sibwscli bridge"
+    title: "ScoreBridge"
     description: "Lets sibelius-ai-workflows read and edit the open score"
     version: "@VERSION@"
     requiresScore: false
@@ -1315,6 +1315,6 @@ MuseScore {
                 handle(clientId, message);
             });
         });
-        console.log("sibwscli bridge " + root.bridgeVersion + " listening on port " + root.port);
+        console.log("ScoreBridge " + root.bridgeVersion + " listening on port " + root.port);
     }
 }

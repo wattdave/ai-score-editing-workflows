@@ -1,4 +1,4 @@
-"""Install the sibwscli bridge plug-in into MuseScore 4.
+"""Install the ScoreBridge plug-in into MuseScore 4.
 
 The plug-in is written from msbridge.qml.in with a token, the port and the
 bridge version filled in. The token is kept in
@@ -9,13 +9,14 @@ reinstalling does not invalidate a plug-in that is already running.
 from __future__ import annotations
 
 import os
+import shutil
 import secrets
 from pathlib import Path
 
 #: Bump when msbridge.qml.in changes; the client refuses an older bridge.
-BRIDGE_VERSION = 7
+BRIDGE_VERSION = 8
 DEFAULT_PORT = 8766
-PLUGIN_TITLE = "sibwscli bridge"
+PLUGIN_TITLE = "ScoreBridge"
 TEMPLATE = Path(__file__).with_name("msbridge.qml.in")
 
 
@@ -29,7 +30,7 @@ def token_path() -> Path:
 
 def plugin_dir() -> Path:
     default = Path.home() / "Documents" / "MuseScore4" / "Plugins"
-    return Path(os.environ.get("MUSESCORE_PLUGIN_DIR", default)) / "sibwscli-bridge"
+    return Path(os.environ.get("MUSESCORE_PLUGIN_DIR", default)) / "ScoreBridge"
 
 
 def read_token() -> str | None:
@@ -59,6 +60,9 @@ def render(token: str, port: int = DEFAULT_PORT) -> str:
 
 
 def install(port: int = DEFAULT_PORT) -> Path:
+    legacy = plugin_dir().with_name("sibwscli-bridge")
+    if legacy.is_dir():
+        shutil.rmtree(legacy)  # the bridge's old name, now ScoreBridge
     target = plugin_dir() / "msbridge.qml"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(render(ensure_token(), port))

@@ -90,7 +90,10 @@ These steps happen in Sibelius, so the user does them; guide and wait.
    this project needs. Do not try to download it for them.
 2. If `sibelius-launched` is missing, ask them to open Sibelius once, then
    quit it.
-3. **Bridge plug-in:** `uv run sibelius-cli install-plugin`.
+3. **Bridge plug-in:** `uv run sibelius-cli install-plugin`. This also
+   removes the old `sibwscli.plg` bridge if the user has it; for MuseScore,
+   `musescore-cli install-plugin` removes the old `sibwscli-bridge` folder.
+   After upgrading, the user approves the new plug-in once.
 4. **Enable Sibelius Connect:** open Sibelius → Sibelius menu →
    Preferences → Input Devices, turn on Sibelius Connect, keep the port at
    1898, and restart Sibelius so the plug-in loads.
@@ -114,9 +117,9 @@ Then the user:
 
 1. Quits and reopens MuseScore (a new or changed plug-in only loads at
    startup) and opens a score.
-2. Goes to Plugins → Manage plugins, enables "sibwscli bridge" and clicks
+2. Goes to Plugins → Manage plugins, enables "ScoreBridge" and clicks
    OK (once only).
-3. Chooses Plugins → sibwscli bridge in the score's window in every
+3. Chooses Plugins → ScoreBridge in the score's window in every
    MuseScore session before asking Claude to work on the score. Enabling it
    does not start it.
 

@@ -1,4 +1,4 @@
-"""Typed calls to the sibwscli bridge, with version checks.
+"""Typed calls to the ScoreBridge, with version checks.
 
 MuseScore reports its version as major * 10000 + minor * 100 + patch
 (4.7.5 is 40705). The back end needs 4.6: the undo-stack lock that makes

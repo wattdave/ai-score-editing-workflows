@@ -108,8 +108,8 @@ fi
 support=$(ls -d "$HOME/Library/Application Support/Avid/Sibelius"* 2>/dev/null | sort | tail -1)
 if [ -z "$support" ]; then
     report missing sibelius-launched "open Sibelius once so it creates its support folder"
-elif [ -f "$support/Plugins/Websocket CLI/sibwscli.plg" ]; then
-    report ok bridge-plugin "$support/Plugins/Websocket CLI/sibwscli.plg"
+elif [ -f "$support/Plugins/ScoreBridge/ScoreBridge.plg" ]; then
+    report ok bridge-plugin "$support/Plugins/ScoreBridge/ScoreBridge.plg"
 else
     report missing bridge-plugin "uv run sibelius-cli install-plugin"
 fi

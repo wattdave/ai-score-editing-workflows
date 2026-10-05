@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 This repository contains a Python CLI for driving Sibelius through Sibelius
-Connect and the bundled `sibwscli` ManuScript bridge plug-in.
+Connect and the bundled `ScoreBridge` ManuScript bridge plug-in.
 
 ## New users
 

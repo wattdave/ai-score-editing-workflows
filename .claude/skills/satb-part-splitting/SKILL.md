@@ -39,7 +39,7 @@ several non-obvious traps that this skill handles systematically.
   - `split`: Demixes notes/chords, clones lyrics, reconnects shattered syllables, assigns clefs, and writes 4-part `.mxl` or `.xml`.
   - `reconnect-lyrics`: Standalone command to scan and reconnect shattered OMR syllables into hyphenated multi-syllable words in any MusicXML file.
   - `validate`: Verifies measure duration consistency across all 4 parts.
-- **`sibwscli` / `sibelius-cli`**: Used to inspect, verify, and engrave the resulting score in Sibelius.
+- **`ScoreBridge` / `sibelius-cli`**: Used to inspect, verify, and engrave the resulting score in Sibelius.
 - **`hanging_notes.py`** (`.claude/skills/hanging-playback-note-repair/scripts/hanging_notes.py`): Used to audit the split score for any residual dangling ties.
 
 ---

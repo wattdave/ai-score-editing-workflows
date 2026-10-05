@@ -141,7 +141,7 @@ async def test_undo_sends_steps_and_checks_range(fake) -> None:
 
 async def test_bridge_not_running_says_how_to_start_it(config) -> None:
     client = MuseScoreClient(port=1, token=TOKEN)
-    with pytest.raises(MuseScoreError, match="Plugins > sibwscli bridge"):
+    with pytest.raises(MuseScoreError, match="Plugins > ScoreBridge"):
         await client.connect()
 
 
@@ -162,7 +162,7 @@ def test_version_text() -> None:
 def test_cli_install_plugin(config, capsys) -> None:
     assert cli.main(["install-plugin"]) == 0
     out = json.loads(capsys.readouterr().out)
-    assert out["installed"].endswith("sibwscli-bridge/msbridge.qml")
+    assert out["installed"].endswith("ScoreBridge/msbridge.qml")
 
 
 # ------------------------------------------------------------------ milestone 2: reads and batches

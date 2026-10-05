@@ -13,7 +13,7 @@ uv run sibelius-cli <command>
 ```
 
 The CLI talks to the frontmost score in Sibelius through Sibelius Connect and
-the bundled `sibwscli` ManuScript bridge.
+the bundled `ScoreBridge` ManuScript bridge.
 
 ## Desktop access and opening scores
 

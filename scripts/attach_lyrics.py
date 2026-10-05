@@ -20,7 +20,7 @@ from ai_score_editing.sibelius import protocol
 from ai_score_editing.sibelius.client import SibeliusClient
 
 
-BRIDGE = "sibwscli"
+BRIDGE = "ScoreBridge"
 
 
 async def call(client: SibeliusClient, method: str, args: list[Any]) -> Any:

@@ -1,7 +1,7 @@
 """Command line for the MuseScore back end: `uv run musescore-cli <command>`.
 
 Prints JSON. Run `install-plugin` once, restart MuseScore, then choose
-Plugins > sibwscli bridge in the window of the score to work on (each
+Plugins > ScoreBridge in the window of the score to work on (each
 MuseScore window is its own process, and the bridge serves its own window).
 """
 

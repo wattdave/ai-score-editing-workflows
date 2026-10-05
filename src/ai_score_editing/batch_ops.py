@@ -35,7 +35,7 @@ ExtraOps = dict[str, Callable[[dict[str, Any], str], dict[str, Any]]]
 from .intervals import compute_transposition
 
 # Properties 'set' may write, per object kind, with the JSON type each takes.
-# Mirrors BatchWritableTable in sibwscli.plg (a test keeps them in sync). The
+# Mirrors BatchWritableTable in ScoreBridge.plg (a test keeps them in sync). The
 # plug-in cannot check value types, and a wrongly typed write raises a modal
 # dialog in Sibelius, so the types are enforced here.
 COMMON_WRITABLE: dict[str, type] = {"Dx": int, "Dy": int, "Hidden": bool, "CueSize": bool}

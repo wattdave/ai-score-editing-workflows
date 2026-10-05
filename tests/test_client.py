@@ -21,7 +21,7 @@ class FakeSibelius:
     def __init__(self) -> None:
         self.approved_tokens: set[str] = set()
         self.token_plugins: dict[str, list[str]] = {}
-        self.installed_plugins: set[str] = {"sibwscli"}
+        self.installed_plugins: set[str] = {"ScoreBridge"}
         self.connect_dialogs_shown = 0
         self.port: int = 0
         self._server: websockets.asyncio.server.Server | None = None
@@ -168,14 +168,14 @@ async def test_invoke_plugin_with_declared_plugin(store: TokenStore) -> None:
     async with FakeSibelius() as fake:
         client = SibeliusClient(
             host="localhost", port=fake.port, token_store=store,
-            approval_timeout=5, plugins=["sibwscli"],
+            approval_timeout=5, plugins=["ScoreBridge"],
         )
         async with client:
-            response = await client.invoke_plugin("sibwscli", "Echo", [42])
+            response = await client.invoke_plugin("ScoreBridge", "Echo", [42])
             assert response["result"] is True
             assert response["return_value"] == {"echo": [42]}
         entry = store.load("localhost", fake.port)
-        assert entry is not None and entry.plugins == ["sibwscli"]
+        assert entry is not None and entry.plugins == ["ScoreBridge"]
 
 
 async def test_token_without_plugin_coverage_forces_fresh_connect(store: TokenStore) -> None:
@@ -186,10 +186,10 @@ async def test_token_without_plugin_coverage_forces_fresh_connect(store: TokenSt
         assert fake.connect_dialogs_shown == 1
         with_plugin = SibeliusClient(
             host="localhost", port=fake.port, token_store=store,
-            approval_timeout=5, plugins=["sibwscli"],
+            approval_timeout=5, plugins=["ScoreBridge"],
         )
         async with with_plugin:
-            response = await with_plugin.invoke_plugin("sibwscli", "Echo", [])
+            response = await with_plugin.invoke_plugin("ScoreBridge", "Echo", [])
             assert response["result"] is True
         # the cached token did not cover the plug-in, so a second dialog is expected
         assert fake.connect_dialogs_shown == 2
@@ -215,7 +215,7 @@ def test_token_store_migrates_plain_string_entries(tmp_path: Path) -> None:
     assert entry.token == "{old-style}"
     assert entry.plugins == []
     assert entry.covers([]) is True
-    assert entry.covers(["sibwscli"]) is False
+    assert entry.covers(["ScoreBridge"]) is False
 
 
 def test_interval_math() -> None:
