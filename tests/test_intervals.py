@@ -2,14 +2,14 @@
 
 import pytest
 
-from sibelius_websocket_cli.intervals import (
+from ai_score_editing.intervals import (
     alteration,
     compute_transposition,
     interval_of,
     spelling_letter,
     transpose_spelled,
 )
-from sibelius_websocket_cli.lyrics import split_syllables
+from ai_score_editing.lyrics import split_syllables
 
 
 def test_compute_transposition_major_second_up() -> None:

@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 import websockets
 
-from sibelius_websocket_cli.client import ConnectionFailed, SibeliusClient
-from sibelius_websocket_cli.token_store import TokenStore
+from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient
+from ai_score_editing.token_store import TokenStore
 
 FAKE_TOKEN = "{fake-token-1234}"
 
@@ -21,7 +21,7 @@ class FakeSibelius:
     def __init__(self) -> None:
         self.approved_tokens: set[str] = set()
         self.token_plugins: dict[str, list[str]] = {}
-        self.installed_plugins: set[str] = {"sibwscli"}
+        self.installed_plugins: set[str] = {"ScoreBridge"}
         self.connect_dialogs_shown = 0
         self.port: int = 0
         self._server: websockets.asyncio.server.Server | None = None
@@ -168,14 +168,14 @@ async def test_invoke_plugin_with_declared_plugin(store: TokenStore) -> None:
     async with FakeSibelius() as fake:
         client = SibeliusClient(
             host="localhost", port=fake.port, token_store=store,
-            approval_timeout=5, plugins=["sibwscli"],
+            approval_timeout=5, plugins=["ScoreBridge"],
         )
         async with client:
-            response = await client.invoke_plugin("sibwscli", "Echo", [42])
+            response = await client.invoke_plugin("ScoreBridge", "Echo", [42])
             assert response["result"] is True
             assert response["return_value"] == {"echo": [42]}
         entry = store.load("localhost", fake.port)
-        assert entry is not None and entry.plugins == ["sibwscli"]
+        assert entry is not None and entry.plugins == ["ScoreBridge"]
 
 
 async def test_token_without_plugin_coverage_forces_fresh_connect(store: TokenStore) -> None:
@@ -186,10 +186,10 @@ async def test_token_without_plugin_coverage_forces_fresh_connect(store: TokenSt
         assert fake.connect_dialogs_shown == 1
         with_plugin = SibeliusClient(
             host="localhost", port=fake.port, token_store=store,
-            approval_timeout=5, plugins=["sibwscli"],
+            approval_timeout=5, plugins=["ScoreBridge"],
         )
         async with with_plugin:
-            response = await with_plugin.invoke_plugin("sibwscli", "Echo", [])
+            response = await with_plugin.invoke_plugin("ScoreBridge", "Echo", [])
             assert response["result"] is True
         # the cached token did not cover the plug-in, so a second dialog is expected
         assert fake.connect_dialogs_shown == 2
@@ -215,11 +215,11 @@ def test_token_store_migrates_plain_string_entries(tmp_path: Path) -> None:
     assert entry.token == "{old-style}"
     assert entry.plugins == []
     assert entry.covers([]) is True
-    assert entry.covers(["sibwscli"]) is False
+    assert entry.covers(["ScoreBridge"]) is False
 
 
 def test_interval_math() -> None:
-    from sibelius_websocket_cli.intervals import compute_transposition
+    from ai_score_editing.intervals import compute_transposition
 
     assert compute_transposition("C", "D", up=True) == (1, 5)      # major 2nd up
     assert compute_transposition("C", "G", up=True) == (4, 5)      # perfect 5th up
@@ -235,8 +235,8 @@ async def test_client_launch_bypassed_if_already_running(store: TokenStore) -> N
     from unittest.mock import patch
 
     async with FakeSibelius() as fake:
-        with patch("sibelius_websocket_cli.launcher.is_sibelius_running", return_value=True), \
-             patch("sibelius_websocket_cli.launcher.launch_sibelius") as mock_launch:
+        with patch("ai_score_editing.sibelius.launcher.is_sibelius_running", return_value=True), \
+             patch("ai_score_editing.sibelius.launcher.launch_sibelius") as mock_launch:
             client = SibeliusClient(
                 host="localhost",
                 port=fake.port,
@@ -253,8 +253,8 @@ async def test_client_launches_if_not_running(store: TokenStore) -> None:
     from unittest.mock import patch
 
     async with FakeSibelius() as fake:
-        with patch("sibelius_websocket_cli.launcher.is_sibelius_running", return_value=False), \
-             patch("sibelius_websocket_cli.launcher.launch_sibelius") as mock_launch:
+        with patch("ai_score_editing.sibelius.launcher.is_sibelius_running", return_value=False), \
+             patch("ai_score_editing.sibelius.launcher.launch_sibelius") as mock_launch:
             client = SibeliusClient(
                 host="localhost",
                 port=fake.port,
@@ -271,8 +271,8 @@ async def test_client_launches_if_not_running(store: TokenStore) -> None:
 async def test_client_launch_timeout_raises_connection_failed(store: TokenStore) -> None:
     from unittest.mock import patch
 
-    with patch("sibelius_websocket_cli.launcher.is_sibelius_running", return_value=False), \
-         patch("sibelius_websocket_cli.launcher.launch_sibelius"):
+    with patch("ai_score_editing.sibelius.launcher.is_sibelius_running", return_value=False), \
+         patch("ai_score_editing.sibelius.launcher.launch_sibelius"):
         client = SibeliusClient(
             host="localhost",
             port=1,
@@ -288,8 +288,8 @@ async def test_client_launch_timeout_raises_connection_failed(store: TokenStore)
 async def test_client_launch_bypassed_for_remote_host(store: TokenStore) -> None:
     from unittest.mock import patch
 
-    with patch("sibelius_websocket_cli.launcher.is_sibelius_running", return_value=False), \
-         patch("sibelius_websocket_cli.launcher.launch_sibelius") as mock_launch:
+    with patch("ai_score_editing.sibelius.launcher.is_sibelius_running", return_value=False), \
+         patch("ai_score_editing.sibelius.launcher.launch_sibelius") as mock_launch:
         client = SibeliusClient(
             host="192.168.1.100",
             port=1,
@@ -304,7 +304,7 @@ async def test_client_launch_bypassed_for_remote_host(store: TokenStore) -> None
 
 
 def test_parse_bar_range():
-    from sibelius_websocket_cli.cli import parse_bar_range
+    from ai_score_editing.barrange import parse_bar_range
 
     assert parse_bar_range(bars="1-4") == (1, 4)
     assert parse_bar_range(bars="3..6") == (3, 6)
@@ -315,7 +315,7 @@ def test_parse_bar_range():
 
 
 def test_parser_new_subcommands_and_flags():
-    from sibelius_websocket_cli.cli import build_parser
+    from ai_score_editing.sibelius.cli import build_parser
 
     parser = build_parser()
 
@@ -486,7 +486,7 @@ def test_parser_new_subcommands_and_flags():
 
 async def test_run_set_lyric_adopts_predominant_font() -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
-    from sibelius_websocket_cli.cli import _run_set_lyric, build_parser
+    from ai_score_editing.sibelius.cli import _run_set_lyric, build_parser
 
     parser = build_parser()
     args = parser.parse_args(["set-lyric", "--staff", "1", "--bar", "2", "--index", "0", "--text", "hermosa"])
@@ -501,10 +501,10 @@ async def test_run_set_lyric_adopts_predominant_font() -> None:
     mock_client = AsyncMock()
     mock_client_ctx.__aenter__.return_value = mock_client
 
-    with patch("sibelius_websocket_cli.cli._client", return_value=mock_client_ctx), \
-         patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()), \
-         patch("sibelius_websocket_cli.cli._bridge", new=AsyncMock(return_value=staff_lyrics)), \
-         patch("sibelius_websocket_cli.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
+    with patch("ai_score_editing.sibelius.cli._client", return_value=mock_client_ctx), \
+         patch("ai_score_editing.sibelius.cli._check_bridge_version", new=AsyncMock()), \
+         patch("ai_score_editing.sibelius.cli._bridge", new=AsyncMock(return_value=staff_lyrics)), \
+         patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
 
         res = await _run_set_lyric(args)
         assert res == 0
@@ -517,7 +517,7 @@ async def test_run_set_lyric_adopts_predominant_font() -> None:
 
 async def test_run_set_lyric_adopts_predominant_font_when_existing_is_outlier() -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
-    from sibelius_websocket_cli.cli import _run_set_lyric, build_parser
+    from ai_score_editing.sibelius.cli import _run_set_lyric, build_parser
 
     parser = build_parser()
     args = parser.parse_args(["set-lyric", "--staff", "1", "--bar", "2", "--index", "0", "--text", "hermosa"])
@@ -533,10 +533,10 @@ async def test_run_set_lyric_adopts_predominant_font_when_existing_is_outlier() 
     mock_client = AsyncMock()
     mock_client_ctx.__aenter__.return_value = mock_client
 
-    with patch("sibelius_websocket_cli.cli._client", return_value=mock_client_ctx), \
-         patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()), \
-         patch("sibelius_websocket_cli.cli._bridge", new=AsyncMock(return_value=staff_lyrics)), \
-         patch("sibelius_websocket_cli.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
+    with patch("ai_score_editing.sibelius.cli._client", return_value=mock_client_ctx), \
+         patch("ai_score_editing.sibelius.cli._check_bridge_version", new=AsyncMock()), \
+         patch("ai_score_editing.sibelius.cli._bridge", new=AsyncMock(return_value=staff_lyrics)), \
+         patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
 
         res = await _run_set_lyric(args)
         assert res == 0
@@ -549,7 +549,7 @@ async def test_run_set_lyric_adopts_predominant_font_when_existing_is_outlier() 
 
 async def test_run_set_lyric_explicit_font_overrides_predominant() -> None:
     from unittest.mock import AsyncMock, patch
-    from sibelius_websocket_cli.cli import _run_set_lyric, build_parser
+    from ai_score_editing.sibelius.cli import _run_set_lyric, build_parser
 
     parser = build_parser()
     args = parser.parse_args([
@@ -557,7 +557,7 @@ async def test_run_set_lyric_explicit_font_overrides_predominant() -> None:
         "--font", "Garamond", "--font-size", "96",
     ])
 
-    with patch("sibelius_websocket_cli.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
+    with patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
         res = await _run_set_lyric(args)
         assert res == 0
         mock_write.assert_awaited_once()
@@ -569,7 +569,7 @@ async def test_run_set_lyric_explicit_font_overrides_predominant() -> None:
 
 async def test_run_set_lyric_adopts_score_default_font_and_size_when_unstyled() -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
-    from sibelius_websocket_cli.cli import _run_set_lyric, build_parser
+    from ai_score_editing.sibelius.cli import _run_set_lyric, build_parser
 
     parser = build_parser()
     args = parser.parse_args(["set-lyric", "--staff", "1", "--bar", "2", "--index", "0", "--text", "hermosa"])
@@ -592,10 +592,10 @@ async def test_run_set_lyric_adopts_score_default_font_and_size_when_unstyled() 
             return staff_lyrics
         return None
 
-    with patch("sibelius_websocket_cli.cli._client", return_value=mock_client_ctx), \
-         patch("sibelius_websocket_cli.cli._check_bridge_version", new=AsyncMock()), \
-         patch("sibelius_websocket_cli.cli._bridge", side_effect=bridge_side_effect), \
-         patch("sibelius_websocket_cli.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
+    with patch("ai_score_editing.sibelius.cli._client", return_value=mock_client_ctx), \
+         patch("ai_score_editing.sibelius.cli._check_bridge_version", new=AsyncMock()), \
+         patch("ai_score_editing.sibelius.cli._bridge", side_effect=bridge_side_effect), \
+         patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
 
         res = await _run_set_lyric(args)
         assert res == 0
@@ -609,12 +609,12 @@ async def test_run_set_lyric_adopts_score_default_font_and_size_when_unstyled() 
 
 async def test_run_set_barline() -> None:
     from unittest.mock import AsyncMock, patch
-    from sibelius_websocket_cli.cli import _run_set_barline, build_parser
+    from ai_score_editing.sibelius.cli import _run_set_barline, build_parser
 
     parser = build_parser()
     args = parser.parse_args(["set-barline", "--bar", "71", "--type", "double"])
 
-    with patch("sibelius_websocket_cli.cli._run_op", new=AsyncMock(return_value=0)) as run_op:
+    with patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=0)) as run_op:
         res = await _run_set_barline(args)
         assert res == 0
     assert run_op.await_args.args[1] == {"op": "set-barline", "bar": 71, "type": "double"}
@@ -626,12 +626,12 @@ async def test_run_set_barline() -> None:
 
 async def test_run_read_barlines() -> None:
     from unittest.mock import AsyncMock, patch
-    from sibelius_websocket_cli.cli import _run_read_barlines, build_parser
+    from ai_score_editing.sibelius.cli import _run_read_barlines, build_parser
 
     parser = build_parser()
     args = parser.parse_args(["read-barlines", "--bars", "70-75"])
 
-    with patch("sibelius_websocket_cli.cli._run_bridge_call", new=AsyncMock(return_value=0)) as mock_call:
+    with patch("ai_score_editing.sibelius.cli._run_bridge_call", new=AsyncMock(return_value=0)) as mock_call:
         res = await _run_read_barlines(args)
         assert res == 0
         mock_call.assert_called_once_with(args, "GetSpecialBarlines", [70, 75])

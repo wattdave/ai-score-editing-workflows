@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Helper tool for auditing and cleaning redundant clef objects in Sibelius scores.
 
-The detection rules live in ``sibelius_websocket_cli.clefs``, shared with the
+The detection rules live in ``ai_score_editing.sibelius.clefs``, shared with the
 ``remove-redundant-clefs`` operation of ``patch-layout``. This script adds the
 audit report and a standalone strip-and-save command.
 """
@@ -14,9 +14,9 @@ from collections import defaultdict
 import sys
 
 try:
-    from sibelius_websocket_cli.cli import _bridge, BRIDGE_PLUGIN, _backup
-    from sibelius_websocket_cli.client import SibeliusClient
-    from sibelius_websocket_cli.clefs import _staff_default_clef, audit_score_clefs, build_meter_map
+    from ai_score_editing.sibelius.cli import _bridge, BRIDGE_PLUGIN, _backup
+    from ai_score_editing.sibelius.client import SibeliusClient
+    from ai_score_editing.sibelius.clefs import _staff_default_clef, audit_score_clefs, build_meter_map
     HAVE_CLIENT = True
 except ImportError:
     HAVE_CLIENT = False
@@ -24,7 +24,7 @@ except ImportError:
 
 async def _run_audit_or_strip(staff: int | None, dry_run: bool, is_audit_only: bool) -> int:
     if not HAVE_CLIENT:
-        print("error: sibelius_websocket_cli required; run with 'uv run python scripts/clean_clefs.py'", file=sys.stderr)
+        print("error: ai_score_editing required; run with 'uv run python scripts/clean_clefs.py'", file=sys.stderr)
         return 1
 
     async with SibeliusClient(plugins=[BRIDGE_PLUGIN]) as client:

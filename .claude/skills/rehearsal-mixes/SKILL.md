@@ -1,7 +1,7 @@
 ---
 name: rehearsal-mixes
 description: >
-  Produce practice parts (rehearsal tracks, learning tracks, part-predominant
+  Sibelius only. Produce practice parts (rehearsal tracks, learning tracks, part-predominant
   mixes) from the score open in Sibelius: one MP3 of all voices, plus for each
   sung part an "only" mix (that voice with accompaniment) and a "louder" mix
   (that voice at 3x over the others). Use when the user asks for practice
@@ -57,8 +57,8 @@ Cantai is set up by the user in Sibelius, not by the CLI:
 ## Export
 
 ```bash
-uv run sibelius-websocket-cli playback-sounds
-uv run sibelius-websocket-cli --expect-file SCORE rehearsal-mixes --out DIR \
+uv run sibelius-cli playback-sounds
+uv run sibelius-cli --expect-file SCORE rehearsal-mixes --out DIR \
   [--file SCORE] [--name 1=Soprano] [--all-parts] [--require-sound Cantai] \
   [--bitrate 192k] [--loudness -16] [--keep-stems]
 ```

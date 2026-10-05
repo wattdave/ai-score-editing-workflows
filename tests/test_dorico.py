@@ -12,11 +12,11 @@ import pytest
 from types import SimpleNamespace
 import websockets
 
-from sibelius_websocket_cli.dorico import bridge as bridge_mod
-from sibelius_websocket_cli.dorico import service
-from sibelius_websocket_cli.dorico.bridge import BarMap, DoricoBridge, fingerprint, lua_literal
-from sibelius_websocket_cli.dorico.client import DoricoClient, DoricoError
-from sibelius_websocket_cli.dorico.score import (
+from ai_score_editing.dorico import bridge as bridge_mod
+from ai_score_editing.dorico import service
+from ai_score_editing.dorico.bridge import BarMap, DoricoBridge, fingerprint, lua_literal
+from ai_score_editing.dorico.client import DoricoClient, DoricoError
+from ai_score_editing.dorico.score import (
     DoricoBatchError,
     interval_of,
     locate_events,
@@ -26,7 +26,7 @@ from sibelius_websocket_cli.dorico.score import (
     spelling_letter,
     transpose_spelled,
 )
-from sibelius_websocket_cli.token_store import TokenStore
+from ai_score_editing.token_store import TokenStore
 
 STAVES = [
     {"staff": 1, "name": "Piano", "stream": 1, "voiceStreams": [2]},
@@ -328,7 +328,7 @@ async def test_an_unmeasurable_bar_is_refused() -> None:
 
 
 def test_musicxml_pickup_and_split_bars_keep_their_length() -> None:
-    from sibelius_websocket_cli.dorico import musicxml_read
+    from ai_score_editing.dorico import musicxml_read
 
     # Dorico's export of 4/4 with a two-beat pick-up, a start repeat on beat 3
     # of bar 1 and an end repeat on beat 3 of bar 2: only the later part of
@@ -413,7 +413,7 @@ MUSICXML = """<?xml version="1.0"?>
 
 
 def test_musicxml_read_staves_bars_lyrics(tmp_path: Path) -> None:
-    from sibelius_websocket_cli.dorico import musicxml_read
+    from ai_score_editing.dorico import musicxml_read
 
     path = tmp_path / "s.musicxml"
     path.write_text(MUSICXML)
@@ -471,7 +471,7 @@ async def test_snapshot_fills_unreadable_staves_from_musicxml(tmp_path: Path, mo
 
 
 async def test_export_pdf_answers_overwrite_and_reads_path_from_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from sibelius_websocket_cli.dorico import export
+    from ai_score_editing.dorico import export
 
     log = tmp_path / "application.log"
     log.write_text("old line\n")
@@ -529,7 +529,7 @@ class _FakeOsascript:
 
 
 def _spawn(monkeypatch: pytest.MonkeyPatch, process: _FakeOsascript) -> list[tuple[Any, ...]]:
-    from sibelius_websocket_cli.dorico import export
+    from ai_score_editing.dorico import export
 
     calls: list[tuple[Any, ...]] = []
 
@@ -543,7 +543,7 @@ def _spawn(monkeypatch: pytest.MonkeyPatch, process: _FakeOsascript) -> list[tup
 
 
 async def test_osascript_runs_without_blocking_and_decodes_like_text_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    from sibelius_websocket_cli.dorico import export
+    from ai_score_editing.dorico import export
 
     process = _FakeOsascript(stdout="Titre\tSérénade\rsecond line\r\n".encode())
     calls = _spawn(monkeypatch, process)
@@ -561,7 +561,7 @@ async def test_osascript_runs_without_blocking_and_decodes_like_text_mode(monkey
     ],
 )
 async def test_osascript_failure_messages(monkeypatch: pytest.MonkeyPatch, stderr: bytes, message: str) -> None:
-    from sibelius_websocket_cli.dorico import export
+    from ai_score_editing.dorico import export
 
     _spawn(monkeypatch, _FakeOsascript(stderr=stderr, returncode=1))
     with pytest.raises(DoricoError, match=message):
@@ -571,7 +571,7 @@ async def test_osascript_failure_messages(monkeypatch: pytest.MonkeyPatch, stder
 async def test_osascript_timeout_kills_the_child(monkeypatch: pytest.MonkeyPatch) -> None:
     import subprocess
 
-    from sibelius_websocket_cli.dorico import export
+    from ai_score_editing.dorico import export
 
     process = _FakeOsascript(hang=True)
     _spawn(monkeypatch, process)
@@ -582,7 +582,7 @@ async def test_osascript_timeout_kills_the_child(monkeypatch: pytest.MonkeyPatch
 
 
 async def test_osascript_cancellation_kills_the_child(monkeypatch: pytest.MonkeyPatch) -> None:
-    from sibelius_websocket_cli.dorico import export
+    from ai_score_editing.dorico import export
 
     process = _FakeOsascript(hang=True)
     _spawn(monkeypatch, process)
@@ -610,7 +610,7 @@ async def test_bridge_wait_for_polls_without_blocking(tmp_path: Path, monkeypatc
 
 
 async def test_read_project_info_drives_the_dialog(monkeypatch: pytest.MonkeyPatch) -> None:
-    from sibelius_websocket_cli.dorico import project_info
+    from ai_score_editing.dorico import project_info
 
     state = {"open": False}
     scripts: list[tuple[str, ...]] = []
@@ -646,7 +646,7 @@ async def test_read_project_info_drives_the_dialog(monkeypatch: pytest.MonkeyPat
 # ------------------------------------------------------------------ voice layout
 
 def test_layout_one_voice_per_stave_and_single_stave_instruments() -> None:
-    from sibelius_websocket_cli.dorico import layout
+    from ai_score_editing.dorico import layout
 
     piano = {"staves": [{"stream": 1}, {"stream": 3}],
              "instruments": [{"id": 0, "name": "Piano", "voiceStreams": [4, 2]}]}
@@ -657,7 +657,7 @@ def test_layout_one_voice_per_stave_and_single_stave_instruments() -> None:
 
 
 def test_layout_extra_voice_needs_musicxml_and_is_placed_by_its_notes() -> None:
-    from sibelius_websocket_cli.dorico import layout
+    from ai_score_editing.dorico import layout
 
     # A piano whose third voice (stream 7, made later) is on the treble staff:
     # id order alone would put it on the bass staff.
@@ -848,14 +848,14 @@ LETTER_OPTIONS = {
 
 
 def _layout_options(batch: dict[str, Any], current: dict[str, str] = LETTER_OPTIONS) -> dict[str, str]:
-    from sibelius_websocket_cli.dorico.score import layout_dictionary
+    from ai_score_editing.dorico.score import layout_dictionary
 
     op = prepare_batch([{"op": "set-layout", **batch}], locate_events(EVENTS, BARS), STAVES, BARS)[0]
     return layout_dictionary(op["settings"], current, "op 0")
 
 
 def test_layout_command_matches_what_layout_options_apply_sends() -> None:
-    from sibelius_websocket_cli.dorico.score import layout_command
+    from ai_score_editing.dorico.score import layout_command
 
     # Logged from Layout Options' Apply after choosing Landscape (2026-09-28).
     logged = ('Project.Layout.SetOptions?LayoutIDArray=0&Dictionary=list: '
@@ -908,7 +908,7 @@ def test_left_and_right_margins_need_identical_margins() -> None:
 
 
 def test_choose_layout_defaults_to_the_full_score() -> None:
-    from sibelius_websocket_cli.dorico.score import choose_layout
+    from ai_score_editing.dorico.score import choose_layout
 
     layouts = [{"layoutID": 0, "layoutName": "Full score", "layoutType": "kFullScoreLayout"},
                {"layoutID": 1, "layoutName": "Piano", "layoutType": "kPartLayout"}]
@@ -922,7 +922,7 @@ def test_choose_layout_defaults_to_the_full_score() -> None:
 
 
 def test_layout_report_in_set_layout_terms() -> None:
-    from sibelius_websocket_cli.dorico.score import layout_report
+    from ai_score_editing.dorico.score import layout_report
 
     report = layout_report({**LETTER_OPTIONS, "pageSizeAndMarginOptions.pageWidth": "792",
                             "pageSizeAndMarginOptions.pageHeight": "612"})
@@ -941,7 +941,7 @@ def test_sibelius_ops_without_a_dorico_route_say_why(op: str) -> None:
 # ------------------------------------------------------------------ add-line
 
 def test_resize_steps_use_only_checked_note_values() -> None:
-    from sibelius_websocket_cli.dorico.score import resize_steps
+    from ai_score_editing.dorico.score import resize_steps
 
     lengthen = "EventEdit.DurationLengthenByValue?RhythmicGridResolutionValue="
     shorten = "EventEdit.DurationShortenByValue?RhythmicGridResolutionValue="
@@ -987,7 +987,7 @@ def test_add_line_refusals(operation: dict[str, Any], message: str) -> None:
 # ------------------------------------------------------------------ add-lyrics
 
 def test_parse_lyrics_words_hyphens_and_melismas() -> None:
-    from sibelius_websocket_cli.dorico.score import parse_lyrics
+    from ai_score_editing.dorico.score import parse_lyrics
 
     assert parse_lyrics("ma-king lyr-ics _ now") == [
         ("ma", "kHyphenateCurrentWord"), ("king", "kEndOrExtendCurrentWord"),
@@ -1078,7 +1078,7 @@ async def test_type_lyrics_moves_down_a_verse_per_kept_text(monkeypatch: pytest.
 # ------------------------------------------------------------------ lyrics dialog
 
 def test_syllable_count_matches_the_dialog_text() -> None:
-    from sibelius_websocket_cli.dorico.lyrics_dialog import syllable_count
+    from ai_score_editing.dorico.lyrics_dialog import syllable_count
 
     assert syllable_count("This was a lark for ma-king lyr-ics.") == 9
     assert syllable_count("if I go ten thou-sand-miles.") == 7
@@ -1112,7 +1112,7 @@ class _MenuClient:
 async def test_read_undoes_only_its_own_selections(
     monkeypatch: pytest.MonkeyPatch, history: list[str], undone: int, kept: bool
 ) -> None:
-    from sibelius_websocket_cli.dorico import lyrics_dialog
+    from ai_score_editing.dorico import lyrics_dialog
 
     client = _MenuClient(list(history))
 
@@ -1132,7 +1132,7 @@ async def test_read_undoes_only_its_own_selections(
 
 
 async def test_part_layout_is_found_by_player_name() -> None:
-    from sibelius_websocket_cli.dorico.lyrics_dialog import _part_layout
+    from ai_score_editing.dorico.lyrics_dialog import _part_layout
 
     class Client:
         async def layouts(self) -> list[dict[str, Any]]:
@@ -1154,7 +1154,7 @@ async def test_part_layout_is_found_by_player_name() -> None:
     [({"Composr": "x"}, "unknown Project Info fields"), ({}, "no fields"), ({"Title": "a\nb"}, "single-line")],
 )
 async def test_set_project_info_validates_before_opening_the_dialog(fields: dict[str, str], message: str) -> None:
-    from sibelius_websocket_cli.dorico import project_info
+    from ai_score_editing.dorico import project_info
 
     with pytest.raises(DoricoError, match=message):
         await project_info.set_project_info(None, fields)  # type: ignore[arg-type]
@@ -1214,7 +1214,7 @@ def test_signature_and_lyric_refusals(operation: dict[str, Any], message: str) -
 
 
 def test_command_values_escape_commas_and_ampersands() -> None:
-    from sibelius_websocket_cli.dorico.score import command_value
+    from ai_score_editing.dorico.score import command_value
 
     assert command_value("well, you'll & more") == "well\\, you'll \\& more"
     with pytest.raises(DoricoBatchError):
@@ -1325,7 +1325,7 @@ def test_copy_passage_refuses_a_note_over_the_paste_point() -> None:
 # ------------------------------------------------------------------ probe placement
 
 def test_layout_from_probed_placements() -> None:
-    from sibelius_websocket_cli.dorico import layout
+    from ai_score_editing.dorico import layout
 
     piano = {"staves": [{"stream": 1}, {"stream": 3}],
              "instruments": [{"id": 0, "name": "Piano", "voiceStreams": [2, 4, 6, 7]}]}
@@ -1410,7 +1410,7 @@ def test_deleting_by_command_counts_measured_undo_steps() -> None:
 
 
 def test_private_export_folder_is_emptied_and_guarded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from sibelius_websocket_cli.dorico import export
+    from ai_score_editing.dorico import export
 
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     work = tmp_path / "cache" / "sibelius-websocket-cli" / "dorico"

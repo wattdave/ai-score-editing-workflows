@@ -1,6 +1,6 @@
 """Unit tests for the lyrics processing and linting module."""
 
-from sibelius_websocket_cli.lyrics import (
+from ai_score_editing.lyrics import (
     analyze_lyric_typography,
     assemble_bar_words,
     extract_font_and_size,

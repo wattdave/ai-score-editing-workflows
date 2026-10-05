@@ -1,0 +1,1740 @@
+{
+	Initialize "() {
+		AddToPluginsMenu('ScoreBridge','Run');
+	}"
+
+	Run "() {
+		Sibelius.MessageBox('This plug-in is the bridge for ai-score-editing-workflows. It is meant to be called over Sibelius Connect (invokePlugin), not from the menu.');
+	}"
+
+	GetBridgeVersion "() {
+		return CreateDictionary('version', 55);
+	}"
+
+	Echo "(value) {
+		return value;
+	}"
+
+	RequireScore "() {
+		if (Sibelius.ScoreCount = 0) {
+			return null;
+		}
+		return Sibelius.ActiveScore;
+	}"
+
+	GetScoreInfo "() {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		keySignatures = CreateSparseArray();
+		timeSignatures = CreateSparseArray();
+		systemStaff = score.SystemStaff;
+		for barNum = 1 to systemStaff.BarCount + 1 {
+			bar = systemStaff.NthBar(barNum);
+			for each KeySignature ks in bar {
+				keySignatures.Push(CreateDictionary(
+					'bar', barNum, 'name', ks.AsText, 'sharps', ks.Sharps, 'major', ks.Major));
+			}
+			for each TimeSignature ts in bar {
+				timeSignatures.Push(CreateDictionary(
+					'bar', barNum, 'numerator', ts.Numerator, 'denominator', ts.Denominator));
+			}
+		}
+		return CreateDictionary(
+			'fileName', score.FileName & '',
+			'title', score.Title,
+			'composer', score.Composer,
+			'lyricist', score.Lyricist,
+			'copyright', score.Copyright,
+			'staffCount', score.StaffCount,
+			'barCount', systemStaff.BarCount,
+			'keySignatures', keySignatures,
+			'timeSignatures', timeSignatures,
+			'mainTextFontName', score.MainTextFontName & '',
+			'mainMusicFontName', score.MainMusicFontName & '',
+			'musicTextFontName', score.MusicTextFontName & '');
+	}"
+
+	GetStaves "() {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		staves = CreateSparseArray();
+		for i = 1 to score.StaffCount + 1 {
+			staff = score.NthStaff(i);
+			staves.Push(CreateDictionary(
+				'staffNum', i,
+				'instrumentName', staff.InstrumentName,
+				'fullInstrumentName', staff.FullInstrumentName,
+				'barCount', staff.BarCount));
+		}
+		return staves;
+	}"
+
+	GetSelectionInfo "() {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		selection = score.Selection;
+		if (selection.IsPassage) {
+			return CreateDictionary(
+				'isPassage', True,
+				'topStaff', selection.TopStaff,
+				'bottomStaff', selection.BottomStaff,
+				'firstBar', selection.FirstBarNumber,
+				'lastBar', selection.LastBarNumber);
+		}
+		return CreateDictionary('isPassage', False);
+	}"
+
+	DescribeObject "(obj, index) {
+		if (obj.Type = 'NoteRest') {
+			notes = CreateSparseArray();
+			for each note in obj {
+				notes.Push(CreateDictionary(
+					'pitch', note.Pitch,
+					'name', note.Name,
+					'tied', note.Tied,
+					'bracketed', note.Bracketed));
+			}
+			return CreateDictionary(
+				'index', index,
+				'type', obj.Type,
+				'position', obj.Position,
+				'voice', obj.VoiceNumber,
+				'duration', obj.Duration,
+				'beam', obj.Beam,
+				'notes', notes);
+		}
+		if (obj.Type = 'LyricItem') {
+			syllableType = 'end';
+			if (obj.SyllableType = MiddleOfWord) {
+				syllableType = 'middle';
+			}
+			return CreateDictionary(
+				'index', index,
+				'type', obj.Type,
+				'position', obj.Position,
+				'voice', obj.VoiceNumber,
+				'text', obj.Text,
+				'syllableType', syllableType,
+				'styleId', '' & obj.StyleId,
+				'styleAsText', '' & obj.StyleAsText,
+				'hidden', obj.Hidden,
+				'dy', obj.Dy,
+				'dx', obj.Dx);
+		}
+		if (obj.Type = 'KeySignature') {
+			return CreateDictionary(
+				'index', index, 'type', obj.Type, 'position', obj.Position,
+				'name', obj.AsText, 'sharps', obj.Sharps, 'major', obj.Major);
+		}
+		if (obj.Type = 'TimeSignature') {
+			return CreateDictionary(
+				'index', index, 'type', obj.Type, 'position', obj.Position,
+				'numerator', obj.Numerator, 'denominator', obj.Denominator);
+		}
+		if (obj.Type = 'Clef') {
+			return CreateDictionary(
+				'index', index, 'type', obj.Type, 'position', obj.Position,
+				'styleId', obj.StyleId);
+		}
+		if (obj.Type = 'Text' or obj.Type = 'SystemTextItem') {
+			return CreateDictionary(
+				'index', index, 'type', obj.Type, 'position', obj.Position,
+				'text', obj.Text, 'styleId', '' & obj.StyleId);
+		}
+		if (obj.IsALine) {
+			return CreateDictionary(
+				'index', index, 'type', obj.Type, 'position', obj.Position,
+				'styleId', '' & obj.StyleId, 'duration', obj.Duration,
+				'endBarNumber', obj.EndBarNumber, 'endPosition', obj.EndPosition);
+		}
+		return CreateDictionary('index', index, 'type', obj.Type, 'position', obj.Position);
+	}"
+
+	ReadBars "(staffNum, fromBar, toBar) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		if (fromBar < 1 or toBar > staff.BarCount or fromBar > toBar) {
+			return CreateDictionary('error', 'bar range out of range');
+		}
+		bars = CreateSparseArray();
+		for barNum = fromBar to toBar + 1 {
+			bar = staff.NthBar(barNum);
+			objects = CreateSparseArray();
+			index = 0;
+			for each obj in bar {
+				objects.Push(DescribeObject(obj, index));
+				index = index + 1;
+			}
+			bars.Push(CreateDictionary('barNumber', barNum, 'objects', objects));
+		}
+		return bars;
+	}"
+
+	ReadLyrics "(staffNum, fromBar, toBar) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 0 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		firstStaff = staffNum;
+		lastStaff = staffNum;
+		if (staffNum = 0) {
+			firstStaff = 1;
+			lastStaff = score.StaffCount;
+		}
+		lyrics = CreateSparseArray();
+		for s = firstStaff to lastStaff + 1 {
+			staff = score.NthStaff(s);
+			startBar = 1;
+			endBar = staff.BarCount;
+			if (fromBar != null and fromBar > 1) {
+				startBar = fromBar;
+			}
+			if (toBar != null and toBar > 0 and toBar < endBar) {
+				endBar = toBar;
+			}
+			for barNum = startBar to endBar + 1 {
+				bar = staff.NthBar(barNum);
+				index = 0;
+				for each obj in bar {
+					if (obj.Type = 'LyricItem') {
+						syllableType = 'end';
+						if (obj.SyllableType = MiddleOfWord) {
+							syllableType = 'middle';
+						}
+						lyrics.Push(CreateDictionary(
+							'staff', s,
+							'bar', barNum,
+							'index', index,
+							'position', obj.Position,
+							'voice', obj.VoiceNumber,
+							'text', obj.Text,
+							'syllableType', syllableType,
+							'styleId', '' & obj.StyleId,
+							'styleAsText', '' & obj.StyleAsText,
+							'hidden', obj.Hidden,
+							'dy', obj.Dy));
+					}
+					index = index + 1;
+				}
+			}
+		}
+		return lyrics;
+	}"
+
+	StaffByNum "(score, staffNum) {
+		// Staff 0 is the system staff (tempo, rehearsal marks, system lines);
+		// null for a staff outside the score.
+		if (staffNum = 0) {
+			return score.SystemStaff;
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return null;
+		}
+		return score.NthStaff(staffNum);
+	}"
+
+	GetObjectAt "(staffNum, barNumber, index) {
+		score = Sibelius.ActiveScore;
+		staff = StaffByNum(score, staffNum);
+		if (staff = null) {
+			return null;
+		}
+		if (barNumber < 1 or barNumber > staff.BarCount) {
+			return null;
+		}
+		bar = staff.NthBar(barNumber);
+		i = 0;
+		for each obj in bar {
+			if (i = index) {
+				return obj;
+			}
+			i = i + 1;
+		}
+		return null;
+	}"
+
+	CreateStaff "(styleId, position, fullName, shortName) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (styleId = null or styleId = '') {
+			return CreateDictionary('error', 'styleId is required');
+		}
+		changeNames = False;
+		fn = '';
+		sn = '';
+		if (fullName != null and fullName != '') {
+			changeNames = True;
+			fn = fullName;
+		}
+		if (shortName != null and shortName != '') {
+			changeNames = True;
+			sn = shortName;
+		}
+		pos = 'bottom';
+		if (position != null and position != '') {
+			pos = position;
+		}
+		stave = null;
+		if (pos = 'top') {
+			if (changeNames) {
+				stave = score.CreateInstrumentAtTopReturnStave(styleId, True, fn, sn);
+			} else {
+				stave = score.CreateInstrumentAtTopReturnStave(styleId);
+			}
+		}
+		if (pos = 'auto') {
+			if (changeNames) {
+				stave = score.CreateInstrumentReturnStave(styleId, True, fn, sn);
+			} else {
+				stave = score.CreateInstrumentReturnStave(styleId);
+			}
+		}
+		if (pos = 'bottom') {
+			if (changeNames) {
+				stave = score.CreateInstrumentAtBottomReturnStave(styleId, True, fn, sn);
+			} else {
+				stave = score.CreateInstrumentAtBottomReturnStave(styleId);
+			}
+		}
+		if (stave = null) {
+			return CreateDictionary('error', 'CreateInstrument failed for style ID: ' & styleId);
+		}
+		return CreateDictionary(
+			'staffNum', stave.StaffNum,
+			'instrumentName', stave.InstrumentName,
+			'fullInstrumentName', stave.FullInstrumentName,
+			'shortInstrumentName', stave.ShortInstrumentName,
+			'barCount', stave.BarCount,
+			'totalStaves', score.StaffCount);
+	}"
+
+	AddStaffToInstrument "(staffNum, above, ossia) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		isOssia = False;
+		if (ossia != null and ossia = True) {
+			isOssia = True;
+		}
+		stave = null;
+		if (above != null and above = True) {
+			stave = staff.AddStaffAbove(isOssia);
+		} else {
+			stave = staff.AddStaffBelow(isOssia);
+		}
+		if (stave = null) {
+			return CreateDictionary('error', 'AddStaff failed');
+		}
+		return CreateDictionary(
+			'staffNum', stave.StaffNum,
+			'instrumentName', stave.InstrumentName,
+			'barCount', stave.BarCount,
+			'totalStaves', score.StaffCount);
+	}"
+
+	AddNoteSequence "(staffNum, barNumber, startPosition, sequence, voice) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		if (barNumber < 1 or barNumber > staff.BarCount) {
+			return CreateDictionary('error', 'barNumber out of range');
+		}
+		if (sequence = null or sequence.Length < 1) {
+			return CreateDictionary('error', 'sequence is empty');
+		}
+		v = 1;
+		if (voice != null and voice >= 1 and voice <= 4) {
+			v = voice;
+		}
+		currBarNum = barNumber;
+		currPos = 0;
+		if (startPosition != null and startPosition >= 0) {
+			currPos = startPosition;
+		}
+		addedCount = 0;
+		for i = 0 to sequence.Length {
+			item = sequence[i];
+			dur = item['duration'];
+			itemPitches = item['pitches'];
+			itemTied = False;
+			if (item['tied'] != null and item['tied'] = True) {
+				itemTied = True;
+			}
+			if (item['bar'] != null) {
+				currBarNum = item['bar'];
+			}
+			if (item['position'] != null) {
+				currPos = item['position'];
+			}
+			if (currBarNum > staff.BarCount) {
+				i = sequence.Length + 1;
+			} else {
+				bar = staff.NthBar(currBarNum);
+				if (currPos >= bar.Length) {
+					currBarNum = currBarNum + 1;
+					currPos = 0;
+				}
+				if (currBarNum <= staff.BarCount) {
+					bar = staff.NthBar(currBarNum);
+					if (itemPitches != null and itemPitches.Length > 0) {
+						firstNote = bar.AddNote(currPos, itemPitches[0], dur, itemTied, v);
+						if (firstNote != null) {
+							addedCount = addedCount + 1;
+							noteRest = firstNote.ParentNoteRest;
+							if (itemPitches.Length > 1) {
+								for p = 1 to itemPitches.Length {
+									noteRest.AddNote(itemPitches[p], itemTied);
+								}
+							}
+						}
+					}
+					currPos = currPos + dur;
+				}
+			}
+		}
+		return CreateDictionary(
+			'staff', staffNum, 'startBar', barNumber, 'addedNotes', addedCount);
+	}"
+
+	AddLyric "(staffNum, barNumber, position, duration, text, syllableType) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		if (barNumber < 1 or barNumber > staff.BarCount) {
+			return CreateDictionary('error', 'barNumber out of range');
+		}
+		st = EndOfWord;
+		if (syllableType = 'middle') {
+			st = MiddleOfWord;
+		}
+		bar = staff.NthBar(barNumber);
+		lyric = bar.AddLyric(position, duration, text, st);
+		if (lyric = null) {
+			return CreateDictionary('error', 'AddLyric failed');
+		}
+		return CreateDictionary(
+			'staff', staffNum, 'bar', barNumber, 'position', lyric.Position, 'text', lyric.Text);
+	}"
+
+	AddVersion "(name, comment) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		versions = score.GetVersions();
+		version = versions.AddVersion(name, comment);
+		if (version = null) {
+			return CreateDictionary('error', 'AddVersion failed (has the score ever been saved?)');
+		}
+		return CreateDictionary('name', name, 'versionCount', versions.NumChildren);
+	}"
+
+	OpenScore "(fileName) {
+		ok = Sibelius.Open(fileName, True);
+		if (ok != True) {
+			return CreateDictionary('error', 'could not open ' & fileName);
+		}
+		score = Sibelius.ActiveScore;
+		return CreateDictionary('fileName', score.FileName & '');
+	}"
+
+	ExportScore "(fileName, format) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		score.SaveAs(fileName, format);
+		return CreateDictionary('exportedTo', fileName, 'format', format,
+			'stillOpen', score.FileName & '');
+	}"
+
+	GetPlaybackSounds "() {
+		// Each staff's playback sound: the Mixer override, if any, and the
+		// sound at the start plus every change after it. MoveToNext steps
+		// through bars as played, repeats included, so only changes of sound
+		// are kept, and the guard allows for repeated passes.
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		staves = CreateSparseArray();
+		for each Staff staff in score {
+			changes = CreateSparseArray();
+			info = staff.SoundInfoAtPosition(1, 0, 1);
+			last = '';
+			more = True;
+			guard = 8 * (staff.BarCount + 1);
+			while (more and guard > 0) {
+				key = info.SoundSetName & '|' & info.PatchName & '|' & info.ActualSoundId;
+				if (key != last) {
+					changes.Push(CreateDictionary(
+						'bar', info.BarNum, 'soundSet', info.SoundSetName & '',
+						'patch', info.PatchName & '',
+						'requestedSoundId', info.RequestedSoundId & '',
+						'actualSoundId', info.ActualSoundId & ''));
+					last = key;
+				}
+				more = info.MoveToNext();
+				guard = guard - 1;
+			}
+			staves.Push(CreateDictionary(
+				'staffNum', staff.StaffNum, 'name', staff.FullInstrumentName & '',
+				'override', staff.SoundIdOverrideIfAny & '', 'complete', not more,
+				'sounds', changes));
+		}
+		return staves;
+	}"
+
+	ExportAudio "(fileName, staffNum) {
+		// Lossless audio (AIFF on a Mac) of the whole score from the start:
+		// every staff for staffNum 0, otherwise only that staff, by selecting
+		// it and turning off 'include all staves'. The selection is cleared.
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 0 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		selection = score.Selection;
+		selection.Clear();
+		allStaves = True;
+		if (staffNum > 0) {
+			selection.SelectPassage(1, score.SystemStaff.BarCount, staffNum, staffNum);
+			allStaves = False;
+		}
+		ok = score.SaveAsAudio(fileName, allStaves, True);
+		selection.Clear();
+		if (ok != True) {
+			return CreateDictionary('error', 'Sibelius refused the audio export');
+		}
+		return CreateDictionary('exportedTo', fileName, 'staff', staffNum);
+	}"
+
+	Save "() {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		fileName = score.FileName & '';
+		// An imported MusicXML score reports a bare title, not a path.
+		if (fileName = '' or Substring(fileName, 0, 1) != '/') {
+			return CreateDictionary('error', 'score has never been saved; save it in Sibelius first');
+		}
+		score.Save(fileName);
+		return CreateDictionary('fileName', fileName);
+	}"
+
+	SetStaffName "(staffNum, fullName, shortName) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		if (fullName != null and fullName != '') {
+			staff.FullInstrumentName = '' & fullName;
+			staff.FullStaffName = '' & fullName;
+		}
+		if (shortName != null and shortName != '') {
+			staff.ShortInstrumentName = '' & shortName;
+			staff.ShortStaffName = '' & shortName;
+		}
+		return CreateDictionary(
+			'staffNum', staffNum,
+			'fullInstrumentName', staff.FullInstrumentName,
+			'shortInstrumentName', staff.ShortInstrumentName);
+	}"
+
+	SetInitialInstrument "(staffNum, styleId) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		if (styleId = null or styleId = '') {
+			return CreateDictionary('error', 'styleId is required');
+		}
+		staff = score.NthStaff(staffNum);
+		bar = staff.NthBar(1);
+		change = bar.AddInstrumentChange(0, styleId, False, False);
+		if (change = null) {
+			return CreateDictionary('error', 'AddInstrumentChange failed');
+		}
+		return CreateDictionary('staffNum', staffNum, 'styleId', styleId);
+	}"
+
+	DuplicateOctaveDownToVoice2 "(staffNum, fromBar, toBar) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		if (fromBar < 1 or toBar < fromBar or toBar > staff.BarCount) {
+			return CreateDictionary('error', 'invalid bar range');
+	}
+	added = 0;
+	lastBar = toBar + 1;
+	for barNum = fromBar to lastBar {
+		bar = staff.NthBar(barNum);
+		found = False;
+		pitch = 0;
+		position = 0;
+		duration = 0;
+		for each obj in bar {
+			if (found = False and obj.Type = 'NoteRest' and obj.VoiceNumber = 1) {
+				for each note in obj {
+					for each other in obj {
+						if (other.Pitch = (note.Pitch + 12)) {
+							pitch = note.Pitch;
+							position = obj.Position;
+							duration = obj.Duration;
+							found = True;
+						}
+					}
+				}
+			}
+		}
+		if (found) {
+			duplicate = bar.AddNote(position, pitch, duration, False, 2);
+			duplicate.ParentNoteRest.Hidden = True;
+			added = added + 1;
+		}
+	}
+		return CreateDictionary('staffNum', staffNum, 'fromBar', fromBar, 'toBar', toBar, 'added', added);
+	}"
+
+	SetScoreInfo "(title, composer, lyricist) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (title != null and title != '') {
+			score.Title = '' & title;
+		}
+		if (composer != null and composer != '') {
+			score.Composer = '' & composer;
+		}
+		if (lyricist != null and lyricist != '') {
+			score.Lyricist = '' & lyricist;
+		}
+		return CreateDictionary(
+			'title', score.Title,
+			'composer', score.Composer,
+			'lyricist', score.Lyricist);
+	}"
+
+	GetScoreStructure "(fromBar, toBar) {
+		// System-staff structure for bars fromBar-toBar. A key or time
+		// signature at the end of a bar takes effect in the next bar, which is
+		// what 'bar' reports; 'storedBar' is the bar that holds the object.
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		systemStaff = score.SystemStaff;
+		barCount = systemStaff.BarCount;
+		if (fromBar < 1 or toBar > barCount or fromBar > toBar) {
+			return CreateDictionary('error', 'bars ' & fromBar & '-' & toBar & ' are outside the score (' & barCount & ' bars)');
+		}
+		keySignatures = CreateSparseArray();
+		timeSignatures = CreateSparseArray();
+		barlines = CreateSparseArray();
+		breaks = CreateSparseArray();
+		for barNum = fromBar to toBar + 1 {
+			bar = systemStaff.NthBar(barNum);
+			for each KeySignature ks in bar {
+				effective = barNum;
+				if (ks.Position >= bar.Length) {
+					effective = barNum + 1;
+				}
+				keySignatures.Push(CreateDictionary('bar', effective, 'storedBar', barNum,
+					'name', ks.AsText, 'sharps', ks.Sharps, 'major', ks.Major));
+			}
+			for each TimeSignature ts in bar {
+				effective = barNum;
+				if (ts.Position >= bar.Length) {
+					effective = barNum + 1;
+				}
+				timeSignatures.Push(CreateDictionary('bar', effective, 'storedBar', barNum,
+					'numerator', ts.Numerator, 'denominator', ts.Denominator));
+			}
+			for each SpecialBarline sb in bar {
+				barlines.Push(CreateDictionary('bar', barNum, 'internalType', sb.BarlineInternalType,
+					'position', sb.Position));
+			}
+			if (bar.BreakType != Default) {
+				breaks.Push(CreateDictionary('bar', barNum, 'breakType', bar.BreakType));
+			}
+		}
+		return CreateDictionary('barCount', barCount, 'fromBar', fromBar, 'toBar', toBar,
+			'keySignatures', keySignatures, 'timeSignatures', timeSignatures,
+			'barlines', barlines, 'breaks', breaks,
+			'layout', LayoutRead(score), 'engraving', EngravingRead(score));
+	}"
+
+	GetSpecialBarlines "(fromBar, toBar) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		systemStaff = score.SystemStaff;
+		if (fromBar < 1 or toBar > systemStaff.BarCount or fromBar > toBar) {
+			return CreateDictionary('error', 'bar range out of range');
+		}
+		results = CreateSparseArray();
+		for barNum = fromBar to toBar + 1 {
+			bar = systemStaff.NthBar(barNum);
+			for each SpecialBarline sb in bar {
+				results.Push(CreateDictionary(
+					'bar', barNum,
+					'type', sb.BarlineType,
+					'internalType', sb.BarlineInternalType,
+					'position', sb.Position));
+			}
+		}
+		return results;
+	}"
+
+	SetLyricStyle "(staffNum, barNumber, index, styleId) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		obj = GetObjectAt(staffNum, barNumber, index);
+		if (obj = null) {
+			return CreateDictionary('error', 'no object at that address');
+		}
+		if (obj.Type != 'LyricItem') {
+			return CreateDictionary('error', 'object at address is a ' & obj.Type & ', not a LyricItem');
+		}
+		oldStyleId = '' & obj.StyleId;
+		targetStyleId = '' & styleId;
+		if (styleId = 'verse1' or styleId = 'line1' or styleId = 1) {
+			targetStyleId = 'text.staff.space.hypen.lyrics.verse1';
+		}
+		if (styleId = 'verse2' or styleId = 'line2' or styleId = 2) {
+			targetStyleId = 'text.staff.space.hypen.lyrics.verse2';
+		}
+		if (styleId = 'verse3' or styleId = 'line3' or styleId = 3) {
+			targetStyleId = 'text.staff.space.hypen.lyrics.verse3';
+		}
+		if (styleId = 'verse4' or styleId = 'line4' or styleId = 4) {
+			targetStyleId = 'text.staff.space.hypen.lyrics.verse4';
+		}
+		if (styleId = 'verse5' or styleId = 'line5' or styleId = 5) {
+			targetStyleId = 'text.staff.space.hypen.lyrics.verse5';
+		}
+		if (styleId = 'chorus') {
+			targetStyleId = 'text.staff.space.hypen.lyrics.chorus';
+		}
+		if (styleId = 'above') {
+			targetStyleId = 'text.staff.space.hypen.lyrics.above';
+		}
+		obj.StyleId = targetStyleId;
+		return CreateDictionary(
+			'staff', staffNum,
+			'bar', barNumber,
+			'index', index,
+			'oldStyleId', oldStyleId,
+			'newStyleId', '' & obj.StyleId);
+	}"
+
+	ConvertVerse6ToRoman "(staffNum, fromBar, toBar) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (staffNum < 1 or staffNum > score.StaffCount) {
+			return CreateDictionary('error', 'staffNum out of range');
+		}
+		staff = score.NthStaff(staffNum);
+		if (fromBar < 1) {
+			fromBar = 1;
+		}
+		if (toBar < 1 or toBar > staff.BarCount) {
+			toBar = staff.BarCount;
+		}
+		converted = 0;
+		for b = fromBar to toBar + 1 {
+			bar = staff.NthBar(b);
+			for each LyricItem lyric in bar {
+				if (lyric.StyleId = 'text.staff.space.hypen.lyrics.chorus') {
+					oldDy = lyric.Dy;
+					lyric.StyleId = 'text.staff.space.hypen.lyrics.verse5';
+					if (oldDy != 0) {
+						lyric.Dy = oldDy;
+					} else {
+						lyric.Dy = -592;
+					}
+					converted = converted + 1;
+				}
+			}
+		}
+		score.Redraw = True;
+		return CreateDictionary('converted', converted);
+	}"
+
+	QueryPropTable "() {
+		// Properties Query may read through obj.@name, per object kind. An
+		// unknown name raises a modal dialog that blocks Sibelius (docs/sibelius-protocol.md
+		// 1.3.1), so nothing outside this table is ever dereferenced.
+		// Mirrored by query.py READABLE_PROPS; a test keeps them in sync.
+		common = CreateDictionary(
+			'Position', True, 'VoiceNumber', True, 'Hidden', True, 'Dx', True,
+			'Dy', True, 'CueSize', True, 'Selected', True, 'Type', True);
+		types = CreateDictionary(
+			'NoteRest', CreateDictionary(
+				'Duration', True, 'NoteCount', True, 'Beam', True, 'GraceNote', True,
+				'StemFlipped', True, 'CrossStaff', True, 'RestPosition', True),
+			'LyricItem', CreateDictionary(
+				'Duration', True, 'NumNotes', True, 'Text', True, 'StyleId', True, 'StyleAsText', True),
+			'Text', CreateDictionary(
+				'Text', True, 'StyleId', True, 'StyleAsText', True),
+			'Line', CreateDictionary(
+				'Duration', True, 'EndBarNumber', True, 'EndPosition', True,
+				'StyleId', True, 'StyleAsText', True, 'RhDx', True),
+			'Clef', CreateDictionary(
+				'StyleId', True, 'ConcertClefStyleId', True),
+			'KeySignature', CreateDictionary(
+				'AsText', True, 'Major', True, 'Sharps', True),
+			'TimeSignature', CreateDictionary(
+				'Numerator', True, 'Denominator', True, 'Text', True),
+			'Tuplet', CreateDictionary(
+				'Text', True, 'FullDuration', True));
+		return CreateDictionary('common', common, 'types', types);
+	}"
+
+	QueryKind "(obj) {
+		// Text on the system staff is a SystemTextItem; both are kind Text.
+		if (obj.IsALine) {
+			return 'Line';
+		}
+		if (obj.Type = 'SystemTextItem') {
+			return 'Text';
+		}
+		return obj.Type;
+	}"
+
+	QueryIsReadable "(table, kind, prop) {
+		common = table['common'];
+		if (common[prop] = True) {
+			return True;
+		}
+		typeTable = table['types'];
+		typeProps = typeTable[kind];
+		if (typeProps = null) {
+			return False;
+		}
+		if (typeProps[prop] = True) {
+			return True;
+		}
+		return False;
+	}"
+
+	QueryCompare "(a, op, b) {
+		result = False;
+		if (op = '=') {
+			if (a = b) {
+				result = True;
+			}
+		}
+		if (op = '!=') {
+			if (a != b) {
+				result = True;
+			}
+		}
+		if (op = '<') {
+			if (a < b) {
+				result = True;
+			}
+		}
+		if (op = '<=') {
+			if (a <= b) {
+				result = True;
+			}
+		}
+		if (op = '>') {
+			if (a > b) {
+				result = True;
+			}
+		}
+		if (op = '>=') {
+			if (a >= b) {
+				result = True;
+			}
+		}
+		return result;
+	}"
+
+	QueryMatches "(obj, kind, where, table) {
+		if (where = null) {
+			return True;
+		}
+		for i = 0 to where.Length {
+			cond = where[i];
+			prop = cond['prop'];
+			op = cond['op'];
+			value = cond['value'];
+			if (prop = 'Pitch' or prop = 'Bracketed') {
+				// Note-level pseudo-properties: true if any note of the chord matches.
+				if (kind != 'NoteRest') {
+					return False;
+				}
+				anyMatch = False;
+				for each note in obj {
+					noteValue = note.Pitch;
+					if (prop = 'Bracketed') {
+						noteValue = note.Bracketed;
+					}
+					if (QueryCompare(noteValue, op, value)) {
+						anyMatch = True;
+					}
+				}
+				if (anyMatch = False) {
+					return False;
+				}
+			} else {
+				if (QueryIsReadable(table, kind, prop) = False) {
+					return False;
+				}
+				if (QueryCompare(obj.@prop, op, value) = False) {
+					return False;
+				}
+			}
+		}
+		return True;
+	}"
+
+	QueryInList "(list, value) {
+		for i = 0 to list.Length {
+			if (list[i] = value) {
+				return True;
+			}
+		}
+		return False;
+	}"
+
+	Query "(selector) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		table = QueryPropTable();
+		ops = CreateSparseArray('=', '!=', '<', '<=', '>', '>=');
+		where = selector['where'];
+		if (where != null) {
+			for i = 0 to where.Length {
+				cond = where[i];
+				if (QueryInList(ops, cond['op']) = False) {
+					return CreateDictionary('error', 'unsupported operator at where ' & i);
+				}
+			}
+		}
+		staves = selector['staves'];
+		if (staves = null or staves.Length = 0) {
+			staves = CreateSparseArray();
+			for s = 1 to score.StaffCount + 1 {
+				staves.Push(s);
+			}
+		}
+		types = selector['types'];
+		fields = selector['fields'];
+		voice = selector['voice'];
+		if (voice = null) {
+			voice = 0;
+		}
+		limit = selector['limit'];
+		if (limit = null or limit < 1) {
+			limit = 500;
+		}
+		objects = CreateSparseArray();
+		truncated = False;
+		for si = 0 to staves.Length {
+			staffNum = staves[si];
+			staff = StaffByNum(score, staffNum);
+			if (staff = null) {
+				return CreateDictionary('error', 'staff ' & staffNum & ' out of range');
+			}
+			fromBar = selector['fromBar'];
+			if (fromBar = null or fromBar < 1) {
+				fromBar = 1;
+			}
+			toBar = selector['toBar'];
+			if (toBar = null or toBar > staff.BarCount) {
+				toBar = staff.BarCount;
+			}
+			for barNum = fromBar to toBar + 1 {
+				index = 0;
+				for each obj in staff.NthBar(barNum) {
+					kind = QueryKind(obj);
+					keep = True;
+					if (types != null and types.Length > 0) {
+						if (QueryInList(types, kind) = False and QueryInList(types, obj.Type) = False) {
+							keep = False;
+						}
+					}
+					if (keep and voice > 0 and obj.VoiceNumber != voice) {
+						keep = False;
+					}
+					if (keep) {
+						keep = QueryMatches(obj, kind, where, table);
+					}
+					if (keep) {
+						if (objects.Length >= limit) {
+							truncated = True;
+						} else {
+							d = DescribeObject(obj, index);
+							d['staff'] = staffNum;
+							d['bar'] = barNum;
+							d['voice'] = obj.VoiceNumber;
+							if (fields != null and fields.Length > 0) {
+								values = CreateDictionary();
+								for fi = 0 to fields.Length {
+									prop = fields[fi];
+									if (QueryIsReadable(table, kind, prop)) {
+										values[prop] = obj.@prop;
+									}
+								}
+								d['fields'] = values;
+							}
+							objects.Push(d);
+						}
+					}
+					index = index + 1;
+				}
+			}
+		}
+		return CreateDictionary('objects', objects, 'count', objects.Length, 'truncated', truncated);
+	}"
+
+	BatchWritableTable "() {
+		// Properties ApplyBatch 'set' may write through obj.@name, per object
+		// kind. Mirrored by batch_ops.py WRITABLE_PROPS, which also checks value
+		// types; a test keeps the two in sync.
+		common = CreateDictionary('Dx', True, 'Dy', True, 'Hidden', True, 'CueSize', True);
+		types = CreateDictionary(
+			'NoteRest', CreateDictionary('Beam', True, 'RestPosition', True),
+			'LyricItem', CreateDictionary('Text', True, 'Duration', True, 'NumNotes', True),
+			'Text', CreateDictionary('Text', True),
+			'Line', CreateDictionary('Duration', True, 'RhDx', True));
+		return CreateDictionary('common', common, 'types', types);
+	}"
+
+	BatchAddressed "(opName) {
+		if (opName = 'set' or opName = 'set-pitch' or opName = 'tie' or opName = 'bracket') {
+			return True;
+		}
+		if (opName = 'flip-stem' or opName = 'delete' or opName = 'nudge') {
+			return True;
+		}
+		return False;
+	}"
+
+	BatchStructural "(opName) {
+		// Range and score operations. They may replace or renumber the objects
+		// addressed ops hold, so they must come after every other op.
+		if (opName = 'transpose' or opName = 'copy-passage' or opName = 'delete-voice') {
+			return True;
+		}
+		if (opName = 'set-key' or opName = 'set-time' or opName = 'set-break') {
+			return True;
+		}
+		if (opName = 'set-barline' or opName = 'add-bars' or opName = 'set-bar-number') {
+			return True;
+		}
+		if (opName = 'set-layout' or opName = 'hide-empty-staves') {
+			return True;
+		}
+		return False;
+	}"
+
+	BatchBeamTargets "(op) {
+		// The objects from firstIndex to lastIndex, resolved before any edit.
+		objects = CreateSparseArray();
+		for i = op['firstIndex'] to op['lastIndex'] + 1 {
+			objects.Push(GetObjectAt(op['staff'], op['bar'], i));
+		}
+		return objects;
+	}"
+
+	BatchCheckRange "(score, op) {
+		// Bars and staves of a range op, against the score before the batch.
+		barCount = score.SystemStaff.BarCount;
+		if (op['fromBar'] < 1 or op['toBar'] > barCount or op['fromBar'] > op['toBar']) {
+			return 'bars ' & op['fromBar'] & '-' & op['toBar'] & ' are outside the score (' & barCount & ' bars)';
+		}
+		if (op['topStaff'] != null) {
+			if (op['topStaff'] < 1 or op['bottomStaff'] > score.StaffCount or op['topStaff'] > op['bottomStaff']) {
+				return 'staves ' & op['topStaff'] & '-' & op['bottomStaff'] & ' are outside the score';
+			}
+		}
+		return '';
+	}"
+
+	BatchCheckStructural "(score, op) {
+		opName = op['op'];
+		barCount = score.SystemStaff.BarCount;
+		if (op['bar'] != null) {
+			if (op['bar'] < 1 or op['bar'] > barCount) {
+				return 'no bar ' & op['bar'] & ' (score has ' & barCount & ' bars)';
+			}
+		}
+		if (op['fromBar'] != null) {
+			problem = BatchCheckRange(score, op);
+			if (problem != '') {
+				return problem;
+			}
+		}
+		if (opName = 'transpose') {
+			// Out-of-range arguments raise a modal dialog (docs/sibelius-protocol.md 1.3.1).
+			if (op['intervalType'] < 0 or op['intervalType'] > 10 or op['degree'] < -21 or op['degree'] > 21) {
+				return 'transposition out of range';
+			}
+		}
+		if (opName = 'copy-passage') {
+			lastDest = op['destStaff'] + op['bottomStaff'] - op['topStaff'];
+			if (op['destStaff'] < 1 or lastDest > score.StaffCount) {
+				return 'destination staves ' & op['destStaff'] & '-' & lastDest & ' are outside the score';
+			}
+			if (op['destBar'] < 1 or op['destBar'] > barCount) {
+				return 'no destination bar ' & op['destBar'];
+			}
+			destBar = score.SystemStaff.NthBar(op['destBar']);
+			if (op['destPosition'] < 0 or op['destPosition'] >= destBar.Length) {
+				return 'destPosition ' & op['destPosition'] & ' is outside bar ' & op['destBar'];
+			}
+		}
+		if (opName = 'delete-voice') {
+			if (op['staff'] < 1 or op['staff'] > score.StaffCount) {
+				return 'no staff ' & op['staff'];
+			}
+			if (op['voice'] < 1 or op['voice'] > 4) {
+				return 'voice must be 1-4';
+			}
+		}
+		if (opName = 'set-time') {
+			// A zero numerator crashes Sibelius (docs/sibelius-protocol.md 1.3.1).
+			d = op['denominator'];
+			if (op['numerator'] < 1 or op['numerator'] > 64) {
+				return 'numerator must be 1-64';
+			}
+			if (d != 1 and d != 2 and d != 4 and d != 8 and d != 16 and d != 32 and d != 64) {
+				return 'denominator must be a power of two up to 64';
+			}
+		}
+		if (opName = 'add-bars') {
+			if (op['count'] < 1 or op['count'] > 1000) {
+				return 'count must be 1-1000';
+			}
+			if (op['length'] != null) {
+				if (op['length'] < 1 or op['length'] > 16384) {
+					return 'length must be 1-16384';
+				}
+			}
+		}
+		if (opName = 'set-bar-number') {
+			if (op['number'] < 1) {
+				return 'number must be at least 1';
+			}
+		}
+		if (opName = 'set-layout') {
+			// Settings are range-checked by batch_ops.py; a zero staff size
+			// would leave nothing to draw.
+			if (BatchHasSetting(op, 'staffSize')) {
+				if (op['staffSize'] <= 0) {
+					return 'staffSize must be positive';
+				}
+			}
+		}
+		return '';
+	}"
+
+	BatchBarlineType "(name) {
+		// -1 for 'none' and 'normal': remove special barlines, add nothing.
+		if (name = 'start_repeat') {
+			return SpecialBarlineStartRepeat;
+		}
+		if (name = 'end_repeat') {
+			return SpecialBarlineEndRepeat;
+		}
+		if (name = 'dashed') {
+			return SpecialBarlineDashed;
+		}
+		if (name = 'double') {
+			return SpecialBarlineDouble;
+		}
+		if (name = 'final') {
+			return SpecialBarlineFinal;
+		}
+		if (name = 'invisible') {
+			return SpecialBarlineInvisible;
+		}
+		if (name = 'between_staves') {
+			return SpecialBarlineBetweenStaves;
+		}
+		if (name = 'tick') {
+			return SpecialBarlineTick;
+		}
+		if (name = 'short') {
+			return SpecialBarlineShort;
+		}
+		if (name = 'dotted') {
+			return SpecialBarlineDotted;
+		}
+		if (name = 'triple') {
+			return SpecialBarlineTriple;
+		}
+		if (name = 'thick') {
+			return SpecialBarlineThick;
+		}
+		return -1;
+	}"
+
+	BatchRunStructural "(score, op) {
+		opName = op['op'];
+		systemStaff = score.SystemStaff;
+		selection = score.Selection;
+		if (opName = 'transpose') {
+			selection.SelectPassage(op['fromBar'], op['toBar'], op['topStaff'], op['bottomStaff']);
+			selection.Transpose(op['degree'], op['intervalType'], True, True);
+			selection.Clear();
+			return CreateDictionary('fromBar', op['fromBar'], 'toBar', op['toBar'],
+				'degree', op['degree'], 'intervalType', op['intervalType']);
+		}
+		if (opName = 'copy-passage') {
+			selection.SelectPassage(op['fromBar'], op['toBar'], op['topStaff'], op['bottomStaff']);
+			selection.Copy();
+			ok = selection.PasteToPosition(op['destStaff'], op['destBar'], op['destPosition']);
+			selection.Clear();
+			if (ok != True) {
+				return null;
+			}
+			return CreateDictionary('destStaff', op['destStaff'], 'destBar', op['destBar'],
+				'destPosition', op['destPosition'], 'barCount', systemStaff.BarCount);
+		}
+		if (opName = 'delete-voice') {
+			// Deleting from an empty selection raises a modal dialog, so an
+			// empty voice is reported without selecting anything.
+			voice = op['voice'];
+			staff = score.NthStaff(op['staff']);
+			found = 0;
+			for barNum = op['fromBar'] to op['toBar'] + 1 {
+				for each obj in staff.NthBar(barNum) {
+					if (obj.VoiceNumber = voice) {
+						found = found + 1;
+					}
+				}
+			}
+			if (found > 0) {
+				selection.SelectPassage(op['fromBar'], op['toBar'], op['staff'], op['staff']);
+				Sibelius.Execute('filter_voice' & voice & '_only');
+				Sibelius.Execute('delete');
+				selection.Clear();
+			}
+			return CreateDictionary('staff', op['staff'], 'voice', voice, 'objects', found);
+		}
+		if (opName = 'add-bars') {
+			if (op['bar'] = null and op['length'] = null) {
+				score.AddBars(op['count']);
+			} else {
+				// No bar appends; InsertBars takes one past the last bar.
+				before = systemStaff.BarCount + 1;
+				if (op['bar'] != null) {
+					before = op['bar'];
+				}
+				if (op['length'] = null) {
+					score.InsertBars(op['count'], before);
+				} else {
+					score.InsertBars(op['count'], before, op['length']);
+				}
+			}
+			return CreateDictionary('addedBars', op['count'], 'barCount', systemStaff.BarCount);
+		}
+		if (opName = 'set-layout') {
+			return BatchSetLayout(score, op);
+		}
+		if (opName = 'hide-empty-staves') {
+			// Hiding changes which staves each system shows, so respace them.
+			score.HideEmptyStaves(1, score.StaffCount, op['fromBar'], op['toBar']);
+			score.OptimizeStaffSpacing(1, score.StaffCount, op['fromBar'], op['toBar']);
+			score.Redraw = True;
+			return CreateDictionary('fromBar', op['fromBar'], 'toBar', op['toBar'], 'pageCount', score.PageCount);
+		}
+		bar = systemStaff.NthBar(op['bar']);
+		if (opName = 'set-bar-number') {
+			bar.AddBarNumber(op['number'], 0, '', False, op['skip']);
+			return CreateDictionary('bar', op['bar'], 'number', op['number'], 'skip', op['skip']);
+		}
+		if (opName = 'set-key') {
+			ks = bar.AddKeySignatureFromText(0, op['key'], op['major']);
+			if (ks = null) {
+				return null;
+			}
+			return CreateDictionary('bar', op['bar'], 'name', ks.AsText, 'sharps', ks.Sharps, 'major', ks.Major);
+		}
+		if (opName = 'set-time') {
+			err = bar.AddTimeSignature(op['numerator'], op['denominator'], True, True, op['symbol']);
+			if (err != '') {
+				return null;
+			}
+			ts = systemStaff.CurrentTimeSignature(op['bar']);
+			return CreateDictionary('bar', op['bar'], 'numerator', ts.Numerator,
+				'denominator', ts.Denominator, 'barCount', systemStaff.BarCount);
+		}
+		if (opName = 'set-break') {
+			bType = EndOfSystemOrPage;
+			if (op['type'] = 'page') {
+				bType = EndOfPage;
+			}
+			// Clearing a break means Default; MiddleOfSystem would forbid one.
+			if (op['type'] = 'none') {
+				bType = Default;
+			}
+			bar.BreakType = bType;
+			return CreateDictionary('bar', op['bar'], 'breakType', '' & bar.BreakType);
+		}
+		if (opName = 'set-barline') {
+			existing = CreateSparseArray();
+			for each SpecialBarline sb in bar {
+				existing.Push(sb);
+			}
+			for i = 0 to existing.Length {
+				sbOld = existing[i];
+				sbOld.Delete();
+			}
+			bType = BatchBarlineType(op['type']);
+			if (bType >= 0) {
+				bar.AddSpecialBarline(bType);
+			}
+			return CreateDictionary('bar', op['bar'], 'removed', existing.Length, 'barlineType', '' & bType);
+		}
+		return null;
+	}"
+
+	BatchSetLayout "(score, op) {
+		// Page size before orientation, which swaps the margins, and both
+		// before the margins themselves. A 0 reads as null in ManuScript, so
+		// op['settings'] names the settings to change.
+		setup = score.DocumentSetup;
+		if (BatchHasSetting(op, 'pageSize')) {
+			setup.PageSize = op['pageSize'];
+		}
+		if (BatchHasSetting(op, 'orientation')) {
+			setup.Orientation = op['orientation'];
+		}
+		if (BatchHasSetting(op, 'staffSize')) {
+			setup.StaffSize = op['staffSize'];
+		}
+		if (BatchHasSetting(op, 'topMargin')) {
+			setup.PageTopMargin = op['topMargin'];
+		}
+		if (BatchHasSetting(op, 'bottomMargin')) {
+			setup.PageBottomMargin = op['bottomMargin'];
+		}
+		if (BatchHasSetting(op, 'leftMargin')) {
+			setup.PageLeftMargin = op['leftMargin'];
+		}
+		if (BatchHasSetting(op, 'rightMargin')) {
+			setup.PageRightMargin = op['rightMargin'];
+		}
+		if (BatchHasSetting(op, 'aboveTopStaveGap')) {
+			setup.AboveTopStaveGap = op['aboveTopStaveGap'];
+		}
+		if (BatchHasSetting(op, 'belowBottomStaveGap')) {
+			setup.BelowBottomStaveGap = op['belowBottomStaveGap'];
+		}
+		rules = score.EngravingRules;
+		if (BatchHasSetting(op, 'spacesBetweenStaves')) {
+			rules.SpacesBetweenStaves = op['spacesBetweenStaves'];
+		}
+		if (BatchHasSetting(op, 'extraSpacesBelowVocalStaves')) {
+			rules.ExtraSpacesBelowVocalStaves = op['extraSpacesBelowVocalStaves'];
+		}
+		if (BatchHasSetting(op, 'spacesBetweenSystems')) {
+			rules.SpacesBetweenSystems = op['spacesBetweenSystems'];
+		}
+		score.Redraw = True;
+		return CreateDictionary('layout', LayoutRead(score), 'engraving', EngravingRead(score));
+	}"
+
+	BatchHasSetting "(op, name) {
+		settings = op['settings'];
+		for i = 0 to settings.Length {
+			if (settings[i] = name) {
+				return True;
+			}
+		}
+		return False;
+	}"
+
+	LayoutRead "(score) {
+		setup = score.DocumentSetup;
+		return CreateDictionary(
+			'pageCount', score.PageCount,
+			'pageSize', setup.PageSize,
+			'orientation', setup.Orientation,
+			'pageWidth', setup.PageWidth,
+			'pageHeight', setup.PageHeight,
+			'staffSize', setup.StaffSize,
+			'topMargin', setup.PageTopMargin,
+			'bottomMargin', setup.PageBottomMargin,
+			'leftMargin', setup.PageLeftMargin,
+			'rightMargin', setup.PageRightMargin,
+			'aboveTopStaveGap', setup.AboveTopStaveGap,
+			'belowBottomStaveGap', setup.BelowBottomStaveGap);
+	}"
+
+	EngravingRead "(score) {
+		rules = score.EngravingRules;
+		return CreateDictionary(
+			'spacesBetweenStaves', rules.SpacesBetweenStaves,
+			'extraSpacesBelowVocalStaves', rules.ExtraSpacesBelowVocalStaves,
+			'spacesBetweenSystems', rules.SpacesBetweenSystems);
+	}"
+
+	BatchBar "(score, op) {
+		staff = StaffByNum(score, op['staff']);
+		if (staff = null) {
+			return null;
+		}
+		barNumber = op['bar'];
+		if (barNumber < 1 or barNumber > staff.BarCount) {
+			return null;
+		}
+		return staff.NthBar(barNumber);
+	}"
+
+	BatchCheck "(score, op, target, writable) {
+		// Returns '' when op can run against the score as it is now.
+		opName = op['op'];
+		if (BatchAddressed(opName)) {
+			if (target = null) {
+				return 'no object at staff ' & op['staff'] & ' bar ' & op['bar'] & ' index ' & op['index'];
+			}
+			if (op['type'] != null) {
+				if (target.Type != op['type'] and QueryKind(target) != op['type']) {
+					return 'expected a ' & op['type'] & ' but found a ' & target.Type;
+				}
+			}
+			if (op['position'] != null) {
+				if (target.Position != op['position']) {
+					return 'expected position ' & op['position'] & ' but found ' & target.Position;
+				}
+			}
+			kind = QueryKind(target);
+			if (opName = 'set') {
+				if (QueryIsReadable(writable, kind, op['prop']) = False) {
+					return 'property ' & op['prop'] & ' is not writable on a ' & target.Type;
+				}
+				return '';
+			}
+			if (opName = 'delete' or opName = 'nudge') {
+				return '';
+			}
+			if (target.Type != 'NoteRest') {
+				return opName & ' needs a NoteRest but found a ' & target.Type;
+			}
+			if (opName = 'set-pitch') {
+				found = False;
+				for each note in target {
+					if (note.Pitch = op['oldPitch']) {
+						found = True;
+					}
+				}
+				if (found = False) {
+					return 'no note with pitch ' & op['oldPitch'];
+				}
+			}
+			if (opName = 'tie' or opName = 'bracket') {
+				if (target.NoteCount < 1) {
+					return 'cannot ' & opName & ' a rest';
+				}
+			}
+			return '';
+		}
+		if (BatchStructural(opName)) {
+			return BatchCheckStructural(score, op);
+		}
+		if (opName = 'beam') {
+			noteRests = 0;
+			for i = 0 to target.Length {
+				obj = target[i];
+				if (obj = null) {
+					return 'no object at staff ' & op['staff'] & ' bar ' & op['bar'] & ' index ' & (op['firstIndex'] + i);
+				}
+				if (obj.Type = 'NoteRest') {
+					noteRests = noteRests + 1;
+				}
+			}
+			first = target[0];
+			last = target[target.Length - 1];
+			if (first.Type != 'NoteRest' or last.Type != 'NoteRest') {
+				return 'beam endpoints must be NoteRests';
+			}
+			if (noteRests < 2) {
+				return 'a beam needs at least two NoteRests';
+			}
+			return '';
+		}
+		bar = BatchBar(score, op);
+		if (bar = null) {
+			return 'no bar ' & op['bar'] & ' on staff ' & op['staff'];
+		}
+		if (op['position'] < 0 or op['position'] >= bar.Length) {
+			return 'position ' & op['position'] & ' is outside the bar';
+		}
+		return '';
+	}"
+
+	BatchRun "(score, op, target) {
+		// Applies one checked op; returns a description of the result, or
+		// null if Sibelius refused the change.
+		opName = op['op'];
+		if (opName = 'set') {
+			prop = op['prop'];
+			target.@prop = op['value'];
+			return DescribeObject(target, op['index']);
+		}
+		if (opName = 'set-pitch') {
+			oldNote = null;
+			for each note in target {
+				if (note.Pitch = op['oldPitch']) {
+					oldNote = note;
+				}
+			}
+			newNote = target.AddNote(op['newPitch'], oldNote.Tied);
+			if (newNote = null) {
+				return null;
+			}
+			target.RemoveNote(oldNote);
+			return DescribeObject(target, op['index']);
+		}
+		if (opName = 'tie') {
+			for each note in target {
+				note.Tied = op['tied'];
+			}
+			return DescribeObject(target, op['index']);
+		}
+		if (opName = 'bracket') {
+			for each note in target {
+				note.Bracketed = op['bracketed'];
+			}
+			return DescribeObject(target, op['index']);
+		}
+		if (opName = 'flip-stem') {
+			target.FlipStem();
+			return DescribeObject(target, op['index']);
+		}
+		if (opName = 'delete') {
+			target.Delete();
+			return CreateDictionary('deleted', True);
+		}
+		if (opName = 'nudge') {
+			// Relative offsets. Reports the offsets themselves, which
+			// DescribeObject does not include for most object types.
+			oldDx = target.Dx;
+			oldDy = target.Dy;
+			target.Dx = oldDx + op['dx'];
+			target.Dy = oldDy + op['dy'];
+			return CreateDictionary(
+				'type', target.Type, 'oldDx', oldDx, 'newDx', target.Dx,
+				'oldDy', oldDy, 'newDy', target.Dy);
+		}
+		if (opName = 'beam') {
+			last = target.Length - 1;
+			noteCount = 0;
+			for i = 0 to target.Length {
+				obj = target[i];
+				if (obj.Type = 'NoteRest') {
+					noteCount = noteCount + 1;
+					if (i = 0) {
+						obj.Beam = StartBeam;
+					} else {
+						if (i = last) {
+							obj.Beam = SingleBeam;
+						} else {
+							obj.Beam = ContinueBeam;
+						}
+					}
+				}
+			}
+			first = target[0];
+			lastObj = target[last];
+			return CreateDictionary('staff', op['staff'], 'bar', op['bar'],
+				'firstIndex', op['firstIndex'], 'lastIndex', op['lastIndex'],
+				'noteCount', noteCount, 'firstBeam', first.Beam, 'lastBeam', lastObj.Beam);
+		}
+		if (BatchStructural(opName)) {
+			return BatchRunStructural(score, op);
+		}
+		bar = BatchBar(score, op);
+		voice = 1;
+		if (op['voice'] != null) {
+			voice = op['voice'];
+		}
+		if (opName = 'add-note') {
+			pitches = op['pitches'];
+			tied = False;
+			if (op['tied'] = True) {
+				tied = True;
+			}
+			firstNote = bar.AddNote(op['position'], pitches[0], op['duration'], tied, voice);
+			if (firstNote = null) {
+				return null;
+			}
+			noteRest = firstNote.ParentNoteRest;
+			for i = 1 to pitches.Length {
+				noteRest.AddNote(pitches[i], tied);
+			}
+			return DescribeObject(noteRest, -1);
+		}
+		if (opName = 'add-text') {
+			if (op['staff'] = 0) {
+				text = bar.AddText(op['position'], op['text'], op['styleId']);
+			} else {
+				text = bar.AddText(op['position'], op['text'], op['styleId'], voice);
+			}
+			if (text = null) {
+				return null;
+			}
+			return DescribeObject(text, -1);
+		}
+		if (opName = 'add-line') {
+			if (op['staff'] = 0) {
+				line = bar.AddLine(op['position'], op['duration'], op['styleId']);
+			} else {
+				line = bar.AddLine(op['position'], op['duration'], op['styleId'], 0, 0, voice);
+			}
+			if (line = null) {
+				return null;
+			}
+			return DescribeObject(line, -1);
+		}
+		if (opName = 'add-lyric') {
+			st = EndOfWord;
+			if (op['syllableType'] = 'middle') {
+				st = MiddleOfWord;
+			}
+			lyric = bar.AddLyric(op['position'], op['duration'], op['text'], st, 1, voice);
+			if (lyric = null) {
+				return null;
+			}
+			return DescribeObject(lyric, -1);
+		}
+		return null;
+	}"
+
+	ApplyBatch "(ops, dryRun) {
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		if (ops = null or ops.Length < 1) {
+			return CreateDictionary('error', 'ops is empty');
+		}
+		writable = BatchWritableTable();
+		// Resolve every address before the first edit: later edits shift bar
+		// indices, but references taken now stay valid (docs/sibelius-protocol.md 1.3.1).
+		targets = CreateSparseArray();
+		results = CreateSparseArray();
+		structuralSeen = False;
+		for i = 0 to ops.Length {
+			op = ops[i];
+			if (BatchStructural(op['op'])) {
+				structuralSeen = True;
+			} else {
+				if (structuralSeen) {
+					return CreateDictionary('error', 'op ' & i & ': structural ops must come after every other op',
+						'failedOp', i, 'applied', 0);
+				}
+			}
+			target = null;
+			if (BatchAddressed(op['op'])) {
+				target = GetObjectAt(op['staff'], op['bar'], op['index']);
+			}
+			if (op['op'] = 'beam') {
+				target = BatchBeamTargets(op);
+			}
+			targets[i] = target;
+			problem = BatchCheck(score, op, target, writable);
+			if (problem != '') {
+				return CreateDictionary('error', 'op ' & i & ': ' & problem, 'failedOp', i, 'applied', 0);
+			}
+			before = null;
+			if (target != null and BatchAddressed(op['op'])) {
+				before = DescribeObject(target, op['index']);
+			}
+			results.Push(CreateDictionary('i', i, 'op', op['op'], 'before', before));
+		}
+		if (dryRun = True) {
+			return CreateDictionary('results', results, 'applied', 0, 'dryRun', True);
+		}
+		applied = 0;
+		failure = '';
+		for i = 0 to ops.Length {
+			if (failure = '') {
+				op = ops[i];
+				after = BatchRun(score, op, targets[i]);
+				result = results[i];
+				if (after = null) {
+					failure = 'op ' & i & ': Sibelius refused ' & op['op'];
+				} else {
+					result['after'] = after;
+					applied = applied + 1;
+				}
+			}
+		}
+		if (structuralSeen) {
+			// Passage ops and re-barring leave a selection the user would see.
+			selection = score.Selection;
+			selection.Clear();
+		}
+		if (failure != '') {
+			return CreateDictionary('error', failure, 'failedOp', applied, 'applied', applied, 'results', results);
+		}
+		return CreateDictionary('results', results, 'applied', applied);
+	}"
+}

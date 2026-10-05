@@ -7,8 +7,8 @@
 
 `install` generates a token (or reuses the stored one), stores it in
 ~/.config/sibelius-websocket-cli/musescore-probe-token (mode 600) and writes
-the plug-in, with the token, to ~/Documents/MuseScore4/Plugins/sibwscli-probe/.
-In MuseScore, enable "sibwscli probe" in Plugins > Plugin Manager once, then
+the plug-in, with the token, to ~/Documents/MuseScore4/Plugins/ScoreBridge-probe/.
+In MuseScore, enable "ScoreBridge probe" in Plugins > Plugin Manager once, then
 run it from the Plugins menu in each session. Snippets are JavaScript
 function bodies; see msprobe.qml.in for the names they can use.
 """
@@ -41,7 +41,7 @@ def install() -> Path:
         token = secrets.token_urlsafe(32)
         TOKEN_FILE.write_text(token)
     TOKEN_FILE.chmod(0o600)
-    target = PLUGIN_DIR / "sibwscli-probe" / "msprobe.qml"
+    target = PLUGIN_DIR / "ScoreBridge-probe" / "msprobe.qml"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(TEMPLATE.read_text().replace("@TOKEN@", token).replace("@PORT@", str(PORT)))
     target.chmod(0o600)
@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         reply = asyncio.run(evaluate(code, args.timeout))
     except (OSError, websockets.exceptions.WebSocketException) as exc:
-        print(f"cannot reach the probe on port {PORT}: {exc}. Is Plugins > sibwscli probe running?", file=sys.stderr)
+        print(f"cannot reach the probe on port {PORT}: {exc}. Is Plugins > ScoreBridge probe running?", file=sys.stderr)
         return 2
     except TimeoutError:
         print("no reply: a dialog may be open in MuseScore", file=sys.stderr)

@@ -1,10 +1,10 @@
 [project]
-name = "sibelius-websocket-cli"
+name = "ai-score-editing-workflows"
 version = "0.1.0"
-description = "Add your description here"
+description = "AI-driven score editing for Sibelius, Dorico and MuseScore: CLIs, MCP servers and bridge plug-ins"
 readme = "README.md"
 authors = [
-    { name = "David Watt", email = "sibelius-ai-workflows@dave.wattlink.net" }
+    { name = "David Watt", email = "ai-score-editing-workflows@dave.wattlink.net" }
 ]
 requires-python = ">=3.13"
 dependencies = [
@@ -15,16 +15,21 @@ dependencies = [
 ]
 
 [project.scripts]
-sibelius-websocket-cli = "sibelius_websocket_cli:main"
-sibelius-mcp = "sibelius_websocket_cli.mcp_server:main"
-dorico-cli = "sibelius_websocket_cli.dorico.cli:main"
-dorico-mcp = "sibelius_websocket_cli.dorico.mcp_server:main"
-musescore-cli = "sibelius_websocket_cli.musescore.cli:main"
-musescore-mcp = "sibelius_websocket_cli.musescore.mcp_server:main"
+sibelius-cli = "ai_score_editing:main"
+# Deprecated alias for sibelius-cli, kept for one release.
+sibelius-websocket-cli = "ai_score_editing:deprecated_main"
+sibelius-mcp = "ai_score_editing.sibelius.mcp_server:main"
+dorico-cli = "ai_score_editing.dorico.cli:main"
+dorico-mcp = "ai_score_editing.dorico.mcp_server:main"
+musescore-cli = "ai_score_editing.musescore.cli:main"
+musescore-mcp = "ai_score_editing.musescore.mcp_server:main"
 
 [build-system]
 requires = ["uv_build>=0.12.6,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "ai_score_editing"
 
 [dependency-groups]
 dev = [

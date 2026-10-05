@@ -68,7 +68,7 @@ else
     report missing ffmpeg "brew install ffmpeg (needed for rehearsal mixes)"
 fi
 
-# Optional: only needed to convert LilyPond sources (lilypond-to-sibelius skill).
+# Optional: only needed to convert LilyPond sources (lilypond-to-score skill).
 if command -v lilypond >/dev/null 2>&1; then
     report ok lilypond "$(lilypond --version 2>/dev/null | head -1)"
 else
@@ -80,7 +80,7 @@ else
     report optional python-ly "installed by uv once uv is present"
 fi
 
-if [ -x .venv/bin/sibelius-websocket-cli ]; then
+if [ -x .venv/bin/sibelius-cli ]; then
     report ok project-deps ".venv is set up"
 else
     report missing project-deps "uv sync"
@@ -108,16 +108,16 @@ fi
 support=$(ls -d "$HOME/Library/Application Support/Avid/Sibelius"* 2>/dev/null | sort | tail -1)
 if [ -z "$support" ]; then
     report missing sibelius-launched "open Sibelius once so it creates its support folder"
-elif [ -f "$support/Plugins/Websocket CLI/sibwscli.plg" ]; then
-    report ok bridge-plugin "$support/Plugins/Websocket CLI/sibwscli.plg"
+elif [ -f "$support/Plugins/ScoreBridge/ScoreBridge.plg" ]; then
+    report ok bridge-plugin "$support/Plugins/ScoreBridge/ScoreBridge.plg"
 else
-    report missing bridge-plugin "uv run sibelius-websocket-cli install-plugin"
+    report missing bridge-plugin "uv run sibelius-cli install-plugin"
 fi
 
 if [ "$1" = --connect ]; then
     if [ -z "$sib" ] || ! pgrep -xq Sibelius; then
         report missing connection "Sibelius is not running"
-    elif out=$(uv run sibelius-websocket-cli --no-launch --timeout 30 bridge-version 2>&1); then
+    elif out=$(uv run sibelius-cli --no-launch --timeout 30 bridge-version 2>&1); then
         report ok connection "$(echo "$out" | tr '\n' ' ')"
     else
         report missing connection "$(echo "$out" | tail -1)"

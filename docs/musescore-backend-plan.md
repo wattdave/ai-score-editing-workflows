@@ -101,7 +101,7 @@ musescore-mcp / musescore-cli
                startCmd/endCmd, cmd(), writeScore
 ```
 
-New package `src/sibelius_websocket_cli/musescore/`, shaped like `dorico/`:
+New package `src/ai_score_editing/musescore/`, shaped like `dorico/`:
 
 | Module | Role |
 |---|---|
@@ -146,7 +146,7 @@ score (it was started in another window, or the score was reopened).
 - **Methods:** `GetBridgeVersion`, `GetScoreInfo`, `GetStaves`, `Read`
   (bars, staves), `ApplyBatch` (primitives, dryRun), `WriteCopy` (path,
   format), `Undo` (steps), `Save`.
-- **Plug-in name.** `title: "sibwscli bridge"` on its own line, which is the
+- **Plug-in name.** `title: "ScoreBridge"` on its own line, which is the
   name people will see in the menu. Docs, the setup skill and error
   messages use that name.
 
@@ -172,7 +172,7 @@ score (it was started in another window, or the score was reopened).
   MuseScore elements have no ids that survive between calls, so these
   guards are the only check that the object is still the one that was read.
   The bridge resolves every address to an element before the first edit
-  (the Sibelius lesson in SPEC.md 1.3.1) and checks each guard against it.
+  (the Sibelius lesson in docs/sibelius-protocol.md 1.3.1) and checks each guard against it.
 - **Score guard.** There's no file path to check (see above), so a batch
   carries a fingerprint from its snapshot: `scoreName`, measure and staff
   counts, and a hash of the bar contents it touches. It's refused if the

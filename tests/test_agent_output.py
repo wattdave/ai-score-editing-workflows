@@ -2,7 +2,7 @@
 
 import json
 
-from sibelius_websocket_cli.agent_output import (
+from ai_score_editing.agent_output import (
     project_inspect,
     project_score_snapshot,
     render_compact_inspect,

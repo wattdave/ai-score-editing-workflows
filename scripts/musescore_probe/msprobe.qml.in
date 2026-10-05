@@ -14,7 +14,7 @@ MuseScore {
     id: root
     // MuseScore reads these properties as text and stops at the first line
     // ending in "{", so they must stay above every block.
-    title: "sibwscli probe"
+    title: "ScoreBridge probe"
     description: "Runs API probes for sibelius-ai-workflows"
     version: "1"
     requiresScore: false
@@ -102,6 +102,6 @@ MuseScore {
                 handle(clientId, message);
             });
         });
-        console.log("sibwscli probe listening on port " + root.port);
+        console.log("ScoreBridge probe listening on port " + root.port);
     }
 }

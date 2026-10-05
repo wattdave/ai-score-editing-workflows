@@ -1,5 +1,5 @@
 ---
-description: Demix and transform 2-staff choral/piano scores (S+A in treble, T+B in bass) into 4 discrete SATB staves with separate MIDI playback channels, proper clefs (including Tenor treble-8vb), preserved lyrics, and clean measure rests.
+description: Sibelius (via sibelius-cli). Demix and transform 2-staff choral/piano scores (S+A in treble, T+B in bass) into 4 discrete SATB staves with separate MIDI playback channels, proper clefs (including Tenor treble-8vb), preserved lyrics, and clean measure rests.
 globs: *
 alwaysApply: false
 ---
@@ -37,7 +37,7 @@ several non-obvious traps that this skill handles systematically.
   - `split`: Demixes notes/chords, clones lyrics, reconnects shattered syllables, assigns clefs, and writes 4-part `.mxl` or `.xml`.
   - `reconnect-lyrics`: Standalone command to scan and reconnect shattered OMR syllables into hyphenated multi-syllable words in any MusicXML file.
   - `validate`: Verifies measure duration consistency across all 4 parts.
-- **`sibwscli` / `sibelius-websocket-cli`**: Used to inspect, verify, and engrave the resulting score in Sibelius.
+- **`ScoreBridge` / `sibelius-cli`**: Used to inspect, verify, and engrave the resulting score in Sibelius.
 - **`hanging_notes.py`** (`.claude/skills/hanging-playback-note-repair/scripts/hanging_notes.py`): Used to audit the split score for any residual dangling ties.
 
 ---
@@ -86,8 +86,8 @@ Verify in as few calls as possible: one `score-snapshot` for staves, keys,
 and barlines, one `proofread --lyrics` for lyric integrity across all four
 parts, and one tie audit across every staff:
 ```bash
-uv run sibelius-websocket-cli score-snapshot
-uv run sibelius-websocket-cli proofread --lyrics
+uv run sibelius-cli score-snapshot
+uv run sibelius-cli proofread --lyrics
 python3 .claude/skills/hanging-playback-note-repair/scripts/hanging_notes.py audit-score \
   --staff all --from-bar 1 --to-bar 30
 ```

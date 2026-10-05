@@ -1,6 +1,6 @@
 # Command Reference
 
-Use `uv run sibelius-websocket-cli <command> --help` for the complete current
+Use `uv run sibelius-cli <command> --help` for the complete current
 argument list. Run commands from the repository root.
 
 Batch commands are listed first in each section. Reach for single-object
@@ -204,9 +204,9 @@ through the bridge instead of asking the user to click through the import
 dialog and Save As:
 
 ```bash
-uv run sibelius-websocket-cli plugin sibwscli OpenScore --args '["/abs/score.xml"]'
-uv run sibelius-websocket-cli plugin sibwscli ExportScore --args '["/abs/score.sib", "SIBL"]'
-uv run sibelius-websocket-cli plugin sibwscli OpenScore --args '["/abs/score.sib"]'
+uv run sibelius-cli plugin ScoreBridge OpenScore --args '["/abs/score.xml"]'
+uv run sibelius-cli plugin ScoreBridge ExportScore --args '["/abs/score.sib", "SIBL"]'
+uv run sibelius-cli plugin ScoreBridge OpenScore --args '["/abs/score.sib"]'
 ```
 
 `OpenScore` imports MusicXML silently. `ExportScore` with `SIBL` writes a
@@ -223,7 +223,7 @@ confirm `score-snapshot` reports `no score open`, and then open from disk.
 - `do undo` invokes the named built-in command.
 - `invoke` accepts raw command IDs. Successful responses are fire-and-forget;
   see the Command IDs chapter linked from `docs/avid-reference.md`.
-- `plugin sibwscli <Method> --args '<json>'` calls a bridge method directly.
+- `plugin ScoreBridge <Method> --args '<json>'` calls a bridge method directly.
 
 Use escape hatches only when a purpose-built command does not cover the task,
 and retain the required read/write/verify workflow from the main skill. When a

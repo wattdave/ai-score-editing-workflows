@@ -1,7 +1,7 @@
 ---
 name: playback-divisi-split
 description: >
-  Build a playback copy of a choral or ensemble score in which every staff
+  Sibelius (via sibelius-cli). Build a playback copy of a choral or ensemble score in which every staff
   sounds exactly one note at a time: split chords and divisi onto separate
   staves, fill unison openings, and let resting voices double the melody.
   Use when playback (one vocal sample or MIDI channel per singer) drops
@@ -71,9 +71,9 @@ Import silently and save through the bridge (see the `sibelius` skill), rather
 than asking the user to click through the import dialog:
 
 ```bash
-uv run sibelius-websocket-cli plugin sibwscli OpenScore --args '["/abs/Score (playback).xml"]'
-uv run sibelius-websocket-cli plugin sibwscli ExportScore --args '["/abs/Score (playback).sib", "SIBL"]'
-uv run sibelius-websocket-cli plugin sibwscli OpenScore --args '["/abs/Score (playback).sib"]'
+uv run sibelius-cli plugin ScoreBridge OpenScore --args '["/abs/Score (playback).xml"]'
+uv run sibelius-cli plugin ScoreBridge ExportScore --args '["/abs/Score (playback).sib", "SIBL"]'
+uv run sibelius-cli plugin ScoreBridge OpenScore --args '["/abs/Score (playback).sib"]'
 ```
 
 Then:

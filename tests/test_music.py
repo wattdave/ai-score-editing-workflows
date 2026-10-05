@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from sibelius_websocket_cli.music import (
+from ai_score_editing.music import (
     duration_to_name,
     parse_duration,
     parse_note_sequence,

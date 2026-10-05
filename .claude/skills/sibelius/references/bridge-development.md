@@ -4,7 +4,7 @@ Read this file when changing the ManuScript bridge or recovering from a bridge
 version mismatch.
 
 - The installed bridge is built from
-  `src/sibelius_websocket_cli/manuscript/sibwscli.plg`.
+  `src/ai_score_editing/sibelius/manuscript/ScoreBridge.plg`.
 - After `install-plugin`, restart Sibelius before the new plug-in code is
   loaded. The agent can do this end-to-end through the Sibelius application
   menu: choose **Sibelius → Quit Sibelius**, confirm it has exited, then let
@@ -12,7 +12,7 @@ version mismatch.
   restart to the user unless a save/discard choice requires their direction.
 - Batch plug-in edits together and update `GetBridgeVersion` when the bridge
   contract changes, because every plug-in update requires that restart.
-- Use Avid's ManuScript Language Guide and `SPEC.md` as the API authority.
+- Use Avid's ManuScript Language Guide and `docs/sibelius-protocol.md` as the API authority.
   `docs/avid-reference.md` links the guide, maps chapters to the gitignored
   local transcriptions (`docs/manuscript-object-tree.md` and others; use
   them when present), and lists where the guide is wrong, including

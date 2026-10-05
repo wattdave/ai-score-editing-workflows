@@ -1,7 +1,10 @@
 # CLAUDE.md
 
-This repository contains a Python CLI for driving Sibelius through Sibelius
-Connect and the bundled `sibwscli` ManuScript bridge plug-in.
+This repository contains Python CLIs, MCP servers and agent skills for driving
+score editors: Sibelius (through Sibelius Connect and the bundled `ScoreBridge`
+ManuScript plug-in), Dorico and MuseScore. Code lives in `src/ai_score_editing/`,
+with one subpackage per editor (`sibelius/`, `dorico/`, `musescore/`) and shared
+modules at the top level.
 
 ## New users
 
@@ -17,7 +20,7 @@ The project requires Python 3.13 or newer and is managed with `uv`.
 
 ```bash
 uv sync
-uv run sibelius-websocket-cli
+uv run sibelius-cli
 uv run pytest
 uv run dorico-cli overview      # Dorico back end, see docs/dorico.md
 python3 scripts/sync_skills.py

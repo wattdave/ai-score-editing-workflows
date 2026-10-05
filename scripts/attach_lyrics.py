@@ -15,11 +15,12 @@ import json
 from pathlib import Path
 from typing import Any
 
-from sibelius_websocket_cli import batch_ops, protocol
-from sibelius_websocket_cli.client import SibeliusClient
+from ai_score_editing import batch_ops
+from ai_score_editing.sibelius import protocol
+from ai_score_editing.sibelius.client import SibeliusClient
 
 
-BRIDGE = "sibwscli"
+BRIDGE = "ScoreBridge"
 
 
 async def call(client: SibeliusClient, method: str, args: list[Any]) -> Any:

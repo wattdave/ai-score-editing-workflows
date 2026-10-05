@@ -1,14 +1,31 @@
-# sibelius-websocket-cli
+# AI score editing workflows
 
-A command-line tool for driving Sibelius via **Sibelius Connect** — the
-WebSocket server built into Sibelius 2024.3+ (Ultimate tier). It can fire any
-of Sibelius's ~627 command IDs, and — via a bundled ManuScript bridge plug-in —
-read score structure and note content back out.
+Command-line tools, MCP servers and agent skills that let an AI assistant
+read and edit the score open in your notation software, and run
+score-conversion workflows (LilyPond, MusicXML, scanned-score repair).
+
+| Editor | Connection | Commands | Status |
+| --- | --- | --- | --- |
+| Sibelius (Ultimate 2026.6+) | Sibelius Connect (WebSocket) plus the ScoreBridge ManuScript plug-in | `sibelius-cli`, `sibelius-mcp` | full |
+| Dorico (6.2+) | Remote Control API plus Lua scripting | `dorico-cli`, `dorico-mcp` | experimental, see [docs/dorico.md](docs/dorico.md) |
+| MuseScore (4.6+) | ScoreBridge QML plug-in (WebSocket) | `musescore-cli`, `musescore-mcp` | see [docs/musescore.md](docs/musescore.md) |
+
+All three share the same tool shapes and units, so a request such as "transpose
+bars 5–8 up a tone" works the same way in each. Ask Claude with the
+`score-editing` skill, or use the app's own skill (`/sibelius`, `/dorico`,
+`/musescore`). The sections below start with Sibelius, the original back end,
+and then cover Dorico and MuseScore.
+
+The Sibelius back end drives **Sibelius Connect** — the WebSocket server built
+into Sibelius 2024.3+ (Ultimate tier). It can fire any of Sibelius's ~627
+command IDs, and — via the bundled ScoreBridge plug-in — read score structure
+and note content back out.
 
 ## Getting started with Claude Code
 
-You do not need to install anything by hand. You need a Mac, Sibelius
-Ultimate 2026.6 or later, and a paid Claude account: Claude Code needs a
+You do not need to install anything by hand. You need a Mac, at least one
+score editor (Sibelius Ultimate 2026.6 or later, Dorico 6.2 or later, or
+MuseScore 4.6 or later), and a paid Claude account: Claude Code needs a
 Pro, Max, Team or Enterprise plan, or a Console (API) account. The free
 Claude plan does not include Claude Code; see
 [Setting up without Claude](#setting-up-without-claude) instead.
@@ -24,7 +41,7 @@ Claude plan does not include Claude Code; see
    asks whether to trust this folder and approve its `sibelius` tool server;
    say yes to both.
 4. Type `/setup`. Claude explains what is missing (Homebrew, git, uv,
-   Python 3.13, ffmpeg, the Sibelius plug-in), asks whether to install it
+   Python 3.13, ffmpeg, the ScoreBridge plug-in for your editor), asks whether to install it
    all at once or one item at a time, and does the work.
 
 `scripts/setup_check.sh` shows what is installed at any time.
@@ -43,7 +60,7 @@ which both read the skills in `.agents/skills/` (Codex also reads
   `.codex/config.toml`, which connects the `sibelius` tool server.
 - **Antigravity** has a free Individual plan with weekly usage limits. It
   does not load this folder's `sibelius` tool server automatically, but the
-  skills can run the `sibelius-websocket-cli` commands directly instead.
+  skills can run the `sibelius-cli` commands directly instead.
 
 Free tiers have low limits. Setup fits easily; a long editing session may
 run out partway.
@@ -77,7 +94,7 @@ The same steps by hand, in Terminal, from this folder:
 4. Open Sibelius once and quit it, then install the bridge plug-in:
 
    ```bash
-   uv run sibelius-websocket-cli install-plugin
+   uv run sibelius-cli install-plugin
    ```
 
 5. In Sibelius, turn on Sibelius Connect (Sibelius menu → Preferences →
@@ -89,12 +106,12 @@ The same steps by hand, in Terminal, from this folder:
    scripts/setup_check.sh --connect
    ```
 
-## Requirements
+## Sibelius: requirements
 
 - Sibelius Ultimate 2026.6 or later, running on the same machine
 - Python 3.13+ and [uv](https://docs.astral.sh/uv/)
 
-## Setup
+## Sibelius: setup
 
 1. **Enable Sibelius Connect** in Sibelius: Preferences → Input Devices
    (default port 1898).
@@ -109,10 +126,18 @@ The same steps by hand, in Terminal, from this folder:
    `score-info`, `staves`, `selection`, `read`):
 
    ```bash
-   uv run sibelius-websocket-cli install-plugin
+   uv run sibelius-cli install-plugin
    ```
 
    Then restart Sibelius so it loads the plug-in.
+
+   **Upgrading from `sibwscli`:** the bridge is now called ScoreBridge.
+   `install-plugin` removes the old `Websocket CLI/sibwscli.plg` and
+   installs `ScoreBridge/ScoreBridge.plg`. After restarting Sibelius, approve
+   the new plug-in when Sibelius Connect asks. For MuseScore, run
+   `musescore-cli install-plugin` again (it removes the old `sibwscli-bridge`
+   folder), restart MuseScore, then enable "ScoreBridge" in Plugins →
+   Manage plugins.
 
 4. **First connection**: any command will make Sibelius show an approval
    dialog naming the client — click OK. The session token is cached at
@@ -120,19 +145,19 @@ The same steps by hand, in Terminal, from this folder:
    connect silently. Tokens die with the Sibelius process, so expect one
    dialog per Sibelius launch.
 
-## Usage
+## Sibelius: usage
 
 Reading the open score (requires the bridge plug-in):
 
 ```bash
-uv run sibelius-websocket-cli score-info          # title, file, staves, bars
-uv run sibelius-websocket-cli inspect             # compact identity, staves, selection
-uv run sibelius-websocket-cli score-snapshot      # compact structural snapshot
-uv run sibelius-websocket-cli proofread            # read-only structural/lyric report
-uv run sibelius-websocket-cli verify-render --format png --out /tmp/score-proof.png
-uv run sibelius-websocket-cli staves              # instrument names per staff
-uv run sibelius-websocket-cli selection           # current passage selection
-uv run sibelius-websocket-cli read --staff 1 --from 1 --to 4
+uv run sibelius-cli score-info          # title, file, staves, bars
+uv run sibelius-cli inspect             # compact identity, staves, selection
+uv run sibelius-cli score-snapshot      # compact structural snapshot
+uv run sibelius-cli proofread            # read-only structural/lyric report
+uv run sibelius-cli verify-render --format png --out /tmp/score-proof.png
+uv run sibelius-cli staves              # instrument names per staff
+uv run sibelius-cli selection           # current passage selection
+uv run sibelius-cli read --staff 1 --from 1 --to 4
                                                   # bar contents: notes (MIDI
                                                   # pitch, name, tie), rests,
                                                   # durations, positions
@@ -142,30 +167,30 @@ Writing (each write backs up first: in-file version + save + timestamped
 `.sib` copy next to the original):
 
 ```bash
-uv run sibelius-websocket-cli check-lyrics                # lint lyrics for typos, collisions, untexted bars
-uv run sibelius-websocket-cli read-lyrics --words         # lyrics grouped by staff and bar into words
-uv run sibelius-websocket-cli read-lyrics                 # all raw lyrics with addresses
-uv run sibelius-websocket-cli read-lyrics --compact       # compact edit addresses
-uv run sibelius-websocket-cli set-lyric --staff 1 --bar 3 --index 2 --text "ry-"
-uv run sibelius-websocket-cli patch-lyrics --file patches.json --font Plantin --font-size 95
-uv run sibelius-websocket-cli patch-layout --file layout-fixes.json --save
-uv run sibelius-websocket-cli patch-notes --file note-fixes.json --save   # pitches, ties, stems, deletes
-uv run sibelius-websocket-cli transpose --from-note C --to-note D --up
-uv run sibelius-websocket-cli set-key --key D             # key signature only
-uv run sibelius-websocket-cli set-time --top 2 --bottom 2 --symbol cut  # cut time
-uv run sibelius-websocket-cli backup                      # backup on demand
-uv run sibelius-websocket-cli bridge-version              # check installed bridge
+uv run sibelius-cli check-lyrics                # lint lyrics for typos, collisions, untexted bars
+uv run sibelius-cli read-lyrics --words         # lyrics grouped by staff and bar into words
+uv run sibelius-cli read-lyrics                 # all raw lyrics with addresses
+uv run sibelius-cli read-lyrics --compact       # compact edit addresses
+uv run sibelius-cli set-lyric --staff 1 --bar 3 --index 2 --text "ry-"
+uv run sibelius-cli patch-lyrics --file patches.json --font Plantin --font-size 95
+uv run sibelius-cli patch-layout --file layout-fixes.json --save
+uv run sibelius-cli patch-notes --file note-fixes.json --save   # pitches, ties, stems, deletes
+uv run sibelius-cli transpose --from-note C --to-note D --up
+uv run sibelius-cli set-key --key D             # key signature only
+uv run sibelius-cli set-time --top 2 --bottom 2 --symbol cut  # cut time
+uv run sibelius-cli backup                      # backup on demand
+uv run sibelius-cli bridge-version              # check installed bridge
 ```
 
 Driving Sibelius with command IDs (fire-and-forget — Sibelius acknowledges
 receipt but never reports whether a command did anything):
 
 ```bash
-uv run sibelius-websocket-cli do undo             # curated friendly names:
+uv run sibelius-cli do undo             # curated friendly names:
                                                   # undo, redo, save, select-all,
                                                   # select-none, delete, add-bar,
                                                   # play, play-stop, transpose-dialog
-uv run sibelius-websocket-cli invoke select_all delete
+uv run sibelius-cli invoke select_all delete
                                                   # raw command IDs, batched;
                                                   # see the guide's Command IDs chapter
 ```
@@ -174,8 +199,8 @@ Splitting MusicXML is performed locally and deterministically (no score is
 edited in Sibelius except optional `.sib` export/opening):
 
 ```bash
-uv run sibelius-websocket-cli split-parts score.mxl --preset satb --out score_satb.mxl
-uv run sibelius-websocket-cli split-parts score.mxl --preset 16voices --audit --json
+uv run sibelius-cli split-parts score.mxl --preset satb --out score_satb.mxl
+uv run sibelius-cli split-parts score.mxl --preset 16voices --audit --json
 ```
 
 The SATB profile accepts `--soprano-solo`, `--tenor-solo`, and
@@ -189,18 +214,18 @@ marks unless given; each voice sings the song `--passes` times (default 2),
 holds its final note and drops out, and the last voice ends under a fermata:
 
 ```bash
-uv run sibelius-websocket-cli round round.musicxml --open
-uv run sibelius-websocket-cli round round.mxl --voices 3 --gap 4 --passes 1 -o out.mxl
+uv run sibelius-cli round round.musicxml --open
+uv run sibelius-cli round round.mxl --voices 3 --gap 4 --passes 1 -o out.mxl
 ```
 
 Calling ManuScript plug-ins and exploring the protocol:
 
 ```bash
-uv run sibelius-websocket-cli plugin sibwscli Echo --args '[1, {"a": true}]'
-uv run sibelius-websocket-cli raw '{"message": "invokeCommands", "commands": []}'
-uv run sibelius-websocket-cli repl                # interactive session
-uv run sibelius-websocket-cli ping                # is Sibelius responding?
-uv run sibelius-websocket-cli forget-token        # drop the cached token
+uv run sibelius-cli plugin ScoreBridge Echo --args '[1, {"a": true}]'
+uv run sibelius-cli raw '{"message": "invokeCommands", "commands": []}'
+uv run sibelius-cli repl                # interactive session
+uv run sibelius-cli ping                # is Sibelius responding?
+uv run sibelius-cli forget-token        # drop the cached token
 ```
 
 Global options: `--host`, `--port`, `--client-name`, `--timeout` (seconds to
@@ -213,7 +238,7 @@ if not running, default: true), `--launch-timeout` (seconds to wait for Sibelius
 Exit codes: `0` success, `1` the call failed (plug-in not found, bridge error),
 `2` could not connect to Sibelius.
 
-## MCP server
+## Sibelius: MCP server
 
 `sibelius-mcp` exposes the open score to MCP clients over stdio. It keeps one
 Sibelius Connect session open and needs the bridge plug-in (v39+).
@@ -229,7 +254,7 @@ Sibelius Connect session open and needs the bridge plug-in (v39+).
 | `export_score` | Export as MusicXML, MXL, PDF, MIDI or PNG |
 
 This repository's `.mcp.json` registers it for Claude Code. For another
-client, run `uv run --directory /path/to/sibelius-websocket-cli sibelius-mcp`.
+client, run `uv run --directory /path/to/sibelius-cli sibelius-mcp`.
 `SIBELIUS_HOST` and `SIBELIUS_PORT` override the default `localhost:1898`.
 The first call shows Sibelius's connection approval dialog, as the CLI does.
 
@@ -237,7 +262,7 @@ The first call shows Sibelius's connection approval dialog, as the CLI does.
 
 `dorico-mcp` offers the same tools for the project open in Dorico 6.2+,
 through Dorico's Remote Control API and a Lua bridge that Dorico runs
-(`src/sibelius_websocket_cli/dorico/bridge.lua`). `dorico-cli` exposes them
+(`src/ai_score_editing/dorico/bridge.lua`). `dorico-cli` exposes them
 on the command line:
 
 ```bash
@@ -257,7 +282,7 @@ gaps and how the bridge works.
 
 `musescore-mcp` offers the same tools for the score open in MuseScore 4.6+,
 plus metadata, lyrics, adding instruments and silencing staves, through
-this repository's plug-in "sibwscli bridge". `.mcp.json` registers it as
+this repository's plug-in "ScoreBridge". `.mcp.json` registers it as
 `musescore`; `musescore-cli` exposes it on the command line:
 
 ```bash
@@ -269,8 +294,8 @@ uv run musescore-cli export --format pdf --path score.pdf
 uv run musescore-cli undo
 ```
 
-After installing, enable "sibwscli bridge" once in Plugins → Manage
-plugins, then run Plugins → sibwscli bridge in the score's window each
+After installing, enable "ScoreBridge" once in Plugins → Manage
+plugins, then run Plugins → ScoreBridge in the score's window each
 session. It listens on port 8766 and refuses requests without the token
 that `install-plugin` stores in `~/.config/sibelius-websocket-cli/`.
 Addresses, units and batches follow the Sibelius tools, and a dry run
@@ -289,8 +314,9 @@ still installed.
 
 ## Multi-Agent Skills (Claude, Antigravity, Cursor)
 
-The canonical Sibelius skill lives in `.claude/skills/sibelius/`. Its concise
-entrypoint links to focused references that agents read only for the active
+Skills live in `.claude/skills/`: `score-editing` routes a request to the right
+editor, and `sibelius`, `dorico` and `musescore` are the per-editor skills. Each
+concise entrypoint links to focused references that agents read only for the active
 workflow. The complete directory is exposed to Antigravity by symlink; the
 generated Cursor rule links back to the same canonical references without
 automatically loading them. Keep the harness files in sync:
@@ -302,13 +328,13 @@ python scripts/sync_skills.py --check  # check for drift without modifying files
 
 ## Documentation
 
-- [`SPEC.md`](SPEC.md) — the empirically verified Sibelius Connect wire
+- [`docs/sibelius-protocol.md`](docs/sibelius-protocol.md) — the empirically verified Sibelius Connect wire
   protocol (one-step handshake, silent token reconnect, `invokePlugin`
   semantics and gotchas) and the CLI design
 - [`docs/avid-reference.md`](docs/avid-reference.md) — links to Avid's
   ManuScript Language Guide (Sibelius Connect protocol, all 627 command IDs,
   and the object reference for extending the bridge plug-in in
-  `src/sibelius_websocket_cli/manuscript/sibwscli.plg`), plus the places
+  `src/ai_score_editing/sibelius/manuscript/ScoreBridge.plg`), plus the places
   where the guide is wrong
 
 ## Development
@@ -326,10 +352,12 @@ export, which is copyrighted and kept out of the repository; it skips unless
 SIBWS_12PP_EXPORT=~/Downloads/export.xml uv run pytest tests/test_polychoral.py
 ```
 
-Sources: `src/sibelius_websocket_cli/` — `protocol.py` (message builders),
-`client.py` (async client with token/approval handling), `launcher.py` (Sibelius
-process detection and launch), `token_store.py`, `cli.py`, and the bundled bridge plug-in
-under `manuscript/`.
+Sources: `src/ai_score_editing/`. Each editor has its own subpackage:
+`sibelius/` (`protocol.py` message builders, `client.py` async client with
+token/approval handling, `launcher.py` process detection and launch, `cli.py`,
+`mcp_server.py`, and the ScoreBridge plug-in under `manuscript/`), `dorico/` and
+`musescore/`. Modules at the top level (`batch_ops`, `query`, `lyrics`,
+`intervals`, `token_store`, the MusicXML tools) are shared.
 
 ## Contributing
 

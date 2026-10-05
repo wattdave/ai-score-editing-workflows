@@ -1,0 +1,89 @@
+---
+description: Turn a LilyPond (.ly) score, such as a CPDL or IMSLP engraving source, into a readable MusicXML score (for Sibelius, Dorico or MuseScore) with correct bars, clefs and lyrics, via python-ly and this skill's re-barring and lyric scripts. Also covers when a MIDI import is enough, and how to find editable editions of a piece. Use when a piece has LilyPond source but no MusicXML, or when asked to find editable versions of scores.
+globs: *
+alwaysApply: false
+---
+
+# LilyPond to a score
+
+Many early-music editions on CPDL and IMSLP publish LilyPond source but no
+MusicXML. python-ly can convert LilyPond to MusicXML, but on real engraving
+files it drops or breaks things. This workflow simplifies the source,
+converts the notes, rebuilds the bars, and re-attaches the lyrics, checking
+each step against LilyPond's own MIDI.
+
+To find an edition in the first place, see
+[finding editions](../../.claude/skills/lilypond-to-score/references/finding-editions.md).
+
+## Do you need a readable score?
+
+- **Playback only** (notes matter, looks don't): import LilyPond's MIDI into
+  your score editor (`\midi` block; or the MIDI the edition already ships). It is
+  quick, but the score is unreadable: no lyrics or clefs, and rhythms are
+  guessed. Remove incipits first (below), or they sound at the start.
+- **A score people read**: follow the steps below.
+
+## Tools
+
+- LilyPond: `brew install lilypond` (gives `lilypond` and `convert-ly`).
+- python-ly: `uvx --from python-ly ly musicxml IN.ly -o OUT.xml`. Releases
+  up to 0.9.10 crash on `\addlyrics` inside `\score` and drop `\new Voice`
+  parts inside a staff group (fixed in frescobaldi/python-ly#196 and #197).
+  Flattening the source (step 2) avoids both. python-ly never exports
+  lyrics from `\lyricsto`, and bars its output wrongly (step 4).
+
+## Steps
+
+Scripts are in this skill's `scripts/`; run each with `python3`.
+
+1. **Update the syntax.** Work on a copy: `convert-ly -e copy.ly`, then
+   `lilypond -s copy.ly` to confirm it compiles and to get a MIDI.
+2. **Flatten to notes.** Find the variable that holds each part's notes and
+   the order the score uses them. Then:
+
+   ```bash
+   python3 scripts/lilypond_prepare.py copy.ly flat.ly \
+     --part cantoI:treble --part 'altoI:"treble_8"' --part bassoI:bass \
+     --language english --drop colorBr ficta unficta \
+     --replace 'fourTwoCutTime=\time 4/2'
+   ```
+
+   Leave out `:CLEF` when the variable sets its own clef. `--language` is
+   needed when the file uses `\include "english.ly"` (`bf`, `fs` names).
+   Name every custom macro: `--drop` for visual-only ones, `--replace` for
+   ones that change the music (such as a time signature). Read the macro
+   definitions before deciding. Incipits written as `\incipitStart ...
+   \incipitEnd` are removed; LilyPond's built-in `\incipit` is outside the
+   notes and needs nothing.
+3. **Convert:** `uvx --from python-ly ly musicxml flat.ly -o notes.xml`.
+4. **Re-bar:** `python3 scripts/rebar.py notes.xml rebar.xml 4 2 P1=treble
+   P2=treble8 P5=bass`. python-ly's bars follow bar checks and never split a
+   note at a barline; this rebuilds them and ties notes across barlines.
+5. **Add lyrics** (skip for untexted parts): `python3 scripts/add_lyrics.py
+   copy.ly rebar.xml final.xml P1=NotesS:LyricsS ...`. It refuses to write if
+   a part's notes and syllables don't line up.
+6. **Name the parts and title** in the MusicXML (`part-name`, `work-title`,
+   `creator type="composer"`), then import the MusicXML into your editor
+   (in Sibelius the options dialog needs OK; save as `.sib`), and set
+   instruments. Setting an
+   instrument renames the staff; restore names with `set-staff-name --full`.
+
+## Check every stage
+
+- After step 3: per part, note count and pitch range against LilyPond's MIDI
+  (`python3 scripts/midi_info.py copy.midi`). MIDI merges tied notes, so
+  compare after step 4 if the source has ties.
+- After step 4: every bar the full length, and the bar count matching the
+  printed edition.
+- After step 5: syllables placed, and the first words of each part read as
+  the text.
+- After import: export MIDI from the editor and compare with `midi_info.py`
+  again. The notes, ranges and timings must match exactly.
+- Proofread lyric "divergence" errors are expected in polyphony where parts
+  sing different words at different times.
+
+## Known limits
+
+The scripts handle one voice per staff with plain notes and rests: no
+chords, tuplets or grace notes (they stop with an error rather than guess).
+A slur in the source is treated as one syllable spread over its notes.

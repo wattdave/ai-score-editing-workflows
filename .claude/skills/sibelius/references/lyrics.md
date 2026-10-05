@@ -35,7 +35,7 @@ one batch so the score is read, backed up, changed, and verified once:
 ```
 
 ```bash
-uv run sibelius-websocket-cli --expect-file /path/to/score.sib \
+uv run sibelius-cli --expect-file /path/to/score.sib \
   patch-lyrics --file /path/to/patches.json \
   --font "Font Family" --font-size TENTHS_OF_POINT
 ```
@@ -53,7 +53,7 @@ stop and ask rather than writing a bare or fallback-styled lyric.
 For a single correction:
 
 ```bash
-uv run sibelius-websocket-cli --expect-file /path/to/score.sib set-lyric \
+uv run sibelius-cli --expect-file /path/to/score.sib set-lyric \
   --staff S --bar B --index I --text "correction" \
   --font "Font Family" --font-size TENTHS_OF_POINT [--save]
 ```

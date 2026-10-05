@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from sibelius_websocket_cli.rehearsal_mix import (
+from ai_score_editing.rehearsal_mix import (
     FEATURE_GAIN,
     Stem,
     common_loudness,
@@ -72,14 +72,14 @@ def test_staff_names_fall_back_and_stay_unique() -> None:
 
 
 def test_parse_peak_reads_levels_above_full_scale() -> None:
-    from sibelius_websocket_cli.rehearsal_mix import parse_peak
+    from ai_score_editing.rehearsal_mix import parse_peak
 
     assert parse_peak("[Parsed_astats_0 @ 0x1] Peak level dB: 9.807554\n") == pytest.approx(9.807554)
     assert parse_peak("Peak level dB: -inf") == -math.inf
 
 
 def test_sound_problems_flag_non_matching_voices_only() -> None:
-    from sibelius_websocket_cli.rehearsal_mix import sound_problems
+    from ai_score_editing.rehearsal_mix import sound_problems
 
     staves = [
         {"staffNum": 1, "complete": True, "sounds": [{"bar": 1, "soundSet": "Cantai", "patch": "Soprano"}]},

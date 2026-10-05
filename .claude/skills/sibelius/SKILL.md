@@ -8,11 +8,11 @@ description: Apply user-described changes to the score open in Sibelius, includi
 Run all commands from the repository root with:
 
 ```bash
-uv run sibelius-websocket-cli <command>
+uv run sibelius-cli <command>
 ```
 
 The CLI talks to the frontmost score in Sibelius through Sibelius Connect and
-the bundled `sibwscli` ManuScript bridge.
+the bundled `ScoreBridge` ManuScript bridge.
 
 ## Desktop access and opening scores
 
@@ -104,5 +104,5 @@ Do not load unrelated references.
 
 ## Local authority
 
-For new bridge work, use `docs/avid-reference.md` and `SPEC.md`; live-probe
+For new bridge work, use `docs/avid-reference.md` and `docs/sibelius-protocol.md`; live-probe
 changes on a scratch score before applying them to real music.

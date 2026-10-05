@@ -7,8 +7,8 @@ new skills and code changes are all welcome.
 
 Follow [Getting started](README.md#getting-started-with-claude-code) in the
 README, or run `scripts/setup_check.sh` and install what it reports missing.
-You need a Mac and Sibelius Ultimate 2026.6 or later to use the tools; the
-test suite runs without Sibelius.
+You need a Mac and one of Sibelius Ultimate 2026.6+, Dorico 6.2+ or
+MuseScore 4.6+ to use the tools; the test suite runs without any of them.
 
 ## Reporting a problem
 
@@ -27,9 +27,9 @@ right to share.
    python3 scripts/sync_skills.py --check
    ```
 
-3. If you change the bridge plug-in (`src/sibelius_websocket_cli/manuscript/sibwscli.plg`),
+3. If you change the bridge plug-in (`src/ai_score_editing/sibelius/manuscript/ScoreBridge.plg`),
    bump its version, reinstall it with
-   `uv run sibelius-websocket-cli install-plugin`, restart Sibelius, and try
+   `uv run sibelius-cli install-plugin`, restart Sibelius, and try
    the change on a real score. Say in the pull request what you tested.
 4. Skills live in `.claude/skills/`. After adding or editing one, run
    `python3 scripts/sync_skills.py` to update the Codex, Antigravity and

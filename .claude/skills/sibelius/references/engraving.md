@@ -8,7 +8,7 @@ changes whose result is visible rather than fully represented by bridge reads.
 Render and verify pages in one call:
 
 ```bash
-uv run sibelius-websocket-cli verify-render --format png --out /tmp/check.png
+uv run sibelius-cli verify-render --format png --out /tmp/check.png
 ```
 
 Numbered pages are written as `check_0001.png`, `check_0002.png`, and so on.
@@ -29,8 +29,8 @@ batch touched.
 ```
 
 ```bash
-uv run sibelius-websocket-cli patch-layout --file /tmp/ops.json --dry-run
-uv run sibelius-websocket-cli --expect-file /path/to/score.sib \
+uv run sibelius-cli patch-layout --file /tmp/ops.json --dry-run
+uv run sibelius-cli --expect-file /path/to/score.sib \
   patch-layout --file /tmp/ops.json
 ```
 
@@ -59,10 +59,10 @@ To reset a freshly imported score whose systems overlap, reset positions and
 spacing across the whole score, then hide empty staves:
 
 ```bash
-uv run sibelius-websocket-cli invoke select_all reset_position \
+uv run sibelius-cli invoke select_all reset_position \
   reset_space_above_staff reset_space_below_staff reset_note_spacing \
   reset_stems_and_beam_positions
-uv run sibelius-websocket-cli command escape
+uv run sibelius-cli command escape
 ```
 
 then run `apply` with `[{"op":"hide-empty-staves","fromBar":1,"toBar":LAST_BAR}]`

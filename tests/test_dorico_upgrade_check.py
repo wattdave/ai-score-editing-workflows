@@ -13,7 +13,7 @@ COMMAND = re.compile(r'"((?:Edit|EventEdit|NoteInput|NoteEdit|File|Print|Window|
 
 
 def test_every_command_the_back_end_sends_is_checked() -> None:
-    sources = (ROOT / "src" / "sibelius_websocket_cli" / "dorico").glob("*.py")
+    sources = (ROOT / "src" / "ai_score_editing" / "dorico").glob("*.py")
     used = {m for p in sources for m in COMMAND.findall(p.read_text())}
     # f"Filter.LyricsLine{verse}" is found as its prefix.
     unchecked = [u for u in used if not any(r == u or r.startswith(u) for r in check.REQUIRED_COMMANDS)]

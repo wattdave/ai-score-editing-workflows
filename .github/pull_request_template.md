@@ -4,4 +4,4 @@
 
 - [ ] `uv run pytest`
 - [ ] `python3 scripts/sync_skills.py --check`
-- [ ] Tried on a real score in Sibelius (describe below, or say why not needed)
+- [ ] Tried on a real score in the affected editor (Sibelius, Dorico or MuseScore) (describe below, or say why not needed)

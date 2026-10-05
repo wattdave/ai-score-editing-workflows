@@ -12,6 +12,6 @@ labels: bug
 
 **Versions**
 - macOS:
-- Sibelius:
+- Editor and version (Sibelius, Dorico or MuseScore):
 - Assistant (Claude Code, Codex, Antigravity):
 - Output of `scripts/setup_check.sh --connect`:
