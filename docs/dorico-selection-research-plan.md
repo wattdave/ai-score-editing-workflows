@@ -1,6 +1,6 @@
 # Dorico selection research plan
 
-Status: Phase 0 done (2026-10-11); Phases 1-3 open. PR #88 (delete-bars on all
+Status: Phase 0 done (2026-10-11); Phase 1 partly done (Smith, Liszt); Phases 2-3 open. PR #88 (delete-bars on all
 back ends) is merged.
 
 ## Why
@@ -119,13 +119,24 @@ Liszt Liebestraume (pickup bar, then 6/8, 1536 per bar; two Piano staves),
   Cause not found. Next: look at the project in Dorico (the Properties
   panel on the notes at those barlines, system/frame breaks, a bar
   repeat or multi-bar region) and test whether it depends on the layout.
-- Not yet run: the pickup fixture, Las Posadas, Smith, Wiese, Akinola,
-  Sohn. Opening a project from an older Dorico version shows a "will be
-  updated" dialog (button OK, drive it with osascript) and a progress
-  dialog that waits for it; the load of a 1 MB project took about 5 minutes.
-- Blocked at 2026-10-11 ~14:00: the Mac's screen locked while the user was
-  away, after which Dorico's bridge stopped answering. Resume by unlocking
-  and checking Dorico for a dialog.
+- **Smith Preces and Responses** (flow 2: five choir staves, a pickup, 3
+  bars, lyrics): the first run missed 7 of 30. A melisma lyric event
+  ("forth_") runs past a barline and drags the next bar in, and a step past
+  the flow's last bar stops there. With both rules the model predicted 30
+  of 30, and `plan` showed `score._extension_plan` exact on all 6 ranges
+  once it counted lyric events (fixed in the same change, with a test).
+- **Akinola and Sohn cannot be read**: `layout._staves_per_instrument`
+  cannot match the MusicXML parts to Dorico's instruments (probably
+  adjacent same-named staves), so no snapshot and no probe. A back-end
+  limit, not a selection result.
+- The probe's setup was hit twice by races in the export dialog scripting
+  (`entire contents` while a dialog closed); those scripts are now wrapped
+  in `try`.
+- Not yet run: the pickup fixture, Las Posadas, Wiese, the rest of Smith's
+  flows (most are one bar). Opening a project from an older Dorico shows a
+  "will be updated" dialog (OK button, drive it with osascript) and the
+  open can then take minutes. After it opens, raise its window (Dorico
+  frontmost, then AXRaise) so the Remote Control API addresses it.
 
 ## Phase 2: other commands, one at a time
 

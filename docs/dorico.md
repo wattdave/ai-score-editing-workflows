@@ -763,6 +763,20 @@ touches, so the bars removed show how far a selection reaches.
   `score._extension_plan` returns an item in the first bar and the number
   of steps, or none when a tie over the last barline makes every selection
   on every staff overshoot.
+- **A lyric is an item too (Smith Preces, 2026-10-11).** A melisma's lyric
+  event starts on its note and lasts to the end of the extender line; one
+  that runs past the barline drags the next bar in, like a tied note
+  (Tenor "forth_": one step to the end of bar 2 touched bar 3). With lyrics
+  counted, the model predicted 30 of 30 trials, and `_extension_plan`
+  counts them.
+- A step past the last bar of a flow stops at the last bar.
+- **Measure removed bars from notes and rests only.** Slurs, lines and
+  other spanning events that cross the edit are re-created with new ids,
+  so they look removed from the bar before the range.
+- **Liszt (open): the extend step that reaches the end of bar 8 goes on
+  into bar 9, and bar 18 on into bar 20**, on both staves, with nothing
+  in the events crossing either barline (see
+  `docs/dorico-selection-research-plan.md`).
 - **`Edit.SelectMore` is not a fixed step.** Once: the item's own bar. Twice:
   the bars either side too (4-6 from bar 5). Three times: nearly the whole
   flow. It also gave wrong counts after `NavigateRightExtendBar`.
