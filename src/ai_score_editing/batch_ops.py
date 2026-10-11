@@ -51,7 +51,7 @@ ADDING = {"add-note", "add-text", "add-line", "add-lyric"}
 STRUCTURAL = {
     "transpose", "copy-passage", "set-key", "set-time", "set-break",
     "set-barline", "set-bar-number", "add-bars", "delete-voice", "set-layout",
-    "hide-empty-staves",
+    "hide-empty-staves", "delete-bars",
 }
 OPERATIONS = ADDRESSED | ADDING | STRUCTURAL | {"beam"}
 DEFAULT_TEXT_STYLE = "text.staff.expression"
@@ -238,7 +238,7 @@ def _validate(operation: Any, i: int, extra: ExtraOps) -> dict[str, Any]:
 
 def _validate_structural(operation: dict[str, Any], op: str, label: str) -> dict[str, Any]:
     out: dict[str, Any] = {"op": op}
-    if op in {"transpose", "copy-passage", "delete-voice", "hide-empty-staves"}:
+    if op in {"transpose", "copy-passage", "delete-voice", "hide-empty-staves", "delete-bars"}:
         out["fromBar"] = _int(operation, "fromBar", label, minimum=1)
         out["toBar"] = _int(operation, "toBar", label, minimum=out["fromBar"])
     if op in {"transpose", "copy-passage"}:
@@ -385,6 +385,8 @@ def _check_structural_order(operations: list[dict[str, Any]]) -> None:
         elif operation["op"] == "add-bars" and "bar" in operation:
             # Inserting before a bar moves that bar and every one after it.
             moved_after = operation["bar"] - 1
+        elif operation["op"] == "delete-bars":
+            moved_after = operation["fromBar"] - 1
         if moved_after is not None:
             rebarred_after = moved_after if rebarred_after is None else min(rebarred_after, moved_after)
 

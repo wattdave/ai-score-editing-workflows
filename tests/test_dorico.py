@@ -735,6 +735,20 @@ def test_add_bars_inserts_at_the_bar_start_or_appends() -> None:
     assert prepare_batch([{"op": "add-bars", "count": 3}], located, STAVES, BARS) == [{"op": "add-bars", "count": 3}]
 
 
+def test_delete_bars_selects_an_item_in_each_bar_last_bar_first() -> None:
+    located = locate_events(EVENTS, BARS)
+    ops = prepare_batch([{"op": "delete-bars", "fromBar": 1, "toBar": 1}], located, STAVES, BARS)
+    assert ops[0]["removed"] == 1024 and ops[0]["marker"]["position"] >= 1024
+    assert [b["bar"] for b in ops[0]["bars"]] == [1]
+    ops = prepare_batch([{"op": "delete-bars", "fromBar": 2, "toBar": 2}], located, STAVES, BARS)
+    assert ops[0]["bars"] == [{"bar": 2, "select": {"id": 7, "stream": 2}}] and "marker" not in ops[0]
+    with pytest.raises(DoricoBatchError, match="every bar"):
+        prepare_batch([{"op": "delete-bars", "fromBar": 1, "toBar": 2}], located, STAVES, BARS)
+    with pytest.raises(DoricoBatchError, match="names a bar after bar 0"):
+        prepare_batch([{"op": "delete-bars", "fromBar": 1, "toBar": 1},
+                       {"op": "set-break", "bar": 2, "type": "system"}], located, STAVES, BARS)
+
+
 @pytest.mark.parametrize(
     ("batch", "message"),
     [

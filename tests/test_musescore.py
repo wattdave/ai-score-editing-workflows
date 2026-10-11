@@ -652,6 +652,19 @@ def test_bars_numbers_and_hidden_staves(objects) -> None:
             prepare(objects, [op])
 
 
+def test_delete_bars_primitive(objects) -> None:
+    primitives, _ = prepare(objects, [{"op": "delete-bars", "fromBar": 2, "toBar": 2}])
+    assert primitives[0]["op"] == "delete-bars"
+    assert (primitives[0]["fromBar"], primitives[0]["toBar"]) == (2, 2)
+    with pytest.raises(MuseScoreBatchError, match="every bar"):
+        prepare(objects, [{"op": "delete-bars", "fromBar": 1, "toBar": 2}])
+    with pytest.raises(MuseScoreBatchError, match="no bar 3"):
+        prepare(objects, [{"op": "delete-bars", "fromBar": 2, "toBar": 3}])
+    with pytest.raises(MuseScoreBatchError, match="bar after"):
+        prepare(objects, [{"op": "delete-bars", "fromBar": 1, "toBar": 1},
+                          {"op": "set-key", "bar": 2, "key": "D"}])
+
+
 def test_set_layout_in_inches(objects) -> None:
     current = {"style": {"pageWidth": 8.5, "pageHeight": 11, "pageOddLeftMargin": 0.59,
                          "pagePrintableWidth": 7.32, "spatium": 82.68}}

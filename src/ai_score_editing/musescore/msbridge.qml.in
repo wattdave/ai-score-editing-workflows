@@ -797,7 +797,7 @@ MuseScore {
     // object and adding op, and the bar list is read again after each.
 
     readonly property var structural: ({ "set-key": true, "set-time": true, "set-break": true,
-                                         "set-barline": true, "set-bar-number": true, "add-bars": true,
+                                         "set-barline": true, "set-bar-number": true, "add-bars": true, "delete-bars": true,
                                          "set-style": true, "paste": true })
 
     function firstChordRest(measure, track) {
@@ -962,6 +962,21 @@ MuseScore {
                 now[b - 1].timesigActual = root.fraction(p.z, p.n);
     }
 
+    // Bars go the way a user removes them: a range of whole bars on every
+    // staff, selected before the command opens (a range selected inside one
+    // is not filled in), then "Remove selected range" (time-delete), which
+    // deletes whole bars [src: Score::doTimeDelete].
+    function deleteBars(p, all) {
+        var before = all.length, count = p.toBar - p.fromBar + 1;
+        if (!curScore.selection.isRange)
+            throw new Error("bars " + p.fromBar + "-" + p.toBar + " were not selected");
+        root.cmd("time-delete");
+        curScore.selection.clear();
+        var now = measures().length;
+        if (now !== before - count)
+            throw new Error("MuseScore removed " + (before - now) + " bars, not " + count);
+    }
+
     function setTime(p, all) {
         var el = root.newElement(Element.TIMESIG);
         el.timesig = root.fraction(p.numerator, p.denominator);
@@ -1001,6 +1016,7 @@ MuseScore {
         case "set-barline": setBarline(p, all); return null;
         case "set-bar-number": setBarNumber(p, all); return null;
         case "add-bars": addBars(p, all); return null;
+        case "delete-bars": deleteBars(p, all); return null;
         case "set-style": setStyle(p); return null;
         case "paste": paste(p, all); return null;
         }
@@ -1101,6 +1117,14 @@ MuseScore {
                 throw new Error("could not select the passage to copy");
             root.cmd("copy");
             s.selection.clear();
+        }
+        for (var q = 0; q < args.primitives.length; q++) {
+            var dp = args.primitives[q];
+            if (dp.op === "delete-bars") {
+                s.selection.clear();
+                if (!s.selection.selectRange(dp.startTick, dp.endTick, dp.staffStart, dp.staffEnd))
+                    throw new Error("could not select bars " + dp.fromBar + "-" + dp.toBar);
+            }
         }
         pendingNumbers = [];
         s.startCmd("AI batch");

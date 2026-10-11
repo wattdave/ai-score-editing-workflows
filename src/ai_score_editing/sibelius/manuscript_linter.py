@@ -192,7 +192,7 @@ OBJECT_MODEL: dict[str, dict[str, set[str]]] = {
             "firstbarnumber", "lastbarnumber", "topstaff", "bottomstaff",
             "ispassage", "staffcount",
         },
-        "methods": {"clear", "selectpassage"},
+        "methods": {"clear", "selectpassage", "selectsystempassage", "delete"},
         "bases": set(),
     },
     "Dictionary": {

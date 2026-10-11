@@ -61,7 +61,7 @@ NOT_YET: dict[str, int] = {}
 STRUCTURAL_OPS = batch_ops.STRUCTURAL
 #: Structural ops that move or re-bar what follows; ops that name objects by
 #: ref (transpose, delete-voice) cannot come after them in a batch.
-REBARRING = {"set-time", "add-bars"}
+REBARRING = {"set-time", "add-bars", "delete-bars"}
 
 #: set-barline names as MuseScore BarLineType values (types.h, 4.7.5);
 #: start_repeat and end_repeat are the bar's repeat flags instead.
@@ -386,6 +386,8 @@ def prepare_batch(
             numbered = i
         if op in REBARRING and rebarred is None:
             rebarred = i
+    if sum(o["op"] == "delete-bars" for o in normalized) > 1:
+        raise MuseScoreBatchError("one delete-bars per batch: it selects its range before the batch opens")
     if sum(o["op"] == "copy-passage" for o in normalized) > 1:
         raise MuseScoreBatchError("one copy-passage per batch: it goes through the clipboard")
     by_address = {(o["staff"], o["bar"], o["index"]): o for o in objects}
@@ -479,6 +481,14 @@ def _structural(
             length = Fraction(operation["length"], 4 * UNITS_PER_QUARTER)
             primitive.update(z=length.numerator, n=length.denominator)
         return [primitive]
+    if op == "delete-bars":
+        if operation["fromBar"] == 1 and operation["toBar"] == last_bar:
+            raise MuseScoreBatchError(f"{label}: delete-bars cannot remove every bar of the score")
+        # The bridge selects the range before the command opens (see copy-passage).
+        first, last = operation["fromBar"], operation["toBar"]
+        end = bar_info[last]["tick"] + bar_info[last]["ticks"]
+        return [{"op": "delete-bars", "fromBar": first, "toBar": last, "startTick": bar_info[first]["tick"],
+                 "endTick": end, "staffStart": 0, "staffEnd": len(staves)}]
     if op == "set-layout":
         return [{"op": "set-style", "values": layout_style(operation, label, (structure or {}).get("style") or {})}]
     if op == "hide-empty-staves":

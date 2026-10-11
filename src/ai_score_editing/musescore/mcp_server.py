@@ -224,7 +224,7 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
       (next letter, or "text")
 
     Structural ops come last; bars are as read before the batch, and no op
-    may name a bar after a set-time or add-bars (before a bar) moves it:
+    may name a bar after a set-time, add-bars (before a bar) or delete-bars moves it:
 
     - {"op":"transpose","fromBar":A,"toBar":B,"topStaff":T,"bottomStaff":U,
       "fromNote":"C","toNote":"D","direction":"up"[,"octaves":N]} (or degree
@@ -244,6 +244,8 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
       bar B out of the count and gives the next bar N
     - {"op":"add-bars","count":N[,"bar":B,"length":L]}: append, or insert
       before bar B; length makes irregular bars
+    - {"op":"delete-bars","fromBar":A,"toBar":B}: removes the bars from
+      every staff and moves the rest up; not the whole score
     - {"op":"set-layout",...}: pageSize, orientation, staffSize, margins,
       stave gaps (mm), spacesBetweenStaves, spacesBetweenSystems
     - {"op":"hide-empty-staves","fromBar":1,"toBar":LAST}: whole score only

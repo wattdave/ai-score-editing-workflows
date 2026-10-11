@@ -255,6 +255,8 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       whole layout). Changes the full score layout unless "layout" names
       another (name or layoutID). One undo step; every option is read back.
       score_structure reports the current settings as "layout".
+    - {"op":"delete-bars","fromBar":A,"toBar":B}: removes the bars from every
+      staff and moves the rest up; not the whole flow. Two undo steps per bar
     - {"op":"add-bars","count":N[,"bar":B]}: N bars of the meter in force
       inserted before bar B (selecting an item on B's first beat, or a
       temporary rest: 2 undo steps, 4 with the rest; refused past the end of
@@ -276,7 +278,7 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       selection, one per verse below V, and one per syllable; Dorico is
       brought to the front while it types, and the result's lyricsCheck
       compares a MusicXML export with the text.
-      Command ops (set-break, set-time, set-key, set-barline, add-bars,
+      Command ops (set-break, set-time, set-key, set-barline, add-bars, delete-bars,
       set-layout, add-lyrics, the notation ops above) cannot share a batch
       with the others. set-bar-number and a ranged hide-empty-staves are
       not available on Dorico.

@@ -46,7 +46,7 @@ CLEFS = {"treble", "bass", "percussion", "tab", "tab.4"}
 NOTE_COMMAND_OPS = {"add-dynamic", "set-articulation", "add-slur", "add-tempo", "add-rehearsal-mark"}
 COMMAND_OPS = {
     "set-break", "add-lyrics", "set-time", "set-key", "set-barline", "copy-passage", "add-line", "add-bars",
-    "set-layout",
+    "set-layout", "delete-bars",
 } | NOTE_COMMAND_OPS
 #: Resolved forms of set-pitch/delete/transpose on notes read from dump().
 ROUTED_COMMAND_OPS = {"repitch", "delete-by-id"}
@@ -308,6 +308,8 @@ def prepare_batch(
             resolved = [_delete_voice(operation, label, staves, bars)]
         elif op == "add-bars":
             resolved = [_add_bars(operation, label, located, staves, bars)]
+        elif op == "delete-bars":
+            resolved = [_delete_bars(operation, label, located, staves, bars)]
         elif op == "set-layout":
             resolved = [_set_layout(operation, label)]
         elif op in ADDRESSED:
@@ -794,13 +796,17 @@ def _check_inserted_bars(operations: list[dict[str, Any]]) -> None:
         if moved_after is not None and any(b > moved_after for b in named):
             raise DoricoBatchError(
                 f"op {i} names a bar after bar {moved_after}, which an earlier op in this batch moves "
-                "(add-bars, set-time, or a barline part-way through a bar); put it earlier or send it "
+                "(add-bars, delete-bars, set-time, or a barline part-way through a bar); put it earlier or send it "
                 "in a later batch"
             )
+        op = operation.get("op")
+        if op == "delete-bars" and isinstance(operation.get("fromBar"), int):
+            after = operation["fromBar"] - 1
+            moved_after = after if moved_after is None else min(moved_after, after)
+            continue
         bar = operation.get("bar")
         if not isinstance(bar, int):
             continue
-        op = operation.get("op")
         if op == "add-bars":
             after = bar - 1
         elif op == "set-time" or (op == "set-barline" and operation.get("position")):
@@ -833,6 +839,62 @@ def _delete_voice(
         raise DoricoBatchError(f"{label}: {exc}") from exc
     return {"op": "delete-voice", "stream": stream, "staff": staff, "voice": voice,
             "fromBar": first, "toBar": last, "start": start, "end": end}
+
+
+def _delete_bars(
+    operation: dict[str, Any], label: str, located: list[dict[str, Any]], staves: list[dict[str, Any]],
+    bars: BarMap,
+) -> dict[str, Any]:
+    """Bars fromBar-toBar removed from every staff, the later bars moving up.
+
+    One bar at a time, last bar first so that the positions and ids read
+    before the batch stay right: select an item in the bar (or a temporary
+    rest, which goes with the bar), Edit.DeleteBars. Extending one selection
+    with NavigateRightExtendBar, or Edit.SelectMore, removed the wrong
+    number of bars (checked 2026-10-11). Lua cannot count a flow's bars, so the result is
+    checked by a note after the range: it must have moved back by the length
+    removed (or, with nothing after, the last bar's item must be gone).
+    """
+    first = _int(operation, "fromBar", label, 1)
+    last = _int(operation, "toBar", label, first)
+    try:
+        start = bars.position(first, 0)
+        end = bars.position(last, 0) + bars.bar_length(last)
+    except Exception as exc:
+        raise DoricoBatchError(f"{label}: {exc}") from exc
+    last_bar = max((e["bar"] for e in located), default=0)
+    if first == 1 and last >= last_bar:
+        raise DoricoBatchError(f"{label}: delete-bars cannot remove every bar of the flow")
+    resolved: dict[str, Any] = {"op": "delete-bars", "fromBar": first, "toBar": last, "start": start,
+                                "removed": end - start, "bars": []}
+    later = [e for e in located if e["flowPosition"] >= end and e["staff"] >= 1 and "id" in e
+             and e["type"] in TYPE_ALIASES["Note"]]
+    if later:
+        marker = min(later, key=lambda e: (e["flowPosition"], e["id"]))
+        resolved["marker"] = {"id": marker["id"], "position": marker["flowPosition"]}
+    for bar in range(last, first - 1, -1):
+        candidates = [
+            e for e in located
+            if e["bar"] == bar and e["staff"] >= 1 and "id" in e and e["type"] in TYPE_ALIASES["NoteRest"]
+            and e.get("voice")
+        ]
+        if candidates:
+            # A note, on the top staff's first voice if it has one (checked 2026-10-11).
+            target = min(candidates, key=lambda e: (e["type"] not in TYPE_ALIASES["Note"], e["staff"],
+                                                    e.get("voice") or 0, e["position"], e["id"]))
+            resolved["bars"].append({"bar": bar, "select": {"id": target["id"], "stream": target["stream"]}})
+            continue
+        try:
+            rest = _temporary_rest(bars.position(bar, 0), located, staves)
+        except Exception as exc:
+            raise DoricoBatchError(f"{label}: {exc}") from exc
+        if rest is None:
+            raise DoricoBatchError(
+                f"{label}: bar {bar} has nothing to select and no room for a temporary rest"
+            )
+        resolved["bars"].append({"bar": bar, "tempRest": rest})
+    resolved["lastItem"] = resolved["bars"][0].get("select")
+    return resolved
 
 
 def _add_bars(
