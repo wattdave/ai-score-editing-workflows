@@ -98,6 +98,35 @@ selected voices").
 Done when: the model predicts at least 95% of trials on every score tried
 or each miss has a documented cause.
 
+### Phase 1 results so far (2026-10-11)
+
+Liszt Liebestraume (pickup bar, then 6/8, 1536 per bar; two Piano staves),
+`bars --bars 5,20 --steps 6` and a one-step scan of every bar of staff 1.
+
+- Counting only notes and rests, the model is right everywhere except two
+  barlines. Counting every event was wrong: a line or slur crossing the
+  edit is re-created with a new id, so it looked "removed" from the bar
+  before. `Edit.DeleteBars` bars-removed must be measured from notes and
+  rests (the script now does).
+- Misses: a selection whose extend step reaches the end of **bar 8** goes on
+  into bar 9 (bar 6 with 3 steps, bar 7 with 2, bar 8 with 1: all end in 9),
+  and one reaching the end of **bar 18** goes on to bar 20. Both staves
+  show it, so it is not one staff's items. The events show nothing crossing
+  either barline (checked all streams, notes, rests, lines). Staff 2 has
+  same-pitch notes meeting at the bar 8/9 barline, but the MusicXML export
+  has no tie there, and treating same-pitch notes as tied, or pulling in
+  every staff's items, did not fix the prediction (`--scope`, `--ties`).
+  Cause not found. Next: look at the project in Dorico (the Properties
+  panel on the notes at those barlines, system/frame breaks, a bar
+  repeat or multi-bar region) and test whether it depends on the layout.
+- Not yet run: the pickup fixture, Las Posadas, Smith, Wiese, Akinola,
+  Sohn. Opening a project from an older Dorico version shows a "will be
+  updated" dialog (button OK, drive it with osascript) and a progress
+  dialog that waits for it; the load of a 1 MB project took about 5 minutes.
+- Blocked at 2026-10-11 ~14:00: the Mac's screen locked while the user was
+  away, after which Dorico's bridge stopped answering. Resume by unlocking
+  and checking Dorico for a dialog.
+
 ## Phase 2: other commands, one at a time
 
 For each: select a range with the PR #88 planner, run the command, measure
