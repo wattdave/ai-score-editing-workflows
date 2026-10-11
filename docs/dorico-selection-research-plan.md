@@ -1,7 +1,7 @@
 # Dorico selection research plan
 
-Status: proposed. Starts after PR #88 (delete-bars on all back ends) is merged;
-this plan is part of that PR.
+Status: Phase 0 done (2026-10-11); Phases 1-3 open. PR #88 (delete-bars on all
+back ends) is merged.
 
 ## Why
 
@@ -65,6 +65,15 @@ repeatable and a Dorico upgrade can re-run it.
 
 Done when: the five PR #88 ranges and 24 delete trials reproduce from the
 script on the Fugue 16 copy.
+
+Done: `scripts/dorico_selection_probe.py` has `bars` (model against measured
+`Edit.DeleteBars`), `copy` (planned and, with `--old`, the old recipe) and
+`run` (any command after a planned selection; measures removed, added or
+changed events and the undo steps). On the Fugue 16 copy: 32 of 32 delete
+trials predicted, five of five planned copies exact, the old recipe loses 5
+notes on bars 6-9. Staff placement comes from `service.snapshot`, and the
+Upgrade checklist step 6b runs it. Not done: property comparison beyond
+position, duration, pitch, type and stream.
 
 ## Phase 1: widen the rules
 
