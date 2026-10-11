@@ -307,6 +307,8 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
     - {"op":"add-bars","count":N[,"bar":B,"length":L]}: appends bars at the
       end, or inserts them before bar B; length makes them irregular bars of
       L (1/256 quarters)
+    - {"op":"delete-bars","fromBar":A,"toBar":B}: removes the bars from every
+      staff (and the system staff) and moves the rest up; not the whole score
     - {"op":"set-bar-number","bar":B,"number":N[,"skip":true]}: renumber
       from bar B; skip leaves bar B itself unnumbered
     - {"op":"set-layout", any of "pageSize":"a4"|"letter"|..., "orientation":

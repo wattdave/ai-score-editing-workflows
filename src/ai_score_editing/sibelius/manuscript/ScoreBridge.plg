@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 55);
+		return CreateDictionary('version', 56);
 	}"
 
 	Echo "(value) {
@@ -1085,7 +1085,7 @@
 		if (opName = 'set-barline' or opName = 'add-bars' or opName = 'set-bar-number') {
 			return True;
 		}
-		if (opName = 'set-layout' or opName = 'hide-empty-staves') {
+		if (opName = 'set-layout' or opName = 'hide-empty-staves' or opName = 'delete-bars') {
 			return True;
 		}
 		return False;
@@ -1275,6 +1275,13 @@
 				selection.Clear();
 			}
 			return CreateDictionary('staff', op['staff'], 'voice', voice, 'objects', found);
+		}
+		if (opName = 'delete-bars') {
+			// Every staff, as Delete Bars does on a system passage.
+			selection.SelectSystemPassage(op['fromBar'], op['toBar']);
+			selection.Delete();
+			selection.Clear();
+			return CreateDictionary('deletedBars', op['toBar'] - op['fromBar'] + 1, 'barCount', systemStaff.BarCount);
 		}
 		if (opName = 'add-bars') {
 			if (op['bar'] = null and op['length'] = null) {

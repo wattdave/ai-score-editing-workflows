@@ -14,7 +14,7 @@ import secrets
 from pathlib import Path
 
 #: Bump when msbridge.qml.in changes; the client refuses an older bridge.
-BRIDGE_VERSION = 8
+BRIDGE_VERSION = 10
 DEFAULT_PORT = 8766
 PLUGIN_TITLE = "ScoreBridge"
 TEMPLATE = Path(__file__).with_name("msbridge.qml.in")

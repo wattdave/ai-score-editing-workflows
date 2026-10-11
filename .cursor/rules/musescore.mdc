@@ -51,8 +51,9 @@ Object ops (set, set-pitch, tie, bracket, flip-stem, nudge, delete, beam)
 come first, then adding ops (add-note, add-rest, add-tuplet, add-text,
 add-lyric, add-line, add-clef, add-dynamic, set-articulation, add-slur,
 add-tempo, add-rehearsal-mark), then structural ops. transpose and
-delete-voice cannot follow adding ops or set-time/add-bars; set-time comes
-before set-bar-number; one copy-passage per batch. The `apply_batch`
+delete-voice cannot follow adding ops or set-time/add-bars/delete-bars;
+set-time comes before set-bar-number; one copy-passage and one delete-bars
+per batch. delete-bars removes whole bars from every staff. The `apply_batch`
 description lists every op's fields.
 
 ## Limits

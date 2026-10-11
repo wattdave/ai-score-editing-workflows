@@ -158,6 +158,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `set-barline` | ⚠️ | double, final, start/end repeat, by command like set-time (a start repeat at bar 1 keeps the opening time signature); `position` puts one part-way through a bar (Dorico only) |
 | `delete-voice` | ✅ | Lua `deleteEventsInRange` over the bars: everything starting there, lyrics included; staves with lyrics too; one undo step with the batch |
 | `add-bars` | ⚠️ | before a bar by the bars popover (`+N`) or at the end (`AddBarAtEndOfFlow`); no `length` (irregular bars); appended bars are not read back |
+| `delete-bars` | ✅ | plans a selection that covers exactly the bars (see "Selecting bars"): one `EventEdit.Select`, some `EventEdit.NavigateRightExtendBar`, one `Edit.DeleteBars`; falls back to one bar at a time when no staff has such a selection. A note after the range must move up by the length removed. `undo` takes at most 20 steps per call |
 | `set-layout` | ⚠️ | `Project.Layout.SetOptions`, one undo step, read back; the full score layout unless `layout` names another; no `extraSpacesBelowVocalStaves`; page sizes with ambiguous dimensions need `pageWidth`/`pageHeight` (mm); left/right margins need identical margins. `score_structure` reports the settings as `layout` |
 | `hide-empty-staves` | ⚠️ | not over a range of bars: Dorico hides empty staves per layout, set by `set-layout`'s `hideEmptyStaves` (`never`, `after-first-system`, `all-systems`) |
 | `set-bar-number` | ❌ | the number only exists inside a dialog: no command carries it and nothing reads it back (see gaps) |
@@ -729,3 +730,54 @@ original notes and ids:
 - MCP tools: dry run refused on a pitch guard; delete + add-rest + add-text;
   text read back with its paragraph style; preview PNG export; `undo`
   restored
+
+## Reading the selection (checked 2026-10-11)
+
+The Remote Control API does not report which items or bars are selected.
+After a selection command Dorico pushes `selectionchanged` (with only
+`openScoreID`) and `status`; the useful status fields are `hasSelection` and
+`selectedEventType` (`kNoteEvent` for one note, `kMixed` after
+`EventEdit.NavigateRightExtendBar`). `getproperties` lists the properties of
+the selection's event types, not its extent. `getselection` is unhandled
+(`kUnhandledMessage`) and the Lua classes list has no selection class. So a
+selection's extent can only be checked from its effect, as `delete-bars` does.
+
+## Selecting bars (measured 2026-10-11)
+
+Measured on a copy of the Fugue 16 example, by selecting, running
+`Edit.DeleteBars`, reading the removed events through Lua (no MusicXML
+export) and undoing. `Edit.DeleteBars` removes every bar the selection
+touches, so the bars removed show how far a selection reaches.
+
+- **A selection holds whole items of one staff.** One note touches its own
+  bar only; a note or rest that runs across a barline touches both bars.
+- **`EventEdit.NavigateRightExtendBar` moves the selection's end to the next
+  barline after it, then pulls in every item of the staff (all its voices)
+  that starts before that barline, whole.** So a note tied over the barline
+  drags the following bar in, and the next step starts from the end of that
+  note. The steps are not "one bar each" on a staff with such notes; items on
+  other staves are ignored. A selection already ending on a barline (a bar
+  rest, or a note that ends the bar) moves a full bar on the first step.
+- Replaying this on the events read predicted the bars removed in all 24
+  trials (two staves, 1 to 8 steps), and `delete-bars` uses it:
+  `score._extension_plan` returns an item in the first bar and the number
+  of steps, or none when a tie over the last barline makes every selection
+  on every staff overshoot.
+- **`Edit.SelectMore` is not a fixed step.** Once: the item's own bar. Twice:
+  the bars either side too (4-6 from bar 5). Three times: nearly the whole
+  flow. It also gave wrong counts after `NavigateRightExtendBar`.
+- **`EventEdit.NavigateRightExtend`** (by item) from a note covered 1 bar
+  after 4 and 8 steps and 2 after 16: it follows items, not bars.
+- The method: select, run the command, read through Lua,
+  undo until the events match the baseline. It needs no export.
+- **Copying a group of bars** needs every item that starts in them, which is
+  a different test from "bars touched". The step whose target is the end of
+  the last bar pulls those in, whatever a tie then adds past it. The old
+  recipe (`Edit.SelectMore`, then one step per further bar) is not a step
+  and a half: on bars 6-9 of the example it copied 21 of 26 notes, while
+  the planned recipe copied all of them (bars 5-8, 7-10, 8-10, 6-9, 5-12
+  all exact; only 6-9 differed). `copy-passage` now uses
+  `_extension_plan(..., cover=True)` with the first note of the range as
+  anchor, and the old recipe only when no plan exists. Its read-back used to
+  look at one destination voice only, so it reported `verified: false` for
+  any staff with two voices; it now checks every voice of the destination.

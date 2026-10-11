@@ -37,7 +37,7 @@ APP = Path("/Applications/Dorico 6.app")
 REQUIRED_COMMANDS = sorted({
     "Script.RunScript", "Edit.Undo", "Edit.Redo", "Edit.SelectAll", "Edit.SelectMore", "Edit.Copy", "Edit.Paste",
     "Edit.CreateSystemBreak", "Edit.LineOfLyrics", "EventEdit.Select", "EventEdit.Delete",
-    "EventEdit.NavigateRightExtendBar", "File.Export", "File.ScoreInfo", "Print.ExportCurrentLayoutAsPDF",
+    "EventEdit.NavigateRightExtendBar", "Edit.DeleteBars", "File.Export", "File.ScoreInfo", "Print.ExportCurrentLayoutAsPDF",
     "Filter.LyricsLine1", "Filter.LyricsLine2", "Filter.LyricsLine3", "Filter.LyricsLine4", "Filter.LyricsLine5",
     "Window.SwitchMode", "Window.SwitchToLayout", "NoteInput.Mode", "NoteInput.CreateDynamic",
     "NoteInput.SetArticulation", "NoteInput.SlurStart", "NoteInput.CreateTempo", "NoteInput.CreateRehearsalMark",

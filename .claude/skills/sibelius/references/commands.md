@@ -109,6 +109,10 @@ and verify once for the whole set.
   - `{"op":"add-bars","count":N[,"bar":B,"length":L]}`: appends N bars at the
     end, or inserts them before bar B; `length` (1/256 quarters) makes them
     irregular bars (`bar`/`length` bridge v50)
+  - `{"op":"delete-bars","fromBar":A,"toBar":B}`: removes the bars from every
+    staff and moves the rest up, as Delete Bars does on a system passage
+    (bridge v56). Bar numbers after it shift, so no later operation may name a
+    bar after A. Time signatures, repeats and barlines in the range go with it.
   - `{"op":"set-bar-number","bar":B,"number":N[,"skip":true]}`: restart bar
     numbering at bar B; `skip` leaves bar B itself unnumbered (bridge v50)
   - `{"op":"set-layout", ...}`: any of `pageSize` (`a4`, `letter`, `a3`,

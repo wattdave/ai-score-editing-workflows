@@ -185,6 +185,12 @@ plug-in API, so no MusicXML reader was needed. How they behave:
   leaves bar B out of the count and gives the next bar the number.
 - **add-bars** appends, or inserts before bar B (one `insert-measure` per
   bar); `length` makes irregular bars.
+- **delete-bars** removes bars A-B from every staff and moves the rest up. The
+  bridge selects those bars as a range before the command opens (a range
+  selected inside one is not filled in; extending a selection with
+  `select(el, true)` made no range either), then runs `time-delete` ("Remove
+  selected range"), which deletes whole bars [src: `Score::doTimeDelete`].
+  One per batch; not the whole score. Needs bridge 10.
 - **set-layout** converts millimetres to MuseScore's inches, staff size to
   spatium, and the right margin to a printable width; both odd and even
   pages change. Sibelius page sizes without agreed dimensions (octavo,
@@ -197,7 +203,7 @@ plug-in API, so no MusicXML reader was needed. How they behave:
   and pastes inside it. It overwrites the clipboard, even in a dry run.
   One per batch.
 - transpose and delete-voice change notes as read, so they cannot follow
-  adding ops or a set-time/add-bars in the same batch; set-time must come
+  adding ops or a set-time/add-bars/delete-bars in the same batch; set-time must come
   before set-bar-number.
 
 Checked live on 4.7.5 (2026-10-03, ScratchScore): every structural op ran

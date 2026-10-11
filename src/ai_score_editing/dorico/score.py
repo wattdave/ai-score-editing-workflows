@@ -46,7 +46,7 @@ CLEFS = {"treble", "bass", "percussion", "tab", "tab.4"}
 NOTE_COMMAND_OPS = {"add-dynamic", "set-articulation", "add-slur", "add-tempo", "add-rehearsal-mark"}
 COMMAND_OPS = {
     "set-break", "add-lyrics", "set-time", "set-key", "set-barline", "copy-passage", "add-line", "add-bars",
-    "set-layout",
+    "set-layout", "delete-bars",
 } | NOTE_COMMAND_OPS
 #: Resolved forms of set-pitch/delete/transpose on notes read from dump().
 ROUTED_COMMAND_OPS = {"repitch", "delete-by-id"}
@@ -308,6 +308,8 @@ def prepare_batch(
             resolved = [_delete_voice(operation, label, staves, bars)]
         elif op == "add-bars":
             resolved = [_add_bars(operation, label, located, staves, bars)]
+        elif op == "delete-bars":
+            resolved = [_delete_bars(operation, label, located, staves, bars)]
         elif op == "set-layout":
             resolved = [_set_layout(operation, label)]
         elif op in ADDRESSED:
@@ -433,9 +435,11 @@ def _copy_passage(
 ) -> list[dict[str, Any]]:
     """Copy bars fromBar-toBar of staves top-bottom to destBar of destStaff on.
 
-    Dorico copies what Edit.SelectMore (from a note) and NavigateRightExtendBar
-    select, which starts at the range's first *note*, not the barline, and
-    pastes it at the selected item. So the paste anchor is the destination
+    Dorico copies what the selection holds: an exact selection from
+    _extension_plan where there is one, else Edit.SelectMore (from a note)
+    and NavigateRightExtendBar, which can reach a bar too far or too short.
+    The selection starts at the range's first *note*, not the barline, and
+    is pasted at the selected item. So the paste anchor is the destination
     bar start plus that note's offset: an existing item there, or a
     temporary rest (overwritten by the paste). One resolved op per staff.
     """
@@ -485,8 +489,12 @@ def _copy_passage(
             "select": {"id": in_first_bar[0]["id"], "stream": in_first_bar[0]["stream"]},
             "extendBars": last - first,
             "expect": [(e["flowPosition"] - notes[0]["flowPosition"], e.get("pitch")) for e in notes],
-            "anchorPosition": anchor_position,
+            "anchorPosition": anchor_position, "destStreams": list(voices),
         }
+        # An exact selection (no Edit.SelectMore): see _extension_plan.
+        plan = _extension_plan(located, bars, first, last, staff=staff, anchor=in_first_bar[0], cover=True)
+        if plan is not None:
+            resolved.update(extendBars=plan["extend"], exact=True)
         if at_anchor:
             resolved["anchor"] = {"id": at_anchor[0]["id"], "stream": at_anchor[0]["stream"]}
         else:
@@ -794,13 +802,17 @@ def _check_inserted_bars(operations: list[dict[str, Any]]) -> None:
         if moved_after is not None and any(b > moved_after for b in named):
             raise DoricoBatchError(
                 f"op {i} names a bar after bar {moved_after}, which an earlier op in this batch moves "
-                "(add-bars, set-time, or a barline part-way through a bar); put it earlier or send it "
+                "(add-bars, delete-bars, set-time, or a barline part-way through a bar); put it earlier or send it "
                 "in a later batch"
             )
+        op = operation.get("op")
+        if op == "delete-bars" and isinstance(operation.get("fromBar"), int):
+            after = operation["fromBar"] - 1
+            moved_after = after if moved_after is None else min(moved_after, after)
+            continue
         bar = operation.get("bar")
         if not isinstance(bar, int):
             continue
-        op = operation.get("op")
         if op == "add-bars":
             after = bar - 1
         elif op == "set-time" or (op == "set-barline" and operation.get("position")):
@@ -833,6 +845,143 @@ def _delete_voice(
         raise DoricoBatchError(f"{label}: {exc}") from exc
     return {"op": "delete-voice", "stream": stream, "staff": staff, "voice": voice,
             "fromBar": first, "toBar": last, "start": start, "end": end}
+
+
+def _extension_plan(
+    located: list[dict[str, Any]], bars: BarMap, first: int, last: int, *,
+    staff: int | None = None, anchor: dict[str, Any] | None = None, cover: bool = False,
+) -> dict[str, Any] | None:
+    """A selection that covers exactly bars first-last: an item in bar `first`
+    and how many EventEdit.NavigateRightExtendBar steps to run.
+
+    Measured 2026-10-11 (docs/dorico.md, "Selecting bars"): the selection
+    always holds whole items of one staff, an extend step moves its end to
+    the next barline after it, and every item of the staff that starts
+    before that barline is pulled in whole, so a note tied across the
+    barline drags the following bar in. Edit.DeleteBars removes every bar the
+    selection touches. This replays the steps on the events read, and
+    returns the first anchor and step count that touch bars first-last and
+    no others, or None. `staff` and `anchor` (an event) restrict the search;
+    `cover` instead asks for every item that starts in the bars, as a copy
+    needs (a single note touches its bar but copies only itself).
+    """
+    last_bar = max((e["bar"] for e in located), default=0)
+    staves = [staff] if staff is not None else sorted({e["staff"] for e in located if e["staff"] >= 1})
+    try:
+        cover_end = bars.position(last, 0) + bars.bar_length(last)
+    except Exception:
+        return None
+    for staff in staves:
+        items = [
+            e for e in located
+            if e["staff"] == staff and e["type"] in TYPE_ALIASES["NoteRest"] and "id" in e and e.get("voice")
+        ]
+        spans = [(e["flowPosition"], e["flowPosition"] + (e.get("duration") or 0)) for e in items]
+        anchors = sorted((e for e in items if e["bar"] == first),
+                         key=lambda e: (e["type"] not in TYPE_ALIASES["Note"], e["flowPosition"], e.get("voice") or 0, e["id"]))
+        if anchor is not None:
+            anchors = [e for e in anchors if e["id"] == anchor["id"]]
+        for chosen in anchors[:3]:
+            end = chosen["flowPosition"] + (chosen.get("duration") or 0)
+            for steps in range(0, last - first + 4):
+                target = None
+                if steps:
+                    try:
+                        bar, _ = bars.locate(end)
+                        target = bars.position(bar + 1, 0)
+                    except Exception:
+                        break
+                    end = max([target] + [e for s_, e in spans if s_ < target])
+                if cover:
+                    if not steps:
+                        start = bars.position(first, 0)
+                        alone = [e for e in items if start <= e["flowPosition"] < cover_end]
+                        if len(alone) == 1 and alone[0]["id"] == chosen["id"]:
+                            return {"select": {"id": chosen["id"], "stream": chosen["stream"]}, "extend": 0,
+                                    "staff": staff}  # the one item that starts in the bars
+                        continue
+                    # A copy needs every item that starts in the bars: the step that targets the
+                    # end of bar `last` pulls them all in, whatever a tie then adds past it.
+                    if target == cover_end:
+                        return {"select": {"id": chosen["id"], "stream": chosen["stream"]}, "extend": steps,
+                                "staff": staff}
+                    if target is not None and target > cover_end:
+                        break
+                    continue
+                try:
+                    touched_last = bars.locate(end - 1)[0]
+                except Exception:
+                    break
+                if touched_last == last:
+                    return {"select": {"id": chosen["id"], "stream": chosen["stream"]}, "extend": steps,
+                            "staff": staff}
+                if touched_last > last:
+                    break  # overshot: a tied note dragged in a bar; try another anchor or staff
+    return None
+
+
+def _delete_bars(
+    operation: dict[str, Any], label: str, located: list[dict[str, Any]], staves: list[dict[str, Any]],
+    bars: BarMap,
+) -> dict[str, Any]:
+    """Bars fromBar-toBar removed from every staff, the later bars moving up.
+
+    Where _extension_plan finds a selection that covers exactly these bars,
+    one select, some extend steps and one Edit.DeleteBars do it. Otherwise
+    one bar at a time, last bar first so that the positions and ids read
+    before the batch stay right: select an item in the bar (or a temporary
+    rest, which goes with the bar), Edit.DeleteBars. Extending one selection
+    with NavigateRightExtendBar, or Edit.SelectMore, removed the wrong
+    number of bars (checked 2026-10-11). Lua cannot count a flow's bars, so the result is
+    checked by a note after the range: it must have moved back by the length
+    removed (or, with nothing after, the last bar's item must be gone).
+    """
+    first = _int(operation, "fromBar", label, 1)
+    last = _int(operation, "toBar", label, first)
+    try:
+        start = bars.position(first, 0)
+        end = bars.position(last, 0) + bars.bar_length(last)
+    except Exception as exc:
+        raise DoricoBatchError(f"{label}: {exc}") from exc
+    last_bar = max((e["bar"] for e in located), default=0)
+    if first == 1 and last >= last_bar:
+        raise DoricoBatchError(f"{label}: delete-bars cannot remove every bar of the flow")
+    resolved: dict[str, Any] = {"op": "delete-bars", "fromBar": first, "toBar": last, "start": start,
+                                "removed": end - start, "bars": []}
+    later = [e for e in located if e["flowPosition"] >= end and e["staff"] >= 1 and "id" in e
+             and e["type"] in TYPE_ALIASES["Note"]]
+    if later:
+        marker = min(later, key=lambda e: (e["flowPosition"], e["id"]))
+        resolved["marker"] = {"id": marker["id"], "position": marker["flowPosition"]}
+    plan = _extension_plan(located, bars, first, last)
+    if plan is not None:
+        resolved["plan"] = plan
+        resolved["bars"] = [{"bar": b} for b in range(last, first - 1, -1)]  # the fallback's size, for counting
+        resolved["lastItem"] = plan["select"]
+        return resolved
+    for bar in range(last, first - 1, -1):
+        candidates = [
+            e for e in located
+            if e["bar"] == bar and e["staff"] >= 1 and "id" in e and e["type"] in TYPE_ALIASES["NoteRest"]
+            and e.get("voice")
+        ]
+        if candidates:
+            # A note, on the top staff's first voice if it has one (checked 2026-10-11).
+            target = min(candidates, key=lambda e: (e["type"] not in TYPE_ALIASES["Note"], e["staff"],
+                                                    e.get("voice") or 0, e["position"], e["id"]))
+            resolved["bars"].append({"bar": bar, "select": {"id": target["id"], "stream": target["stream"]}})
+            continue
+        try:
+            rest = _temporary_rest(bars.position(bar, 0), located, staves)
+        except Exception as exc:
+            raise DoricoBatchError(f"{label}: {exc}") from exc
+        if rest is None:
+            raise DoricoBatchError(
+                f"{label}: bar {bar} has nothing to select and no room for a temporary rest"
+            )
+        resolved["bars"].append({"bar": bar, "tempRest": rest})
+    resolved["lastItem"] = resolved["bars"][0].get("select")
+    return resolved
 
 
 def _add_bars(
