@@ -70,6 +70,8 @@ class Lab:
         self.base, _ = await self.bridge.read_partial(flow)
         self.base_by_id = {e["id"]: e for e in self.base if "id" in e}
         self.base_sig = signature(self.base)
+        self.ties: set[tuple[int, int]] = set()
+        self.tie_offset = 0
 
     def item(self, staff: int, bar: int, *, note: bool = True) -> dict[str, Any] | None:
         """The first item starting in the bar on the staff (a note first)."""
@@ -107,7 +109,8 @@ class Lab:
                 out["error"] = str(exc).split(":")[-1].strip()
             else:
                 now = {e["id"] for e in await self.read() if "id" in e}
-                gone = [self.base_by_id[i]["position"] for i in self.base_by_id if i not in now]
+                # Lines and slurs crossing the edit get new ids, so only notes and rests count.
+                gone = [e["position"] for i, e in self.base_by_id.items() if i not in now and e["type"] in ITEM_TYPES]
                 out["bars"] = (self.bar_of(min(gone)), self.bar_of(max(gone))) if gone else None
         except DoricoError as exc:
             out["error"] = f"ERR {str(exc)[:80]}"
@@ -115,14 +118,63 @@ class Lab:
         return out
 
 
-def predict_bars(lab: Lab, staff: int, anchor: dict[str, Any], steps: int) -> tuple[int, int]:
+def scope_staves(lab: Lab, staff: int, scope: str) -> set[int]:
+    """The staves whose items a step pulls in: the anchor's staff, its instrument's, or all."""
+    if scope == "all":
+        return {s["staff"] for s in lab.staves}
+    if scope == "instrument":
+        name = next((s.get("name") for s in lab.staves if s["staff"] == staff), None)
+        return {s["staff"] for s in lab.staves if s.get("name") == name}
+    return {staff}
+
+
+async def barline_ties(client: DoricoClient, flow: int) -> set[tuple[int, int]]:
+    """(measure, MIDI pitch) of every note whose tie starts in that bar and goes on
+    into the next. Neither Lua nor dump() report ties, so this exports MusicXML once
+    (slow, visible); it cannot tell voices of one staff apart."""
+    import xml.etree.ElementTree as ET
+
+    from ai_score_editing.dorico.export import export_musicxml
+
+    root = ET.parse(await export_musicxml(client, flow)).getroot()
+    step = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+    out: set[tuple[int, int]] = set()
+    for part in root.iter("part"):
+        for index, measure in enumerate(part.iter("measure"), 1):
+            for note in measure.iter("note"):
+                pitch = note.find("pitch")
+                if pitch is None or not any(t.get("type") == "start" for t in note.findall("tie")):
+                    continue
+                midi = 12 * (int(pitch.findtext("octave")) + 1) + step[pitch.findtext("step")] + int(float(pitch.findtext("alter") or 0))
+                out.add((index, midi))
+    return out
+
+
+def tie_chains(lab: Lab, items: list[dict[str, Any]]) -> list[tuple[int, int]]:
+    """Item spans where a note tied over a barline reaches to the end of the note it
+    is tied to. Ties come from lab.ties (the events do not carry them)."""
+    notes = {(e["stream"], e["pitch"], e["flowPosition"]): e for e in items if e["type"] == "NoteEvent"}
+
+    def end_of(e: dict[str, Any]) -> int:
+        end = e["flowPosition"] + (e.get("duration") or 0)
+        tied = e["type"] == "NoteEvent" and (e["bar"] + lab.tie_offset, e["pitch"]) in lab.ties and lab.bars.locate(end)[1] == 0
+        nxt = notes.get((e["stream"], e["pitch"], end)) if tied else None
+        return end_of(nxt) if nxt is not None else end
+
+    return [(e["flowPosition"], end_of(e)) for e in items]
+
+
+def predict_bars(lab: Lab, staff: int, anchor: dict[str, Any], steps: int, scope: str = "staff", ties: bool = False) -> tuple[int, int]:
     """Bars Edit.DeleteBars touches after `steps` extend steps from `anchor`.
 
     The rule: a step moves the end to the next barline after it, then pulls
     in every item of the staff that starts before that barline, whole.
     """
-    items = [e for e in lab.located if e["staff"] == staff and e["type"] in ITEM_TYPES and e.get("voice")]
+    staves = scope_staves(lab, staff, scope)
+    items = [e for e in lab.located if e["staff"] in staves and e["type"] in ITEM_TYPES and e.get("voice")]
     spans = [(e["flowPosition"], e["flowPosition"] + (e.get("duration") or 0)) for e in items]
+    if ties:
+        spans = tie_chains(lab, items)
     end = anchor["flowPosition"] + (anchor.get("duration") or 0)
     for _ in range(steps):
         target = lab.bars.position(lab.bar_of(end) + 1, 0)
@@ -141,7 +193,7 @@ async def run_bars(lab: Lab, args: argparse.Namespace) -> int:
                 continue
             for k in range(1, args.steps + 1):
                 try:
-                    predicted = predict_bars(lab, staff, anchor, k)
+                    predicted = predict_bars(lab, staff, anchor, k, args.scope, args.ties)
                 except Exception as exc:  # past the end of the flow
                     print(f"staff {staff} bar {bar} k={k}: no prediction ({exc})")
                     break
@@ -273,6 +325,10 @@ async def main() -> int:
     bars.add_argument("--staff", type=int)
     bars.add_argument("--bars", type=lambda t: [int(x) for x in t.split(",")], default=[5, 20])
     bars.add_argument("--steps", type=int, default=8)
+    bars.add_argument("--ties", action="store_true", help="model same-pitch notes meeting on a barline as tied")
+    bars.add_argument("--tie-offset", type=int, default=0, help="MusicXML measure index minus bar number")
+    bars.add_argument("--scope", choices=("staff", "instrument", "all"), default="staff",
+                      help="whose items a step pulls in, for the model")
     copy = sub.add_parser("copy")
     copy.add_argument("--staff", type=int)
     copy.add_argument("--dest-staff", type=int)
@@ -289,6 +345,10 @@ async def main() -> int:
     async with DoricoClient() as client:
         lab = Lab(client)
         await lab.setup(args.flow)
+        if getattr(args, "ties", False):
+            lab.tie_offset = args.tie_offset
+            lab.ties = await barline_ties(client, args.flow)
+            print(f"{len(lab.ties)} (measure, pitch) ties start in a bar and go on")
         if args.mode == "bars":
             return int(await run_bars(lab, args) > 0)
         if args.mode == "copy":
