@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import websockets
 
 from ai_score_editing.dorico import bridge as bridge_mod
-from ai_score_editing.dorico import service
+from ai_score_editing.dorico import score, service
 from ai_score_editing.dorico.bridge import BarMap, DoricoBridge, fingerprint, lua_literal
 from ai_score_editing.dorico.client import DoricoClient, DoricoError
 from ai_score_editing.dorico.score import (
@@ -735,18 +735,37 @@ def test_add_bars_inserts_at_the_bar_start_or_appends() -> None:
     assert prepare_batch([{"op": "add-bars", "count": 3}], located, STAVES, BARS) == [{"op": "add-bars", "count": 3}]
 
 
-def test_delete_bars_selects_an_item_in_each_bar_last_bar_first() -> None:
+def test_delete_bars_plans_an_exact_selection() -> None:
     located = locate_events(EVENTS, BARS)
     ops = prepare_batch([{"op": "delete-bars", "fromBar": 1, "toBar": 1}], located, STAVES, BARS)
     assert ops[0]["removed"] == 1024 and ops[0]["marker"]["position"] >= 1024
-    assert [b["bar"] for b in ops[0]["bars"]] == [1]
+    assert ops[0]["plan"] == {"select": {"id": 3, "stream": 2}, "extend": 0, "staff": 1}
     ops = prepare_batch([{"op": "delete-bars", "fromBar": 2, "toBar": 2}], located, STAVES, BARS)
-    assert ops[0]["bars"] == [{"bar": 2, "select": {"id": 7, "stream": 2}}] and "marker" not in ops[0]
+    assert ops[0]["plan"]["select"]["id"] == 7 and "marker" not in ops[0]
     with pytest.raises(DoricoBatchError, match="every bar"):
         prepare_batch([{"op": "delete-bars", "fromBar": 1, "toBar": 2}], located, STAVES, BARS)
     with pytest.raises(DoricoBatchError, match="names a bar after bar 0"):
         prepare_batch([{"op": "delete-bars", "fromBar": 1, "toBar": 1},
                        {"op": "set-break", "bar": 2, "type": "system"}], located, STAVES, BARS)
+
+
+def test_a_tied_note_across_the_last_barline_drags_in_the_next_bar() -> None:
+    """The measured rule: items starting before the barline are pulled in whole."""
+    bars = BarMap([(0, 1024)])
+    events = [
+        {"id": 0, "type": "BarDivisionEvent", "stream": 0, "staff": 0, "position": 0, "duration": 0},
+        note(3, 0, 72, "C5", duration=1024), note(4, 1024, 71, "B4", duration=1536),  # held into bar 3
+        note(5, 2560, 69, "A4", duration=512), note(6, 3072, 67, "G4", duration=1024),
+    ]
+    located = locate_events(events, bars)
+    one = score._extension_plan(located, bars, 1, 1)
+    assert one == {"select": {"id": 3, "stream": 2}, "extend": 0, "staff": 1}
+    # Bar 2's note runs into bar 3, so no selection on this staff covers bars 2-2 exactly:
+    assert score._extension_plan(located, bars, 2, 2) is None
+    two = score._extension_plan(located, bars, 2, 3)
+    assert two is not None and two["select"]["id"] == 4
+    longer = score._extension_plan(located, bars, 1, 3)
+    assert longer == {"select": {"id": 3, "stream": 2}, "extend": 1, "staff": 1}  # the tie reaches bar 3
 
 
 @pytest.mark.parametrize(

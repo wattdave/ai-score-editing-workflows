@@ -68,8 +68,9 @@ and refuses to type over existing lyrics in that verse; `read_lyrics` /
   cannot be read back.
   copy-passage pastes at the start of a bar only. add-bars inserts before
   an existing bar or appends; it cannot make irregular bars (`length`).
-  delete-bars removes whole bars from every staff, one bar at a time (two
-  undo steps per bar; `undo` takes at most 20 steps per call).
+  delete-bars removes whole bars from every staff with a planned selection
+  (select, extend by bar, `Edit.DeleteBars`; `undo` takes at most 20 steps per
+  call), one bar at a time when no exact selection exists.
   set-layout changes one layout (the full score unless `layout` names a
   part); it has no extra gap below vocal staves, and hides empty staves only
   for a whole layout (`hideEmptyStaves`), not over a range of bars.

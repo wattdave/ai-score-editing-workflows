@@ -256,7 +256,7 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       another (name or layoutID). One undo step; every option is read back.
       score_structure reports the current settings as "layout".
     - {"op":"delete-bars","fromBar":A,"toBar":B}: removes the bars from every
-      staff and moves the rest up; not the whole flow. Two undo steps per bar
+      staff and moves the rest up; not the whole flow
     - {"op":"add-bars","count":N[,"bar":B]}: N bars of the meter in force
       inserted before bar B (selecting an item on B's first beat, or a
       temporary rest: 2 undo steps, 4 with the rest; refused past the end of

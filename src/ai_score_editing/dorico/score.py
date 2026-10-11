@@ -841,13 +841,61 @@ def _delete_voice(
             "fromBar": first, "toBar": last, "start": start, "end": end}
 
 
+def _extension_plan(
+    located: list[dict[str, Any]], bars: BarMap, first: int, last: int
+) -> dict[str, Any] | None:
+    """A selection that covers exactly bars first-last: an item in bar `first`
+    and how many EventEdit.NavigateRightExtendBar steps to run.
+
+    Measured 2026-10-11 (docs/dorico.md, "Selecting bars"): the selection
+    always holds whole items of one staff, an extend step moves its end to
+    the next barline after it, and every item of the staff that starts
+    before that barline is pulled in whole, so a note tied across the
+    barline drags the following bar in. Edit.DeleteBars removes every bar the
+    selection touches. This replays the steps on the events read, and
+    returns the first anchor and step count that touch bars first-last and
+    no others, or None.
+    """
+    last_bar = max((e["bar"] for e in located), default=0)
+    for staff in sorted({e["staff"] for e in located if e["staff"] >= 1}):
+        items = [
+            e for e in located
+            if e["staff"] == staff and e["type"] in TYPE_ALIASES["NoteRest"] and "id" in e and e.get("voice")
+        ]
+        spans = [(e["flowPosition"], e["flowPosition"] + (e.get("duration") or 0)) for e in items]
+        anchors = sorted((e for e in items if e["bar"] == first),
+                         key=lambda e: (e["type"] not in TYPE_ALIASES["Note"], e["flowPosition"], e.get("voice") or 0, e["id"]))
+        for anchor in anchors[:3]:
+            end = anchor["flowPosition"] + (anchor.get("duration") or 0)
+            for steps in range(0, last - first + 4):
+                if steps:
+                    try:
+                        bar, _ = bars.locate(end)
+                        target = bars.position(bar + 1, 0)
+                    except Exception:
+                        break
+                    end = max([target] + [e for s_, e in spans if s_ < target])
+                try:
+                    touched_last = bars.locate(end - 1)[0]
+                except Exception:
+                    break
+                if touched_last == last:
+                    return {"select": {"id": anchor["id"], "stream": anchor["stream"]}, "extend": steps,
+                            "staff": staff}
+                if touched_last > last:
+                    break  # overshot: a tied note dragged in a bar; try another anchor or staff
+    return None
+
+
 def _delete_bars(
     operation: dict[str, Any], label: str, located: list[dict[str, Any]], staves: list[dict[str, Any]],
     bars: BarMap,
 ) -> dict[str, Any]:
     """Bars fromBar-toBar removed from every staff, the later bars moving up.
 
-    One bar at a time, last bar first so that the positions and ids read
+    Where _extension_plan finds a selection that covers exactly these bars,
+    one select, some extend steps and one Edit.DeleteBars do it. Otherwise
+    one bar at a time, last bar first so that the positions and ids read
     before the batch stay right: select an item in the bar (or a temporary
     rest, which goes with the bar), Edit.DeleteBars. Extending one selection
     with NavigateRightExtendBar, or Edit.SelectMore, removed the wrong
@@ -872,6 +920,12 @@ def _delete_bars(
     if later:
         marker = min(later, key=lambda e: (e["flowPosition"], e["id"]))
         resolved["marker"] = {"id": marker["id"], "position": marker["flowPosition"]}
+    plan = _extension_plan(located, bars, first, last)
+    if plan is not None:
+        resolved["plan"] = plan
+        resolved["bars"] = [{"bar": b} for b in range(last, first - 1, -1)]  # the fallback's size, for counting
+        resolved["lastItem"] = plan["select"]
+        return resolved
     for bar in range(last, first - 1, -1):
         candidates = [
             e for e in located
