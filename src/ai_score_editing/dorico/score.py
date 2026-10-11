@@ -876,7 +876,10 @@ def _extension_plan(
             e for e in located
             if e["staff"] == staff and e["type"] in TYPE_ALIASES["NoteRest"] and "id" in e and e.get("voice")
         ]
-        spans = [(e["flowPosition"], e["flowPosition"] + (e.get("duration") or 0)) for e in items]
+        # A lyric is an item of the stream: a melisma runs on past the barline and drags
+        # the next bar in like a tied note (measured on Smith, 2026-10-11).
+        lyrics = [e for e in located if e["staff"] == staff and e["type"] == "LyricEvent" and e.get("voice")]
+        spans = [(e["flowPosition"], e["flowPosition"] + (e.get("duration") or 0)) for e in items + lyrics]
         anchors = sorted((e for e in items if e["bar"] == first),
                          key=lambda e: (e["type"] not in TYPE_ALIASES["Note"], e["flowPosition"], e.get("voice") or 0, e["id"]))
         if anchor is not None:

@@ -7,11 +7,13 @@ MusicXML export), then undoes until the events match the baseline. The
 script never saves. See docs/dorico-selection-research-plan.md.
 
     uv run python scripts/dorico_selection_probe.py bars [--staff N] [--bars 5,20] [--steps 8]
+    uv run python scripts/dorico_selection_probe.py plan [--span 3]
     uv run python scripts/dorico_selection_probe.py copy [--ranges 5-8,7-10] [--dest-bar 20]
     uv run python scripts/dorico_selection_probe.py run --anchor 1:5 --extend 2 \\
         --cmd Edit.TransposeSelection --measure changed
 
-`bars` selects a note with k extend steps, runs Edit.DeleteBars and compares
+`plan` checks that score._extension_plan (what delete-bars uses) removes exactly
+the bars it was asked for. `bars` selects a note with k extend steps, runs Edit.DeleteBars and compares
 the bars removed with the model's prediction (docs/dorico.md, "Selecting
 bars"). `copy` copies planned selections and compares the notes pasted with
 the notes that start in the bars. `run` is the general recipe for new
@@ -171,7 +173,8 @@ def predict_bars(lab: Lab, staff: int, anchor: dict[str, Any], steps: int, scope
     in every item of the staff that starts before that barline, whole.
     """
     staves = scope_staves(lab, staff, scope)
-    items = [e for e in lab.located if e["staff"] in staves and e["type"] in ITEM_TYPES and e.get("voice")]
+    # Lyrics are items of the stream too: a melisma runs past the barline.
+    items = [e for e in lab.located if e["staff"] in staves and e["type"] in ITEM_TYPES + ("LyricEvent",) and e.get("voice")]
     spans = [(e["flowPosition"], e["flowPosition"] + (e.get("duration") or 0)) for e in items]
     if ties:
         spans = tie_chains(lab, items)
@@ -179,7 +182,8 @@ def predict_bars(lab: Lab, staff: int, anchor: dict[str, Any], steps: int, scope
     for _ in range(steps):
         target = lab.bars.position(lab.bar_of(end) + 1, 0)
         end = max([target] + [e for s, e in spans if s < target])
-    return anchor["bar"], lab.bar_of(end - 1)
+    last_bar = max(e["bar"] for e in lab.located)
+    return anchor["bar"], min(lab.bar_of(end - 1), last_bar)  # a step past the last bar stops there
 
 
 async def run_bars(lab: Lab, args: argparse.Namespace) -> int:
@@ -209,6 +213,31 @@ async def run_bars(lab: Lab, args: argparse.Namespace) -> int:
                       f"predicted {predicted[0]}-{predicted[1]}, measured {measured}"
                       f"{' ' + result['error'] if 'error' in result else ''}, undo {result['undo_steps']}", flush=True)
     print(f"bars: {total - misses}/{total} predicted")
+    return misses
+
+
+async def run_plan(lab: Lab, args: argparse.Namespace) -> int:
+    """score._extension_plan against Edit.DeleteBars: does each planned selection remove
+    exactly the bars asked for? Returns the misses."""
+    last_bar = max(e["bar"] for e in lab.located)
+    misses = total = 0
+    for first in range(1, last_bar + 1):
+        for last in range(first, min(first + args.span, last_bar + 1)):
+            plan = score._extension_plan(lab.located, lab.bars, first, last)
+            if plan is None:
+                print(f"none bars {first}-{last}: no exact selection planned")
+                continue
+            anchor = next(e for e in lab.located if e["id"] == plan["select"]["id"])
+            result = await lab.delete_bars_trial([lab.select(anchor)] + [EXTEND] * plan["extend"])
+            if result["undo_steps"] is None:
+                print("!! could not restore the baseline; stopping")
+                return misses + 1
+            total += 1
+            ok = result.get("bars") == (first, last)
+            misses += not ok
+            print(f"{'ok  ' if ok else 'MISS'} bars {first}-{last}: staff {plan['staff']} extend {plan['extend']}, "
+                  f"measured {result.get('bars')}", flush=True)
+    print(f"plan: {total - misses}/{total} exact")
     return misses
 
 
@@ -329,6 +358,8 @@ async def main() -> int:
     bars.add_argument("--tie-offset", type=int, default=0, help="MusicXML measure index minus bar number")
     bars.add_argument("--scope", choices=("staff", "instrument", "all"), default="staff",
                       help="whose items a step pulls in, for the model")
+    plan = sub.add_parser("plan")
+    plan.add_argument("--span", type=int, default=3, help="longest range of bars to plan")
     copy = sub.add_parser("copy")
     copy.add_argument("--staff", type=int)
     copy.add_argument("--dest-staff", type=int)
@@ -351,6 +382,8 @@ async def main() -> int:
             print(f"{len(lab.ties)} (measure, pitch) ties start in a bar and go on")
         if args.mode == "bars":
             return int(await run_bars(lab, args) > 0)
+        if args.mode == "plan":
+            return int(await run_plan(lab, args) > 0)
         if args.mode == "copy":
             return int(await run_copy(lab, args) > 0)
         if args.mode == "run":

@@ -140,6 +140,20 @@ def test_prepare_batch_resolves_addresses_and_spells() -> None:
     assert ops[3] == {"op": "add-clef", "stream": 3, "position": 1024, "clef": "clef.treble"}
 
 
+def test_a_lyric_melisma_across_the_barline_drags_in_the_next_bar() -> None:
+    bars = BarMap([(0, 1024)])
+    events = [
+        {"id": 0, "type": "BarDivisionEvent", "stream": 0, "staff": 0, "position": 0, "duration": 0},
+        note(3, 0, 72, "C5", duration=1024), note(4, 1024, 71, "B4", duration=1024), note(5, 2048, 69, "A4", duration=1024),
+        {"id": 9, "type": "LyricEvent", "stream": 2, "staff": 1, "voice": 1, "position": 1024, "duration": 1536},
+    ]
+    located = locate_events(events, bars)
+    # One step from bar 1 reaches bar 2's end, but the melisma runs on into bar 3.
+    assert score._extension_plan(located, bars, 1, 2) is None
+    assert score._extension_plan([e for e in located if e["type"] != "LyricEvent"], bars, 1, 2)["extend"] == 1  # without the lyric it is exact
+    assert score._extension_plan(located, bars, 1, 3)["extend"] == 1
+
+
 @pytest.mark.parametrize(
     ("operation", "message"),
     [
