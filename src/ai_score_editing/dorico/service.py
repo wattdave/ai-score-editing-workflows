@@ -699,8 +699,10 @@ async def _delete_bars(
             await client.command(f"EventEdit.Select?FlowID={flow_id}&EventID={target['id']}&EventBlockID={block}")
             await client.command("Edit.DeleteBars")
             steps += 2
-            # Event blocks may be renumbered by the deletion; read them again.
-            blocks = (await bridge.call("read", flow=flow, skipUnreadable=True)).get("blocks") or blocks
+            # Re-read the event blocks, which a deletion may renumber. A later bar's
+            # DeleteBars was rejected without a Lua call between deletes; whether it is
+            # the new blocks or just the round trip that fixes it is not known.
+            blocks = ((await bridge.overview(flow)).get("layout") or {}).get("blocks") or blocks
     except DoricoError as exc:
         raise DoricoError(f"{exc}; {steps} undo step(s) were applied (undo that many to revert)") from exc
     events, _ = await bridge.read_partial(flow)

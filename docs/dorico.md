@@ -158,7 +158,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `set-barline` | ⚠️ | double, final, start/end repeat, by command like set-time (a start repeat at bar 1 keeps the opening time signature); `position` puts one part-way through a bar (Dorico only) |
 | `delete-voice` | ✅ | Lua `deleteEventsInRange` over the bars: everything starting there, lyrics included; staves with lyrics too; one undo step with the batch |
 | `add-bars` | ⚠️ | before a bar by the bars popover (`+N`) or at the end (`AddBarAtEndOfFlow`); no `length` (irregular bars); appended bars are not read back |
-| `delete-bars` | ✅ | one bar at a time, last first: select a note in the bar (`EventEdit.Select`), `Edit.DeleteBars`; event blocks are read again after each. A note after the range must move up by the length removed. Two undo steps per bar; `undo` takes at most 20 steps per call. `Edit.SelectMore` and `NavigateRightExtendBar` removed the wrong number of bars, so they are not used |
+| `delete-bars` | ✅ | one bar at a time, last first: select a note in the bar (`EventEdit.Select`), `Edit.DeleteBars`; the event blocks are read again after each (without a Lua call between deletes a later bar was rejected; not known whether the blocks or the pause matter). A note after the range must move up by the length removed. Two undo steps per bar; `undo` takes at most 20 steps per call. `Edit.SelectMore` and `NavigateRightExtendBar` removed the wrong number of bars, so they are not used |
 | `set-layout` | ⚠️ | `Project.Layout.SetOptions`, one undo step, read back; the full score layout unless `layout` names another; no `extraSpacesBelowVocalStaves`; page sizes with ambiguous dimensions need `pageWidth`/`pageHeight` (mm); left/right margins need identical margins. `score_structure` reports the settings as `layout` |
 | `hide-empty-staves` | ⚠️ | not over a range of bars: Dorico hides empty staves per layout, set by `set-layout`'s `hideEmptyStaves` (`never`, `after-first-system`, `all-systems`) |
 | `set-bar-number` | ❌ | the number only exists inside a dialog: no command carries it and nothing reads it back (see gaps) |
@@ -730,3 +730,14 @@ original notes and ids:
 - MCP tools: dry run refused on a pitch guard; delete + add-rest + add-text;
   text read back with its paragraph style; preview PNG export; `undo`
   restored
+
+## Reading the selection (checked 2026-10-11)
+
+The Remote Control API does not report which items or bars are selected.
+After a selection command Dorico pushes `selectionchanged` (with only
+`openScoreID`) and `status`; the useful status fields are `hasSelection` and
+`selectedEventType` (`kNoteEvent` for one note, `kMixed` after
+`EventEdit.NavigateRightExtendBar`). `getproperties` lists the properties of
+the selection's event types, not its extent. `getselection` is unhandled
+(`kUnhandledMessage`) and the Lua classes list has no selection class. So a
+selection's extent can only be checked from its effect, as `delete-bars` does.
