@@ -435,9 +435,11 @@ def _copy_passage(
 ) -> list[dict[str, Any]]:
     """Copy bars fromBar-toBar of staves top-bottom to destBar of destStaff on.
 
-    Dorico copies what Edit.SelectMore (from a note) and NavigateRightExtendBar
-    select, which starts at the range's first *note*, not the barline, and
-    pastes it at the selected item. So the paste anchor is the destination
+    Dorico copies what the selection holds: an exact selection from
+    _extension_plan where there is one, else Edit.SelectMore (from a note)
+    and NavigateRightExtendBar, which can reach a bar too far or too short.
+    The selection starts at the range's first *note*, not the barline, and
+    is pasted at the selected item. So the paste anchor is the destination
     bar start plus that note's offset: an existing item there, or a
     temporary rest (overwritten by the paste). One resolved op per staff.
     """
@@ -487,8 +489,12 @@ def _copy_passage(
             "select": {"id": in_first_bar[0]["id"], "stream": in_first_bar[0]["stream"]},
             "extendBars": last - first,
             "expect": [(e["flowPosition"] - notes[0]["flowPosition"], e.get("pitch")) for e in notes],
-            "anchorPosition": anchor_position,
+            "anchorPosition": anchor_position, "destStreams": list(voices),
         }
+        # An exact selection (no Edit.SelectMore): see _extension_plan.
+        plan = _extension_plan(located, bars, first, last, staff=staff, anchor=in_first_bar[0], cover=True)
+        if plan is not None:
+            resolved.update(extendBars=plan["extend"], exact=True)
         if at_anchor:
             resolved["anchor"] = {"id": at_anchor[0]["id"], "stream": at_anchor[0]["stream"]}
         else:
@@ -842,7 +848,8 @@ def _delete_voice(
 
 
 def _extension_plan(
-    located: list[dict[str, Any]], bars: BarMap, first: int, last: int
+    located: list[dict[str, Any]], bars: BarMap, first: int, last: int, *,
+    staff: int | None = None, anchor: dict[str, Any] | None = None, cover: bool = False,
 ) -> dict[str, Any] | None:
     """A selection that covers exactly bars first-last: an item in bar `first`
     and how many EventEdit.NavigateRightExtendBar steps to run.
@@ -854,10 +861,17 @@ def _extension_plan(
     barline drags the following bar in. Edit.DeleteBars removes every bar the
     selection touches. This replays the steps on the events read, and
     returns the first anchor and step count that touch bars first-last and
-    no others, or None.
+    no others, or None. `staff` and `anchor` (an event) restrict the search;
+    `cover` instead asks for every item that starts in the bars, as a copy
+    needs (a single note touches its bar but copies only itself).
     """
     last_bar = max((e["bar"] for e in located), default=0)
-    for staff in sorted({e["staff"] for e in located if e["staff"] >= 1}):
+    staves = [staff] if staff is not None else sorted({e["staff"] for e in located if e["staff"] >= 1})
+    try:
+        cover_end = bars.position(last, 0) + bars.bar_length(last)
+    except Exception:
+        return None
+    for staff in staves:
         items = [
             e for e in located
             if e["staff"] == staff and e["type"] in TYPE_ALIASES["NoteRest"] and "id" in e and e.get("voice")
@@ -865,9 +879,12 @@ def _extension_plan(
         spans = [(e["flowPosition"], e["flowPosition"] + (e.get("duration") or 0)) for e in items]
         anchors = sorted((e for e in items if e["bar"] == first),
                          key=lambda e: (e["type"] not in TYPE_ALIASES["Note"], e["flowPosition"], e.get("voice") or 0, e["id"]))
-        for anchor in anchors[:3]:
-            end = anchor["flowPosition"] + (anchor.get("duration") or 0)
+        if anchor is not None:
+            anchors = [e for e in anchors if e["id"] == anchor["id"]]
+        for chosen in anchors[:3]:
+            end = chosen["flowPosition"] + (chosen.get("duration") or 0)
             for steps in range(0, last - first + 4):
+                target = None
                 if steps:
                     try:
                         bar, _ = bars.locate(end)
@@ -875,12 +892,28 @@ def _extension_plan(
                     except Exception:
                         break
                     end = max([target] + [e for s_, e in spans if s_ < target])
+                if cover:
+                    if not steps:
+                        start = bars.position(first, 0)
+                        alone = [e for e in items if start <= e["flowPosition"] < cover_end]
+                        if len(alone) == 1 and alone[0]["id"] == chosen["id"]:
+                            return {"select": {"id": chosen["id"], "stream": chosen["stream"]}, "extend": 0,
+                                    "staff": staff}  # the one item that starts in the bars
+                        continue
+                    # A copy needs every item that starts in the bars: the step that targets the
+                    # end of bar `last` pulls them all in, whatever a tie then adds past it.
+                    if target == cover_end:
+                        return {"select": {"id": chosen["id"], "stream": chosen["stream"]}, "extend": steps,
+                                "staff": staff}
+                    if target is not None and target > cover_end:
+                        break
+                    continue
                 try:
                     touched_last = bars.locate(end - 1)[0]
                 except Exception:
                     break
                 if touched_last == last:
-                    return {"select": {"id": anchor["id"], "stream": anchor["stream"]}, "extend": steps,
+                    return {"select": {"id": chosen["id"], "stream": chosen["stream"]}, "extend": steps,
                             "staff": staff}
                 if touched_last > last:
                     break  # overshot: a tied note dragged in a bar; try another anchor or staff

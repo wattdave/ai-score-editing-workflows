@@ -327,7 +327,7 @@ async def _apply_commands(
             raise DoricoError(f"{checked['error']}; nothing was changed")
     planned = (1 if removals else 0) + sum(
         1 + (op["verse"] - 1) + len(op["syllables"]) if op["op"] == "add-lyrics"
-        else COPY_STEPS + op["extendBars"] + ("tempRest" in op) if op["op"] == "copy-passage"
+        else COPY_STEPS - bool(op.get("exact")) + op["extendBars"] + ("tempRest" in op) if op["op"] == "copy-passage"
         else 2 + _resize_cost(op.get("resize")) + (TEMP_REST_STEPS if "tempRest" in op else 0) if op["op"] == "add-line"
         else op["count"] if op["op"] == "add-bars" and "bar" not in op
         else 2 + op["plan"]["extend"] if op["op"] == "delete-bars" and "plan" in op
@@ -652,7 +652,8 @@ async def _copy_passage(
                   "block": blocks.get(str(rest["stream"]))}
     source = op["select"]
     await client.command(f"EventEdit.Select?FlowID={flow_id}&EventID={source['id']}&EventBlockID={source['block']}")
-    await client.command("Edit.SelectMore")
+    if not op.get("exact"):
+        await client.command("Edit.SelectMore")
     for _ in range(op["extendBars"]):
         await client.command("EventEdit.NavigateRightExtendBar")
     await client.command("Edit.Copy")
@@ -665,13 +666,14 @@ async def _copy_passage(
     finally:
         if mode and mode != "kOverwrite":
             await client.command(f"NoteInput.Mode?NoteInputMode={mode}")
-    steps += COPY_STEPS + op["extendBars"]
+    steps += COPY_STEPS - bool(op.get("exact")) + op["extendBars"]
     events, _ = await bridge.read_partial(flow)
     start = op["anchorPosition"]
+    streams = op.get("destStreams") or [anchor["stream"]]  # every voice of the destination staff
     span = max(p for p, _ in op["expect"]) + 1
     pasted = sorted(
         (e["position"] - start, e.get("pitch")) for e in events
-        if e.get("stream") == anchor["stream"] and e["type"] in ("NoteEvent", "GraceNoteEvent") and start <= e["position"] < start + span
+        if e.get("stream") in streams and e["type"] in ("NoteEvent", "GraceNoteEvent") and start <= e["position"] < start + span
     )
     ok = pasted == sorted(op["expect"])
     return steps, {"op": "copy-passage", "staff": op["staff"], "destStaff": op["destStaff"],

@@ -762,6 +762,10 @@ def test_a_tied_note_across_the_last_barline_drags_in_the_next_bar() -> None:
     assert one == {"select": {"id": 3, "stream": 2}, "extend": 0, "staff": 1}
     # Bar 2's note runs into bar 3, so no selection on this staff covers bars 2-2 exactly:
     assert score._extension_plan(located, bars, 2, 2) is None
+    # A copy needs every item that starts in the bars; the tie into bar 3 adds only a tail.
+    assert score._extension_plan(located, bars, 1, 1, staff=1, cover=True)["extend"] == 0  # its only item
+    assert score._extension_plan(located, bars, 1, 2, staff=1, cover=True)["extend"] == 1  # the step to bar 2's end
+    assert score._extension_plan(located, bars, 2, 2, staff=1, cover=True)["extend"] == 0
     two = score._extension_plan(located, bars, 2, 3)
     assert two is not None and two["select"]["id"] == 4
     longer = score._extension_plan(located, bars, 1, 3)
@@ -1328,7 +1332,8 @@ def test_copy_passage_anchors_at_the_first_note_offset() -> None:
     ops = prepare_batch([{"op": "copy-passage", "fromBar": 1, "toBar": 1, "topStaff": 1, "bottomStaff": 1,
                           "destStaff": 1, "destBar": 3}], located, STAVES, BARS)
     op = ops[0]
-    assert op["select"] == {"id": 3, "stream": 2} and op["extendBars"] == 0
+    assert op["select"] == {"id": 3, "stream": 2} and op["extendBars"] == 1 and op["exact"]
+    assert op["destStreams"] == [2]
     assert op["anchorPosition"] == 2048 + 128
     assert op["tempRest"] == {"stream": 2, "position": 2176, "duration": 256}
     assert op["expect"] == [(0, 60), (384, 62)]

@@ -770,3 +770,14 @@ touches, so the bars removed show how far a selection reaches.
   after 4 and 8 steps and 2 after 16: it follows items, not bars.
 - The method: select, run the command, read through Lua,
   undo until the events match the baseline. It needs no export.
+- **Copying a group of bars** needs every item that starts in them, which is
+  a different test from "bars touched". The step whose target is the end of
+  the last bar pulls those in, whatever a tie then adds past it. The old
+  recipe (`Edit.SelectMore`, then one step per further bar) is not a step
+  and a half: on bars 6-9 of the example it copied 21 of 26 notes, while
+  the planned recipe copied all of them (bars 5-8, 7-10, 8-10, 6-9, 5-12
+  all exact; only 6-9 differed). `copy-passage` now uses
+  `_extension_plan(..., cover=True)` with the first note of the range as
+  anchor, and the old recipe only when no plan exists. Its read-back used to
+  look at one destination voice only, so it reported `verified: false` for
+  any staff with two voices; it now checks every voice of the destination.
