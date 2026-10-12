@@ -275,6 +275,16 @@ this plan that is "blocked", not guessed at. The existing per-note `transpose`
 (Lua, diatonic respelling) stays; what the command would add is key
 signatures and chord symbols in the range.
 
+### Result: bar numbers (2026-10-12)
+
+`Edit.AddBarNumberChange` opens an Insert Bar Number Change dialog (type
+Primary, Subordinate, Don't Include or Continue Primary; the number; OK and
+Cancel). A `Number=10` parameter was ignored, so `set-bar-number` stays
+refused on Dorico. The Cancel button is reachable as `button "Cancel" of group
+1 of window "Insert Bar Number Change"`. `Edit.AddBarNumbersToSelection` runs
+without a dialog, but it only makes bar numbers show on the selected bars; it
+does not change the numbering.
+
 ## Phase 3: consolidate
 
 - Move `_extension_plan` out of `score.py` into its own module
