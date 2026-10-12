@@ -894,7 +894,9 @@ def _extension_plan(
                         target = bars.position(bar + 1, 0)
                     except Exception:
                         break
-                    end = max([target] + [e for s_, e in spans if s_ < target])
+                    # Only items that start in the selection's range are pulled in: a lyric
+                    # extender that began before the anchor is not (measured on a synthetic score).
+                    end = max([target] + [e for s_, e in spans if chosen["flowPosition"] <= s_ < target])
                 if cover:
                     if not steps:
                         start = bars.position(first, 0)

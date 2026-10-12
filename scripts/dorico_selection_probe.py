@@ -99,8 +99,10 @@ class Lab:
     def bar_of(self, position: int) -> int:
         return self.bars.locate(position)[0]
 
-    async def delete_bars_trial(self, commands: list[str]) -> dict[str, Any]:
-        """Run commands then Edit.DeleteBars; the bars removed."""
+    async def delete_bars_trial(self, commands: list[str], first: int | None = None) -> dict[str, Any]:
+        """Run commands then Edit.DeleteBars; the bars removed. `first` is the bar the selection
+        starts in: with it, empty bars (which hold no events) are counted by how far the events
+        after them moved up."""
         out: dict[str, Any] = {}
         try:
             for command in commands:
@@ -110,10 +112,16 @@ class Lab:
             except DoricoError as exc:
                 out["error"] = str(exc).split(":")[-1].strip()
             else:
-                now = {e["id"] for e in await self.read() if "id" in e}
+                after = {e["id"]: e for e in await self.read() if "id" in e}
+                now = set(after)
+                moved = [self.bar_of(self.base_by_id[i]["position"]) - self.bar_of(e["position"])
+                         for i, e in after.items() if i in self.base_by_id and e["position"] != self.base_by_id[i]["position"]]
                 # Lines and slurs crossing the edit get new ids, so only notes and rests count.
                 gone = [e["position"] for i, e in self.base_by_id.items() if i not in now and e["type"] in ITEM_TYPES]
                 out["bars"] = (self.bar_of(min(gone)), self.bar_of(max(gone))) if gone else None
+                if first is not None and moved and min(moved) > 0:
+                    shift = min(moved)  # every later event moves up by the bars removed
+                    out["bars"] = (first, max(first + shift - 1, out["bars"][1] if out["bars"] else 0))
         except DoricoError as exc:
             out["error"] = f"ERR {str(exc)[:80]}"
         out["undo_steps"] = await self.restore()
@@ -181,7 +189,7 @@ def predict_bars(lab: Lab, staff: int, anchor: dict[str, Any], steps: int, scope
     end = anchor["flowPosition"] + (anchor.get("duration") or 0)
     for _ in range(steps):
         target = lab.bars.position(lab.bar_of(end) + 1, 0)
-        end = max([target] + [e for s, e in spans if s < target])
+        end = max([target] + [e for s, e in spans if anchor["flowPosition"] <= s < target])
     last_bar = max(e["bar"] for e in lab.located)
     return anchor["bar"], min(lab.bar_of(end - 1), last_bar)  # a step past the last bar stops there
 
@@ -201,7 +209,7 @@ async def run_bars(lab: Lab, args: argparse.Namespace) -> int:
                 except Exception as exc:  # past the end of the flow
                     print(f"staff {staff} bar {bar} k={k}: no prediction ({exc})")
                     break
-                result = await lab.delete_bars_trial([lab.select(anchor)] + [EXTEND] * k)
+                result = await lab.delete_bars_trial([lab.select(anchor)] + [EXTEND] * k, anchor["bar"])
                 if result["undo_steps"] is None:
                     print("!! could not restore the baseline; stopping")
                     return misses + 1
@@ -228,7 +236,7 @@ async def run_plan(lab: Lab, args: argparse.Namespace) -> int:
                 print(f"none bars {first}-{last}: no exact selection planned")
                 continue
             anchor = next(e for e in lab.located if e["id"] == plan["select"]["id"])
-            result = await lab.delete_bars_trial([lab.select(anchor)] + [EXTEND] * plan["extend"])
+            result = await lab.delete_bars_trial([lab.select(anchor)] + [EXTEND] * plan["extend"], first)
             if result["undo_steps"] is None:
                 print("!! could not restore the baseline; stopping")
                 return misses + 1
