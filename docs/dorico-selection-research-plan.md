@@ -149,6 +149,21 @@ Liszt Liebestraume (pickup bar, then 6/8, 1536 per bar; two Piano staves),
   on staff 25: only rests? "measured None" counts notes and rests only).
   Cause not yet found; Sohn bars 2-8 look like a multi-bar rest or
   consolidation, which the model does not know about.
+- **Part layouts and player names (2026-10-11).** The Export MusicXML
+  dialog lists one layout per player, named `NN_<player name>`. NN is the
+  player's place in the score, not the instrument id: for the first 28
+  instruments of Sohn it equals id + 1, but players added later (the third
+  trumpet, horns 3 and 4, percussion, Tubular Bells) sit mid-score with
+  ids far from their NN. The bridge's instrument `name` is the player's
+  name, so a player with several instruments (a percussion kit) repeats it.
+  Player names were unique in all five scores tried (Fugue, Liszt, Smith,
+  Akinola, Sohn), but **Dorico allows two players with the same name**:
+  `Project.Player.Duplicate` (Setup mode) numbers the copy ("Piano 1",
+  "Piano 2"), and `Project.Player.Rename?PlayerID=<n>&Name=<text>` (the
+  text is taken literally, no URL decoding) then set both to "Piano 1". The
+  export dialog showed `01_Piano 1` and `02_Piano 1`, and the bridge two
+  instruments named "Piano 1". So any join on player name must refuse a
+  name that appears twice; NN stays unique.
 - The probe's setup was hit twice by races in the export dialog scripting
   (`entire contents` while a dialog closed); those scripts are now wrapped
   in `try`.
