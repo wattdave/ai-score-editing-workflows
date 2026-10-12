@@ -346,7 +346,7 @@ async def _apply_commands(
         else COPY_STEPS - bool(op.get("exact")) + op["extendBars"] + ("tempRest" in op) if op["op"] == "copy-passage"
         else 2 + _resize_cost(op.get("resize")) + (TEMP_REST_STEPS if "tempRest" in op else 0) if op["op"] == "add-line"
         else op["count"] if op["op"] == "add-bars" and "bar" not in op
-        else 2 + op["plan"]["extend"] if op["op"] == "delete-bars" and "plan" in op
+        else max(2 + op["plan"]["extend"], sum(2 + ("tempRest" in i) for i in op.get("fallback") or [])) if op["op"] == "delete-bars" and "plan" in op
         else sum(2 + ("tempRest" in item) for item in op["bars"]) if op["op"] == "delete-bars"
         else 1 if op["op"] == "set-layout"
         else _delete_steps(op) if op["op"] == "delete-by-id"
@@ -712,12 +712,36 @@ async def _delete_bars(
         block = blocks.get(str(target["stream"]))
         if block is None:
             raise DoricoError(f"cannot find the event block of stream {target['stream']}")
-        await client.command(f"EventEdit.Select?FlowID={flow_id}&EventID={target['id']}&EventBlockID={block}")
-        for _ in range(plan["extend"]):
-            await client.command("EventEdit.NavigateRightExtendBar")
-        await client.command("Edit.DeleteBars")
-        steps = 2 + plan["extend"]
-        return steps, await _check_deleted_bars(bridge, op, flow, steps)
+        fallback = op.get("fallback")
+        base = await _item_positions(bridge, flow) if fallback else {}
+        taken = 0
+        reason = None
+        try:
+            await client.command(f"EventEdit.Select?FlowID={flow_id}&EventID={target['id']}&EventBlockID={block}")
+            taken = 1
+            for _ in range(plan["extend"]):
+                await client.command("EventEdit.NavigateRightExtendBar")
+                taken += 1
+            await client.command("Edit.DeleteBars")
+            taken += 1
+        except DoricoError as exc:
+            if not fallback:
+                raise
+            reason = str(exc)
+        if reason is None:
+            steps = 2 + plan["extend"]
+            try:
+                return steps, await _check_deleted_bars(bridge, op, flow, steps)
+            except DoricoError as exc:
+                if not fallback:
+                    raise
+                reason = str(exc).split("; ")[0]
+        # The planned selection did not remove these bars: put the score back and go bar by bar.
+        await _revert_to(bridge, base, flow, taken + 2)
+        blocks = ((await bridge.overview(flow)).get("layout") or {}).get("blocks") or blocks
+        op = {**op, "bars": fallback, "via": "per-bar after the planned selection failed", "retried": reason}
+        op.pop("plan")
+        steps = 0  # the trial was undone
     try:
         for item in op["bars"]:
             if "tempRest" in item:
@@ -739,6 +763,23 @@ async def _delete_bars(
     return steps, await _check_deleted_bars(bridge, op, flow, steps)
 
 
+async def _item_positions(bridge: DoricoBridge, flow: int) -> dict[Any, Any]:
+    """Notes and rests by id with their positions: what a bar deletion changes. Lines and slurs
+    are left out because re-created ones get new ids."""
+    events, _ = await bridge.read_partial(flow)
+    return {e["id"]: e["position"] for e in events if e.get("type") in ("NoteEvent", "RestEvent") and "id" in e}
+
+
+async def _revert_to(bridge: DoricoBridge, base: dict[Any, Any], flow: int, limit: int) -> None:
+    """Undo until the notes and rests are as they were (at most `limit` steps)."""
+    for _ in range(limit):
+        if await _item_positions(bridge, flow) == base:
+            return
+        await bridge.client.command("Edit.Undo")
+    if await _item_positions(bridge, flow) != base:
+        raise DoricoError("could not put the score back after a failed bar deletion; check it in Dorico")
+
+
 async def _check_deleted_bars(bridge: DoricoBridge, op: dict[str, Any], flow: int, steps: int) -> dict[str, Any]:
     events, _ = await bridge.read_partial(flow)
     marker = op.get("marker")
@@ -755,7 +796,8 @@ async def _check_deleted_bars(bridge: DoricoBridge, op: dict[str, Any], flow: in
             f"Dorico did not delete bars {op['fromBar']}-{op['toBar']}; {steps} undo step(s) were applied"
         )
     return {"op": "delete-bars", "fromBar": op["fromBar"], "toBar": op["toBar"], "verified": True,
-            "via": "extend" if "plan" in op else "per-bar"}
+            "via": op.get("via") or ("extend" if "plan" in op else "per-bar"),
+            **({"retried": op["retried"]} if "retried" in op else {})}
 
 
 async def _repitch(bridge: DoricoBridge, op: dict[str, Any], flow: int) -> tuple[int, dict[str, Any]]:

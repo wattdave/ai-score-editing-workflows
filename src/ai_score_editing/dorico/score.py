@@ -937,7 +937,9 @@ def _delete_bars(
     before the batch stay right: select an item in the bar (or a temporary
     rest, which goes with the bar), Edit.DeleteBars. Extending one selection
     with NavigateRightExtendBar, or Edit.SelectMore, removed the wrong
-    number of bars (checked 2026-10-11). Lua cannot count a flow's bars, so the result is
+    number of bars (checked 2026-10-11), and a slur or hairpin starting in the selection pulls
+    its whole span in, which the plan cannot see; so a planned selection is a trial that is
+    undone and replaced by the per-bar route when it removes the wrong bars. Lua cannot count a flow's bars, so the result is
     checked by a note after the range: it must have moved back by the length
     removed (or, with nothing after, the last bar's item must be gone).
     """
@@ -958,33 +960,45 @@ def _delete_bars(
     if later:
         marker = min(later, key=lambda e: (e["flowPosition"], e["id"]))
         resolved["marker"] = {"id": marker["id"], "position": marker["flowPosition"]}
+    def per_bar() -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        for bar in range(last, first - 1, -1):
+            candidates = [
+                e for e in located
+                if e["bar"] == bar and e["staff"] >= 1 and "id" in e and e["type"] in TYPE_ALIASES["NoteRest"]
+                and e.get("voice")
+            ]
+            if candidates:
+                # A note, on the top staff's first voice if it has one (checked 2026-10-11).
+                target = min(candidates, key=lambda e: (e["type"] not in TYPE_ALIASES["Note"], e["staff"],
+                                                        e.get("voice") or 0, e["position"], e["id"]))
+                items.append({"bar": bar, "select": {"id": target["id"], "stream": target["stream"]}})
+                continue
+            try:
+                rest = _temporary_rest(bars.position(bar, 0), located, staves)
+            except Exception as exc:
+                raise DoricoBatchError(f"{label}: {exc}") from exc
+            if rest is None:
+                raise DoricoBatchError(
+                    f"{label}: bar {bar} has nothing to select and no room for a temporary rest"
+                )
+            items.append({"bar": bar, "tempRest": rest})
+        return items
+
     plan = _extension_plan(located, bars, first, last)
     if plan is not None:
+        # The plan models only what Lua can read (not slurs or hairpins, which also pull bars in),
+        # so it is tried and checked; if Dorico removes a different number of bars, the trial is
+        # undone and the bars are deleted one at a time instead (service._delete_bars).
         resolved["plan"] = plan
+        try:
+            resolved["fallback"] = per_bar()
+        except DoricoBatchError:
+            pass  # no per-bar route (a bar with nothing to select): the plan has to work
         resolved["bars"] = [{"bar": b} for b in range(last, first - 1, -1)]  # the fallback's size, for counting
         resolved["lastItem"] = plan["select"]
         return resolved
-    for bar in range(last, first - 1, -1):
-        candidates = [
-            e for e in located
-            if e["bar"] == bar and e["staff"] >= 1 and "id" in e and e["type"] in TYPE_ALIASES["NoteRest"]
-            and e.get("voice")
-        ]
-        if candidates:
-            # A note, on the top staff's first voice if it has one (checked 2026-10-11).
-            target = min(candidates, key=lambda e: (e["type"] not in TYPE_ALIASES["Note"], e["staff"],
-                                                    e.get("voice") or 0, e["position"], e["id"]))
-            resolved["bars"].append({"bar": bar, "select": {"id": target["id"], "stream": target["stream"]}})
-            continue
-        try:
-            rest = _temporary_rest(bars.position(bar, 0), located, staves)
-        except Exception as exc:
-            raise DoricoBatchError(f"{label}: {exc}") from exc
-        if rest is None:
-            raise DoricoBatchError(
-                f"{label}: bar {bar} has nothing to select and no room for a temporary rest"
-            )
-        resolved["bars"].append({"bar": bar, "tempRest": rest})
+    resolved["bars"] = per_bar()
     resolved["lastItem"] = resolved["bars"][0].get("select")
     return resolved
 

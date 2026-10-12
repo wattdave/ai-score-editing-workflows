@@ -763,6 +763,17 @@ touches, so the bars removed show how far a selection reaches.
   53 makes a one-bar selection from bar 51 remove bars 51-53). They are not
   readable from Lua, so `delete-bars` cannot see them yet; the probe models
   them from a MusicXML export (`dorico_selection_probe.py bars --slurs`).
+- **`delete-bars` treats a planned selection as a trial.** After the select,
+  extend steps and `Edit.DeleteBars`, a note after the range must have moved
+  up by exactly the length removed. If not (a slur or hairpin pulled more
+  bars in), or Dorico rejects a step, the notes and rests are put back by
+  undoing until they match a snapshot taken before the trial, and the bars
+  are deleted one at a time. The result says `"via": "per-bar after the
+  planned selection failed"` and why under `retried`. Checked live on the
+  fixture (a slur from bar 51 to 53; a one-bar delete from a slurred staff
+  removed bar 51 only, via the fallback). When no per-bar route exists (a bar
+  with nothing to select and no room for a temporary rest) the plan's failure
+  is an error, as before. `undoSteps` in a dry run is the larger of the two routes.
 - Replaying this on the events read predicted the bars removed in all 24
   trials (two staves, 1 to 8 steps), and `delete-bars` uses it:
   `score._extension_plan` returns an item in the first bar and the number

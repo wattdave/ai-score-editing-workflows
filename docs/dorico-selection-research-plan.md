@@ -288,3 +288,11 @@ and the top two or three have a proposed operation.
 Sibelius and MuseScore selection behaviour (their back ends select ranges
 through their own plug-in APIs and are checked in PR #88), and any change to
 the user's real scores.
+
+- **`delete-bars` now tries the plan and falls back (2026-10-12).** A planned
+  selection is checked after the fact (a later note must move up by exactly
+  the bars removed); on a mismatch or a rejected step it is undone to a
+  snapshot of the notes and rests and the bars go one at a time. Unit test
+  with a fake client; live on the slur fixture. The model still wants slurs
+  (a rejected plan costs an extra delete and undo), and condensed players
+  skip straight to the fallback.

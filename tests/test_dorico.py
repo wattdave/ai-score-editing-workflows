@@ -1490,3 +1490,49 @@ def test_private_export_folder_is_emptied_and_guarded(tmp_path: Path, monkeypatc
     monkeypatch.setattr(export, "EXPORT_DIR", tmp_path / "Scores")
     with pytest.raises(DoricoError, match="refusing to clear"):
         export._clear_export_dir()
+
+
+def test_delete_bars_undoes_a_planned_selection_that_removes_the_wrong_bars_and_goes_bar_by_bar() -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from ai_score_editing.dorico import service
+
+    def note(id_: int, position: int) -> dict:
+        return {"id": id_, "type": "NoteEvent", "position": position, "stream": 1}
+
+    class Client:
+        def __init__(self) -> None:
+            self.events = [note(1, 0), note(2, 1024), note(3, 2048), note(4, 3072)]
+            self.history: list[list[dict]] = []
+            self.deletes = 0
+            self.commands: list[str] = []
+
+        async def command(self, command: str) -> None:
+            self.commands.append(command)
+            if command == "Edit.Undo":
+                self.events = self.history.pop()
+            elif command == "Edit.DeleteBars":
+                self.deletes += 1
+                self.history.append(self.events)
+                bars = 2 if self.deletes == 1 else 1  # the first, planned, selection overshoots by a bar (a slur)
+                self.events = [{**e, "position": e["position"] - 1024 * bars} for e in self.events if e["position"] >= 1024 * bars]
+
+    client = Client()
+    bridge = SimpleNamespace(client=client)
+
+    async def read_partial(flow: int):
+        return client.events, []
+
+    async def overview(flow: int):
+        return {"layout": {"blocks": {"1": 5}}}
+
+    bridge.read_partial, bridge.overview = read_partial, overview
+    op = {"op": "delete-bars", "fromBar": 1, "toBar": 1, "removed": 1024, "marker": {"id": 4, "position": 3072},
+          "plan": {"select": {"id": 1, "stream": 1}, "extend": 0},
+          "fallback": [{"bar": 1, "select": {"id": 1, "stream": 1}}], "bars": [{"bar": 1}]}
+    steps, result = asyncio.run(service._delete_bars(bridge, op, 1, 0, {"1": 5}))
+    assert result["via"].startswith("per-bar") and result["verified"] and "retried" in result
+    assert client.deletes == 2 and client.commands.count("Edit.Undo") == 1
+    assert [e["position"] for e in client.events] == [0, 1024, 2048]
+    assert steps == 2
