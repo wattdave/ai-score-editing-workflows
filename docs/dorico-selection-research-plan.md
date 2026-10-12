@@ -335,3 +335,13 @@ the user's real scores.
   unchanged at 136/138. A restart of Dorico was needed first: after many
   projects and window changes the placement probe put every voice of Akinola
   on one staff (cause not found), and a restart cleared it.
+
+- **`delete-bars` live on Akinola (2026-10-12).** Bars 46-47 (the planner's three
+  candidate plans on staves 1-3, two extend steps each): every plan overshot by
+  a bar (the bar 46-47 hairpin ends at the bar's last position, which the
+  planner cannot see), each was undone, and the per-bar route removed exactly
+  the two bars: a later note moved up by 3072 as expected, 205 notes went, and
+  four undo steps restored all 5561 notes. The result reported
+  `"via": "per-bar after the planned selection failed"`, `"attempts": 3`.
+  This confirms the retry-and-fallback loop on a real score; the planner would
+  need hairpin knowledge (an export read) to get it right first time.
