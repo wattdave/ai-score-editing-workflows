@@ -758,6 +758,11 @@ touches, so the bars removed show how far a selection reaches.
   note. The steps are not "one bar each" on a staff with such notes; items on
   other staves are ignored. A selection already ending on a barline (a bar
   rest, or a note that ends the bar) moves a full bar on the first step.
+- **Slurs and hairpins that start inside the selection are items too**:
+  `Edit.DeleteBars` also removes every bar they span (a slur from bar 51 to
+  53 makes a one-bar selection from bar 51 remove bars 51-53). They are not
+  readable from Lua, so `delete-bars` cannot see them yet; the probe models
+  them from a MusicXML export (`dorico_selection_probe.py bars --slurs`).
 - Replaying this on the events read predicted the bars removed in all 24
   trials (two staves, 1 to 8 steps), and `delete-bars` uses it:
   `score._extension_plan` returns an item in the first bar and the number

@@ -180,16 +180,39 @@ Liszt Liebestraume (pickup bar, then 6/8, 1536 per bar; two Piano staves),
   events moved up; (2) only items that start inside the selection are pulled
   in: a lyric extender that began before the anchor is not (the planner now
   agrees).
-- **The real-score overshoots are still unexplained.** Sohn's viola (staff
-  3) and piccolo (staff 8) misses are at bars 2, 4, 6, 8 and 13 (steps go 1
-  to 2 bars too far); the strings' rows around two-bar notes are suspects but
-  the synthetic equivalents pass. Liszt's bar 8 and bar 18 barlines are
-  unchanged by the new measurement. Candidates not yet tested in isolation:
-  cue notes, divisi or section players, explicit rests in a second voice, hidden or condensed staves (many Sohn staves
-  answer `kCommandNotAllowed` when selected, probably because they are
-  hidden in the full-score layout), and notes shortened rather than removed
-  when `Edit.DeleteBars` crosses them (so the extent read from vanished ids
-  can be off).
+- **Slurs and hairpins are items too (found 2026-10-11, late).** A slur or
+  hairpin that starts inside the selection is pulled in with everything it
+  spans: `Edit.DeleteBars` then removes every bar it touches. Fixture bars
+  51-53 (a slur from bar 51 to bar 53): from bar 50 or 51 one step already
+  removes bars through 53; from bar 52 (after the slur starts) it does not.
+  A hairpin from bar 40 to bar 42 behaves the same way. Neither is readable
+  from Lua, so the probe now takes them from a MusicXML export
+  (`bars --slurs`). With that, 30/30 fixture trials are predicted. (An
+  earlier "hairpin predicted fine" run was against the wrong project: after
+  `open`, check `lastBarWithMusic` in `dorico-cli overview` to see which
+  project the API is addressing.) `Edit.Delete` on the selection shows the
+  selected notes are exactly what the model says; it is `DeleteBars` that
+  removes the extra bars.
+- **Sohn's viola, with slurs modelled (`--slurs`)**: the first step now
+  matches at bars 2, 4, 6, 8 and 13 (it matched at none before; 15 trials
+  went from 0 to 7 predicted, after snapping a slur's end to the start of
+  the whole Dorico note, because the export splits a note tied over a
+  barline). Steps 2 and 3 still overshoot by one or two bars at most
+  anchors, so something else is in play: possibly a slur's last note is
+  selected whole and the next step starts from its end (that fits Sohn but
+  not the fixture, whose slur ends mid-bar), or other lines (trills,
+  pedal, ottava) or tied notes in the export. The piccolo, Liszt and Akinola
+  misses have not been re-run with `--slurs`. The product's
+  `_extension_plan` cannot see slurs (not readable from Lua), so a plan
+  over a slurred passage can still undershoot; the fix needs the export or
+  a guard that checks the removed bars afterwards and undoes.
+- The hidden-staff idea is not supported: every Sohn staff with notes
+  accepts `EventEdit.Select` at bar 2 (45 staves, no refusals), so
+  `kCommandNotAllowed` came from something else (probably staves with no
+  notes at the anchor).
+- `DoricoClient` now connects with `ping_interval=None`: the Sohn snapshot
+  does a 40 s MusicXML export during which Dorico does not answer
+  websocket pings, and the default keepalive closed the connection.
 - The probe's setup was hit twice by races in the export dialog scripting
   (`entire contents` while a dialog closed); those scripts are now wrapped
   in `try`.

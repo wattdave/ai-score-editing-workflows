@@ -34,9 +34,11 @@ FIGURES: dict[int, tuple[str, str]] = {
     34: ("late", "plain"), 35: ("late", "plain"), 36: ("late", "plain"),  # a half rest, then notes: the first note starts late in the bar
     38: ("late-long", "plain"), 39: ("late-long", "plain"),  # a quarter rest, then a dotted half to the barline
     44: ("voices", "plain"), 45: ("voices", "plain"),  # a second voice of half notes under a whole note
+    40: ("wedge-start", "plain"), 41: ("plain-half", "plain"), 42: ("wedge-end", "plain"),  # a crescendo hairpin from bar 40 beat 3 to bar 42 beat 3
+    51: ("slur-start", "plain"), 52: ("plain-half", "plain"), 53: ("slur-end", "plain"),  # a slur from bar 51 to bar 53
     47: ("voices-tie", "plain"), 48: ("voices-tie-in", "plain"),  # voice 2 tied over the barline 47|48 under quarter notes
 }
-LAST_BAR = 50
+LAST_BAR = 56
 
 STEPS = ["C", "D", "E", "F", "G", "A", "B"]
 
@@ -65,6 +67,7 @@ def note(step: str, octave: int, dur: int, typ: str, staff: int, *, extra: str =
         notations += '<tied type="start"/>'
     if tie in ("stop", "both"):
         notations += '<tied type="stop"/>'
+    notations += extra
     if tuplet == "start":
         notations += '<tuplet type="start"/>'
     elif tuplet == "stop":
@@ -124,6 +127,23 @@ def staff_bar(bar: int, staff: int) -> str:
             return top + back + note("A", base, HALF, "half", staff, voice=2) + note("G", base, HALF, "half", staff, voice=2, tie="start")
         top = "".join(note(step, base + 1, DIV, "quarter", staff) for step in ("G", "A", "B", "C"))
         return top + back + note("G", base, HALF, "half", staff, voice=2, tie="stop") + note("F", base, HALF, "half", staff, voice=2)
+    if kind in ("wedge-start", "plain-half", "wedge-end"):
+        def wedge(kind_: str) -> str:
+            return f'<direction placement="below"><direction-type><wedge type="{kind_}"/></direction-type><staff>{staff}</staff></direction>'
+        def dyn(mark: str) -> str:
+            return f'<direction placement="below"><direction-type><dynamics><{mark}/></dynamics></direction-type><staff>{staff}</staff></direction>'
+        first = note("C", base, HALF, "half", staff)
+        second = note("D", base, HALF, "half", staff)
+        if kind == "wedge-start":
+            return dyn("p") + wedge("crescendo") + first + second
+        if kind == "wedge-end":
+            return first + wedge("stop") + dyn("f") + second
+        return first + second
+    if kind in ("slur-start", "slur-end"):
+        slur = lambda t: f'<slur type="{t}" number="1"/>'
+        if kind == "slur-start":
+            return note("C", base, HALF, "half", staff, extra=slur("start")) + note("D", base, HALF, "half", staff)
+        return note("C", base, HALF, "half", staff) + note("D", base, HALF, "half", staff, extra=slur("stop"))
     if kind == "grace":
         return note("B", base, 0, "eighth", staff, grace=True) + note("C", base, BAR, "whole", staff)
     if kind == "triplet":

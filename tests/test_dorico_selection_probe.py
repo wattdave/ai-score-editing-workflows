@@ -19,9 +19,9 @@ def note(id_: int, start: int, duration: int) -> dict:
             "flowPosition": start, "bar": start // BAR + 1}
 
 
-def lab(events: list[dict]) -> SimpleNamespace:
+def lab(events: list[dict], slurs: list[tuple[int, int, int, int, int]] | None = None) -> SimpleNamespace:
     bars = BarMap([(0, BAR)])
-    return SimpleNamespace(located=events, bars=bars, bar_of=lambda p: bars.locate(p)[0])
+    return SimpleNamespace(located=events, bars=bars, bar_of=lambda p: bars.locate(p)[0], slurs=slurs or [], tie_offset=0)
 
 
 def test_parse_ranges() -> None:
@@ -42,3 +42,14 @@ def test_a_short_note_reaches_the_end_of_its_own_bar() -> None:
 def test_a_tie_over_the_barline_drags_the_next_bar_in() -> None:
     events = [note(1, 0, BAR + 256), note(2, BAR + 256, 768), note(3, 2 * BAR, BAR)]
     assert probe.predict_bars(lab(events), 1, events[0], 1) == (1, 2)
+
+
+def test_a_slur_starting_inside_the_selection_drags_in_the_bars_it_spans() -> None:
+    # whole notes in bars 1, 2, 4, 6; half notes in bars 3 and 5; a slur from bar 3 to the second half of bar 5
+    events = [note(1, 0, BAR), note(2, BAR, BAR), note(3, 2 * BAR, 512), note(4, 2 * BAR + 512, 512),
+              note(5, 3 * BAR, BAR), note(6, 4 * BAR, 512), note(7, 4 * BAR + 512, 512), note(8, 5 * BAR, BAR)]
+    slurs = [(1, 3, 0, 5, 512)]
+    assert probe.predict_bars(lab(events), 1, events[0], 2) == (1, 3)
+    assert probe.predict_bars(lab(events, slurs), 1, events[0], 2, slurs=True) == (1, 5)
+    # a slur that starts before the anchor is not pulled in
+    assert probe.predict_bars(lab(events, slurs), 1, events[3], 1, slurs=True) == (3, 4)

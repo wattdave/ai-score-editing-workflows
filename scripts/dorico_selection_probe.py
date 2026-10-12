@@ -74,6 +74,7 @@ class Lab:
         self.base_sig = signature(self.base)
         self.ties: set[tuple[int, int]] = set()
         self.tie_offset = 0
+        self.slurs: list[tuple[int, int, int, int, int]] = []
 
     def item(self, staff: int, bar: int, *, note: bool = True) -> dict[str, Any] | None:
         """The first item starting in the bar on the staff (a note first)."""
@@ -160,6 +161,57 @@ async def barline_ties(client: DoricoClient, flow: int) -> set[tuple[int, int]]:
     return out
 
 
+async def slur_spans(client: DoricoClient, flow: int) -> list[tuple[int, int, int, int, int]]:
+    """(staff, start measure, start offset, end measure, end offset) of every slur and hairpin, from a
+    MusicXML export (slurs are not readable from Lua). Staves are numbered through the parts in
+    order, so this is only as reliable as that order is for the score; offsets are in 1/256 quarter."""
+    import xml.etree.ElementTree as ET
+
+    from ai_score_editing.dorico.export import export_musicxml
+
+    root = ET.parse(await export_musicxml(client, flow)).getroot()
+    out: list[tuple[int, int, int, int, int]] = []
+    first_staff = 0
+    for part in root.iter("part"):
+        divisions = 1
+        staves = 1
+        open_slurs: dict[tuple[int, str], tuple[int, int]] = {}
+        for index, measure in enumerate(part.iter("measure"), 1):
+            cursor = 0
+            for child in measure:
+                if child.tag == "attributes":
+                    divisions = int(child.findtext("divisions") or divisions)
+                    staves = int(child.findtext("staves") or staves)
+                elif child.tag in ("backup", "forward"):
+                    cursor += (-1 if child.tag == "backup" else 1) * int(child.findtext("duration") or 0)
+                elif child.tag == "direction":
+                    for wedge in child.iter("wedge"):
+                        staff = first_staff + int(child.findtext("staff") or 1)
+                        key = (staff, "wedge")
+                        if wedge.get("type") in ("crescendo", "diminuendo"):
+                            open_slurs[key] = (index, int(cursor * 256 / divisions))
+                        elif wedge.get("type") == "stop" and key in open_slurs:
+                            m1, o1 = open_slurs.pop(key)
+                            out.append((staff, m1, o1, index, int(cursor * 256 / divisions)))
+                elif child.tag == "note":
+                    chord = child.find("chord") is not None
+                    start = cursor
+                    dur = int(child.findtext("duration") or 0)
+                    staff = first_staff + int(child.findtext("staff") or 1)
+                    scale = 256 / divisions
+                    for slur in child.iter("slur"):
+                        key = (staff, slur.get("number", "1"))
+                        if slur.get("type") == "start":
+                            open_slurs[key] = (index, int(start * scale))
+                        elif slur.get("type") == "stop" and key in open_slurs:
+                            m1, o1 = open_slurs.pop(key)
+                            out.append((staff, m1, o1, index, int(start * scale)))  # a slur ends where its last note starts
+                    if not chord and child.find("grace") is None:
+                        cursor += dur
+        first_staff += staves
+    return out
+
+
 def tie_chains(lab: Lab, items: list[dict[str, Any]]) -> list[tuple[int, int]]:
     """Item spans where a note tied over a barline reaches to the end of the note it
     is tied to. Ties come from lab.ties (the events do not carry them)."""
@@ -174,7 +226,8 @@ def tie_chains(lab: Lab, items: list[dict[str, Any]]) -> list[tuple[int, int]]:
     return [(e["flowPosition"], end_of(e)) for e in items]
 
 
-def predict_bars(lab: Lab, staff: int, anchor: dict[str, Any], steps: int, scope: str = "staff", ties: bool = False) -> tuple[int, int]:
+def predict_bars(lab: Lab, staff: int, anchor: dict[str, Any], steps: int, scope: str = "staff", ties: bool = False,
+                 slurs: bool = False) -> tuple[int, int]:
     """Bars Edit.DeleteBars touches after `steps` extend steps from `anchor`.
 
     The rule: a step moves the end to the next barline after it, then pulls
@@ -186,12 +239,28 @@ def predict_bars(lab: Lab, staff: int, anchor: dict[str, Any], steps: int, scope
     spans = [(e["flowPosition"], e["flowPosition"] + (e.get("duration") or 0)) for e in items]
     if ties:
         spans = tie_chains(lab, items)
+    item_spans = list(spans)
+    slur_spans_: list[tuple[int, int, int]] = []
+    if slurs:  # a slur is an item too: it is pulled in when it starts inside the selection
+        for st, m1, o1, m2, o2 in lab.slurs:
+            if st in staves:
+                a = lab.bars.position(m1 + lab.tie_offset, 0) + o1
+                b = lab.bars.position(m2 + lab.tie_offset, 0) + o2
+                # The export splits a note tied over a barline; the slur ends at the start of the whole note.
+                held = [(s, e) for s, e in item_spans if s <= b < e]
+                last = max(held) if held else (b, b)
+                slur_spans_.append((a, last[0], last[1]))
     end = anchor["flowPosition"] + (anchor.get("duration") or 0)
+    reach = end - 1  # the last position touched; a slur touches the bar of its last note
     for _ in range(steps):
         target = lab.bars.position(lab.bar_of(end) + 1, 0)
-        end = max([target] + [e for s, e in spans if anchor["flowPosition"] <= s < target])
+        pulled = [(s, e) for s, e in spans if anchor["flowPosition"] <= s < target]
+        caught = [(r, e) for s, r, e in slur_spans_ if anchor["flowPosition"] <= s < target]
+        notes_end = max([target] + [e for s, e in pulled])
+        end = max([notes_end] + [e for r, e in caught])
+        reach = max([reach, notes_end - 1] + [r for r, e in caught])
     last_bar = max(e["bar"] for e in lab.located)
-    return anchor["bar"], min(lab.bar_of(end - 1), last_bar)  # a step past the last bar stops there
+    return anchor["bar"], min(lab.bar_of(reach), last_bar)  # a step past the last bar stops there
 
 
 async def run_bars(lab: Lab, args: argparse.Namespace) -> int:
@@ -205,7 +274,7 @@ async def run_bars(lab: Lab, args: argparse.Namespace) -> int:
                 continue
             for k in range(1, args.steps + 1):
                 try:
-                    predicted = predict_bars(lab, staff, anchor, k, args.scope, args.ties)
+                    predicted = predict_bars(lab, staff, anchor, k, args.scope, args.ties, args.slurs)
                 except Exception as exc:  # past the end of the flow
                     print(f"staff {staff} bar {bar} k={k}: no prediction ({exc})")
                     break
@@ -362,6 +431,7 @@ async def main() -> int:
     bars.add_argument("--staff", type=int)
     bars.add_argument("--bars", type=lambda t: [int(x) for x in t.split(",")], default=[5, 20])
     bars.add_argument("--steps", type=int, default=8)
+    bars.add_argument("--slurs", action="store_true", help="model slurs starting inside the selection as items (needs a MusicXML export)")
     bars.add_argument("--ties", action="store_true", help="model same-pitch notes meeting on a barline as tied")
     bars.add_argument("--tie-offset", type=int, default=0, help="MusicXML measure index minus bar number")
     bars.add_argument("--scope", choices=("staff", "instrument", "all"), default="staff",
@@ -388,6 +458,10 @@ async def main() -> int:
             lab.tie_offset = args.tie_offset
             lab.ties = await barline_ties(client, args.flow)
             print(f"{len(lab.ties)} (measure, pitch) ties start in a bar and go on")
+        if getattr(args, "slurs", False):
+            lab.tie_offset = args.tie_offset
+            lab.slurs = await slur_spans(client, args.flow)
+            print(f"{len(lab.slurs)} slurs")
         if args.mode == "bars":
             return int(await run_bars(lab, args) > 0)
         if args.mode == "plan":
