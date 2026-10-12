@@ -1392,6 +1392,21 @@ def test_layout_from_probed_placements() -> None:
         layout.resolve(choir, [], placements={11: 2, 12: 3})  # S has nothing probed
 
 
+def test_loose_placements_name_staves_whatever_order_instruments_are_listed() -> None:
+    from ai_score_editing.dorico import layout
+
+    # Instruments listed out of staff order, one with no notes: strict reading gives up, loose does not.
+    raw = {"staves": [{"stream": 1}, {"stream": 3}, {"stream": 5}],
+           "instruments": [{"id": 0, "name": "Bells", "voiceStreams": [10]},
+                           {"id": 1, "name": "Kit", "voiceStreams": [11]},
+                           {"id": 2, "name": "Flute", "voiceStreams": [12]}]}
+    with pytest.raises(layout.NeedsMusicXML):
+        layout.resolve(raw, [], placements={10: 3, 12: 1})
+    staves = layout.resolve(raw, [], placements={10: 3, 12: 1}, loose=True)
+    assert [(s["staff"], s["name"], s["voiceStreams"]) for s in staves] == [
+        (1, "Flute", [12]), (2, None, []), (3, "Bells", [10])]
+
+
 class _ProbeClient:
     """Dorico's undo stack as the probe sees it: selections and dynamics are steps."""
 

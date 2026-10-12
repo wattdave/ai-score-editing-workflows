@@ -1,6 +1,6 @@
 # Dorico selection research plan
 
-Status: Phase 0 done (2026-10-11); Phase 1 partly done (Smith, Liszt); Phases 2-3 open. PR #88 (delete-bars on all
+Status: Phase 0 done (2026-10-11); Phase 1 partly done (Smith, Liszt, Sohn, Akinola); Phases 2-3 open. PR #88 (delete-bars on all
 back ends) is merged.
 
 ## Why
@@ -125,14 +125,32 @@ Liszt Liebestraume (pickup bar, then 6/8, 1536 per bar; two Piano staves),
   the flow's last bar stops there. With both rules the model predicted 30
   of 30, and `plan` showed `score._extension_plan` exact on all 6 ranges
   once it counted lyric events (fixed in the same change, with a test).
-- **Akinola and Sohn cannot be read**: `layout._staves_per_instrument`
-  cannot match the MusicXML parts to Dorico's instruments (probably
-  adjacent same-named staves), so no snapshot and no probe. A back-end
-  limit, not a selection result.
+- **Akinola and Sohn could not be read, and now can.** Two bugs in this
+  repository's back end, not Dorico's. (1) The placement probe made a
+  dynamic on a note to see which staff it landed on, but where a dynamic
+  already sat at that position (a tutti `p` at the start of most voices)
+  Dorico changed it in place and nothing new appeared, so the probe gave
+  up on the first voice. It now uses a note at a position with no dynamic
+  on any staff and leaves a voice unplaced when it has none. (2) Dorico
+  lists instruments in id order, not score order (Sohn: Tubular Bells
+  before the other percussion; unplayed percussion instruments with no
+  notes), so neither the strict placement reading nor matching the
+  MusicXML parts by order works. When both fail, staves are now named from
+  the voices probed onto them (`layout.resolve(..., loose=True)`); a staff
+  with nothing probed has no name.
+- **Planner against `Edit.DeleteBars`** (`plan --span 2`, every range of
+  1-2 bars): Smith 6/6, **Sohn 60/65**, **Akinola 96/103** (+ 7 ranges with
+  no plan, as expected when every staff's tie or lyric overshoots).
+  Misses are all overshoots, like Liszt's: the plan's last bar is reached
+  but more bars are removed (Sohn 2-3 removed 2-8, 6-7 removed 6-10;
+  Akinola 52-53 removed 52-55), or nothing is removed (Sohn 1-2 and 13-14
+  on staff 25: only rests? "measured None" counts notes and rests only).
+  Cause not yet found; Sohn bars 2-8 look like a multi-bar rest or
+  consolidation, which the model does not know about.
 - The probe's setup was hit twice by races in the export dialog scripting
   (`entire contents` while a dialog closed); those scripts are now wrapped
   in `try`.
-- Not yet run: the pickup fixture, Las Posadas, Wiese, the rest of Smith's
+- Not yet run: the pickup fixture, Las Posadas, Wiese, a look at the Sohn and Akinola misses, the rest of Smith's
   flows (most are one bar). Opening a project from an older Dorico shows a
   "will be updated" dialog (OK button, drive it with osascript) and the
   open can then take minutes. After it opens, raise its window (Dorico

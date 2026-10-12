@@ -60,6 +60,7 @@ async def snapshot(bridge: DoricoBridge, flow: int = 1, lyrics: bool = False, pr
     events, unreadable = await bridge.read_partial(flow)
     staves = None
     bars = None
+    placements: dict[int, int] = {}
     if not unreadable and not lyrics:
         # Bars first: if they cannot be measured the export is needed anyway,
         # and no probe edits should be spent.
@@ -78,21 +79,31 @@ async def snapshot(bridge: DoricoBridge, flow: int = 1, lyrics: bool = False, pr
                 staves = layout.resolve(raw, events, placements=placements)
             except (layout.NeedsMusicXML, DoricoError):
                 staves = None
-    if staves is not None and bars is not None:
+    def from_lua(staves: list[dict[str, Any]]) -> Snapshot:
         placed = layout.assign(events, staves)
         placed_streams = {v for s in staves for v in s["voiceStreams"]}
         all_voices = {v for i in raw["instruments"] for v in i.get("voiceStreams") or []}
         return Snapshot(staves, score.locate_events(placed, bars), bars,
                         unplaced_voices=sorted(all_voices - placed_streams), raw=raw)
 
+    if staves is not None and bars is not None:
+        return from_lua(staves)
+
     path = await export_musicxml(bridge.client, flow)
     xml = musicxml_read.read(path)
-    staves = layout.resolve(raw, events, xml)
-    if len(xml["staves"]) != len(staves):
-        raise DoricoError(
-            f"the MusicXML export has {len(xml['staves'])} staves but the flow has {len(staves)}; "
-            "cannot combine them"
-        )
+    try:
+        staves = layout.resolve(raw, events, xml)
+        if len(xml["staves"]) != len(staves):
+            raise DoricoError(
+                f"the MusicXML export has {len(xml['staves'])} staves but the flow has {len(staves)}; "
+                "cannot combine them"
+            )
+    except DoricoError:
+        if not placements or bars is None:
+            raise
+        # The export's parts cannot be matched to Dorico's instruments (their order differs, as in
+        # an orchestral score), but the probe placed every voice: name staves from those.
+        return from_lua(layout.resolve(raw, events, placements=placements, loose=True))
     placed = layout.assign(events, staves)
     unreadable_streams = {u["stream"] for u in unreadable}
     bad = sorted(
@@ -135,8 +146,13 @@ async def probe_placements(
     flow_id = flows[flow - 1]["flowID"]
     voices = [v for instrument in raw["instruments"] for v in instrument.get("voiceStreams") or []]
     placements: dict[int, int] = {}
+    dynamic_positions = {e.get("position") for e in events if e["type"] == "DynamicGroupEvent"}
     for voice in voices:
-        note = next((e for e in events if e.get("stream") == voice and e["type"] == "NoteEvent" and "id" in e), None)
+        # A dynamic made where one already exists changes it in place and creates nothing to
+        # find, so use a note whose position has no dynamic on any staff (a tutti dynamic at
+        # the start is common). A voice whose notes all have one stays unplaced.
+        note = next((e for e in events if e.get("stream") == voice and e["type"] == "NoteEvent" and "id" in e
+                     and e.get("position") not in dynamic_positions), None)
         block = blocks.get(str(voice))
         if note is None or block is None:
             continue
