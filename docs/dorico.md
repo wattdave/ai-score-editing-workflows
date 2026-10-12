@@ -153,6 +153,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | (Dorico only) `read_lyrics`, `edit_lyrics` | ⚠️ | a player's verse as text through the Edit Lyrics dialog; edits must keep the syllable count |
 | `add-lyric` → `add-lyrics` | ⚠️ | verses 1-10, typed through the lyric popover by command (see gaps); refuses to type over a lyric already in that verse |
 | `copy-passage` | ✅ | by selection + `Edit.Copy` / `Edit.Paste` (see gaps); destPosition 0 only |
+| `move-passage` | ✅ | `copy-passage` with `Edit.Cut`: the source bars stay (rests, nothing moves), the notes keep their ids at the destination; checked by what vanished, undone if the cut reached further than planned; one more undo step |
 | `set-key`, `set-time` | ✅ | by command at the start of any bar, bar 1 included: 2 undo steps each, 4 where the bar starts with implicit rests only (a temporary rest is selected); refused only when every voice holds a note over the barline (see gaps). `set-time` takes a `pickup` (Dorico only). A time signature is removed with `delete` by its id (`query_score` type `TimeSignature`) |
 | `set-break` | ✅ | system breaks via `Edit.CreateSystemBreak` on a selected note (2 undo steps each), or a temporary rest in a bar with nothing of its own (4); refused only where every voice holds a note over the barline |
 | `set-barline` | ⚠️ | double, final, start/end repeat, by command like set-time (a start repeat at bar 1 keeps the opening time signature); `position` puts one part-way through a bar (Dorico only) |

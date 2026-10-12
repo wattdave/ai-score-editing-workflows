@@ -45,7 +45,7 @@ CLEFS = {"treble", "bass", "percussion", "tab", "tab.4"}
 #: Ops that select a note and run one Dorico command on it.
 NOTE_COMMAND_OPS = {"add-dynamic", "set-articulation", "add-slur", "add-tempo", "add-rehearsal-mark"}
 COMMAND_OPS = {
-    "set-break", "add-lyrics", "set-time", "set-key", "set-barline", "copy-passage", "add-line", "add-bars",
+    "set-break", "add-lyrics", "set-time", "set-key", "set-barline", "copy-passage", "move-passage", "add-line", "add-bars",
     "set-layout", "delete-bars",
 } | NOTE_COMMAND_OPS
 #: Resolved forms of set-pitch/delete/transpose on notes read from dump().
@@ -302,8 +302,8 @@ def prepare_batch(
             resolved = [_note_command(operation, op, label, by_id, by_address)]
         elif op == "add-line":
             resolved = [_add_line(operation, label, located, staves, bars)]
-        elif op == "copy-passage":
-            resolved = _copy_passage(operation, label, located, staves, bars)
+        elif op in ("copy-passage", "move-passage"):
+            resolved = _copy_passage(operation, label, located, staves, bars, move=op == "move-passage")
         elif op == "delete-voice":
             resolved = [_delete_voice(operation, label, staves, bars)]
         elif op == "add-bars":
@@ -431,9 +431,15 @@ def _note_command(
 
 def _copy_passage(
     operation: dict[str, Any], label: str, located: list[dict[str, Any]],
-    staves: list[dict[str, Any]], bars: BarMap,
+    staves: list[dict[str, Any]], bars: BarMap, move: bool = False,
 ) -> list[dict[str, Any]]:
     """Copy bars fromBar-toBar of staves top-bottom to destBar of destStaff on.
+
+    With `move` the selection is cut (Edit.Cut, which leaves the bars in place
+    with rests, measured 2026-10-12) instead of copied, and the resolved op
+    carries `keepIds`: the notes of both staves that must survive, so that a
+    selection that reached further than planned (a slur or hairpin starting in
+    it pulls its span in) is caught and undone rather than left in the score.
 
     Dorico copies what the selection holds: an exact selection from
     _extension_plan where there is one, else Edit.SelectMore (from a note)
@@ -491,6 +497,21 @@ def _copy_passage(
             "expect": [(e["flowPosition"] - notes[0]["flowPosition"], e.get("pitch")) for e in notes],
             "anchorPosition": anchor_position, "destStreams": list(voices),
         }
+        if move:
+            passage_end = max(e["flowPosition"] - notes[0]["flowPosition"] + (e.get("duration") or 0) for e in notes)
+            cut_ids = {e["id"] for e in notes}
+            overwritten = {
+                e["id"] for e in located
+                if e["staff"] == target_staff and e["type"] in TYPE_ALIASES["Note"] and "id" in e
+                and anchor_position <= e["flowPosition"] < anchor_position + passage_end
+            }
+            resolved["move"] = True
+            resolved["cutIds"] = sorted(cut_ids)
+            resolved["keepIds"] = sorted(
+                e["id"] for e in located
+                if e["staff"] in (staff, target_staff) and e["type"] in TYPE_ALIASES["Note"] and "id" in e
+                and e["id"] not in cut_ids and e["id"] not in overwritten
+            )
         # An exact selection (no Edit.SelectMore): see _extension_plan.
         plan = _extension_plan(located, bars, first, last, staff=staff, anchor=in_first_bar[0], cover=True)
         if plan is not None:

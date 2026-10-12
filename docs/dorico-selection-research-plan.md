@@ -345,3 +345,17 @@ the user's real scores.
   `"via": "per-bar after the planned selection failed"`, `"attempts": 3`.
   This confirms the retry-and-fallback loop on a real score; the planner would
   need hairpin knowledge (an export read) to get it right first time.
+
+- **`Edit.Cut` (Phase 2, item 6; 2026-10-12): partly, and not what the plan guessed.**
+  Cut on a staff's bar selection is *not* a variant of `delete-bars`: it removes
+  the selected notes, leaves the bars in place (implicit rests, no events,
+  nothing moves) and keeps the notes on the clipboard. Pasting them elsewhere
+  keeps the notes' ids (a move, not a copy). So it serves a new `move-passage`
+  operation, built on `copy-passage` (same fields; cut for copy; one more undo
+  step) and checked by the notes that vanished: the cut notes must be gone and
+  every other note of both staves still there (a cut that reached further
+  than planned is undone and refused; unit-tested, not provoked on a real
+  score). Live: Liszt staff 1 bars 5 and 8 to bars 12 and 20 (10 and 11
+  notes), Akinola staff 1 bar 46 to bar 30 (3 notes), each verified and undone
+  back to the exact baseline. Selections taken without extend steps did not
+  drag the neighbouring hairpins in.

@@ -1385,6 +1385,73 @@ def test_copy_passage_refuses_a_note_over_the_paste_point() -> None:
                         "destStaff": 1, "destBar": 3}], locate_events(events, BARS), STAVES, BARS)
 
 
+def test_move_passage_resolves_like_copy_with_the_ids_that_must_go_and_stay() -> None:
+    events = [note(3, 128, 60, "C4"), note(4, 512, 62, "D4"), note(5, 1024, 64, "E4")]  # bars 1 and 2
+    located = locate_events(events, BARS)
+    ops = prepare_batch([{"op": "move-passage", "fromBar": 1, "toBar": 1, "topStaff": 1, "bottomStaff": 1,
+                          "destStaff": 1, "destBar": 3}], located, STAVES, BARS)
+    op = ops[0]
+    assert op["op"] == "copy-passage" and op["move"] is True
+    assert op["cutIds"] == [3, 4] and op["keepIds"] == [5]  # bar 2's note stays
+    assert op["expect"] == [(0, 60), (384, 62)]
+
+
+def test_move_passage_cuts_and_checks_what_vanished() -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from ai_score_editing.dorico import service
+
+    def n(id_: int, pos: int, pitch: int) -> dict:
+        return {"id": id_, "type": "NoteEvent", "position": pos, "stream": 2, "pitch": pitch}
+
+    def run(overreach: bool) -> tuple[list[str], list[int], Exception | None]:
+        client = SimpleNamespace(commands=[])
+        state = {"events": [n(3, 0, 60), n(4, 512, 62), n(5, 1024, 64)], "history": []}
+
+        async def command(c: str) -> None:
+            client.commands.append(c)
+            if c == "Edit.Cut":
+                state["history"].append(state["events"])
+                gone = {3, 4, 5} if overreach else {3, 4}  # overreach: a slur drags bar 2's note in
+                state["events"] = [e for e in state["events"] if e["id"] not in gone]
+            elif c == "Edit.Paste":
+                state["history"].append(state["events"])
+                state["events"] = state["events"] + [n(3, 2048, 60), n(4, 2432, 62)]  # a paste keeps the ids
+            elif c == "Edit.Undo":
+                state["events"] = state["history"].pop()
+
+        async def status() -> dict:
+            return {"noteInputMode": "kOverwrite"}
+
+        client.command, client.status = command, status
+        bridge = SimpleNamespace(client=client)
+
+        async def read_partial(flow: int):
+            return state["events"], []
+
+        bridge.read_partial = read_partial
+        op = {"op": "copy-passage", "move": True, "staff": 1, "destStaff": 1, "select": {"id": 3, "stream": 2, "block": 7},
+              "extendBars": 1, "exact": True, "expect": [(0, 60), (384, 62)], "anchorPosition": 2048, "destStreams": [2],
+              "anchor": {"id": 9, "stream": 2, "block": 7}, "cutIds": [3, 4], "keepIds": [5]}
+        error = None
+        try:
+            steps, result = asyncio.run(service._copy_passage(bridge, op, 1, 0, {"2": 7}))
+        except Exception as exc:  # noqa: BLE001
+            error = exc
+            result = {}
+        return client.commands, [(e["id"], e["position"]) for e in state["events"]], error if error else result
+
+    commands, ids, result = run(overreach=False)
+    assert "Edit.Cut" in commands and "Edit.Copy" not in commands
+    assert result["op"] == "move-passage" and result["verified"] and sorted(ids) == [(3, 2048), (4, 2432), (5, 1024)]
+
+    commands, ids, error = run(overreach=True)
+    assert isinstance(error, service.DoricoError) and "cut more" in str(error)
+    assert ids == [(3, 0), (4, 512), (5, 1024)]  # put back, positions and all
+    assert commands.count("Edit.Undo") == 2  # the paste and the cut
+
+
 # ------------------------------------------------------------------ probe placement
 
 def test_layout_from_probed_placements() -> None:

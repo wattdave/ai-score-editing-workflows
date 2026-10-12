@@ -343,7 +343,7 @@ async def _apply_commands(
             raise DoricoError(f"{checked['error']}; nothing was changed")
     planned = (1 if removals else 0) + sum(
         1 + (op["verse"] - 1) + len(op["syllables"]) if op["op"] == "add-lyrics"
-        else COPY_STEPS - bool(op.get("exact")) + op["extendBars"] + ("tempRest" in op) if op["op"] == "copy-passage"
+        else COPY_STEPS - bool(op.get("exact")) + op["extendBars"] + ("tempRest" in op) + bool(op.get("move")) if op["op"] == "copy-passage"
         else 2 + _resize_cost(op.get("resize")) + (TEMP_REST_STEPS if "tempRest" in op else 0) if op["op"] == "add-line"
         else op["count"] if op["op"] == "add-bars" and "bar" not in op
         else _delete_bars_cost(op) if op["op"] == "delete-bars" and "plan" in op
@@ -654,9 +654,17 @@ COPY_STEPS = 4
 async def _copy_passage(
     bridge: DoricoBridge, op: dict[str, Any], flow: int, flow_id: Any, blocks: dict[str, Any]
 ) -> tuple[int, dict[str, Any]]:
-    """Copy one staff's bars by selection, Edit.Copy and Edit.Paste; check the notes."""
+    """Copy one staff's bars by selection, Edit.Copy and Edit.Paste; check the notes.
+
+    With op["move"] the selection is cut instead (one more undo step), and the
+    source notes must be gone and every note in op["keepIds"] still there; if
+    the cut reached further than planned the score is put back and an error
+    raised.
+    """
     client = bridge.client
     steps = 0
+    move = bool(op.get("move"))
+    base = await _item_positions(bridge, flow) if move else {}
     anchor = op.get("anchor")
     if anchor is None:
         rest = op["tempRest"]
@@ -672,7 +680,7 @@ async def _copy_passage(
         await client.command("Edit.SelectMore")
     for _ in range(op["extendBars"]):
         await client.command("EventEdit.NavigateRightExtendBar")
-    await client.command("Edit.Copy")
+    await client.command("Edit.Cut" if move else "Edit.Copy")
     mode = (await client.status()).get("noteInputMode")
     await client.command(f"EventEdit.Select?FlowID={flow_id}&EventID={anchor['id']}&EventBlockID={anchor['block']}")
     if mode != "kOverwrite":
@@ -682,8 +690,21 @@ async def _copy_passage(
     finally:
         if mode and mode != "kOverwrite":
             await client.command(f"NoteInput.Mode?NoteInputMode={mode}")
-    steps += COPY_STEPS - bool(op.get("exact")) + op["extendBars"]
+    steps += COPY_STEPS - bool(op.get("exact")) + op["extendBars"] + move
     events, _ = await bridge.read_partial(flow)
+    if move:
+        present = {e["id"]: e["position"] for e in events if "id" in e}
+        lost = [i for i in op["keepIds"] if i not in present]
+        # Cut and paste keep a note's id (measured 2026-10-12), so a cut note is "left" only if it
+        # is still where it was.
+        left = [i for i in op["cutIds"] if i in present and present[i] == base.get(i)]
+        if lost or left:
+            await _revert_to(bridge, base, flow, steps + 1)
+            raise DoricoError(
+                f"move-passage on staff {op['staff']} cut {'more' if lost else 'less'} than bars were asked "
+                f"({len(lost)} other note(s) gone, {len(left)} selected note(s) left; a slur or hairpin starting "
+                "inside the range pulls its whole span in); the score was put back and nothing was changed by it"
+            )
     start = op["anchorPosition"]
     streams = op.get("destStreams") or [anchor["stream"]]  # every voice of the destination staff
     span = max(p for p, _ in op["expect"]) + 1
@@ -692,7 +713,7 @@ async def _copy_passage(
         if e.get("stream") in streams and e["type"] in ("NoteEvent", "GraceNoteEvent") and start <= e["position"] < start + span
     )
     ok = pasted == sorted(op["expect"])
-    return steps, {"op": "copy-passage", "staff": op["staff"], "destStaff": op["destStaff"],
+    return steps, {"op": "move-passage" if move else "copy-passage", "staff": op["staff"], "destStaff": op["destStaff"],
                    "notes": len(op["expect"]), "verified": ok, **({} if ok else {"found": pasted})}
 
 

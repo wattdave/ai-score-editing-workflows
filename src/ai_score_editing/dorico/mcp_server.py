@@ -269,6 +269,12 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
       and paste (overwriting at the destination), anchored so the notes keep
       their places in the bar; checked afterwards. Needs a note in bar A on
       each staff with notes; refuses a destination under a sustained note.
+    - {"op":"move-passage", ...same fields as copy-passage}: cuts instead of
+      copies, so the source bars keep their place and hold rests, and the
+      notes keep their ids at the destination. Checked afterwards: the source
+      notes must be gone and no other note of either staff lost; otherwise
+      the score is put back and the batch fails. One more undo step than
+      copy-passage.
     - {"op":"add-lyrics","staff":S,"bar":B,"index":I (or "id"),"text":"ma-king lyr-ics _ now","verse":V}:
       lyrics typed into Dorico's lyric popover from that note on (spaces
       separate words, hyphens syllables, "_" continues a melisma), in verse
