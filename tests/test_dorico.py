@@ -763,6 +763,17 @@ def test_delete_bars_plans_an_exact_selection() -> None:
                        {"op": "set-break", "bar": 2, "type": "system"}], located, STAVES, BARS)
 
 
+def test_delete_bars_plans_one_selection_per_staff_up_to_three() -> None:
+    located = locate_events(EVENTS, BARS)
+    plans = score._extension_plans(located, BARS, 1, 1)
+    staves = [p["staff"] for p in plans]
+    assert staves == sorted(set(staves)) and 1 <= len(plans) <= 3
+    assert plans[0] == score._extension_plan(located, BARS, 1, 1)  # the old single choice comes first
+    ops = prepare_batch([{"op": "delete-bars", "fromBar": 1, "toBar": 1}], located, STAVES, BARS)
+    assert ops[0]["plans"] == plans and ops[0]["plan"] == plans[0]
+    assert len(score._extension_plans(located, BARS, 1, 1, limit=1)) == 1
+
+
 def test_a_tied_note_across_the_last_barline_drags_in_the_next_bar() -> None:
     """The measured rule: items starting before the barline are pulled in whole."""
     bars = BarMap([(0, 1024)])
@@ -1536,3 +1547,97 @@ def test_delete_bars_undoes_a_planned_selection_that_removes_the_wrong_bars_and_
     assert client.deletes == 2 and client.commands.count("Edit.Undo") == 1
     assert [e["position"] for e in client.events] == [0, 1024, 2048]
     assert steps == 2
+
+
+class _FakeDorico:
+    """A client and bridge for service._delete_bars: four bars of whole notes (ids 1-4), a note
+    after the range (id 4). Selecting a note in `refuse` makes EventEdit.NavigateRightExtendBar
+    answer kCommandNotAllowed; in `overshoot` makes Edit.DeleteBars remove two bars, not one."""
+
+    def __init__(self, refuse: set[int] = frozenset(), overshoot: set[int] = frozenset()) -> None:
+        from types import SimpleNamespace
+
+        self.events = [{"id": i + 1, "type": "NoteEvent", "position": 1024 * i, "stream": 1} for i in range(4)]
+        self.history: list[list[dict]] = []
+        self.refuse, self.overshoot = refuse, overshoot
+        self.selected = 0
+        self.commands: list[str] = []
+        self.client = self
+        self.bridge = SimpleNamespace(client=self, read_partial=self.read_partial, overview=self.overview)
+
+    async def command(self, command: str) -> None:
+        from ai_score_editing.dorico.client import DoricoError
+
+        self.commands.append(command)
+        if command.startswith("EventEdit.Select"):
+            self.selected = int(command.split("EventID=")[1].split("&")[0])
+        elif command == "EventEdit.NavigateRightExtendBar":
+            if self.selected in self.refuse:
+                raise DoricoError("Dorico rejected command EventEdit.NavigateRightExtendBar: kCommandNotAllowed")
+        elif command == "Edit.Undo":
+            self.events = self.history.pop()
+        elif command == "Edit.DeleteBars":
+            self.history.append(self.events)
+            bars = 2 if self.selected in self.overshoot else 1
+            self.events = [{**e, "position": e["position"] - 1024 * bars} for e in self.events if e["position"] >= 1024 * bars]
+
+    async def read_partial(self, flow: int):
+        return self.events, []
+
+    async def overview(self, flow: int):
+        return {"layout": {"blocks": {"1": 5}}}
+
+    def op(self, plans: list[tuple[int, int]], fallback: bool = True) -> dict:
+        built = [{"select": {"id": i, "stream": 1}, "extend": extend, "staff": i} for i, extend in plans]
+        return {"op": "delete-bars", "fromBar": 1, "toBar": 1, "removed": 1024, "marker": {"id": 4, "position": 3072},
+                "plan": built[0], "plans": built, "bars": [{"bar": 1}],
+                **({"fallback": [{"bar": 1, "select": {"id": 3, "stream": 1}}]} if fallback else {})}
+
+    def run(self, op: dict) -> tuple[int, dict]:
+        import asyncio
+
+        from ai_score_editing.dorico import service
+
+        return asyncio.run(service._delete_bars(self.bridge, op, 1, 0, {"1": 5}))
+
+
+def test_delete_bars_tries_the_next_plan_when_one_is_refused_or_overshoots() -> None:
+    # plan 1 overshoots a bar (one Undo), plan 2 is refused on the extend step (nothing to undo), plan 3 works
+    fake = _FakeDorico(refuse={2}, overshoot={1})
+    steps, result = fake.run(fake.op([(1, 1), (2, 1), (3, 1)]))
+    assert result["via"] == "extend" and result["verified"] and result["attempts"] == 3 and "kCommandNotAllowed" in result["retried"]
+    assert fake.commands.count("Edit.Undo") == 1 and fake.commands.count("Edit.DeleteBars") == 2
+    assert [e["position"] for e in fake.events] == [0, 1024, 2048] and steps == 3
+
+
+def test_delete_bars_goes_bar_by_bar_when_every_plan_fails() -> None:
+    fake = _FakeDorico(refuse={2}, overshoot={1})
+    steps, result = fake.run(fake.op([(1, 0), (2, 1)]))
+    assert result["via"].startswith("per-bar") and result["verified"] and result["attempts"] == 2
+    assert fake.commands.count("Edit.Undo") == 1 and steps == 2
+    assert [e["position"] for e in fake.events] == [0, 1024, 2048]
+
+
+def test_delete_bars_without_a_fallback_still_raises_when_the_last_plan_fails() -> None:
+    import pytest
+
+    from ai_score_editing.dorico.client import DoricoError
+
+    refused = _FakeDorico(refuse={1, 2})
+    with pytest.raises(DoricoError, match="kCommandNotAllowed"):
+        refused.run(refused.op([(1, 1), (2, 1)], fallback=False))
+    assert refused.commands.count("Edit.Undo") == 0 and refused.commands.count("Edit.DeleteBars") == 0
+
+    wrong = _FakeDorico(overshoot={1})
+    with pytest.raises(DoricoError, match="did not delete bars"):
+        wrong.run(wrong.op([(1, 0)], fallback=False))
+
+
+def test_delete_bars_cost_is_the_dearest_route() -> None:
+    from ai_score_editing.dorico import service
+
+    fake = _FakeDorico()
+    op = fake.op([(1, 0), (2, 3)])
+    assert service._delete_bars_cost(op) == 5  # 2 + 3 extend steps, against 2 for the per-bar route
+    assert service._delete_bars_cost({**op, "fallback": [{"bar": b, "tempRest": {}} for b in (3, 2, 1)]}) == 9
+    assert service._delete_bars_cost({"plan": op["plan"]}) == 2

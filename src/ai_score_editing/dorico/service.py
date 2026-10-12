@@ -346,7 +346,7 @@ async def _apply_commands(
         else COPY_STEPS - bool(op.get("exact")) + op["extendBars"] + ("tempRest" in op) if op["op"] == "copy-passage"
         else 2 + _resize_cost(op.get("resize")) + (TEMP_REST_STEPS if "tempRest" in op else 0) if op["op"] == "add-line"
         else op["count"] if op["op"] == "add-bars" and "bar" not in op
-        else max(2 + op["plan"]["extend"], sum(2 + ("tempRest" in i) for i in op.get("fallback") or [])) if op["op"] == "delete-bars" and "plan" in op
+        else _delete_bars_cost(op) if op["op"] == "delete-bars" and "plan" in op
         else sum(2 + ("tempRest" in item) for item in op["bars"]) if op["op"] == "delete-bars"
         else 1 if op["op"] == "set-layout"
         else _delete_steps(op) if op["op"] == "delete-by-id"
@@ -707,41 +707,54 @@ async def _delete_bars(
     client = bridge.client
     steps = 0
     if "plan" in op:
-        plan = op["plan"]
-        target = plan["select"]
-        block = blocks.get(str(target["stream"]))
-        if block is None:
-            raise DoricoError(f"cannot find the event block of stream {target['stream']}")
+        plans = op.get("plans") or [op["plan"]]
         fallback = op.get("fallback")
-        base = await _item_positions(bridge, flow) if fallback else {}
-        taken = 0
-        reason = None
-        try:
-            await client.command(f"EventEdit.Select?FlowID={flow_id}&EventID={target['id']}&EventBlockID={block}")
-            taken = 1
-            for _ in range(plan["extend"]):
-                await client.command("EventEdit.NavigateRightExtendBar")
-                taken += 1
-            await client.command("Edit.DeleteBars")
-            taken += 1
-        except DoricoError as exc:
-            if not fallback:
-                raise
-            reason = str(exc)
-        if reason is None:
-            steps = 2 + plan["extend"]
+        base = await _item_positions(bridge, flow) if fallback or len(plans) > 1 else {}
+        reason = last_reason = None
+        for attempt, plan in enumerate(plans, 1):
+            retry = bool(fallback) or attempt < len(plans)  # another route is left to try
+            target = plan["select"]
+            block = blocks.get(str(target["stream"]))
+            taken = 0
+            reason = None
+            if block is None:
+                if not retry:
+                    raise DoricoError(f"cannot find the event block of stream {target['stream']}")
+                reason = last_reason = f"cannot find the event block of stream {target['stream']}"
+                continue
             try:
-                return steps, await _check_deleted_bars(bridge, op, flow, steps)
+                await client.command(f"EventEdit.Select?FlowID={flow_id}&EventID={target['id']}&EventBlockID={block}")
+                taken = 1
+                for _ in range(plan["extend"]):
+                    await client.command("EventEdit.NavigateRightExtendBar")
+                    taken += 1
+                await client.command("Edit.DeleteBars")
+                taken += 1
             except DoricoError as exc:
-                if not fallback:
+                if not retry:
                     raise
-                reason = str(exc).split("; ")[0]
-        # The planned selection did not remove these bars: put the score back and go bar by bar.
-        await _revert_to(bridge, base, flow, taken + 2)
-        blocks = ((await bridge.overview(flow)).get("layout") or {}).get("blocks") or blocks
-        op = {**op, "bars": fallback, "via": "per-bar after the planned selection failed", "retried": reason}
+                reason = str(exc)
+            if reason is None:
+                steps = 2 + plan["extend"]
+                tried = {**op, "lastItem": target, "plan": plan}
+                if attempt > 1:
+                    tried["attempts"] = attempt
+                    tried["retried"] = last_reason
+                try:
+                    return steps, await _check_deleted_bars(bridge, tried, flow, steps)
+                except DoricoError as exc:
+                    if not retry:
+                        raise
+                    reason = str(exc).split("; ")[0]
+            # This selection did not remove these bars: put the score back and try the next route.
+            last_reason = reason
+            await _revert_to(bridge, base, flow, taken + 2)
+            blocks = ((await bridge.overview(flow)).get("layout") or {}).get("blocks") or blocks
+        op = {**op, "bars": fallback, "via": "per-bar after the planned selection failed", "retried": reason,
+              "attempts": len(plans)}
         op.pop("plan")
-        steps = 0  # the trial was undone
+        op.pop("plans", None)
+        steps = 0  # the trials were undone
     try:
         for item in op["bars"]:
             if "tempRest" in item:
@@ -761,6 +774,14 @@ async def _delete_bars(
     except DoricoError as exc:
         raise DoricoError(f"{exc}; {steps} undo step(s) were applied (undo that many to revert)") from exc
     return steps, await _check_deleted_bars(bridge, op, flow, steps)
+
+
+def _delete_bars_cost(op: dict[str, Any]) -> int:
+    """The most undo steps a delete-bars op can leave behind: each planned selection that is kept
+    is its select, its extend steps and the delete (a failed one is undone), or the per-bar route."""
+    plans = op.get("plans") or [op["plan"]]
+    per_bar = sum(2 + ("tempRest" in item) for item in op.get("fallback") or [])
+    return max([2 + p["extend"] for p in plans] + [per_bar])
 
 
 async def _item_positions(bridge: DoricoBridge, flow: int) -> dict[Any, Any]:
@@ -797,6 +818,7 @@ async def _check_deleted_bars(bridge: DoricoBridge, op: dict[str, Any], flow: in
         )
     return {"op": "delete-bars", "fromBar": op["fromBar"], "toBar": op["toBar"], "verified": True,
             "via": op.get("via") or ("extend" if "plan" in op else "per-bar"),
+            **({"attempts": op["attempts"]} if "attempts" in op else {}),
             **({"retried": op["retried"]} if "retried" in op else {})}
 
 

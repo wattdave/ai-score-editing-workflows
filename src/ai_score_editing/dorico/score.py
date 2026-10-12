@@ -925,6 +925,26 @@ def _extension_plan(
     return None
 
 
+def _extension_plans(
+    located: list[dict[str, Any]], bars: BarMap, first: int, last: int, limit: int = 3,
+) -> list[dict[str, Any]]:
+    """Up to `limit` exact selections for bars first-last, each on a different staff.
+
+    The first is what _extension_plan would pick (staves in order). The others are the
+    next staves whose own selection is exact: Dorico refuses the extend step on some staves
+    (condensed players answer kCommandNotAllowed) and a slur or hairpin that Lua cannot read
+    can make one staff's selection reach further than modelled, while another staff's is fine.
+    """
+    plans: list[dict[str, Any]] = []
+    for staff in sorted({e["staff"] for e in located if e["staff"] >= 1}):
+        plan = _extension_plan(located, bars, first, last, staff=staff)
+        if plan is not None:
+            plans.append(plan)
+            if len(plans) >= limit:
+                break
+    return plans
+
+
 def _delete_bars(
     operation: dict[str, Any], label: str, located: list[dict[str, Any]], staves: list[dict[str, Any]],
     bars: BarMap,
@@ -938,8 +958,10 @@ def _delete_bars(
     rest, which goes with the bar), Edit.DeleteBars. Extending one selection
     with NavigateRightExtendBar, or Edit.SelectMore, removed the wrong
     number of bars (checked 2026-10-11), and a slur or hairpin starting in the selection pulls
-    its whole span in, which the plan cannot see; so a planned selection is a trial that is
-    undone and replaced by the per-bar route when it removes the wrong bars. Lua cannot count a flow's bars, so the result is
+    its whole span in, which the plan cannot see, and Dorico refuses the extend step on some
+    staves; so a planned selection is a trial, checked and undone when it removes the wrong bars
+    or is refused. Up to three plans on different staves (`plans`; `plan` is the first) are tried
+    in turn, then the per-bar route (`fallback`). Lua cannot count a flow's bars, so the result is
     checked by a note after the range: it must have moved back by the length
     removed (or, with nothing after, the last bar's item must be gone).
     """
@@ -985,18 +1007,20 @@ def _delete_bars(
             items.append({"bar": bar, "tempRest": rest})
         return items
 
-    plan = _extension_plan(located, bars, first, last)
-    if plan is not None:
-        # The plan models only what Lua can read (not slurs or hairpins, which also pull bars in),
-        # so it is tried and checked; if Dorico removes a different number of bars, the trial is
-        # undone and the bars are deleted one at a time instead (service._delete_bars).
-        resolved["plan"] = plan
+    plans = _extension_plans(located, bars, first, last)
+    if plans:
+        # The plans model only what Lua can read (not slurs or hairpins, which also pull bars in),
+        # and Dorico refuses the extend step on some staves, so each is tried and checked in turn;
+        # a plan that removes the wrong number of bars (or is refused) is undone and the next one
+        # tried, and after the last the bars are deleted one at a time (service._delete_bars).
+        resolved["plan"] = plans[0]
+        resolved["plans"] = plans
         try:
             resolved["fallback"] = per_bar()
         except DoricoBatchError:
-            pass  # no per-bar route (a bar with nothing to select): the plan has to work
+            pass  # no per-bar route (a bar with nothing to select): the last plan has to work
         resolved["bars"] = [{"bar": b} for b in range(last, first - 1, -1)]  # the fallback's size, for counting
-        resolved["lastItem"] = plan["select"]
+        resolved["lastItem"] = plans[0]["select"]
         return resolved
     resolved["bars"] = per_bar()
     resolved["lastItem"] = resolved["bars"][0].get("select")
