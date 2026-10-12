@@ -170,8 +170,9 @@ Liszt Liebestraume (pickup bar, then 6/8, 1536 per bar; two Piano staves),
   over three bars, a grace note before the downbeat, eighth triplets, a
   lyric melisma over a barline, three empty bars on both staves, a staff
   silent for two bars while the other plays, the same ties and long notes on
-  the second staff only, and bars that open with a half rest or a quarter
-  rest so the first note starts late. 216 + 54 `bars` trials, 4 steps from
+  the second staff only, a second voice on a staff (half notes under a whole
+  note, and a tie over the barline in voice 2 under quarter notes), and bars that open with a half rest or a quarter
+  rest so the first note starts late. 216 + 54 + 42 `bars` trials, 3-4 steps from
   each bar: **all predicted.** So none of these figures, alone, causes the
   Sohn, Akinola or Liszt overshoots. Two fixes came out of it: (1) bars
   that hold no events (empty bars) are invisible to a measure that looks at
@@ -184,8 +185,7 @@ Liszt Liebestraume (pickup bar, then 6/8, 1536 per bar; two Piano staves),
   to 2 bars too far); the strings' rows around two-bar notes are suspects but
   the synthetic equivalents pass. Liszt's bar 8 and bar 18 barlines are
   unchanged by the new measurement. Candidates not yet tested in isolation:
-  several voices on one staff (rests in the second voice), cue notes,
-  divisi or section players, hidden or condensed staves (many Sohn staves
+  cue notes, divisi or section players, explicit rests in a second voice, hidden or condensed staves (many Sohn staves
   answer `kCommandNotAllowed` when selected, probably because they are
   hidden in the full-score layout), and notes shortened rather than removed
   when `Edit.DeleteBars` crosses them (so the extent read from vanished ids

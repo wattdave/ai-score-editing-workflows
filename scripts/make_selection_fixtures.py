@@ -33,14 +33,16 @@ FIGURES: dict[int, tuple[str, str]] = {
     31: ("rest", "plain"), 32: ("rest", "plain"),  # staff 1 empty, staff 2 playing
     34: ("late", "plain"), 35: ("late", "plain"), 36: ("late", "plain"),  # a half rest, then notes: the first note starts late in the bar
     38: ("late-long", "plain"), 39: ("late-long", "plain"),  # a quarter rest, then a dotted half to the barline
+    44: ("voices", "plain"), 45: ("voices", "plain"),  # a second voice of half notes under a whole note
+    47: ("voices-tie", "plain"), 48: ("voices-tie-in", "plain"),  # voice 2 tied over the barline 47|48 under quarter notes
 }
-LAST_BAR = 42
+LAST_BAR = 50
 
 STEPS = ["C", "D", "E", "F", "G", "A", "B"]
 
 
 def note(step: str, octave: int, dur: int, typ: str, staff: int, *, extra: str = "", lyric: str = "", dot: bool = False,
-         tie: str = "", grace: bool = False, tuplet: str = "") -> str:
+         tie: str = "", grace: bool = False, tuplet: str = "", voice: int = 0) -> str:
     parts = ["<note>"]
     if grace:
         parts.append("<grace/>")
@@ -51,7 +53,7 @@ def note(step: str, octave: int, dur: int, typ: str, staff: int, *, extra: str =
         parts.append('<tie type="start"/>')
     if tie in ("stop", "both"):
         parts.append('<tie type="stop"/>')
-    parts.append("<voice>1</voice>" if staff == 1 else "<voice>5</voice>")
+    parts.append(f"<voice>{voice or (1 if staff == 1 else 5)}</voice>")
     parts.append(f"<type>{typ}</type>")
     if dot:
         parts.append("<dot/>")
@@ -112,6 +114,16 @@ def staff_bar(bar: int, staff: int) -> str:
         voice = 1 if staff == 1 else 5
         out = f'<note><rest/><duration>{DIV}</duration><voice>{voice}</voice><type>quarter</type><staff>{staff}</staff></note>'
         return out + note("C", base, BAR - DIV, "half", staff, dot=True)  # a quarter rest, then a dotted half to the barline
+    if kind in ("voices", "voices-tie", "voices-tie-in"):
+        back = f"<backup><duration>{BAR}</duration></backup>"
+        if kind == "voices":
+            return (note("C", base + 1, BAR, "whole", staff) + back
+                    + note("E", base, HALF, "half", staff, voice=2) + note("F", base, HALF, "half", staff, voice=2))
+        if kind == "voices-tie":
+            top = "".join(note(step, base + 1, DIV, "quarter", staff) for step in ("C", "D", "E", "F"))
+            return top + back + note("A", base, HALF, "half", staff, voice=2) + note("G", base, HALF, "half", staff, voice=2, tie="start")
+        top = "".join(note(step, base + 1, DIV, "quarter", staff) for step in ("G", "A", "B", "C"))
+        return top + back + note("G", base, HALF, "half", staff, voice=2, tie="stop") + note("F", base, HALF, "half", staff, voice=2)
     if kind == "grace":
         return note("B", base, 0, "eighth", staff, grace=True) + note("C", base, BAR, "whole", staff)
     if kind == "triplet":
