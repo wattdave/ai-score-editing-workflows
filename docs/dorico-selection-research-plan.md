@@ -164,6 +164,32 @@ Liszt Liebestraume (pickup bar, then 6/8, 1536 per bar; two Piano staves),
   export dialog showed `01_Piano 1` and `02_Piano 1`, and the bridge two
   instruments named "Piano 1". So any join on player name must refuse a
   name that appears twice; NN stays unique.
+- **One-figure test scores** (`scripts/make_selection_fixtures.py`, a
+  two-staff piano in 4/4 imported from MusicXML; each figure sits alone in
+  its bars between control bars): a tie over one barline, a whole note held
+  over three bars, a grace note before the downbeat, eighth triplets, a
+  lyric melisma over a barline, three empty bars on both staves, a staff
+  silent for two bars while the other plays, the same ties and long notes on
+  the second staff only, and bars that open with a half rest or a quarter
+  rest so the first note starts late. 216 + 54 `bars` trials, 4 steps from
+  each bar: **all predicted.** So none of these figures, alone, causes the
+  Sohn, Akinola or Liszt overshoots. Two fixes came out of it: (1) bars
+  that hold no events (empty bars) are invisible to a measure that looks at
+  vanished notes, so the probe now counts removed bars by how far the later
+  events moved up; (2) only items that start inside the selection are pulled
+  in: a lyric extender that began before the anchor is not (the planner now
+  agrees).
+- **The real-score overshoots are still unexplained.** Sohn's viola (staff
+  3) and piccolo (staff 8) misses are at bars 2, 4, 6, 8 and 13 (steps go 1
+  to 2 bars too far); the strings' rows around two-bar notes are suspects but
+  the synthetic equivalents pass. Liszt's bar 8 and bar 18 barlines are
+  unchanged by the new measurement. Candidates not yet tested in isolation:
+  several voices on one staff (rests in the second voice), cue notes,
+  divisi or section players, hidden or condensed staves (many Sohn staves
+  answer `kCommandNotAllowed` when selected, probably because they are
+  hidden in the full-score layout), and notes shortened rather than removed
+  when `Edit.DeleteBars` crosses them (so the extent read from vanished ids
+  can be off).
 - The probe's setup was hit twice by races in the export dialog scripting
   (`entire contents` while a dialog closed); those scripts are now wrapped
   in `try`.

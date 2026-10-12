@@ -31,8 +31,10 @@ FIGURES: dict[int, tuple[str, str]] = {
     24: ("plain", "tie-out"), 25: ("plain", "tie-in"),  # the tie, on staff 2 only
     27: ("plain", "long-start"), 28: ("plain", "long-mid"), 29: ("plain", "long-end"),  # the long note, on staff 2 only
     31: ("rest", "plain"), 32: ("rest", "plain"),  # staff 1 empty, staff 2 playing
+    34: ("late", "plain"), 35: ("late", "plain"), 36: ("late", "plain"),  # a half rest, then notes: the first note starts late in the bar
+    38: ("late-long", "plain"), 39: ("late-long", "plain"),  # a quarter rest, then a dotted half to the barline
 }
-LAST_BAR = 34
+LAST_BAR = 42
 
 STEPS = ["C", "D", "E", "F", "G", "A", "B"]
 
@@ -101,6 +103,15 @@ def staff_bar(bar: int, staff: int) -> str:
         return note("F", base, BAR, "whole", staff, tie="both")
     if kind == "long-end":
         return note("F", base, BAR, "whole", staff, tie="stop")
+    if kind == "late":
+        out = f'<note><rest/><duration>{HALF}</duration><voice>{1 if staff == 1 else 5}</voice><type>half</type><staff>{staff}</staff></note>'
+        for step in ("C", "D", "E", "F"):
+            out += note(step, base, HALF // 4 * 1, "eighth" if False else "eighth", staff)
+        return out
+    if kind == "late-long":
+        voice = 1 if staff == 1 else 5
+        out = f'<note><rest/><duration>{DIV}</duration><voice>{voice}</voice><type>quarter</type><staff>{staff}</staff></note>'
+        return out + note("C", base, BAR - DIV, "half", staff, dot=True)  # a quarter rest, then a dotted half to the barline
     if kind == "grace":
         return note("B", base, 0, "eighth", staff, grace=True) + note("C", base, BAR, "whole", staff)
     if kind == "triplet":
