@@ -139,8 +139,10 @@ Liszt Liebestraume (pickup bar, then 6/8, 1536 per bar; two Piano staves),
   the voices probed onto them (`layout.resolve(..., loose=True)`); a staff
   with nothing probed has no name.
 - **Planner against `Edit.DeleteBars`** (`plan --span 2`, every range of
-  1-2 bars): Smith 6/6, **Sohn 60/65**, **Akinola 96/103** (+ 7 ranges with
-  no plan, as expected when every staff's tie or lyric overshoots).
+  1-2 bars): Smith 6/6, **Sohn 60/65**, **Akinola 96/103** (7 misses, and 6 ranges
+  with no plan: bars 1, 2 and 48 hold no note or rest event on any staff,
+  so there is nothing to select; the bars are probably empty or covered by
+  a multi-bar rest).
   Misses are all overshoots, like Liszt's: the plan's last bar is reached
   but more bars are removed (Sohn 2-3 removed 2-8, 6-7 removed 6-10;
   Akinola 52-53 removed 52-55), or nothing is removed (Sohn 1-2 and 13-14
