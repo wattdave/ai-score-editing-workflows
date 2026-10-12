@@ -166,6 +166,11 @@ def _plain_name(name: str) -> str:
     return " ".join(name.replace("{@flat@}", " Flat").replace("{@sharp@}", " Sharp").split()).lower()
 
 
+# Lines pulled in like slurs. Octave shifts, brackets and dashes made Liszt worse when added (2026-10-12);
+# pedal lines changed nothing there but were not isolated.
+LINE_TAGS = ("wedge",)
+
+
 async def slur_spans(client: DoricoClient, flow: int, lab_staves: list[dict[str, Any]] | None = None) -> list[tuple[int, int, int, int, int]]:
     """(staff, start measure, start offset, end measure, end offset) of every slur and hairpin, from a
     MusicXML export (slurs are not readable from Lua). The export lists parts in score order and
@@ -203,14 +208,18 @@ async def slur_spans(client: DoricoClient, flow: int, lab_staves: list[dict[str,
                 elif child.tag in ("backup", "forward"):
                     cursor += (-1 if child.tag == "backup" else 1) * int(child.findtext("duration") or 0)
                 elif child.tag == "direction":
-                    for wedge in child.iter("wedge"):
-                        staff = first_staff + int(child.findtext("staff") or 1)
-                        key = (staff, "wedge")
-                        if wedge.get("type") in ("crescendo", "diminuendo"):
-                            open_slurs[key] = (index, int(cursor * 256 / divisions))
-                        elif wedge.get("type") == "stop" and key in open_slurs:
+                    staff = first_staff + int(child.findtext("staff") or 1)
+                    here = int(cursor * 256 / divisions)
+                    for line in child.iter():
+                        kind = line.get("type")
+                        if line.tag not in LINE_TAGS or kind is None:
+                            continue
+                        key = (staff, line.tag)
+                        if kind in ("stop", "change", "discontinue") and key in open_slurs:
                             m1, o1 = open_slurs.pop(key)
-                            out.append((staff, m1, o1, index, int(cursor * 256 / divisions)))
+                            out.append((staff, m1, o1, index, here))
+                        if kind in ("crescendo", "diminuendo", "start", "up", "down", "change"):
+                            open_slurs[key] = (index, here)
                 elif child.tag == "note":
                     chord = child.find("chord") is not None
                     start = cursor
@@ -254,27 +263,38 @@ def predict_bars(lab: Lab, staff: int, anchor: dict[str, Any], steps: int, scope
     """
     staves = scope_staves(lab, staff, scope)
     # Lyrics are items of the stream too: a melisma runs past the barline.
-    items = [e for e in lab.located if e["staff"] in staves and e["type"] in ITEM_TYPES + ("LyricEvent",) and e.get("voice")]
+    items = [e for e in lab.located if e["staff"] in staves and e["type"] in ITEM_TYPES + ("LyricEvent", "HorizontalLineEvent") and e.get("voice")]
     spans = [(e["flowPosition"], e["flowPosition"] + (e.get("duration") or 0)) for e in items]
     if ties:
         spans = tie_chains(lab, items)
-    item_spans = list(spans)
-    slur_spans_: list[tuple[int, int, int]] = []
-    if slurs:  # a slur is an item too: it is pulled in when it starts inside the selection
+    slur_spans_: list[tuple[int, int, int, bool]] = []
+    if slurs:  # slurs and lines are items too: pulled in when they start inside the selection, from either staff of the instrument
+        mates = staves | scope_staves(lab, staff, "instrument")
+        own: dict[int, list[tuple[int, int]]] = {}
+        for e in lab.located:
+            if e["staff"] in mates and e["type"] in ITEM_TYPES and e.get("voice"):
+                own.setdefault(e["staff"], []).append((e["flowPosition"], e["flowPosition"] + (e.get("duration") or 0)))
         for st, m1, o1, m2, o2 in lab.slurs:
-            if st in staves:
+            if st in mates:
                 a = lab.bars.position(m1 + lab.tie_offset, 0) + o1
                 b = lab.bars.position(m2 + lab.tie_offset, 0) + o2
-                # The export splits a note tied over a barline; the slur ends at the start of the whole note.
-                held = [(s, e) for s, e in item_spans if s <= b < e]
-                last = max(held) if held else (b, b)
-                slur_spans_.append((a, last[0], last[1]))
+                # The bars touched run up to the slur's end position (a slur ending on a barline does not
+                # touch the next bar); the next step starts from the end of its last note, the whole Dorico
+                # note (the export splits a note tied over a barline).
+                held = [(s, e) for s, e in own.get(st, []) if s <= b < e]
+                inside = max(held) if held else None
+                # A slur ending where a note starts selects up to that point; one ending inside a longer
+                # note (the tied continuation) selects the whole note.
+                slur_spans_.append((a, b - 1, inside[1] if inside and inside[0] != b else b, st in staves))
     end = anchor["flowPosition"] + (anchor.get("duration") or 0)
     reach = end - 1  # the last position touched; a slur touches the bar of its last note
     for _ in range(steps):
         target = lab.bars.position(lab.bar_of(end) + 1, 0)
         pulled = [(s, e) for s, e in spans if anchor["flowPosition"] <= s < target]
-        caught = [(r, e) for s, r, e in slur_spans_ if anchor["flowPosition"] <= s < target]
+        # Lines of the same staff are pulled in anywhere before the target; those of the instrument's
+        # other staff only when they start within the anchor itself.
+        caught = [(r, e) for s, r, e, own in slur_spans_
+                  if anchor["flowPosition"] <= s < (target if own else anchor["flowPosition"] + (anchor.get("duration") or 0))]
         notes_end = max([target] + [e for s, e in pulled])
         end = max([notes_end] + [e for r, e in caught])
         reach = max([reach, notes_end - 1] + [r for r, e in caught])

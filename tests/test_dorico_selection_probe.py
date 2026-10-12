@@ -21,7 +21,8 @@ def note(id_: int, start: int, duration: int) -> dict:
 
 def lab(events: list[dict], slurs: list[tuple[int, int, int, int, int]] | None = None) -> SimpleNamespace:
     bars = BarMap([(0, BAR)])
-    return SimpleNamespace(located=events, bars=bars, bar_of=lambda p: bars.locate(p)[0], slurs=slurs or [], tie_offset=0)
+    return SimpleNamespace(located=events, bars=bars, bar_of=lambda p: bars.locate(p)[0], slurs=slurs or [], tie_offset=0,
+                           staves=[{"staff": 1, "name": "Piano"}])
 
 
 def test_parse_ranges() -> None:
@@ -53,3 +54,13 @@ def test_a_slur_starting_inside_the_selection_drags_in_the_bars_it_spans() -> No
     assert probe.predict_bars(lab(events, slurs), 1, events[0], 2, slurs=True) == (1, 5)
     # a slur that starts before the anchor is not pulled in
     assert probe.predict_bars(lab(events, slurs), 1, events[3], 1, slurs=True) == (3, 4)
+
+
+def test_a_slur_ending_on_a_barline_does_not_touch_the_next_bar() -> None:
+    # bars 1-3 of half notes; a slur from the second half of bar 1 to the first note of bar 2
+    events = [note(1, 0, 512), note(2, 512, 512), note(3, BAR, 512), note(4, BAR + 512, 512), note(5, 2 * BAR, BAR)]
+    slurs = [(1, 1, 512, 2, 0)]
+    assert probe.predict_bars(lab(events, slurs), 1, events[0], 1, slurs=True) == (1, 1)
+    # ending inside the next bar it does reach it
+    inside = [(1, 1, 512, 2, 512)]
+    assert probe.predict_bars(lab(events, inside), 1, events[0], 1, slurs=True) == (1, 2)

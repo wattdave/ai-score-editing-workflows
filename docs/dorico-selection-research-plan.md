@@ -296,3 +296,29 @@ the user's real scores.
   with a fake client; live on the slur fixture. The model still wants slurs
   (a rejected plan costs an extra delete and undo), and condensed players
   skip straight to the fallback.
+
+- **The slur and hairpin rule, worked out (2026-10-12).** Fixture figures for
+  a slur from beat 3 to the first note of the next bar, across several bars,
+  onto a whole note, and from a whole note (bars 57-70) isolated it. A slur
+  or hairpin that starts inside the selection is pulled in with its span:
+  - **Bars touched** run up to just before the line's end position. A slur
+    ending on the first note of a bar does not touch that bar (Liszt's
+    staff 2 over-predictions).
+  - **The next step** starts from the end of the line's last note when the
+    line ends inside a longer note (a note tied over a barline, which the
+    export splits: Sohn's viola), and from the end position itself when it
+    ends on a note's start.
+  - **Which staff:** slurs belong to their staff. Hairpins are on staff 1 in
+    the export of a piano, and a hairpin of the piano's other staff is pulled
+    in only when it starts within the anchor note itself (Liszt staff 2 bar
+    18 versus bar 8); lines starting in the stepped-over range are not.
+    Octave shifts, brackets and dashes made Liszt worse when modelled; pedal
+    lines changed nothing there.
+  - Results with `bars --slurs`: fixture 54/54 and 72/72 on other anchors;
+    Sohn Violin I, Viola, Piccolo 33/33 (first fixed 7/15 on the viola);
+    Liszt 136/138 (122/138 without slurs). Still wrong: Liszt staff 2 bar 17
+    at 2 and 3 steps (a hairpin starting in the second stepped bar is
+    pulled in there but not at bar 8). Akinola was not re-run with the final
+    rule.
+  - Export parts are matched to staves by name, since the export lists parts
+    in score order and Dorico's staves are in creation order.

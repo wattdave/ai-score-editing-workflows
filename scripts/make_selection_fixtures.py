@@ -36,9 +36,13 @@ FIGURES: dict[int, tuple[str, str]] = {
     44: ("voices", "plain"), 45: ("voices", "plain"),  # a second voice of half notes under a whole note
     40: ("wedge-start", "plain"), 41: ("plain-half", "plain"), 42: ("wedge-end", "plain"),  # a crescendo hairpin from bar 40 beat 3 to bar 42 beat 3
     51: ("slur-start", "plain"), 52: ("plain-half", "plain"), 53: ("slur-end", "plain"),  # a slur from bar 51 to bar 53
+    58: ("h-s", "plain"), 59: ("he-", "plain"),  # slur from beat 3 of bar 58 to the first note of bar 59
+    61: ("hs-", "plain"), 62: ("h--", "plain"), 63: ("he-", "plain"),  # slur from bar 61 beat 1 to the first note of bar 63
+    65: ("hs-", "plain"), 66: ("we", "plain"),  # slur from bar 65 beat 1 to a whole note starting bar 66
+    68: ("ws", "plain"), 69: ("he-", "plain"),  # slur from a whole note in bar 68 to the first note of bar 69
     47: ("voices-tie", "plain"), 48: ("voices-tie-in", "plain"),  # voice 2 tied over the barline 47|48 under quarter notes
 }
-LAST_BAR = 56
+LAST_BAR = 71
 
 STEPS = ["C", "D", "E", "F", "G", "A", "B"]
 
@@ -139,6 +143,13 @@ def staff_bar(bar: int, staff: int) -> str:
         if kind == "wedge-end":
             return first + wedge("stop") + dyn("f") + second
         return first + second
+    if len(kind) == 3 and kind[0] == "h" or kind in ("we", "ws"):
+        # "h" + one letter per half note, "w" + one letter for a whole note: s starts a slur on that note, e ends it
+        def mark(c: str) -> str:
+            return {"s": '<slur type="start" number="1"/>', "e": '<slur type="stop" number="1"/>'}.get(c, "")
+        if kind[0] == "w":
+            return note("C", base, BAR, "whole", staff, extra=mark(kind[1]))
+        return note("C", base, HALF, "half", staff, extra=mark(kind[1])) + note("D", base, HALF, "half", staff, extra=mark(kind[2]))
     if kind in ("slur-start", "slur-end"):
         slur = lambda t: f'<slur type="{t}" number="1"/>'
         if kind == "slur-start":
