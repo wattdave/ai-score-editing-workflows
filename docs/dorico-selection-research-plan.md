@@ -263,6 +263,18 @@ does not document, are recorded as blocked rather than guessed at.
 Done when: each listed command is marked yes, partly or no with evidence,
 and the top two or three have a proposed operation.
 
+### Result: `Edit.TransposeSelection` (2026-10-12) is blocked
+
+With a bar selected, the command opens a modal Transpose dialog (Quality or
+Number of Divisions, interval, direction, octaves, key-signature and respelling
+options, OK/Cancel). Parameters on the command (`?Interval=2&Direction=kUp`)
+were not taken: the dialog opened all the same, and the API call hung until it
+was dismissed (the bridge then answered again). Its Cancel button is not in
+the accessibility tree; it was closed by clicking at its screen position. Per
+this plan that is "blocked", not guessed at. The existing per-note `transpose`
+(Lua, diatonic respelling) stays; what the command would add is key
+signatures and chord symbols in the range.
+
 ## Phase 3: consolidate
 
 - Move `_extension_plan` out of `score.py` into its own module
