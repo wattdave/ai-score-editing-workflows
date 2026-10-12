@@ -322,3 +322,16 @@ the user's real scores.
     rule.
   - Export parts are matched to staves by name, since the export lists parts
     in score order and Dorico's staves are in creation order.
+
+- **Hairpins touch the bar after the one they end in when they end on its last
+  position (2026-10-12, Akinola).** A slur ending on a barline does not touch
+  the next bar, but a hairpin whose stop sits at the end of a bar does (the
+  Akinola hairpins at bars 46-47, 49-50 and 53-54 all reached one bar further
+  than the slur rule predicted, on every staff). With that, Akinola goes from
+  192/370 to 240/370 `bars --slurs` trials (bars 7-53, 1-2 steps, all staves):
+  122 trials are the condensed players' `kCommandNotAllowed`, so of the 248 Dorico
+  answered, 240 match (97%, from 77%). The 8 left are 2-step trials at
+  bars 8, 15, 47 and 52 on Oboe-range staves 11 and 17-19. Liszt is
+  unchanged at 136/138. A restart of Dorico was needed first: after many
+  projects and window changes the placement probe put every voice of Akinola
+  on one staff (cause not found), and a restart cleared it.

@@ -74,7 +74,7 @@ class Lab:
         self.base_sig = signature(self.base)
         self.ties: set[tuple[int, int]] = set()
         self.tie_offset = 0
-        self.slurs: list[tuple[int, int, int, int, int]] = []
+        self.slurs: list[tuple[Any, ...]] = []
 
     def item(self, staff: int, bar: int, *, note: bool = True) -> dict[str, Any] | None:
         """The first item starting in the bar on the staff (a note first)."""
@@ -171,7 +171,7 @@ def _plain_name(name: str) -> str:
 LINE_TAGS = ("wedge",)
 
 
-async def slur_spans(client: DoricoClient, flow: int, lab_staves: list[dict[str, Any]] | None = None) -> list[tuple[int, int, int, int, int]]:
+async def slur_spans(client: DoricoClient, flow: int, lab_staves: list[dict[str, Any]] | None = None) -> list[tuple[Any, ...]]:
     """(staff, start measure, start offset, end measure, end offset) of every slur and hairpin, from a
     MusicXML export (slurs are not readable from Lua). The export lists parts in score order and
     Dorico's staves are in creation order, so with `lab_staves` each part is matched to the staff
@@ -182,7 +182,7 @@ async def slur_spans(client: DoricoClient, flow: int, lab_staves: list[dict[str,
     from ai_score_editing.dorico.export import export_musicxml
 
     root = ET.parse(await export_musicxml(client, flow)).getroot()
-    out: list[tuple[int, int, int, int, int]] = []
+    out: list[tuple[Any, ...]] = []
     names = {sp.get("id"): sp.findtext("part-name") for sp in root.iter("score-part")}
     by_name = {}
     for st in lab_staves or []:
@@ -217,7 +217,7 @@ async def slur_spans(client: DoricoClient, flow: int, lab_staves: list[dict[str,
                         key = (staff, line.tag)
                         if kind in ("stop", "change", "discontinue") and key in open_slurs:
                             m1, o1 = open_slurs.pop(key)
-                            out.append((staff, m1, o1, index, here))
+                            out.append((staff, m1, o1, index, here, True))  # True: a line, not a slur
                         if kind in ("crescendo", "diminuendo", "start", "up", "down", "change"):
                             open_slurs[key] = (index, here)
                 elif child.tag == "note":
@@ -274,7 +274,7 @@ def predict_bars(lab: Lab, staff: int, anchor: dict[str, Any], steps: int, scope
         for e in lab.located:
             if e["staff"] in mates and e["type"] in ITEM_TYPES and e.get("voice"):
                 own.setdefault(e["staff"], []).append((e["flowPosition"], e["flowPosition"] + (e.get("duration") or 0)))
-        for st, m1, o1, m2, o2 in lab.slurs:
+        for st, m1, o1, m2, o2, *tag in lab.slurs:
             if st in mates:
                 a = lab.bars.position(m1 + lab.tie_offset, 0) + o1
                 b = lab.bars.position(m2 + lab.tie_offset, 0) + o2
@@ -285,7 +285,8 @@ def predict_bars(lab: Lab, staff: int, anchor: dict[str, Any], steps: int, scope
                 inside = max(held) if held else None
                 # A slur ending where a note starts selects up to that point; one ending inside a longer
                 # note (the tied continuation) selects the whole note.
-                slur_spans_.append((a, b - 1, inside[1] if inside and inside[0] != b else b, st in staves))
+                # A hairpin ending on a bar's last position also touches the next bar; a slur ending there does not.
+                slur_spans_.append((a, b if tag else b - 1, inside[1] if inside and inside[0] != b else b, st in staves))
     end = anchor["flowPosition"] + (anchor.get("duration") or 0)
     reach = end - 1  # the last position touched; a slur touches the bar of its last note
     for _ in range(steps):
