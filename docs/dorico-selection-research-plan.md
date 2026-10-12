@@ -193,23 +193,31 @@ Liszt Liebestraume (pickup bar, then 6/8, 1536 per bar; two Piano staves),
   project the API is addressing.) `Edit.Delete` on the selection shows the
   selected notes are exactly what the model says; it is `DeleteBars` that
   removes the extra bars.
-- **Sohn's viola, with slurs modelled (`--slurs`)**: the first step now
-  matches at bars 2, 4, 6, 8 and 13 (it matched at none before; 15 trials
-  went from 0 to 7 predicted, after snapping a slur's end to the start of
-  the whole Dorico note, because the export splits a note tied over a
-  barline). Steps 2 and 3 still overshoot by one or two bars at most
-  anchors, so something else is in play: possibly a slur's last note is
-  selected whole and the next step starts from its end (that fits Sohn but
-  not the fixture, whose slur ends mid-bar), or other lines (trills,
-  pedal, ottava) or tied notes in the export. The piccolo, Liszt and Akinola
-  misses have not been re-run with `--slurs`. The product's
-  `_extension_plan` cannot see slurs (not readable from Lua), so a plan
-  over a slurred passage can still undershoot; the fix needs the export or
-  a guard that checks the removed bars afterwards and undoes.
-- The hidden-staff idea is not supported: every Sohn staff with notes
-  accepts `EventEdit.Select` at bar 2 (45 staves, no refusals), so
-  `kCommandNotAllowed` came from something else (probably staves with no
-  notes at the anchor).
+- **Sohn, with slurs modelled and export parts matched to staves by name**
+  (`bars --slurs`; the export lists parts in score order, Dorico's staves
+  are in creation order, so ordinal numbering put slurs on the wrong
+  staves): the piccolo is predicted in 12/12 trials, the viola 14/15,
+  Violin I 8/9, Double Bass 21/21 (bars 2-15, 1-3 steps). The first step
+  now matches everywhere it can be tried. The two remaining misses
+  (viola bar 8 and Violin I bar 9, both at 3 steps) are over-predictions:
+  measured 12, predicted 14. Slurs were the main cause of the Sohn
+  overshoots. Not yet re-run: Liszt and Akinola.
+  A slur's end snaps to the start of the whole Dorico note (the export
+  splits a note tied over a barline), the slur's last note is selected
+  whole (the next step starts from its end), and the bars touched run to
+  the last note's start bar.
+- **Condensed players refuse the extend step (strong correlation, cause
+  not isolated).** In Sohn `EventEdit.Select` works on every staff with
+  notes, but `EventEdit.NavigateRightExtendBar` answers `kCommandNotAllowed`
+  on Flute 1 and 2, Oboe 1 and 2, Clarinet 1, Bassoon 1, Horn 1 and 2,
+  Trumpet 1 and Timpani 1, and works on Violin I, Viola, Double Bass, the
+  Piccolo and the Tuba: every refusing staff is one of a pair or group of
+  same-family players, every working staff stands alone or is a string
+  section. That is what Dorico's condensing would do in the full score.
+  Setting the layout's `hideEmptyStaves` to `never` changes nothing, so
+  hidden staves are not the cause. For these staves `delete-bars` must use
+  its fallback (one bar at a time); a way to turn condensing off for the
+  edit has not been tried.
 - `DoricoClient` now connects with `ping_interval=None`: the Sohn snapshot
   does a 40 s MusicXML export during which Dorico does not answer
   websocket pings, and the default keepalive closed the connection.

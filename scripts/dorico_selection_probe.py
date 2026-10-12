@@ -161,18 +161,36 @@ async def barline_ties(client: DoricoClient, flow: int) -> set[tuple[int, int]]:
     return out
 
 
-async def slur_spans(client: DoricoClient, flow: int) -> list[tuple[int, int, int, int, int]]:
+def _plain_name(name: str) -> str:
+    """Dorico writes a flat as {@flat@} in staff names and 'Flat' in the export's part names."""
+    return " ".join(name.replace("{@flat@}", " Flat").replace("{@sharp@}", " Sharp").split()).lower()
+
+
+async def slur_spans(client: DoricoClient, flow: int, lab_staves: list[dict[str, Any]] | None = None) -> list[tuple[int, int, int, int, int]]:
     """(staff, start measure, start offset, end measure, end offset) of every slur and hairpin, from a
-    MusicXML export (slurs are not readable from Lua). Staves are numbered through the parts in
-    order, so this is only as reliable as that order is for the score; offsets are in 1/256 quarter."""
+    MusicXML export (slurs are not readable from Lua). The export lists parts in score order and
+    Dorico's staves are in creation order, so with `lab_staves` each part is matched to the staff
+    of the same name (a second staff of the part follows the first); without them staves are
+    numbered through the parts in order. Offsets are in 1/256 quarter."""
     import xml.etree.ElementTree as ET
 
     from ai_score_editing.dorico.export import export_musicxml
 
     root = ET.parse(await export_musicxml(client, flow)).getroot()
     out: list[tuple[int, int, int, int, int]] = []
+    names = {sp.get("id"): sp.findtext("part-name") for sp in root.iter("score-part")}
+    by_name = {}
+    for st in lab_staves or []:
+        if st.get("name"):
+            by_name.setdefault(_plain_name(st["name"]), st["staff"])
     first_staff = 0
     for part in root.iter("part"):
+        if lab_staves:
+            found = by_name.get(_plain_name(names.get(part.get("id")) or ""))
+            if found is None:
+                first_staff = -10_000  # no staff of that name: its slurs go nowhere
+            else:
+                first_staff = found - 1
         divisions = 1
         staves = 1
         open_slurs: dict[tuple[int, str], tuple[int, int]] = {}
@@ -208,7 +226,8 @@ async def slur_spans(client: DoricoClient, flow: int) -> list[tuple[int, int, in
                             out.append((staff, m1, o1, index, int(start * scale)))  # a slur ends where its last note starts
                     if not chord and child.find("grace") is None:
                         cursor += dur
-        first_staff += staves
+        if not lab_staves:
+            first_staff += staves
     return out
 
 
@@ -460,7 +479,7 @@ async def main() -> int:
             print(f"{len(lab.ties)} (measure, pitch) ties start in a bar and go on")
         if getattr(args, "slurs", False):
             lab.tie_offset = args.tie_offset
-            lab.slurs = await slur_spans(client, args.flow)
+            lab.slurs = await slur_spans(client, args.flow, lab.staves)
             print(f"{len(lab.slurs)} slurs")
         if args.mode == "bars":
             return int(await run_bars(lab, args) > 0)
