@@ -285,6 +285,19 @@ refused on Dorico. The Cancel button is reachable as `button "Cancel" of group
 without a dialog, but it only makes bar numbers show on the selected bars; it
 does not change the numbering.
 
+### Result: `Edit.SplitFlowAtSelection` (2026-10-12)
+
+Yes. On Akinola, with the first note of bar 30 on staff 1 selected, the
+command runs with no dialog and no parameters. It makes a second flow
+("Flow 2") that starts at the selected bar. The notes read from the two
+flows are 3135 and 2426, which add up to the 5561 notes before. Undoing the
+split took 4 undo steps (plus 1 for the selection) and brought back the single
+flow with the original 6592 events. Not checked: what Flow 2 gets for time
+signature, key and tempo at the split, flow names, and whether a selection
+that is not at a bar start splits mid-bar. A `split-flow` operation would take
+a bar and a staff, select that bar's first note and run the command; the
+service would check the flow count and the note total.
+
 ## Phase 3: consolidate
 
 - Move `_extension_plan` out of `score.py` into its own module
