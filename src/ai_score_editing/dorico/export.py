@@ -103,20 +103,22 @@ tell application "System Events"
   tell process "%(process)s"
     set out to ""
     repeat with i from 1 to count of windows
-      set w to window i
-      if (get subrole of w) is "AXDialog" then
-        set texts to ""
-        set items_ to entire contents of w
-        repeat with j from 1 to count of items_
-          set e to item j of items_
-          if (get role of e) is "AXStaticText" then
+      try
+        set w to window i
+        if (get subrole of w) is "AXDialog" then
+          set texts to ""
+          set items_ to entire contents of w
+          repeat with j from 1 to count of items_
             try
-              set texts to texts & ((get value of e) as text) & " "
+              set e to item j of items_
+              if (get role of e) is "AXStaticText" then
+                set texts to texts & ((get value of e) as text) & " "
+              end if
             end try
-          end if
-        end repeat
-        set out to out & i & tab & texts & linefeed
-      end if
+          end repeat
+          set out to out & i & tab & texts & linefeed
+        end if
+      end try
     end repeat
     return out
   end tell
@@ -131,15 +133,15 @@ on run argv
     tell process "%(process)s"
       set items_ to entire contents of window windowIndex
       repeat with j from 1 to count of items_
-        set e to item j of items_
-        if (get role of e) is "AXButton" then
-          try
+        try
+          set e to item j of items_
+          if (get role of e) is "AXButton" then
             if ((get name of e) as text) is buttonName then
               click e
               return "clicked"
             end if
-          end try
-        end if
+          end if
+        end try
       end repeat
       return "missing"
     end tell

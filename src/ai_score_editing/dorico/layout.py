@@ -34,6 +34,7 @@ def resolve(
     events: list[dict[str, Any]],
     musicxml: dict[str, Any] | None = None,
     placements: dict[int, int] | None = None,
+    loose: bool = False,
 ) -> list[dict[str, Any]]:
     """Staves as [{staff, name, stream, voiceStreams}], staff numbers from 1.
 
@@ -42,6 +43,8 @@ def resolve(
     """
     staves = [s["stream"] for s in raw["staves"]]
     instruments = raw["instruments"]
+    if placements and loose:
+        return _from_placements_loose(raw, staves, instruments, placements)
     if placements:
         return _from_placements(raw, staves, instruments, placements)
     counts = _staves_per_instrument(len(staves), instruments, musicxml)
@@ -67,6 +70,25 @@ def resolve(
                     result[staff - 1]["voiceStreams"].append(voice)
     if first != len(staves):
         raise DoricoError(f"the instruments account for {first} staves but the flow has {len(staves)}")
+    return result
+
+
+def _from_placements_loose(
+    raw: dict[str, Any], staves: list[int], instruments: list[dict[str, Any]], placements: dict[int, int]
+) -> list[dict[str, Any]]:
+    """Staves from probed placements alone, whatever order Dorico lists its instruments in.
+
+    A staff holds the voices probed onto it and takes the name of the instrument they belong
+    to (the first, when a kit shares one staff). A staff nothing was probed onto has no voices
+    and no name. Used when the strict reading cannot be settled (Sohn lists Tubular Bells
+    before the other percussion, and its unplayed percussion instruments have no notes).
+    """
+    owner = {v: i.get("name") for i in instruments for v in i.get("voiceStreams") or []}
+    result = []
+    for number, stream in enumerate(staves, 1):
+        voices = sorted(v for v, staff in placements.items() if staff == number)
+        name = next((owner[v] for v in voices if owner.get(v)), None)
+        result.append({"staff": number, "name": name, "stream": stream, "voiceStreams": voices})
     return result
 
 

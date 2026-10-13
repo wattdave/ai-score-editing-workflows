@@ -45,7 +45,7 @@ CLEFS = {"treble", "bass", "percussion", "tab", "tab.4"}
 #: Ops that select a note and run one Dorico command on it.
 NOTE_COMMAND_OPS = {"add-dynamic", "set-articulation", "add-slur", "add-tempo", "add-rehearsal-mark"}
 COMMAND_OPS = {
-    "set-break", "add-lyrics", "set-time", "set-key", "set-barline", "copy-passage", "add-line", "add-bars",
+    "set-break", "add-lyrics", "set-time", "set-key", "set-barline", "copy-passage", "move-passage", "add-line", "add-bars",
     "set-layout", "delete-bars",
 } | NOTE_COMMAND_OPS
 #: Resolved forms of set-pitch/delete/transpose on notes read from dump().
@@ -302,8 +302,8 @@ def prepare_batch(
             resolved = [_note_command(operation, op, label, by_id, by_address)]
         elif op == "add-line":
             resolved = [_add_line(operation, label, located, staves, bars)]
-        elif op == "copy-passage":
-            resolved = _copy_passage(operation, label, located, staves, bars)
+        elif op in ("copy-passage", "move-passage"):
+            resolved = _copy_passage(operation, label, located, staves, bars, move=op == "move-passage")
         elif op == "delete-voice":
             resolved = [_delete_voice(operation, label, staves, bars)]
         elif op == "add-bars":
@@ -431,9 +431,15 @@ def _note_command(
 
 def _copy_passage(
     operation: dict[str, Any], label: str, located: list[dict[str, Any]],
-    staves: list[dict[str, Any]], bars: BarMap,
+    staves: list[dict[str, Any]], bars: BarMap, move: bool = False,
 ) -> list[dict[str, Any]]:
     """Copy bars fromBar-toBar of staves top-bottom to destBar of destStaff on.
+
+    With `move` the selection is cut (Edit.Cut, which leaves the bars in place
+    with rests, measured 2026-10-12) instead of copied, and the resolved op
+    carries `keepIds`: the notes of both staves that must survive, so that a
+    selection that reached further than planned (a slur or hairpin starting in
+    it pulls its span in) is caught and undone rather than left in the score.
 
     Dorico copies what the selection holds: an exact selection from
     _extension_plan where there is one, else Edit.SelectMore (from a note)
@@ -491,6 +497,21 @@ def _copy_passage(
             "expect": [(e["flowPosition"] - notes[0]["flowPosition"], e.get("pitch")) for e in notes],
             "anchorPosition": anchor_position, "destStreams": list(voices),
         }
+        if move:
+            passage_end = max(e["flowPosition"] - notes[0]["flowPosition"] + (e.get("duration") or 0) for e in notes)
+            cut_ids = {e["id"] for e in notes}
+            overwritten = {
+                e["id"] for e in located
+                if e["staff"] == target_staff and e["type"] in TYPE_ALIASES["Note"] and "id" in e
+                and anchor_position <= e["flowPosition"] < anchor_position + passage_end
+            }
+            resolved["move"] = True
+            resolved["cutIds"] = sorted(cut_ids)
+            resolved["keepIds"] = sorted(
+                e["id"] for e in located
+                if e["staff"] in (staff, target_staff) and e["type"] in TYPE_ALIASES["Note"] and "id" in e
+                and e["id"] not in cut_ids and e["id"] not in overwritten
+            )
         # An exact selection (no Edit.SelectMore): see _extension_plan.
         plan = _extension_plan(located, bars, first, last, staff=staff, anchor=in_first_bar[0], cover=True)
         if plan is not None:
@@ -876,7 +897,10 @@ def _extension_plan(
             e for e in located
             if e["staff"] == staff and e["type"] in TYPE_ALIASES["NoteRest"] and "id" in e and e.get("voice")
         ]
-        spans = [(e["flowPosition"], e["flowPosition"] + (e.get("duration") or 0)) for e in items]
+        # A lyric is an item of the stream: a melisma runs on past the barline and drags
+        # the next bar in like a tied note (measured on Smith, 2026-10-11).
+        lyrics = [e for e in located if e["staff"] == staff and e["type"] == "LyricEvent" and e.get("voice")]
+        spans = [(e["flowPosition"], e["flowPosition"] + (e.get("duration") or 0)) for e in items + lyrics]
         anchors = sorted((e for e in items if e["bar"] == first),
                          key=lambda e: (e["type"] not in TYPE_ALIASES["Note"], e["flowPosition"], e.get("voice") or 0, e["id"]))
         if anchor is not None:
@@ -891,7 +915,9 @@ def _extension_plan(
                         target = bars.position(bar + 1, 0)
                     except Exception:
                         break
-                    end = max([target] + [e for s_, e in spans if s_ < target])
+                    # Only items that start in the selection's range are pulled in: a lyric
+                    # extender that began before the anchor is not (measured on a synthetic score).
+                    end = max([target] + [e for s_, e in spans if chosen["flowPosition"] <= s_ < target])
                 if cover:
                     if not steps:
                         start = bars.position(first, 0)
@@ -920,6 +946,26 @@ def _extension_plan(
     return None
 
 
+def _extension_plans(
+    located: list[dict[str, Any]], bars: BarMap, first: int, last: int, limit: int = 3,
+) -> list[dict[str, Any]]:
+    """Up to `limit` exact selections for bars first-last, each on a different staff.
+
+    The first is what _extension_plan would pick (staves in order). The others are the
+    next staves whose own selection is exact: Dorico refuses the extend step on some staves
+    (condensed players answer kCommandNotAllowed) and a slur or hairpin that Lua cannot read
+    can make one staff's selection reach further than modelled, while another staff's is fine.
+    """
+    plans: list[dict[str, Any]] = []
+    for staff in sorted({e["staff"] for e in located if e["staff"] >= 1}):
+        plan = _extension_plan(located, bars, first, last, staff=staff)
+        if plan is not None:
+            plans.append(plan)
+            if len(plans) >= limit:
+                break
+    return plans
+
+
 def _delete_bars(
     operation: dict[str, Any], label: str, located: list[dict[str, Any]], staves: list[dict[str, Any]],
     bars: BarMap,
@@ -932,7 +978,11 @@ def _delete_bars(
     before the batch stay right: select an item in the bar (or a temporary
     rest, which goes with the bar), Edit.DeleteBars. Extending one selection
     with NavigateRightExtendBar, or Edit.SelectMore, removed the wrong
-    number of bars (checked 2026-10-11). Lua cannot count a flow's bars, so the result is
+    number of bars (checked 2026-10-11), and a slur or hairpin starting in the selection pulls
+    its whole span in, which the plan cannot see, and Dorico refuses the extend step on some
+    staves; so a planned selection is a trial, checked and undone when it removes the wrong bars
+    or is refused. Up to three plans on different staves (`plans`; `plan` is the first) are tried
+    in turn, then the per-bar route (`fallback`). Lua cannot count a flow's bars, so the result is
     checked by a note after the range: it must have moved back by the length
     removed (or, with nothing after, the last bar's item must be gone).
     """
@@ -953,33 +1003,47 @@ def _delete_bars(
     if later:
         marker = min(later, key=lambda e: (e["flowPosition"], e["id"]))
         resolved["marker"] = {"id": marker["id"], "position": marker["flowPosition"]}
-    plan = _extension_plan(located, bars, first, last)
-    if plan is not None:
-        resolved["plan"] = plan
-        resolved["bars"] = [{"bar": b} for b in range(last, first - 1, -1)]  # the fallback's size, for counting
-        resolved["lastItem"] = plan["select"]
-        return resolved
-    for bar in range(last, first - 1, -1):
-        candidates = [
-            e for e in located
-            if e["bar"] == bar and e["staff"] >= 1 and "id" in e and e["type"] in TYPE_ALIASES["NoteRest"]
-            and e.get("voice")
-        ]
-        if candidates:
-            # A note, on the top staff's first voice if it has one (checked 2026-10-11).
-            target = min(candidates, key=lambda e: (e["type"] not in TYPE_ALIASES["Note"], e["staff"],
-                                                    e.get("voice") or 0, e["position"], e["id"]))
-            resolved["bars"].append({"bar": bar, "select": {"id": target["id"], "stream": target["stream"]}})
-            continue
+    def per_bar() -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        for bar in range(last, first - 1, -1):
+            candidates = [
+                e for e in located
+                if e["bar"] == bar and e["staff"] >= 1 and "id" in e and e["type"] in TYPE_ALIASES["NoteRest"]
+                and e.get("voice")
+            ]
+            if candidates:
+                # A note, on the top staff's first voice if it has one (checked 2026-10-11).
+                target = min(candidates, key=lambda e: (e["type"] not in TYPE_ALIASES["Note"], e["staff"],
+                                                        e.get("voice") or 0, e["position"], e["id"]))
+                items.append({"bar": bar, "select": {"id": target["id"], "stream": target["stream"]}})
+                continue
+            try:
+                rest = _temporary_rest(bars.position(bar, 0), located, staves)
+            except Exception as exc:
+                raise DoricoBatchError(f"{label}: {exc}") from exc
+            if rest is None:
+                raise DoricoBatchError(
+                    f"{label}: bar {bar} has nothing to select and no room for a temporary rest"
+                )
+            items.append({"bar": bar, "tempRest": rest})
+        return items
+
+    plans = _extension_plans(located, bars, first, last)
+    if plans:
+        # The plans model only what Lua can read (not slurs or hairpins, which also pull bars in),
+        # and Dorico refuses the extend step on some staves, so each is tried and checked in turn;
+        # a plan that removes the wrong number of bars (or is refused) is undone and the next one
+        # tried, and after the last the bars are deleted one at a time (service._delete_bars).
+        resolved["plan"] = plans[0]
+        resolved["plans"] = plans
         try:
-            rest = _temporary_rest(bars.position(bar, 0), located, staves)
-        except Exception as exc:
-            raise DoricoBatchError(f"{label}: {exc}") from exc
-        if rest is None:
-            raise DoricoBatchError(
-                f"{label}: bar {bar} has nothing to select and no room for a temporary rest"
-            )
-        resolved["bars"].append({"bar": bar, "tempRest": rest})
+            resolved["fallback"] = per_bar()
+        except DoricoBatchError:
+            pass  # no per-bar route (a bar with nothing to select): the last plan has to work
+        resolved["bars"] = [{"bar": b} for b in range(last, first - 1, -1)]  # the fallback's size, for counting
+        resolved["lastItem"] = plans[0]["select"]
+        return resolved
+    resolved["bars"] = per_bar()
     resolved["lastItem"] = resolved["bars"][0].get("select")
     return resolved
 

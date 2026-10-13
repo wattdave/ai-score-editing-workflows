@@ -35,7 +35,7 @@ APP = Path("/Applications/Dorico 6.app")
 #: Every Dorico command the back end sends (a test keeps this in step with
 #: the source). A missing one breaks a feature.
 REQUIRED_COMMANDS = sorted({
-    "Script.RunScript", "Edit.Undo", "Edit.Redo", "Edit.SelectAll", "Edit.SelectMore", "Edit.Copy", "Edit.Paste",
+    "Script.RunScript", "Edit.Undo", "Edit.Redo", "Edit.SelectAll", "Edit.SelectMore", "Edit.Copy", "Edit.Cut", "Edit.Paste",
     "Edit.CreateSystemBreak", "Edit.LineOfLyrics", "EventEdit.Select", "EventEdit.Delete",
     "EventEdit.NavigateRightExtendBar", "Edit.DeleteBars", "File.Export", "File.ScoreInfo", "Print.ExportCurrentLayoutAsPDF",
     "Filter.LyricsLine1", "Filter.LyricsLine2", "Filter.LyricsLine3", "Filter.LyricsLine4", "Filter.LyricsLine5",

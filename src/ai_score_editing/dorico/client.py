@@ -82,7 +82,7 @@ class DoricoClient:
 
     async def connect(self) -> None:
         try:
-            self._ws = await websockets.connect(self.uri, max_size=None, open_timeout=5)
+            self._ws = await websockets.connect(self.uri, max_size=None, open_timeout=5, ping_interval=None)
         except (OSError, asyncio.TimeoutError) as exc:
             raise DoricoError(f"cannot reach Dorico at {self.uri}: is Dorico running? ({exc})") from exc
         entry = self.store.load(self._store_host, self.port)

@@ -239,6 +239,20 @@ now works:
 - Slurs visible to Lua; `copyRange` copying anything.
 - The jump bar logging a command; the Project Info flow list accessible.
 
+## 6b. Selection rules
+
+Open a copy of the Fugue 16 example (`/Users/Shared/Dorico Example Projects`),
+never a real score, and run
+
+```bash
+uv run python scripts/dorico_selection_probe.py
+```
+
+It re-measures the rules in `docs/dorico.md` "Selecting bars" (32 delete-bars
+trials against the model, and five copy ranges) through Lua reads, undoing
+each trial. Exit status 1 means a rule changed; `delete-bars` and
+`copy-passage` plan their selections with those rules.
+
 ## 7. Afterwards
 
 - Save new baselines: `uv run python scripts/dorico_upgrade_check.py

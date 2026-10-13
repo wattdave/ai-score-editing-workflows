@@ -153,6 +153,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | (Dorico only) `read_lyrics`, `edit_lyrics` | ⚠️ | a player's verse as text through the Edit Lyrics dialog; edits must keep the syllable count |
 | `add-lyric` → `add-lyrics` | ⚠️ | verses 1-10, typed through the lyric popover by command (see gaps); refuses to type over a lyric already in that verse |
 | `copy-passage` | ✅ | by selection + `Edit.Copy` / `Edit.Paste` (see gaps); destPosition 0 only |
+| `move-passage` | ✅ | `copy-passage` with `Edit.Cut`: the source bars stay (rests, nothing moves), the notes keep their ids at the destination; checked by what vanished, undone if the cut reached further than planned; one more undo step |
 | `set-key`, `set-time` | ✅ | by command at the start of any bar, bar 1 included: 2 undo steps each, 4 where the bar starts with implicit rests only (a temporary rest is selected); refused only when every voice holds a note over the barline (see gaps). `set-time` takes a `pickup` (Dorico only). A time signature is removed with `delete` by its id (`query_score` type `TimeSignature`) |
 | `set-break` | ✅ | system breaks via `Edit.CreateSystemBreak` on a selected note (2 undo steps each), or a temporary rest in a bar with nothing of its own (4); refused only where every voice holds a note over the barline |
 | `set-barline` | ⚠️ | double, final, start/end repeat, by command like set-time (a start repeat at bar 1 keeps the opening time signature); `position` puts one part-way through a bar (Dorico only) |
@@ -758,11 +759,48 @@ touches, so the bars removed show how far a selection reaches.
   note. The steps are not "one bar each" on a staff with such notes; items on
   other staves are ignored. A selection already ending on a barline (a bar
   rest, or a note that ends the bar) moves a full bar on the first step.
+- **Slurs and hairpins that start inside the selection are items too**:
+  `Edit.DeleteBars` also removes every bar they span (a slur from bar 51 to
+  53 makes a one-bar selection from bar 51 remove bars 51-53). They are not
+  readable from Lua, so `delete-bars` cannot see them yet; the probe models
+  them from a MusicXML export (`dorico_selection_probe.py bars --slurs`).
+- **`delete-bars` treats a planned selection as a trial.** The planner finds
+  up to three exact selections, each on a different staff (`plans`; `plan`
+  is the first). Each is run in turn: select, extend steps, `Edit.DeleteBars`,
+  then a note after the range must have moved up by exactly the length
+  removed. If not (a slur or hairpin pulled more bars in), or Dorico rejects
+  a step (condensed players answer `kCommandNotAllowed` to the extend step),
+  the notes and rests are put back by undoing until they match a snapshot
+  taken before the trial, and the next plan is tried; after the last, the
+  bars are deleted one at a time. The result's `via` is `extend` (with
+  `attempts` when it was not the first plan, and `retried` the last reason) or
+  `per-bar after the planned selection failed` (with `attempts` and
+  `retried`). Checked live on the fixture (a slur from bar 51 to 53; a
+  one-bar delete from a slurred staff removed bar 51 only, via the fallback);
+  the several-plan loop is covered by unit tests with a fake client. When no
+  per-bar route exists (a bar with nothing to select and no room for a
+  temporary rest) the last plan's failure is an error, as before. `undoSteps`
+  in a dry run is the dearest route: the largest plan or the per-bar route,
+  since a failed trial is undone.
 - Replaying this on the events read predicted the bars removed in all 24
   trials (two staves, 1 to 8 steps), and `delete-bars` uses it:
   `score._extension_plan` returns an item in the first bar and the number
   of steps, or none when a tie over the last barline makes every selection
   on every staff overshoot.
+- **A lyric is an item too (Smith Preces, 2026-10-11).** A melisma's lyric
+  event starts on its note and lasts to the end of the extender line; one
+  that runs past the barline drags the next bar in, like a tied note
+  (Tenor "forth_": one step to the end of bar 2 touched bar 3). With lyrics
+  counted, the model predicted 30 of 30 trials, and `_extension_plan`
+  counts them.
+- A step past the last bar of a flow stops at the last bar.
+- **Measure removed bars from notes and rests only.** Slurs, lines and
+  other spanning events that cross the edit are re-created with new ids,
+  so they look removed from the bar before the range.
+- **Liszt (open): the extend step that reaches the end of bar 8 goes on
+  into bar 9, and bar 18 on into bar 20**, on both staves, with nothing
+  in the events crossing either barline (see
+  `docs/dorico-selection-research-plan.md`).
 - **`Edit.SelectMore` is not a fixed step.** Once: the item's own bar. Twice:
   the bars either side too (4-6 from bar 5). Three times: nearly the whole
   flow. It also gave wrong counts after `NavigateRightExtendBar`.

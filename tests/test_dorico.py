@@ -140,6 +140,20 @@ def test_prepare_batch_resolves_addresses_and_spells() -> None:
     assert ops[3] == {"op": "add-clef", "stream": 3, "position": 1024, "clef": "clef.treble"}
 
 
+def test_a_lyric_melisma_across_the_barline_drags_in_the_next_bar() -> None:
+    bars = BarMap([(0, 1024)])
+    events = [
+        {"id": 0, "type": "BarDivisionEvent", "stream": 0, "staff": 0, "position": 0, "duration": 0},
+        note(3, 0, 72, "C5", duration=1024), note(4, 1024, 71, "B4", duration=1024), note(5, 2048, 69, "A4", duration=1024),
+        {"id": 9, "type": "LyricEvent", "stream": 2, "staff": 1, "voice": 1, "position": 1024, "duration": 1536},
+    ]
+    located = locate_events(events, bars)
+    # One step from bar 1 reaches bar 2's end, but the melisma runs on into bar 3.
+    assert score._extension_plan(located, bars, 1, 2) is None
+    assert score._extension_plan([e for e in located if e["type"] != "LyricEvent"], bars, 1, 2)["extend"] == 1  # without the lyric it is exact
+    assert score._extension_plan(located, bars, 1, 3)["extend"] == 1
+
+
 @pytest.mark.parametrize(
     ("operation", "message"),
     [
@@ -747,6 +761,17 @@ def test_delete_bars_plans_an_exact_selection() -> None:
     with pytest.raises(DoricoBatchError, match="names a bar after bar 0"):
         prepare_batch([{"op": "delete-bars", "fromBar": 1, "toBar": 1},
                        {"op": "set-break", "bar": 2, "type": "system"}], located, STAVES, BARS)
+
+
+def test_delete_bars_plans_one_selection_per_staff_up_to_three() -> None:
+    located = locate_events(EVENTS, BARS)
+    plans = score._extension_plans(located, BARS, 1, 1)
+    staves = [p["staff"] for p in plans]
+    assert staves == sorted(set(staves)) and 1 <= len(plans) <= 3
+    assert plans[0] == score._extension_plan(located, BARS, 1, 1)  # the old single choice comes first
+    ops = prepare_batch([{"op": "delete-bars", "fromBar": 1, "toBar": 1}], located, STAVES, BARS)
+    assert ops[0]["plans"] == plans and ops[0]["plan"] == plans[0]
+    assert len(score._extension_plans(located, BARS, 1, 1, limit=1)) == 1
 
 
 def test_a_tied_note_across_the_last_barline_drags_in_the_next_bar() -> None:
@@ -1360,6 +1385,73 @@ def test_copy_passage_refuses_a_note_over_the_paste_point() -> None:
                         "destStaff": 1, "destBar": 3}], locate_events(events, BARS), STAVES, BARS)
 
 
+def test_move_passage_resolves_like_copy_with_the_ids_that_must_go_and_stay() -> None:
+    events = [note(3, 128, 60, "C4"), note(4, 512, 62, "D4"), note(5, 1024, 64, "E4")]  # bars 1 and 2
+    located = locate_events(events, BARS)
+    ops = prepare_batch([{"op": "move-passage", "fromBar": 1, "toBar": 1, "topStaff": 1, "bottomStaff": 1,
+                          "destStaff": 1, "destBar": 3}], located, STAVES, BARS)
+    op = ops[0]
+    assert op["op"] == "copy-passage" and op["move"] is True
+    assert op["cutIds"] == [3, 4] and op["keepIds"] == [5]  # bar 2's note stays
+    assert op["expect"] == [(0, 60), (384, 62)]
+
+
+def test_move_passage_cuts_and_checks_what_vanished() -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from ai_score_editing.dorico import service
+
+    def n(id_: int, pos: int, pitch: int) -> dict:
+        return {"id": id_, "type": "NoteEvent", "position": pos, "stream": 2, "pitch": pitch}
+
+    def run(overreach: bool) -> tuple[list[str], list[int], Exception | None]:
+        client = SimpleNamespace(commands=[])
+        state = {"events": [n(3, 0, 60), n(4, 512, 62), n(5, 1024, 64)], "history": []}
+
+        async def command(c: str) -> None:
+            client.commands.append(c)
+            if c == "Edit.Cut":
+                state["history"].append(state["events"])
+                gone = {3, 4, 5} if overreach else {3, 4}  # overreach: a slur drags bar 2's note in
+                state["events"] = [e for e in state["events"] if e["id"] not in gone]
+            elif c == "Edit.Paste":
+                state["history"].append(state["events"])
+                state["events"] = state["events"] + [n(3, 2048, 60), n(4, 2432, 62)]  # a paste keeps the ids
+            elif c == "Edit.Undo":
+                state["events"] = state["history"].pop()
+
+        async def status() -> dict:
+            return {"noteInputMode": "kOverwrite"}
+
+        client.command, client.status = command, status
+        bridge = SimpleNamespace(client=client)
+
+        async def read_partial(flow: int):
+            return state["events"], []
+
+        bridge.read_partial = read_partial
+        op = {"op": "copy-passage", "move": True, "staff": 1, "destStaff": 1, "select": {"id": 3, "stream": 2, "block": 7},
+              "extendBars": 1, "exact": True, "expect": [(0, 60), (384, 62)], "anchorPosition": 2048, "destStreams": [2],
+              "anchor": {"id": 9, "stream": 2, "block": 7}, "cutIds": [3, 4], "keepIds": [5]}
+        error = None
+        try:
+            steps, result = asyncio.run(service._copy_passage(bridge, op, 1, 0, {"2": 7}))
+        except Exception as exc:  # noqa: BLE001
+            error = exc
+            result = {}
+        return client.commands, [(e["id"], e["position"]) for e in state["events"]], error if error else result
+
+    commands, ids, result = run(overreach=False)
+    assert "Edit.Cut" in commands and "Edit.Copy" not in commands
+    assert result["op"] == "move-passage" and result["verified"] and sorted(ids) == [(3, 2048), (4, 2432), (5, 1024)]
+
+    commands, ids, error = run(overreach=True)
+    assert isinstance(error, service.DoricoError) and "cut more" in str(error)
+    assert ids == [(3, 0), (4, 512), (5, 1024)]  # put back, positions and all
+    assert commands.count("Edit.Undo") == 2  # the paste and the cut
+
+
 # ------------------------------------------------------------------ probe placement
 
 def test_layout_from_probed_placements() -> None:
@@ -1376,6 +1468,21 @@ def test_layout_from_probed_placements() -> None:
     assert [(s["name"], s["voiceStreams"]) for s in staves] == [("S", [10]), ("T", [11]), ("T", [12])]
     with pytest.raises(layout.NeedsMusicXML):
         layout.resolve(choir, [], placements={11: 2, 12: 3})  # S has nothing probed
+
+
+def test_loose_placements_name_staves_whatever_order_instruments_are_listed() -> None:
+    from ai_score_editing.dorico import layout
+
+    # Instruments listed out of staff order, one with no notes: strict reading gives up, loose does not.
+    raw = {"staves": [{"stream": 1}, {"stream": 3}, {"stream": 5}],
+           "instruments": [{"id": 0, "name": "Bells", "voiceStreams": [10]},
+                           {"id": 1, "name": "Kit", "voiceStreams": [11]},
+                           {"id": 2, "name": "Flute", "voiceStreams": [12]}]}
+    with pytest.raises(layout.NeedsMusicXML):
+        layout.resolve(raw, [], placements={10: 3, 12: 1})
+    staves = layout.resolve(raw, [], placements={10: 3, 12: 1}, loose=True)
+    assert [(s["staff"], s["name"], s["voiceStreams"]) for s in staves] == [
+        (1, "Flute", [12]), (2, None, []), (3, "Bells", [10])]
 
 
 class _ProbeClient:
@@ -1461,3 +1568,143 @@ def test_private_export_folder_is_emptied_and_guarded(tmp_path: Path, monkeypatc
     monkeypatch.setattr(export, "EXPORT_DIR", tmp_path / "Scores")
     with pytest.raises(DoricoError, match="refusing to clear"):
         export._clear_export_dir()
+
+
+def test_delete_bars_undoes_a_planned_selection_that_removes_the_wrong_bars_and_goes_bar_by_bar() -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from ai_score_editing.dorico import service
+
+    def note(id_: int, position: int) -> dict:
+        return {"id": id_, "type": "NoteEvent", "position": position, "stream": 1}
+
+    class Client:
+        def __init__(self) -> None:
+            self.events = [note(1, 0), note(2, 1024), note(3, 2048), note(4, 3072)]
+            self.history: list[list[dict]] = []
+            self.deletes = 0
+            self.commands: list[str] = []
+
+        async def command(self, command: str) -> None:
+            self.commands.append(command)
+            if command == "Edit.Undo":
+                self.events = self.history.pop()
+            elif command == "Edit.DeleteBars":
+                self.deletes += 1
+                self.history.append(self.events)
+                bars = 2 if self.deletes == 1 else 1  # the first, planned, selection overshoots by a bar (a slur)
+                self.events = [{**e, "position": e["position"] - 1024 * bars} for e in self.events if e["position"] >= 1024 * bars]
+
+    client = Client()
+    bridge = SimpleNamespace(client=client)
+
+    async def read_partial(flow: int):
+        return client.events, []
+
+    async def overview(flow: int):
+        return {"layout": {"blocks": {"1": 5}}}
+
+    bridge.read_partial, bridge.overview = read_partial, overview
+    op = {"op": "delete-bars", "fromBar": 1, "toBar": 1, "removed": 1024, "marker": {"id": 4, "position": 3072},
+          "plan": {"select": {"id": 1, "stream": 1}, "extend": 0},
+          "fallback": [{"bar": 1, "select": {"id": 1, "stream": 1}}], "bars": [{"bar": 1}]}
+    steps, result = asyncio.run(service._delete_bars(bridge, op, 1, 0, {"1": 5}))
+    assert result["via"].startswith("per-bar") and result["verified"] and "retried" in result
+    assert client.deletes == 2 and client.commands.count("Edit.Undo") == 1
+    assert [e["position"] for e in client.events] == [0, 1024, 2048]
+    assert steps == 2
+
+
+class _FakeDorico:
+    """A client and bridge for service._delete_bars: four bars of whole notes (ids 1-4), a note
+    after the range (id 4). Selecting a note in `refuse` makes EventEdit.NavigateRightExtendBar
+    answer kCommandNotAllowed; in `overshoot` makes Edit.DeleteBars remove two bars, not one."""
+
+    def __init__(self, refuse: set[int] = frozenset(), overshoot: set[int] = frozenset()) -> None:
+        from types import SimpleNamespace
+
+        self.events = [{"id": i + 1, "type": "NoteEvent", "position": 1024 * i, "stream": 1} for i in range(4)]
+        self.history: list[list[dict]] = []
+        self.refuse, self.overshoot = refuse, overshoot
+        self.selected = 0
+        self.commands: list[str] = []
+        self.client = self
+        self.bridge = SimpleNamespace(client=self, read_partial=self.read_partial, overview=self.overview)
+
+    async def command(self, command: str) -> None:
+        from ai_score_editing.dorico.client import DoricoError
+
+        self.commands.append(command)
+        if command.startswith("EventEdit.Select"):
+            self.selected = int(command.split("EventID=")[1].split("&")[0])
+        elif command == "EventEdit.NavigateRightExtendBar":
+            if self.selected in self.refuse:
+                raise DoricoError("Dorico rejected command EventEdit.NavigateRightExtendBar: kCommandNotAllowed")
+        elif command == "Edit.Undo":
+            self.events = self.history.pop()
+        elif command == "Edit.DeleteBars":
+            self.history.append(self.events)
+            bars = 2 if self.selected in self.overshoot else 1
+            self.events = [{**e, "position": e["position"] - 1024 * bars} for e in self.events if e["position"] >= 1024 * bars]
+
+    async def read_partial(self, flow: int):
+        return self.events, []
+
+    async def overview(self, flow: int):
+        return {"layout": {"blocks": {"1": 5}}}
+
+    def op(self, plans: list[tuple[int, int]], fallback: bool = True) -> dict:
+        built = [{"select": {"id": i, "stream": 1}, "extend": extend, "staff": i} for i, extend in plans]
+        return {"op": "delete-bars", "fromBar": 1, "toBar": 1, "removed": 1024, "marker": {"id": 4, "position": 3072},
+                "plan": built[0], "plans": built, "bars": [{"bar": 1}],
+                **({"fallback": [{"bar": 1, "select": {"id": 3, "stream": 1}}]} if fallback else {})}
+
+    def run(self, op: dict) -> tuple[int, dict]:
+        import asyncio
+
+        from ai_score_editing.dorico import service
+
+        return asyncio.run(service._delete_bars(self.bridge, op, 1, 0, {"1": 5}))
+
+
+def test_delete_bars_tries_the_next_plan_when_one_is_refused_or_overshoots() -> None:
+    # plan 1 overshoots a bar (one Undo), plan 2 is refused on the extend step (nothing to undo), plan 3 works
+    fake = _FakeDorico(refuse={2}, overshoot={1})
+    steps, result = fake.run(fake.op([(1, 1), (2, 1), (3, 1)]))
+    assert result["via"] == "extend" and result["verified"] and result["attempts"] == 3 and "kCommandNotAllowed" in result["retried"]
+    assert fake.commands.count("Edit.Undo") == 1 and fake.commands.count("Edit.DeleteBars") == 2
+    assert [e["position"] for e in fake.events] == [0, 1024, 2048] and steps == 3
+
+
+def test_delete_bars_goes_bar_by_bar_when_every_plan_fails() -> None:
+    fake = _FakeDorico(refuse={2}, overshoot={1})
+    steps, result = fake.run(fake.op([(1, 0), (2, 1)]))
+    assert result["via"].startswith("per-bar") and result["verified"] and result["attempts"] == 2
+    assert fake.commands.count("Edit.Undo") == 1 and steps == 2
+    assert [e["position"] for e in fake.events] == [0, 1024, 2048]
+
+
+def test_delete_bars_without_a_fallback_still_raises_when_the_last_plan_fails() -> None:
+    import pytest
+
+    from ai_score_editing.dorico.client import DoricoError
+
+    refused = _FakeDorico(refuse={1, 2})
+    with pytest.raises(DoricoError, match="kCommandNotAllowed"):
+        refused.run(refused.op([(1, 1), (2, 1)], fallback=False))
+    assert refused.commands.count("Edit.Undo") == 0 and refused.commands.count("Edit.DeleteBars") == 0
+
+    wrong = _FakeDorico(overshoot={1})
+    with pytest.raises(DoricoError, match="did not delete bars"):
+        wrong.run(wrong.op([(1, 0)], fallback=False))
+
+
+def test_delete_bars_cost_is_the_dearest_route() -> None:
+    from ai_score_editing.dorico import service
+
+    fake = _FakeDorico()
+    op = fake.op([(1, 0), (2, 3)])
+    assert service._delete_bars_cost(op) == 5  # 2 + 3 extend steps, against 2 for the per-bar route
+    assert service._delete_bars_cost({**op, "fallback": [{"bar": b, "tempRest": {}} for b in (3, 2, 1)]}) == 9
+    assert service._delete_bars_cost({"plan": op["plan"]}) == 2
