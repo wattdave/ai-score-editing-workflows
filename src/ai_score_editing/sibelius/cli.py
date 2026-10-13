@@ -1352,7 +1352,7 @@ async def _run_patch_notes(args: argparse.Namespace) -> int:
 
 
 async def _run_query(args: argparse.Namespace) -> int:
-    from .query import QueryError, build_selector, resolve_staves
+    from ai_score_editing.query import QueryError, build_selector, resolve_staves
 
     from_b, to_b = (None, None)
     if args.bars:
