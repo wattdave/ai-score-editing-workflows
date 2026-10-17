@@ -166,15 +166,23 @@ def part_list(targets: list[TargetPart], groups: list[tuple[str, range]] | None 
 
 
 def attributes_with_clef(original: Element | None, target: TargetPart) -> Element:
-    attrs = Element("attributes")
-    if original is not None:
-        for child in original:
-            if child.tag not in {"clef", "staves"}:
-                attrs.append(copy.deepcopy(child))
     clef = Element("clef")
     sign = Element("sign"); sign.text = target.clef_sign; clef.append(sign)
     line = Element("line"); line.text = target.clef_line; clef.append(line)
     if target.clef_octave is not None:
         octave = Element("clef-octave-change"); octave.text = target.clef_octave; clef.append(octave)
-    attrs.append(clef)
+    attrs = Element("attributes")
+    if original is not None:
+        for child in original:
+            if child.tag in {"clef", "staves"}:
+                continue
+            # the schema puts clef before these elements
+            if clef is not None and child.tag in {
+                "staff-details", "transpose", "for-part", "directive", "measure-style",
+            }:
+                attrs.append(clef)
+                clef = None
+            attrs.append(copy.deepcopy(child))
+    if clef is not None:
+        attrs.append(clef)
     return attrs
