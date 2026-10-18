@@ -68,6 +68,14 @@ else
     report missing ffmpeg "brew install ffmpeg (needed for rehearsal mixes)"
 fi
 
+# Optional: pdfinfo/pdftoppm (poppler) inspect and render PDFs for the OMR and
+# melody-search workflows.
+if command -v pdfinfo >/dev/null 2>&1; then
+    report ok poppler "$(command -v pdfinfo)"
+else
+    report optional poppler "brew install poppler (pdfinfo and pdftoppm, for PDF scores)"
+fi
+
 # Optional: only needed to convert LilyPond sources (lilypond-to-score skill).
 if command -v lilypond >/dev/null 2>&1; then
     report ok lilypond "$(lilypond --version 2>/dev/null | head -1)"

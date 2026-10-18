@@ -235,3 +235,4 @@ docs/sibelius-connect.md
 
 # MuseScore MCP server, fetched by scripts/musescore_mcp.sh
 .vendor/
+.playwright-mcp/
