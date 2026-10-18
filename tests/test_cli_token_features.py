@@ -738,6 +738,49 @@ async def test_backup_refuses_imported_score_without_a_path() -> None:
             await _backup(MagicMock(), "before set-time")
 
 
+async def test_backup_goes_beside_the_score_by_default(tmp_path: Path) -> None:
+    score = tmp_path / "song.sib"
+    score.write_bytes(b"sib")
+    responses = {"AddVersion": {"ok": True}, "Save": {"fileName": str(score)}}
+    with patch(
+        "ai_score_editing.sibelius.cli._bridge",
+        new=AsyncMock(side_effect=lambda _client, method, *_: responses[method]),
+    ):
+        result = await _backup(MagicMock(), "before set-time")
+    assert Path(result["copy"]).parent == tmp_path
+    assert Path(result["copy"]).read_bytes() == b"sib"
+
+
+async def test_backup_dir_collects_backups_in_one_folder(tmp_path: Path) -> None:
+    score = tmp_path / "song.sib"
+    score.write_bytes(b"sib")
+    folder = tmp_path / "backups" / "nested"
+    responses = {"AddVersion": {"ok": True}, "Save": {"fileName": str(score)}}
+    with patch("ai_score_editing.sibelius.cli._BACKUP_DIR", folder), patch(
+        "ai_score_editing.sibelius.cli._bridge",
+        new=AsyncMock(side_effect=lambda _client, method, *_: responses[method]),
+    ):
+        result = await _backup(MagicMock(), "before set-time")
+    assert Path(result["copy"]).parent == folder
+    assert Path(result["copy"]).name.startswith("song.backup-")
+    assert not list(tmp_path.glob("*.backup-*"))
+
+
+def test_backup_dir_option_and_environment_set_the_folder(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from ai_score_editing.sibelius import cli
+
+    monkeypatch.setattr(cli, "_run_ping", AsyncMock(return_value=EXIT_OK), raising=True)
+    monkeypatch.setattr(cli, "_BACKUP_DIR", None)
+    monkeypatch.setenv("SIBELIUS_BACKUP_DIR", str(tmp_path / "env"))
+    cli.main(["ping"])
+    assert cli._BACKUP_DIR == tmp_path / "env"
+    cli.main(["--backup-dir", str(tmp_path / "flag"), "ping"])
+    assert cli._BACKUP_DIR == tmp_path / "flag"
+    monkeypatch.delenv("SIBELIUS_BACKUP_DIR")
+    cli.main(["ping"])
+    assert cli._BACKUP_DIR is None
+
+
 async def test_run_op_checks_before_backup_and_prints_legacy_output(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
