@@ -88,6 +88,10 @@ def test_validate_normalizes_each_operation() -> None:
         ({"op": "add-text", "staff": 1, "bar": 1, "position": 0, "text": "x", "styleId": "bogus"}, "styleId"),
         ({"op": "add-lyric", "staff": 1, "bar": 1, "position": 0, "duration": 256, "text": "x",
           "voice": 5}, "voice must be"),
+        ({"op": "add-lyric", "staff": 1, "bar": 1, "position": 0, "duration": 256, "text": "x",
+          "verse": 0}, "verse must be"),
+        ({"op": "add-lyric", "staff": 1, "bar": 1, "position": 0, "duration": 256, "text": "x",
+          "dy": "up"}, "dy must be"),
     ],
 )
 def test_validate_rejects(operation, message) -> None:
@@ -322,3 +326,15 @@ def test_hide_empty_staves_validates_a_bar_range_and_needs_bridge_52() -> None:
     assert _batch_bridge_version(batch) == HIDE_EMPTY_STAVES_BRIDGE_VERSION
     with pytest.raises(BatchError, match="toBar"):
         validate_batch([{"op": "hide-empty-staves", "fromBar": 5, "toBar": 4}])
+
+
+def test_add_lyric_verse_and_dy_pass_through_and_need_newer_bridge() -> None:
+    from ai_score_editing.sibelius.cli import BATCH_BRIDGE_VERSION, LYRIC_VERSE_BRIDGE_VERSION, _batch_bridge_version
+
+    plain = validate_batch([{"op": "add-lyric", "staff": 1, "bar": 1, "position": 0, "duration": 256, "text": "a"}])
+    styled = validate_batch([{"op": "add-lyric", "staff": 1, "bar": 1, "position": 0, "duration": 256,
+                              "text": "a", "verse": 3, "dy": -352}])
+    assert "verse" not in plain[0] and "dy" not in plain[0]
+    assert styled[0]["verse"] == 3 and styled[0]["dy"] == -352
+    assert _batch_bridge_version(plain) == BATCH_BRIDGE_VERSION
+    assert _batch_bridge_version(styled) == LYRIC_VERSE_BRIDGE_VERSION

@@ -233,6 +233,10 @@ def _validate(operation: Any, i: int, extra: ExtraOps) -> dict[str, Any]:
         if syllable not in {"end", "middle"}:
             raise BatchError(f"{label}.syllableType must be 'end' or 'middle'")
         out["syllableType"] = syllable
+        if "verse" in operation:
+            out["verse"] = _int(operation, "verse", label, minimum=1, maximum=99)
+        if "dy" in operation:
+            out["dy"] = _int(operation, "dy", label, minimum=-100000, maximum=100000)
     return out
 
 

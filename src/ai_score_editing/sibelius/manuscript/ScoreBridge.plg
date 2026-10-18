@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 56);
+		return CreateDictionary('version', 58);
 	}"
 
 	Echo "(value) {
@@ -1668,6 +1668,17 @@
 			lyric = bar.AddLyric(op['position'], op['duration'], op['text'], st, 1, voice);
 			if (lyric = null) {
 				return null;
+			}
+			// A new lyric is on verse 1 at the default Dy; the verse style
+			// must be set before Dy because changing the style resets Dy.
+			if (op['verse'] != null) {
+				if (op['verse'] < 1 or op['verse'] > 5) {
+					return null;
+				}
+				lyric.StyleId = 'text.staff.space.hypen.lyrics.verse' & op['verse'];
+			}
+			if (op['dy'] != null) {
+				lyric.Dy = op['dy'];
 			}
 			return DescribeObject(lyric, -1);
 		}

@@ -79,7 +79,10 @@ and verify once for the whole set.
   - `{"op":"add-text","staff":S,"bar":B,"position":P,"text":T[,"styleId":"text.staff.expression","voice":V]}`
   - `{"op":"add-line","staff":S,"bar":B,"position":P,"duration":D,"styleId":"line.staff.hairpin.crescendo"[,"voice":V]}`
     (bridge v48)
-  - `{"op":"add-lyric","staff":S,"bar":B,"position":P,"duration":D,"text":T[,"syllableType":"middle","voice":V]}`
+  - `{"op":"add-lyric","staff":S,"bar":B,"position":P,"duration":D,"text":T[,"syllableType":"middle","voice":V,"verse":N,"dy":Y]}`
+    (without `verse` a new lyric is on verse 1; `verse` 1-5 sets the line,
+    and `dy` the vertical offset, which the verse style otherwise resets;
+    bridge v58)
   - Staff 0 is the system staff (bridge v48). It takes `set`, `delete`,
     `nudge`, `add-text` and `add-line`, with system styles only and no voice:
     `add-text` defaults to `text.system.tempo` there (or e.g.

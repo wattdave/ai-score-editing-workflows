@@ -278,7 +278,7 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
     - {"op":"add-note",...,"duration":D,"pitches":[..][,"voice":V,"tied":true]}
     - {"op":"add-text",...,"text":T[,"styleId":"text.staff.expression","voice":V]}
     - {"op":"add-line",...,"duration":D,"styleId":"line.staff.hairpin.crescendo"[,"voice":V]}
-    - {"op":"add-lyric",...,"duration":D,"text":T[,"syllableType":"middle","voice":V]}
+    - {"op":"add-lyric",...,"duration":D,"text":T[,"syllableType":"middle","voice":V,"verse":1-5,"dy":N]}
 
     Staff 0 is the system staff. It takes set, delete, nudge, add-text and
     add-line, with system styles only and no voice: e.g. add-text with
