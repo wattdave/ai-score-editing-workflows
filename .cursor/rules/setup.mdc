@@ -38,6 +38,7 @@ roughly how long it takes:
 | ffmpeg | Builds the MP3 rehearsal mixes. |
 | Project packages | This project's own Python libraries (`uv sync`). |
 | Bridge plug-in | A small Sibelius plug-in that lets the tool read the score. |
+| poppler (optional) | `pdfinfo` and `pdftoppm`: page counts and page images for PDF scores in the OMR and melody-search workflows. |
 | LilyPond (optional) | Converts LilyPond score sources from CPDL/IMSLP; only needed for that workflow. |
 
 Then ask whether to install **everything missing at once** (recommended)
@@ -75,6 +76,8 @@ continue past something the later steps depend on.
    commands with `eval "$($brew_bin shellenv)" &&` if `brew` is not found.
 2. **git, uv, ffmpeg:** `brew install git uv ffmpeg` (only the missing ones).
    ffmpeg takes a few minutes.
+   If the user will work from PDF scores (OMR, melody search), also
+   `brew install poppler` for `pdfinfo` and `pdftoppm`.
    If the user will convert LilyPond sources, also `brew install lilypond`;
    python-ly needs no install (it runs through `uvx`).
 3. **Python 3.13:** `uv python install 3.13`.
