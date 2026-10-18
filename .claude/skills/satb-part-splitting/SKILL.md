@@ -100,6 +100,19 @@ four staves: an OMR split can silently lose a voice in a bar (bass notes in one
 bar of Silent Night, alto notes in another), and the lyrics have nothing to sit on
 there.
 
+To make one playback pass sing lyrics that sit on verse lines 2-4 of a staff
+(for example the alto, tenor and bass, which have one verse each), move them
+onto line 1 with one apply op per staff instead of a `set-lyric-style` and a
+`Dy` fix per syllable (bridge v59):
+```json
+[{"op":"set-lyric-verse","staff":2,"fromBar":1,"toBar":40,"verse":1}]
+```
+It sets the matching Dy too and refuses, changing nothing, if a moved lyric
+would share a position with one already on line 1 (a staff that carries
+several verses at the same positions needs `fromVerse` or a per-verse
+approach). `copy_lyrics_to_staves.py` still restyles per item because the
+copies it adds sit at identical positions, which this op rightly refuses.
+
 ### 3. (Optional) Reconnect Lyrics on an Existing Score
 To reconnect shattered OMR syllables on an already split or existing MusicXML file without re-splitting:
 ```bash

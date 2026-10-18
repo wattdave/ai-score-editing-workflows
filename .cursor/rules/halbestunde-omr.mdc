@@ -159,9 +159,11 @@ how often:
   wrong verse line: a syllable from another verse (here the German line's
   `li` and `te,`) leaks into verse 1. Positions show it: a syllable at a
   position where the other verses have none is usually a stray.
-- Missing syllables. `add-lyric` always lands on verse 1; move it with
-  `set-lyric-style --style verseN`, then set its `Dy` to match the line
-  (verse 1 -192, 2 -272, 3 -352, 4 -432).
+- Missing syllables. Add them with `add-lyric` plus `"verse":N` (bridge
+  v58), which also takes `"dy"`; the line's Dy is -192 - 80*(N-1) (verse 1
+  -192, 2 -272, 3 -352, 4 -432). To move syllables already in the score
+  onto a line, use one `set-lyric-verse` op per staff and bar range (v59)
+  instead of `set-lyric-style` and a Dy fix per syllable.
 - Hyphen links cannot be edited in place; delete the lyric and `add-lyric`
   with `"syllableType":"middle"` for every syllable except the last.
 - System breaks: Sibelius re-breaks the systems; restore the print's with

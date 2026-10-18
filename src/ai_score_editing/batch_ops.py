@@ -53,7 +53,11 @@ STRUCTURAL = {
     "set-barline", "set-bar-number", "add-bars", "delete-voice", "set-layout",
     "hide-empty-staves", "delete-bars",
 }
-OPERATIONS = ADDRESSED | ADDING | STRUCTURAL | {"beam"}
+# A range operation on one staff's lyrics. It edits objects in place (the
+# indices addressed ops hold stay valid), so it is not structural.
+LYRIC_RANGE = {"set-lyric-verse"}
+OPERATIONS = ADDRESSED | ADDING | STRUCTURAL | LYRIC_RANGE | {"beam"}
+MAX_VERSE = 5
 DEFAULT_TEXT_STYLE = "text.staff.expression"
 DEFAULT_SYSTEM_TEXT_STYLE = "text.system.tempo"
 SYSTEM_STAFF = 0
@@ -154,6 +158,8 @@ def _validate(operation: Any, i: int, extra: ExtraOps) -> dict[str, Any]:
         raise BatchError(f"{label}.op must be one of: {', '.join(sorted(OPERATIONS | set(extra)))}")
     if op in STRUCTURAL:
         return _validate_structural(operation, op, label)
+    if op in LYRIC_RANGE:
+        return _validate_lyric_verse(operation, label)
     out: dict[str, Any] = {"op": op}
     out["staff"] = _int(operation, "staff", label, minimum=0)
     out["bar"] = _int(operation, "bar", label, minimum=1)
@@ -237,6 +243,47 @@ def _validate(operation: Any, i: int, extra: ExtraOps) -> dict[str, Any]:
             out["verse"] = _int(operation, "verse", label, minimum=1, maximum=99)
         if "dy" in operation:
             out["dy"] = _int(operation, "dy", label, minimum=-100000, maximum=100000)
+    return out
+
+
+def verse_dy(verse: int) -> int:
+    """The Dy of a lyric on verse line `verse` (1-5): lines sit 80 apart below -192."""
+    return -192 - 80 * (verse - 1)
+
+
+def _validate_lyric_verse(operation: dict[str, Any], label: str) -> dict[str, Any]:
+    """set-lyric-verse: restyle a staff's lyrics in bars A-B to a verse line, with its Dy.
+
+    `fromVerse`, `voice` and `position` narrow which lyrics move. Lyrics on
+    the chorus or above-staff styles are never touched. Dy defaults to the
+    verse spacing convention; ManuScript reads a 0 as null, so a Dy of 0 is
+    refused and `position` (which may be 0) is flagged by `hasPosition`.
+    """
+    known = {"op", "staff", "fromBar", "toBar", "verse", "fromVerse", "voice", "position", "dy"}
+    if unknown := sorted(operation.keys() - known):
+        raise BatchError(
+            f"{label}: unknown set-lyric-verse fields {unknown}; allowed: {', '.join(sorted(known - {'op'}))}"
+        )
+    out: dict[str, Any] = {"op": "set-lyric-verse"}
+    out["staff"] = _int(operation, "staff", label, minimum=0)
+    if out["staff"] == SYSTEM_STAFF:
+        raise BatchError(f"{label}: set-lyric-verse cannot target the system staff (staff 0)")
+    out["fromBar"] = _int(operation, "fromBar", label, minimum=1)
+    out["toBar"] = _int(operation, "toBar", label, minimum=out["fromBar"])
+    out["verse"] = _int(operation, "verse", label, minimum=1, maximum=MAX_VERSE)
+    if "fromVerse" in operation:
+        out["fromVerse"] = _int(operation, "fromVerse", label, minimum=1, maximum=MAX_VERSE)
+        if out["fromVerse"] == out["verse"]:
+            raise BatchError(f"{label}.fromVerse must differ from verse")
+    if "voice" in operation:
+        out["voice"] = _int(operation, "voice", label, minimum=1, maximum=4)
+    out["hasPosition"] = "position" in operation
+    if out["hasPosition"]:
+        out["position"] = _int(operation, "position", label, minimum=0)
+    dy = _int({"dy": verse_dy(out["verse"]), **operation}, "dy", label, minimum=-100000, maximum=100000)
+    if dy == 0:
+        raise BatchError(f"{label}.dy must not be 0")
+    out["dy"] = dy
     return out
 
 

@@ -279,6 +279,12 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
     - {"op":"add-text",...,"text":T[,"styleId":"text.staff.expression","voice":V]}
     - {"op":"add-line",...,"duration":D,"styleId":"line.staff.hairpin.crescendo"[,"voice":V]}
     - {"op":"add-lyric",...,"duration":D,"text":T[,"syllableType":"middle","voice":V,"verse":1-5,"dy":N]}
+    - {"op":"set-lyric-verse","staff":S,"fromBar":A,"toBar":B,"verse":1-5[,"fromVerse":1-5,
+      "voice":V,"position":P,"dy":N]}: move the staff's lyrics in bars A-B
+      onto that verse line and set Dy (default -192 - 80*(verse-1)). Lyrics
+      already on the line, and chorus/above lyrics, are left alone. Refused
+      if a moved lyric would share a position and voice with another lyric
+      on the target line. Bridge v59
 
     Staff 0 is the system staff. It takes set, delete, nudge, add-text and
     add-line, with system styles only and no voice: e.g. add-text with
