@@ -88,7 +88,8 @@ Available layout operations include:
 - `invoke select_all reset_note_spacing select_none` (one call, several IDs)
   or `increase_spacing` for global note spacing.
 - `set-lyric-style --staff S --bar B --index I --style verse1` when a unison
-  refrain should use lyric line 1 consistently.
+  refrain should use lyric line 1 consistently. For more than a few lyrics
+  use the `set-lyric-verse` apply op (staff, bar range, verse; sets Dy too).
 
 ## Review checklist
 

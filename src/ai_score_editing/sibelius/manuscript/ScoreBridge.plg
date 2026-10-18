@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 58);
+		return CreateDictionary('version', 59);
 	}"
 
 	Echo "(value) {
@@ -1207,6 +1207,102 @@
 		return False;
 	}"
 
+	LyricVerseOf "(obj) {
+		// The verse line 1-5 of a lyric, or 0 for chorus, above and other styles.
+		styleId = '' & obj.StyleId;
+		for v = 1 to 6 {
+			// build the name first: `=` would otherwise bind tighter than `&`
+			target = 'text.staff.space.hypen.lyrics.verse' & v;
+			if (styleId = target) {
+				return v;
+			}
+		}
+		return 0;
+	}"
+
+	LyricVerseMoves "(obj, op) {
+		// True if set-lyric-verse moves this lyric: it is on another verse line
+		// and passes the op's fromVerse, voice and position filters.
+		if (obj.Type != 'LyricItem') {
+			return False;
+		}
+		v = LyricVerseOf(obj);
+		if (v = 0 or v = op['verse']) {
+			return False;
+		}
+		if (op['fromVerse'] != null) {
+			if (v != op['fromVerse']) {
+				return False;
+			}
+		}
+		if (op['voice'] != null) {
+			if (obj.VoiceNumber != op['voice']) {
+				return False;
+			}
+		}
+		if (op['hasPosition'] = True) {
+			if (obj.Position != op['position']) {
+				return False;
+			}
+		}
+		return True;
+	}"
+
+	BatchCheckLyricVerse "(score, op) {
+		// Refuses a move that would put two lyrics on one verse line at the
+		// same position and voice: one already there, or two being moved.
+		if (op['staff'] < 1 or op['staff'] > score.StaffCount) {
+			return 'no staff ' & op['staff'];
+		}
+		problem = BatchCheckRange(score, op);
+		if (problem != '') {
+			return problem;
+		}
+		staff = score.NthStaff(op['staff']);
+		for barNum = op['fromBar'] to op['toBar'] + 1 {
+			taken = CreateDictionary();
+			for each obj in staff.NthBar(barNum) {
+				if (obj.Type = 'LyricItem') {
+					if (LyricVerseOf(obj) = op['verse']) {
+						taken[obj.VoiceNumber & ':' & obj.Position] = True;
+					}
+				}
+			}
+			for each obj in staff.NthBar(barNum) {
+				if (LyricVerseMoves(obj, op)) {
+					key = obj.VoiceNumber & ':' & obj.Position;
+					if (taken[key] = True) {
+						return 'bar ' & barNum & ' position ' & obj.Position & ' voice ' & obj.VoiceNumber & ' already has a lyric on verse ' & op['verse'] & ', or two lyrics would land there';
+					}
+					taken[key] = True;
+				}
+			}
+		}
+		return '';
+	}"
+
+	BatchRunLyricVerse "(score, op) {
+		// The verse style first: changing the style resets Dy. Movers are
+		// collected before any edit so the iteration is not disturbed.
+		staff = score.NthStaff(op['staff']);
+		styleId = 'text.staff.space.hypen.lyrics.verse' & op['verse'];
+		movers = CreateSparseArray();
+		for barNum = op['fromBar'] to op['toBar'] + 1 {
+			for each obj in staff.NthBar(barNum) {
+				if (LyricVerseMoves(obj, op)) {
+					movers.Push(obj);
+				}
+			}
+		}
+		for i = 0 to movers.Length {
+			lyric = movers[i];
+			lyric.StyleId = styleId;
+			lyric.Dy = op['dy'];
+		}
+		return CreateDictionary('staff', op['staff'], 'fromBar', op['fromBar'], 'toBar', op['toBar'],
+			'verse', op['verse'], 'dy', op['dy'], 'moved', movers.Length);
+	}"
+
 	BatchBeamTargets "(op) {
 		// The objects from firstIndex to lastIndex, resolved before any edit.
 		objects = CreateSparseArray();
@@ -1621,6 +1717,9 @@
 		if (BatchStructural(opName)) {
 			return BatchCheckStructural(score, op);
 		}
+		if (opName = 'set-lyric-verse') {
+			return BatchCheckLyricVerse(score, op);
+		}
 		if (opName = 'beam') {
 			noteRests = 0;
 			for i = 0 to target.Length {
@@ -1732,6 +1831,9 @@
 		}
 		if (BatchStructural(opName)) {
 			return BatchRunStructural(score, op);
+		}
+		if (opName = 'set-lyric-verse') {
+			return BatchRunLyricVerse(score, op);
 		}
 		bar = BatchBar(score, op);
 		voice = 1;

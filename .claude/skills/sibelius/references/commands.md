@@ -83,6 +83,20 @@ and verify once for the whole set.
     (without `verse` a new lyric is on verse 1; `verse` 1-5 sets the line,
     and `dy` the vertical offset, which the verse style otherwise resets;
     bridge v58)
+  - `{"op":"set-lyric-verse","staff":S,"fromBar":A,"toBar":B,"verse":N[,"fromVerse":M,"voice":V,"position":P,"dy":Y]}`
+    (bridge v59): moves every lyric of staff S in bars A-B onto verse line N
+    (1-5) and sets its Dy in the same op, `-192 - 80*(N-1)` unless `dy` is
+    given (verse 1 -192, 2 -272, 3 -352, 4 -432, 5 -512). Use it to put
+    several verse lines on one line so a single playback pass sings them.
+    `fromVerse`, `voice` and `position` narrow what moves (for one lyric use
+    `fromBar` = `toBar` with `position`); lyrics already on line N, and
+    chorus/above lyrics, are left untouched. It refuses the whole batch,
+    changing nothing, if a lyric would land on a position and voice where
+    line N already has one (or where two moved lyrics would meet, as when
+    verses 2 and 3 are both sent to 1 without `fromVerse`); that check sees
+    the score as it was before the batch. It does not re-index anything, so it
+    can sit before addressed ops, but like them it comes before structural ops.
+    Prefer it to one `set-lyric-style` call plus a `set Dy` per lyric.
   - Staff 0 is the system staff (bridge v48). It takes `set`, `delete`,
     `nudge`, `add-text` and `add-line`, with system styles only and no voice:
     `add-text` defaults to `text.system.tempo` there (or e.g.
