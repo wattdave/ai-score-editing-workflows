@@ -52,7 +52,12 @@ Cantai is set up by the user in Sibelius, not by the CLI:
   calls on a Cantai score left one staff rendering an instrument sound even
   in export. A fresh import with voices set once in the Mixer fixed it.
 - `--require-sound Cantai` only checks the sound set name, not that each
-  staff has the right voice: read the `playback-sounds` list.
+  staff has the right voice: read the `playback-sounds` list. `override` can
+  be empty while `actualSoundId` is still a Cantai voice (the export passes);
+  read `actualSoundId` to see which voice will sing.
+- **Cantai ignores Sibelius's rhythmic feel.** Swing set under Play /
+  Performance / Rhythmic Feel (or as "Swing" text) is not heard in Cantai
+  exports. Use the `swing-playback-copy` skill to build a swung copy.
 
 ## Export
 
@@ -68,6 +73,16 @@ export's opening otherwise carries the previous staff's voice. Read
 `--help` before composing unusual invocations. Quote `--name` values that
 contain spaces (`--name "2=Contra I"`). Importing MusicXML shows an options
 dialog every time; the user must click OK before the import continues.
+
+## Single-staff melody line
+
+A one-staff score (a melody with lyrics) still makes the three files, and
+they are identical because there is no accompaniment or second voice. Pass
+`--name 1=Melody`, keep the "All voices" file, rename it `<Song> - Melody.mp3`
+(`<Song> - Melody (swing).mp3` for a swing copy) and delete the other two.
+When the user wants to listen before each export, do one score per request:
+confirm `score-snapshot` shows the right file, `playback-sounds` shows Cantai,
+then export with `--expect-file`.
 
 ## Output
 
