@@ -8,6 +8,7 @@ import hashlib
 import json
 import logging
 import math
+import os
 import sys
 import tempfile
 from collections.abc import Awaitable, Callable
@@ -71,6 +72,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--expect-file",
         help="refuse writes unless the active score resolves to this path",
+    )
+    parser.add_argument(
+        "--backup-dir",
+        help="put the timestamped .sib backups of write commands in this folder instead of "
+        "beside the score (default: the SIBELIUS_BACKUP_DIR environment variable, else beside the score)",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="log the wire traffic")
 
@@ -885,6 +891,9 @@ async def _assert_expected_score(
     return info
 
 
+_BACKUP_DIR: Path | None = None  # set by main() from --backup-dir / SIBELIUS_BACKUP_DIR
+
+
 async def _backup(client: SibeliusClient, name: str) -> dict[str, Any]:
     """In-file version + save + timestamped filesystem copy. Returns details."""
     import shutil
@@ -905,7 +914,9 @@ async def _backup(client: SibeliusClient, name: str) -> dict[str, Any]:
             f"score {saved['fileName']!r} has never been saved as a .sib; save it in Sibelius first"
         )
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    copy = source.with_name(f"{source.stem}.backup-{stamp}{source.suffix}")
+    folder = _BACKUP_DIR or source.parent
+    folder.mkdir(parents=True, exist_ok=True)
+    copy = folder / f"{source.stem}.backup-{stamp}{source.suffix}"
     shutil.copy2(source, copy)
     return {"version": version, "savedTo": str(source), "copy": str(copy)}
 
@@ -2607,6 +2618,9 @@ def _client(args: argparse.Namespace, plugins: list[str] | None = None) -> Sibel
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    global _BACKUP_DIR
+    backup_dir = args.backup_dir or os.environ.get("SIBELIUS_BACKUP_DIR")
+    _BACKUP_DIR = Path(backup_dir).expanduser() if backup_dir else None
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.WARNING,
         format="%(message)s",

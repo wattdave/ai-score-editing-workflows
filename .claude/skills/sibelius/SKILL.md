@@ -64,8 +64,8 @@ use one session, one backup, one verification, and a compact summary:
    reads before targeted edits.
 3. Apply the requested writes as one batch where a batch command exists, with
    global `--expect-file <path>` before the subcommand. Write commands create
-   a timestamped `.sib` backup beside the source and attempt an in-file
-   version first. Do not bypass the backup path.
+   a timestamped `.sib` backup beside the source (`--backup-dir` moves it) and
+   attempt an in-file version first. Do not bypass the backup path.
 4. Verify the result and report the backup path printed on stderr. Use the
    batch command's verified summary; otherwise read only the changed region
    again. Ask the user to confirm on screen when the bridge cannot expose the
