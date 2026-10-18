@@ -712,6 +712,122 @@
 			'layout', LayoutRead(score), 'engraving', EngravingRead(score));
 	}"
 
+	GetPlayOrder "() {
+		// Play > Interpretation > Repeats: whether a manual roadmap is in use,
+		// and the order bars play in (the automatic one when it is not).
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		return CreateDictionary('manual', score.UsingManualBarPlayOrder,
+			'order', score.BarPlaybackOrderString & '',
+			'barCount', score.SystemStaff.BarCount);
+	}"
+
+	SetPlayOrder "(bars) {
+		// bars: a sparse array of bar numbers in playback order, or null to go
+		// back to the automatic order (as 'Automatic repeats playback' does).
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		barCount = score.SystemStaff.BarCount;
+		if (bars != null) {
+			for each n in bars {
+				if (n < 1 or n > barCount) {
+					return CreateDictionary('error', 'bar ' & n & ' is outside the score (' & barCount & ' bars)');
+				}
+			}
+			order = CreateSparseArray();
+			for each n in bars {
+				order.Push(n);
+			}
+			score.BarPlaybackOrder = order;
+		} else {
+			score.BarPlaybackOrder = null;
+		}
+		return CreateDictionary('manual', score.UsingManualBarPlayOrder,
+			'order', score.BarPlaybackOrderString & '', 'barCount', barCount);
+	}"
+
+	SetPlayOrderText "(text) {
+		// Fallback for SetPlayOrder: the Repeats dialog's own text, such as
+		// '1-4, 1-4, 5-8'.
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		score.BarPlaybackOrderString = text;
+		return CreateDictionary('manual', score.UsingManualBarPlayOrder,
+			'order', score.BarPlaybackOrderString & '', 'barCount', score.SystemStaff.BarCount);
+	}"
+
+	PlayOnPassState "(sb) {
+		// The eight 'Play on pass' checkboxes of a barline, as booleans.
+		passes = CreateSparseArray();
+		for n = 1 to 9 {
+			passes.Push(sb.GetPlayedOnNthPass(n));
+		}
+		return passes;
+	}"
+
+	GetPlayOnPass "(bar) {
+		// Every special barline in a bar with its Inspector > Playback > Play
+		// on pass checkboxes 1-8. Barlines live in the system staff.
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		systemStaff = score.SystemStaff;
+		if (bar < 1 or bar > systemStaff.BarCount) {
+			return CreateDictionary('error', 'bar ' & bar & ' is outside the score (' & systemStaff.BarCount & ' bars)');
+		}
+		barlines = CreateSparseArray();
+		for each SpecialBarline sb in systemStaff.NthBar(bar) {
+			barlines.Push(CreateDictionary('internalType', sb.BarlineInternalType,
+				'type', sb.BarlineType, 'position', sb.Position,
+				'playOnPass', PlayOnPassState(sb)));
+		}
+		return CreateDictionary('bar', bar, 'barlines', barlines);
+	}"
+
+	SetPlayOnPass "(bar, typeName, passes, position) {
+		// Tick the Play on pass checkboxes 1-8 listed in passes and clear the
+		// rest, on the barlines in bar of the type typeName (end_repeat, ...),
+		// at position when it is not null.
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		systemStaff = score.SystemStaff;
+		if (bar < 1 or bar > systemStaff.BarCount) {
+			return CreateDictionary('error', 'bar ' & bar & ' is outside the score (' & systemStaff.BarCount & ' bars)');
+		}
+		wanted = BatchBarlineType(typeName);
+		if (wanted = -1) {
+			return CreateDictionary('error', 'unknown barline type ' & typeName);
+		}
+		changed = CreateSparseArray();
+		for each SpecialBarline sb in systemStaff.NthBar(bar) {
+			if (sb.BarlineInternalType = wanted and (position = null or sb.Position = position)) {
+				for n = 1 to 9 {
+					play = False;
+					for each p in passes {
+						if (p = n) {
+							play = True;
+						}
+					}
+					sb.SetPlayedOnNthPass(n, play);
+				}
+				changed.Push(CreateDictionary('position', sb.Position, 'playOnPass', PlayOnPassState(sb)));
+			}
+		}
+		if (changed.Length = 0) {
+			return CreateDictionary('error', 'no ' & typeName & ' barline in bar ' & bar);
+		}
+		return CreateDictionary('bar', bar, 'barlines', changed);
+	}"
+
 	GetSpecialBarlines "(fromBar, toBar) {
 		score = RequireScore();
 		if (score = null) {
