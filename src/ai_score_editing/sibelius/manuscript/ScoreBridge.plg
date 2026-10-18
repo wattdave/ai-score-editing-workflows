@@ -1211,7 +1211,9 @@
 		// The verse line 1-5 of a lyric, or 0 for chorus, above and other styles.
 		styleId = '' & obj.StyleId;
 		for v = 1 to 6 {
-			if (styleId = 'text.staff.space.hypen.lyrics.verse' & v) {
+			// build the name first: `=` would otherwise bind tighter than `&`
+			target = 'text.staff.space.hypen.lyrics.verse' & v;
+			if (styleId = target) {
 				return v;
 			}
 		}

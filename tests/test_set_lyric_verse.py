@@ -96,3 +96,12 @@ def test_plugin_refuses_duplicates_and_sets_style_before_dy() -> None:
     assert run.index("lyric.StyleId = styleId") < run.index("lyric.Dy = op['dy']")
     moves = _function(source, "LyricVerseMoves")
     assert re.search(r"op\['hasPosition'\] = True", moves)  # position 0 reads as null in ManuScript
+
+
+def test_verse_name_is_built_before_comparing():
+    # `styleId = 'text...verse' & v` matched nothing in Sibelius (v59 smoke test:
+    # moved 0 of 319 lyrics); the name must be built first, then compared.
+    source = PLUGIN.read_text()
+    block = source[source.index("LyricVerseOf"):source.index("LyricVerseMoves")]
+    assert "target = 'text.staff.space.hypen.lyrics.verse' & v;" in block
+    assert "if (styleId = target)" in block
