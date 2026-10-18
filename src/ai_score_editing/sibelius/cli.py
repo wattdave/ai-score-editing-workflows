@@ -28,7 +28,7 @@ from ai_score_editing import (
 )
 from ai_score_editing.barrange import parse_bar_range
 from ai_score_editing.intervals import compute_transposition
-from ai_score_editing.sibelius import launcher, protocol
+from ai_score_editing.sibelius import launcher, protocol, repeats
 from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient, run_sync
 from ai_score_editing.token_store import TokenStore
 
@@ -466,6 +466,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="barline type (default: double)",
     )
     set_barline.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    play_order = sub.add_parser(
+        "play-order",
+        help="read or set the playback roadmap (Play > Interpretation > Repeats, manual repeats playback)",
+    )
+    play_order.add_argument(
+        "order", nargs="?",
+        help="bars in the order they play, e.g. '1-12, 1-12, 1-12'; 'auto' returns to automatic repeats playback; "
+        "omit to read the current order",
+    )
+    play_order.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    play_on_pass = sub.add_parser(
+        "play-on-pass",
+        help="read or set Inspector > Playback > Play on pass (1-8) on a barline",
+    )
+    play_on_pass.add_argument("--bar", type=int, required=True, help="bar number (from 1) holding the barline")
+    play_on_pass.add_argument(
+        "--passes",
+        help="passes that play, e.g. '1-3' or '1,3' ('none' for no pass, 'all' for 1-8); the rest are cleared. "
+        "Omit to read the barline's checkboxes",
+    )
+    play_on_pass.add_argument(
+        "--type", default="end_repeat",
+        choices=["start_repeat", "end_repeat", "double", "final", "dashed", "invisible", "between_staves",
+                 "tick", "short", "dotted", "triple", "thick"],
+        help="which barline in the bar to change (default: %(default)s)",
+    )
+    play_on_pass.add_argument("--position", type=int, help="barline position in the bar (1/256 quarters), if several match")
+    play_on_pass.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     read_barlines = sub.add_parser(
         "read-barlines",
         help="read special barlines in a bar or range",
@@ -760,7 +788,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 56
+CURRENT_BRIDGE_VERSION = 57
 QUERY_BRIDGE_VERSION = 38
 BATCH_BRIDGE_VERSION = 39
 NUDGE_BRIDGE_VERSION = 41
@@ -773,6 +801,7 @@ HIDE_EMPTY_STAVES_BRIDGE_VERSION = 52
 AUDIO_EXPORT_BRIDGE_VERSION = 54
 PLAYBACK_SOUNDS_BRIDGE_VERSION = 55
 DELETE_BARS_BRIDGE_VERSION = 56
+REPEATS_BRIDGE_VERSION = 57
 
 
 def _batch_bridge_version(operations: list[dict[str, Any]]) -> int:
@@ -1850,6 +1879,73 @@ async def _run_read_barlines(args: argparse.Namespace) -> int:
     return await _run_bridge_call(args, "GetSpecialBarlines", [from_b, to_b])
 
 
+def _read_order(result: dict[str, Any]) -> list[int] | None:
+    try:
+        return repeats.parse_bar_order(str(result.get("order", "")))
+    except ValueError:
+        return None
+
+
+async def _run_play_order(args: argparse.Namespace) -> int:
+    if args.order is None:
+        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            await _require_bridge(client, REPEATS_BRIDGE_VERSION, "play-order")
+            result = await _bridge(client, "GetPlayOrder")
+        print(json.dumps(result, indent=2))
+        return EXIT_OK
+    try:
+        bars = None if args.order.strip().lower() == "auto" else repeats.parse_bar_order(args.order)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _require_bridge(client, REPEATS_BRIDGE_VERSION, "play-order")
+        await _assert_expected_score(client, args)
+        before = await _bridge(client, "GetPlayOrder")
+        if bars is not None and (bad := [n for n in bars if n > before["barCount"]]):
+            print(f"error: bar {bad[0]} is outside the score ({before['barCount']} bars)", file=sys.stderr)
+            return EXIT_COMMAND_FAILED
+        backup = await _backup(client, f"before {args.subcommand}")
+        print(f"backed up: {backup['copy']}", file=sys.stderr)
+        result = await _bridge(client, "SetPlayOrder", [bars])
+        if bars is not None and _read_order(result) != bars:
+            # Assigning the array did not take; try the dialog's own text form.
+            result = await _bridge(client, "SetPlayOrderText", [repeats.format_bar_order(bars)])
+            if _read_order(result) != bars:
+                print(f"error: Sibelius reports the order {result.get('order')!r}, not the requested one",
+                      file=sys.stderr)
+                return EXIT_COMMAND_FAILED
+        if getattr(args, "save", False):
+            saved = await _bridge(client, "Save")
+            print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
+    print(json.dumps({"before": before, "after": result}, indent=2))
+    return EXIT_OK
+
+
+async def _run_play_on_pass(args: argparse.Namespace) -> int:
+    if args.passes is None:
+        return await _run_bridge_call(args, "GetPlayOnPass", [args.bar])
+    try:
+        if args.passes.strip().lower() == "all":
+            passes = list(range(1, repeats.MAX_PASS + 1))
+        else:
+            passes = repeats.parse_passes(args.passes)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await _require_bridge(client, REPEATS_BRIDGE_VERSION, "play-on-pass")
+        await _assert_expected_score(client, args)
+        backup = await _backup(client, f"before {args.subcommand}")
+        print(f"backed up: {backup['copy']}", file=sys.stderr)
+        result = await _bridge(client, "SetPlayOnPass", [args.bar, args.type, passes, args.position])
+        if getattr(args, "save", False):
+            saved = await _bridge(client, "Save")
+            print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
+    print(json.dumps(result, indent=2))
+    return EXIT_OK
+
+
 async def _run_copy_passage(args: argparse.Namespace) -> int:
     operation = {
         "op": "copy-passage", "fromBar": args.from_bar, "toBar": args.to_bar,
@@ -2571,6 +2667,8 @@ def main(argv: list[str] | None = None) -> int:
         "set-break": _run_set_break,
         "set-barline": _run_set_barline,
         "read-barlines": _run_read_barlines,
+        "play-order": _run_play_order,
+        "play-on-pass": _run_play_on_pass,
         "set-lyric-style": _run_set_lyric_style,
         "split-parts": _run_split_parts,
         "demix": _run_split_parts,

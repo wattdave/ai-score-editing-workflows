@@ -194,6 +194,25 @@ Single-object writes:
   each staff's sound set, patch and sound ID at the start and at every later
   sound change, plus any Mixer override. `--require` exits non-zero if any
   staff's sound set does not contain the name.
+- Playback roadmap (bridge v57): `play-order ["1-12, 1-12, 1-12"|auto]
+  [--save]` reads or sets Play > Interpretation > Repeats. A list of bars sets
+  Manual repeats playback (ranges expand to the bar numbers in playback
+  order, via `Score.BarPlaybackOrder`); `auto` returns to the automatic order;
+  no argument prints `manual`, `order` (the dialog's own string) and
+  `barCount`. Backs up first. Don't play repeats has no ManuScript property.
+- Play on pass (bridge v57): `play-on-pass --bar B [--passes 1-3|1,3|none|all]
+  [--type end_repeat] [--position P] [--save]` sets Inspector > Playback >
+  Play on pass (checkboxes 1-8) on the barline of that type in bar B: the
+  listed passes are ticked, the others cleared, so `--passes 1-3` makes a
+  repeat play three times. Without `--passes` it prints the checkboxes of
+  every special barline in the bar. Backs up first.
+  Checked live on a scratch score: `play-on-pass` set and read back boxes
+  1-3; a fresh end-repeat reads only pass 1 ticked, a start repeat all eight;
+  `play-order auto` clears manual mode. Assigning an order list from a JSON
+  array was accepted but left the order at `1-48` (manual mode on), so the
+  command checks the order Sibelius reports and retries with the dialog's text
+  form (`BarPlaybackOrderString`); it fails loudly if neither takes. Check the
+  printed `order` against the Repeats dialog.
 
 Read a command's `--help` before composing a new invocation rather than
 inferring omitted arguments.
