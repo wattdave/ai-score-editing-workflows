@@ -1,0 +1,75 @@
+---
+name: swing-playback-copy
+description: >
+  Sibelius with Cantai voices. Make a swung playback copy of a straight-eighth
+  melody or vocal line by re-writing it in compound meter (4/4 to 12/8,
+  3/4 to 9/8) with a quarter plus eighth for each pair of eighths. Use when a
+  song should swing in rehearsal mixes: Sibelius's Play / Performance / Rhythmic
+  Feel makes Sibelius sounds swing but Cantai ignores it.
+---
+
+# Swing playback copy
+
+## Why a copy
+
+Sibelius's rhythmic feel (Play / Performance / Rhythmic Feel, or "Swing" text) re-times notes at
+playback for Sibelius's own sounds, but the Cantai engine sings the notated durations and ignores it.
+Tests in a real score: a "Swing" staff text and a "Swing" system text both left every exported
+onset unchanged. The only way to get a swung Cantai rehearsal track is to notate the swing.
+
+Keep the printed score straight for singers to read. Build a separate playback copy, name it
+`<Song> - Melody (swing playback).sib`, and export mixes from that.
+
+## Conversion
+
+Write the line in compound meter, one beat = a dotted quarter:
+
+| Straight | Swung copy |
+|---|---|
+| 4/4 | 12/8 (one bar is 6 quarter-lengths) |
+| 3/4 | 9/8 |
+| on-beat eighth | quarter (2/3 of the beat) |
+| off-beat eighth | eighth (1/3 of the beat) |
+| quarter note | dotted quarter |
+| onset n + 0.5 beats | n × 1.5 + 1.0 quarter-lengths |
+
+- `scripts/swing_events.py` does the re-timing for `(onset, duration, pitch)` events on a half-beat grid
+  (`swing`, plus `swing_playback` with the fixes below). Quarter-grid or triplet material needs hand work.
+- Pickups: a pickup ends on a beat, so the first event's phase is `(1 - pickup) % 1`; its swung length
+  is the swung distance from that phase to the beat.
+- **Tempo mark:** print a dotted quarter, not a quarter. In MusicXML use
+  `<metronome><beat-unit>quarter</beat-unit><beat-unit-dot/><per-minute>147</per-minute></metronome>`
+  with `<sound tempo="220"/>` (1.5 x the dotted-quarter value) so playback agrees. Sibelius then shows "q. = 147".
+- A MusicXML import into Sibelius needs the OK click on the options dialog, as in the other OSA imports.
+
+## Tie rules (this bit is what breaks playback)
+
+Cantai playback drones on tied notes: a note whose tie is never released can sound for several measures.
+
+- **No ties inside a bar.** A swung duration that is not one note value (30 or 42 twelfths of a quarter)
+  is played as the largest single value and the remainder is rested (a small breath before the next
+  syllable). Write exact single durations even when they cross a beat in 12/8 (a half note on beat 3 is fine
+  for a playback copy).
+- A note crossing a barline keeps its one tie. Chains of three or more ties (a 6, a 24 and a 6) hung in a
+  real test; avoid them.
+- The last note: one dotted half and a rest for the bar, not two tied dotted halves.
+- After import, count ties: `<tie type="start"/>` inside a bar should be zero.
+
+## Workflow
+
+1. Build the swung MusicXML from the straight events, import it, check bar count against the straight
+   score (the count stays the same) and `proofread`.
+2. The user sets the Cantai voice on the Mixer strip (the import resets it) and saves.
+3. Check `playback-sounds` shows `Cantai` and the override, then run the `rehearsal-mixes` skill's export
+   with `--expect-file` on the swing copy. A single-staff line gives three identical MP3s (all voices,
+   only, louder): keep one.
+4. Verify the swing reached the audio: `uv run python scripts/onset_check.py STRAIGHT.mp3 SWUNG.mp3`
+   should show the off-beat onsets later than the straight file's, same total length.
+5. Leave the straight score and its mix alone; name the swung file `<Song> - Melody (swing).mp3`.
+
+## Gotchas
+
+- Re-importing a copy replaces the Mixer settings: the user must pick Cantai again.
+- `sib_import`-style imports need Sibelius frontmost; a skipped import leaves the previous score open and a
+  later export silently writes the wrong score. Always pass `--expect-file` and check the bar count.
+- Mixed swing within a piece (a straight bridge) needs the converter run on sections with a meter change.
