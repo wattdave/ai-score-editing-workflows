@@ -788,7 +788,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 57
+CURRENT_BRIDGE_VERSION = 58
 QUERY_BRIDGE_VERSION = 38
 BATCH_BRIDGE_VERSION = 39
 NUDGE_BRIDGE_VERSION = 41
@@ -802,11 +802,17 @@ AUDIO_EXPORT_BRIDGE_VERSION = 54
 PLAYBACK_SOUNDS_BRIDGE_VERSION = 55
 DELETE_BARS_BRIDGE_VERSION = 56
 REPEATS_BRIDGE_VERSION = 57
+LYRIC_VERSE_BRIDGE_VERSION = 58
 
 
 def _batch_bridge_version(operations: list[dict[str, Any]]) -> int:
     """The oldest bridge that runs every operation in a validated batch."""
     names = {operation["op"] for operation in operations}
+    if any(
+        operation["op"] == "add-lyric" and ("verse" in operation or "dy" in operation)
+        for operation in operations
+    ):
+        return LYRIC_VERSE_BRIDGE_VERSION
     if "delete-bars" in names:
         return DELETE_BARS_BRIDGE_VERSION
     if "hide-empty-staves" in names:

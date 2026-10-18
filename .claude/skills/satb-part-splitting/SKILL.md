@@ -56,6 +56,22 @@ Inspect the 2-staff MusicXML (`.xml` or `.mxl`) to determine voice usage and cho
 python3 .claude/skills/satb-part-splitting/scripts/split_satb.py audit "path/to/2staff_score.mxl"
 ```
 
+### 1b. Input exported from Sibelius (2 parts, or a repaired score)
+
+The splitter wants one part with two staves. A score exported from Sibelius
+arrives as two single-staff parts with a few quirks, so prepare it first
+(needs `lxml`, e.g. `uv run --with lxml python -I`):
+```bash
+S=.claude/skills/satb-part-splitting/scripts
+uv run --with lxml python -I $S/prepare_sibelius_export.py export.xml prepared.xml
+uv run --with lxml python -I $S/merge_grand_staff.py prepared.xml grand.xml
+```
+Without this, only the treble part is split and the tenor and bass come out as
+empty rests, chord members with unequal durations make the bars overflow, and
+every lyric verse lands on one line when the result is imported. After
+importing the split score, run the `hanging_notes.py` audit and remove the
+ties it flags (tenor/bass re-attacks are common).
+
 ### 2. Split into 4 SATB Parts (with Automatic Lyric Reconnection)
 Run `split`, specifying any solo bars, lyric propagation, and automatic syllable reconnection (enabled by default):
 ```bash
@@ -65,6 +81,24 @@ python3 .claude/skills/satb-part-splitting/scripts/split_satb.py split "path/to/
   --copy-lyrics-to-tb \
   --reconnect-lyrics
 ```
+
+### 2b. Give the lower voices all the verses
+
+`--copy-lyrics-to-tb` copies verse 1 only, and only where the note counts match.
+With the split score open in Sibelius, copy every verse from the soprano onto
+the tenor and bass (matched by note onset), optionally hidden so the page stays
+legible while playback still gets the words:
+```bash
+uv run python .claude/skills/satb-part-splitting/scripts/copy_lyrics_to_staves.py \
+  --expect-file "/path/score.sib" --target-staff 3 --target-staff 4 --hide --save
+```
+`--dry-run` prints the plan first. It replaces the target staves' lyrics (a
+backup is made), drops verse-number prefixes, and reports syllables that have no
+note to sit on (a passing note the lower voice lacks) and any bar whose words
+differ from the source. Before running it, compare note counts per bar across the
+four staves: an OMR split can silently lose a voice in a bar (bass notes in one
+bar of Silent Night, alto notes in another), and the lyrics have nothing to sit on
+there.
 
 ### 3. (Optional) Reconnect Lyrics on an Existing Score
 To reconnect shattered OMR syllables on an already split or existing MusicXML file without re-splitting:

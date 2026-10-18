@@ -1,0 +1,193 @@
+---
+description: Scan a sheet-music PDF into a first-draft MusicXML file with the Halbestunde Mac app (it uploads the PDF to an online service). Covers cleaning the PDF first (crop and flatten scan borders and neighbouring pieces), driving the app's GUI with real mouse clicks, saving the XML, and what to check in the result. Use when asked to run, convert or OCR a score PDF with Halbestunde, or to turn scanned carols or choral scores into MusicXML.
+globs: *
+alwaysApply: false
+---
+
+# Halbestunde OMR
+
+Halbestunde is a graphical Mac app (`/Applications/Halbestunde.app`, version
+0.1.1 when this was written). It uploads a PDF or image to a service, which
+returns a preview and downloads in MIDI, XML, MSCZ and PDF form. The service
+reads the whole PDF page, so the input must contain only the piece you want.
+
+Uploading sends the score to an external service. Only do it for files the user
+has asked to convert.
+
+## 1. Clean the PDF first
+
+A PDF crop box is not enough: Halbestunde still scans the hidden content (a
+cropped Silent Night came back with the following carol's bars). Crop, then
+flatten to an image-only PDF. Always add white padding (`--pad 40`): a crop
+that leaves the staves flush against the image edge made the service return an
+empty score for Deck the Halls (one empty staff, no notes), and the same page
+converted fine as the untouched original or with 40 pt of white added.
+
+```bash
+S=.claude/skills/halbestunde-omr/scripts
+# crop to a rectangle (points, origin top-left; page is usually 611 x 792)
+uv run --with pymupdf --with numpy python -I $S/clean_pdf.py in.pdf out.pdf --crop 100 40 545 462 --pad 40
+# or crop each page to its content, dropping page 1 (belongs to another piece)
+uv run --with pymupdf --with numpy python -I $S/clean_pdf.py in.pdf out.pdf --auto --drop 1 --pad 40
+```
+
+`--auto` works when the margins differ from page to page (skewed scans); it
+keeps edge specks, so prefer a fixed `--crop` when the pages are uniform. A
+crop box left in place from an earlier session still needs flattening: run
+`clean_pdf.py` with only `--pad`, and it renders the existing crop box.
+
+A page that needs no cleaning (no border, no neighbouring piece) can go in
+untouched. Render the output and look at it before moving it over the original. Pick the
+crop by rendering the page at about 70 dpi (`page.get_pixmap(dpi=70)`; points =
+pixels x 72/70) and reading edges off the picture. `--auto` ignores an 8 pt
+strip at every page edge, so it removes scanner edge lines but not a black
+border inside the page. Check the page ranges as well: the first and last page
+of a carol often belong to its neighbour.
+
+## 2. Convert and download
+
+```bash
+uv run --with pyobjc-framework-Quartz --with pillow --with numpy python -I \
+  .claude/skills/halbestunde-omr/scripts/halbestunde_convert.py "~/Documents/Scores/OSA/01 Silent Night.pdf"
+```
+
+It writes `01 Silent Night.xml` next to the PDF (it refuses if that exists).
+Tell the user not to touch the mouse or keyboard while it runs: it clicks at
+fixed window positions. A one-page score takes under a minute; longer ones take
+several.
+
+It has run end to end on single-page scores (Deck the Halls). If a step fails,
+screenshot the window and compare with the steps below. `--resume` skips the
+upload and continues from the current screen: the finished scan or an open
+Save As form. Before it starts it closes a leftover Save As dialog.
+
+An empty or tiny result (one bar, no notes) means the service could not read
+the page, not that the script failed. Retry with more padding or a different
+crop before blaming the scan.
+
+### The workflow it follows
+
+1. Halbestunde must be frontmost before every click or keystroke. Otherwise the
+   keystrokes land in the terminal, which has already happened once.
+2. Only real mouse events work. The window exposes just its three title-bar
+   buttons to System Events, and `click at` through System Events does nothing.
+3. `+` (lower left, "New Upload") opens the upload page. A click on the dashed
+   drop area opens the macOS file dialog. Cmd+Shift+G, the full path, Return
+   goes to the file; a second Return opens it. The page then names the file and
+   shows **Convert**.
+4. Convert shows "The file is currently being processed" with a progress
+   counter. It ends on "The conversion is complete" with a **Great, let's go**
+   button.
+5. Great, let's go opens "Ready to Download" with Original and Converted
+   previews. The converted preview takes a few seconds to load.
+6. **Download Now** (upper right) opens Save As after a moment. File types are
+   MSCZ, MIDI, XML and PDF, and they behave like radio buttons: one at a time,
+   **MIDI by default** (the dialog remembers the last choice). Tick XML, which
+   unticks MIDI; clicking a ticked box does nothing. Enter the file name without
+   an extension, check the "Save to" folder (the Change link edits it; it
+   remembers the last folder), and press Save. The app adds `.xml`. "File
+   downloaded successfully!" confirms the path.
+7. `+` starts the next upload. Close the confirmation first with its X; Escape
+   does nothing.
+
+Reading the screen: the Save As dialog is neutral grey (38,38,38) against the
+app's (23,26,26). A ticked box reads blue (0,162,199) at its corner, but its
+centre is the white tick, so probe the corner. The centre of the "Great, let's
+go" button is dark text, so probe its left padding instead.
+
+The output is `.xml` (MusicXML `score-partwise` 3.0), not `.musicxml`.
+
+## 3. Check the result
+
+Compare the converted preview with the original, and count bars and parts in
+the XML:
+
+```bash
+f="01 Silent Night.xml"
+grep -c '<measure ' "$f"; grep -c '<score-part ' "$f"
+grep -o '<text>[^<]*</text>' "$f" | sed 's/<[^>]*>//g' | tr '\n' ' ' | head -c 900
+```
+
+Expect to fix: lyrics split into syllables with no hyphens (use the
+`lyric-hyphenation` skill), misread lyric words (compare with the PDF),
+overprinted text such as the composer line, wrong clefs or barlines and
+dropped notes (use `omr-score-repair`). Results so far:
+
+- Silent Night: two parts, 24 bars, several misreads in the German verse
+  ("kock", "Faar", "Euh").
+- Deck the Halls: two parts, 16 bars, 272 notes; lyrics for all three verses
+  with some misreads ("Tale" for "See the new"/"Yule", "Get"/"Cset" for "Fa");
+  chord symbols and the pencil notes did not break it.
+
+- Feliz Navidad (10 pages, SATB and piano, Musicnotes print-out): about 90
+  seconds. Six parts of 76 bars (`Voice0`...; four voices plus two piano
+  staves), 1794 notes. Lyrics are bare syllables, and in places two voices'
+  words are merged into one part ("Mer Mer ry ry Christ Christ").
+
+- It's the Most Wonderful Time of the Year (8 pages, four staves): four parts
+  of 150 bars with lyrics throughout. Heavy pencil marks and grey highlighting
+  did not stop the scan; black hole-punch dots on the left were cropped off.
+- Carol of the Bells (4 pages, skewed scans, `--auto`): nine parts of 42 bars;
+  the voices are fragmented across parts (several hold under 20 notes).
+- In the Bleak Midwinter (6 pages): four parts of 64 bars; some lyric misreads
+  ("wif ter", "flost y").
+- Caroling, Caroling and Away in a Manger (one page each): one part of 15
+  bars, and two parts of 17 bars. Faint show-through of the page's reverse
+  side did no harm.
+
+Expect to merge and rename parts afterwards: the service names parts
+`Voice0`, `Voice1`... by detected voice, not by staff.
+
+Crops for Musicnotes-style pages: hole punches sit at the right edge and a
+licence footer at the bottom, so one rectangle for every page
+(`--crop 40 22 563 748`) drops them and keeps the page numbers and rehearsal
+marks. Pick the rectangle from two or three pages with different layouts, not
+only the first (page 1 carries a title and copyright block).
+
+## 4. Repair in Sibelius (worked on Silent Night)
+
+Import and save through the bridge (see the `sibelius` skill), but expect a
+dialog: `OpenScore` on a MusicXML file raises "Open MusicXML File" in Sibelius
+and the CLI times out until someone presses **OK** (defaults are fine). Do it
+with a real click (the same `click.py` approach as above), then
+`ExportScore ... SIBL` and `OpenScore` the saved `.sib`.
+
+Compare against the PDF, not the XML. What the scan got wrong, in order of
+how often:
+
+- Lyric words (`Vir-te, gin`, `kock` for `hoch`) and lyrics attached to the
+  wrong verse line: a syllable from another verse (here the German line's
+  `li` and `te,`) leaks into verse 1. Positions show it: a syllable at a
+  position where the other verses have none is usually a stray.
+- Missing syllables. `add-lyric` always lands on verse 1; move it with
+  `set-lyric-style --style verseN`, then set its `Dy` to match the line
+  (verse 1 -192, 2 -272, 3 -352, 4 -432).
+- Hyphen links cannot be edited in place; delete the lyric and `add-lyric`
+  with `"syllableType":"middle"` for every syllable except the last.
+- System breaks: Sibelius re-breaks the systems; restore the print's with
+  `set-break --bar N` on the last bar of each system.
+- Notes and rhythm were right in Silent Night (checked bar by bar against a
+  200 dpi crop of the print); the dynamic read `ppp` for `pp`.
+
+Expression text can break playback with a voice engine. The scan turns dynamics
+and directions (`pp`, `mf`, `unis.`, `poco accel.`) into text objects. In Silent
+Night a `pp` on bar 1 made one Cantai voice sing the syllables on the wrong beat
+until the text was deleted. Before listening to a vocal playback, list them with
+`query --type Text` and delete or replace them, instead of correcting the spelling
+(I changed `ppp` to `pp` and it still misbehaved).
+
+Retexting is `apply` with `{"op":"set","prop":"Text","type":"LyricItem"}`
+operations (no font arguments needed when the import left no overrides).
+Credits typed as text objects (`JOSEPH MOHR, 1818`) are better removed and
+moved into `set-score-info`.
+
+## Pitfalls
+
+- A stray keystroke or click from the user during a run can derail it. If a
+  file such as `01 Silent Night.xml` appears from an aborted run, check its
+  bar count and delete it if it came from the wrong input.
+- Keep other windows (including the terminal) off the Halbestunde window. A
+  terminal covering part of a button hides it from screenshots; clicking the
+  visible part worked once.
+- If Halbestunde opens a PDF passed as an `open -a` argument, it does not load
+  it; use the + flow.

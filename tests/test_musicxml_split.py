@@ -6,7 +6,9 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from ai_score_editing.musicxml_split.io import parse_musicxml
+from ai_score_editing.musicxml_split.model import TargetPart
 from ai_score_editing.musicxml_split.profiles.satb import split_satb
+from ai_score_editing.musicxml_split.routing import attributes_with_clef
 from ai_score_editing.musicxml_split.timeline import timeline_for_measure
 
 
@@ -63,3 +65,13 @@ def test_satb_profile_routes_chord_lyrics_and_preserves_measure_duration(tmp_pat
     _, split = parse_musicxml(output)
     assert split.find("part[@id='P1']/measure/note/lyric/text").text == "Kyrie"
     assert all(sum(int(note.findtext("duration") or "0") for note in part.find("measure").findall("note")) == 4 for part in split.findall("part"))
+
+
+def test_clef_is_written_before_staff_details() -> None:
+    original = ET.Element("attributes")
+    ET.SubElement(original, "divisions").text = "256"
+    ET.SubElement(original, "staff-details", number="1")
+    ET.SubElement(original, "clef")
+    target = TargetPart("P3", "Tenor", "T.", "G", "2", "-1", "voice.tenor", "3")
+    tags = [child.tag for child in attributes_with_clef(original, target)]
+    assert tags == ["divisions", "clef", "staff-details"]
