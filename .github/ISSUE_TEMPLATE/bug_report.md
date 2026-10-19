@@ -14,4 +14,4 @@ labels: bug
 - macOS:
 - Editor and version (Sibelius, Dorico or MuseScore):
 - Assistant (Claude Code, Codex, Antigravity):
-- Output of `scripts/setup_check.sh --connect`:
+- Output of `.claude/skills/setup/scripts/setup_check.sh --connect`:

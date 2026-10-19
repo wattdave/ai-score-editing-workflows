@@ -14,7 +14,7 @@ command does. Tell them what you are about to do before you do it.
 ## 1. Check what is already there
 
 ```bash
-scripts/setup_check.sh
+${CLAUDE_SKILL_DIR}/scripts/setup_check.sh
 ```
 
 It changes nothing. Each line is `ok`, `missing`, `warn` or `optional` plus
@@ -50,7 +50,7 @@ skip any.
 
 ## 3. Install, in this order
 
-Run each step, then re-run `scripts/setup_check.sh` to confirm it took
+Run each step, then re-run `${CLAUDE_SKILL_DIR}/scripts/setup_check.sh` to confirm it took
 before moving on. If a step fails, show the error in plain words and do not
 continue past something the later steps depend on.
 
@@ -101,7 +101,7 @@ These steps happen in Sibelius, so the user does them; guide and wait.
    Preferences → Input Devices, turn on Sibelius Connect, keep the port at
    1898, and restart Sibelius so the plug-in loads.
 5. **First connection:** with Sibelius open, run
-   `scripts/setup_check.sh --connect`. Warn them first that Sibelius will
+   `${CLAUDE_SKILL_DIR}/scripts/setup_check.sh --connect`. Warn them first that Sibelius will
    show a dialog asking to allow "sibelius-cli" and that they
    must click OK. `connection` should report a bridge version. If it says
    Sibelius is busy, a dialog is open in Sibelius and they must close it.
@@ -143,7 +143,7 @@ and approved, and walk the user through it. Check with
 
 ## 5. Finish
 
-Run `scripts/setup_check.sh --connect` one last time and show the result.
+Run `${CLAUDE_SKILL_DIR}/scripts/setup_check.sh --connect` one last time and show the result.
 Then tell them in two or three sentences what they can do now, with
 example requests they can type, for example:
 

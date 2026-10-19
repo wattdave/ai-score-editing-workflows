@@ -1,8 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(scripts/setup_check.sh)",
-      "Bash(scripts/setup_check.sh --connect)"
+      "Bash(*setup_check.sh)",
+      "Bash(*setup_check.sh --connect)"
     ]
   }
 }

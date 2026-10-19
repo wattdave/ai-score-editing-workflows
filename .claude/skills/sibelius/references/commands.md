@@ -268,5 +268,5 @@ confirm `score-snapshot` reports `no score open`, and then open from disk.
 Use escape hatches only when a purpose-built command does not cover the task,
 and retain the required read/write/verify workflow from the main skill. When a
 task needs many bridge calls with no batch command, write one Python script
-that opens a single `SibeliusClient` session (see `scripts/clean_clefs.py`)
+that opens a single `SibeliusClient` session (see the `omr-score-repair` skill's `scripts/clean_clefs.py`)
 rather than looping CLI invocations.

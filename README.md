@@ -44,7 +44,7 @@ Claude plan does not include Claude Code; see
    Python 3.13, ffmpeg, the ScoreBridge plug-in for your editor), asks whether to install it
    all at once or one item at a time, and does the work.
 
-`scripts/setup_check.sh` shows what is installed at any time.
+`.claude/skills/setup/scripts/setup_check.sh` shows what is installed at any time.
 
 ## Installing as Claude Code plugins
 
@@ -90,7 +90,7 @@ The same steps by hand, in Terminal, from this folder:
 1. See what is missing (this changes nothing):
 
    ```bash
-   scripts/setup_check.sh
+   .claude/skills/setup/scripts/setup_check.sh
    ```
 
 2. Install [Homebrew](https://brew.sh). It asks for your Mac password;
@@ -121,7 +121,7 @@ The same steps by hand, in Terminal, from this folder:
    allow the connection:
 
    ```bash
-   scripts/setup_check.sh --connect
+   .claude/skills/setup/scripts/setup_check.sh --connect
    ```
 
 ## Sibelius: requirements

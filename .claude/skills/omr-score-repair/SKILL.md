@@ -39,7 +39,7 @@ systematic architectural and engraving mistakes:
 
 - **`sibelius` skill** (`.claude/skills/sibelius/SKILL.md`): Used for score inspection, lyric checking, and engraving verification after importing the repaired MusicXML into Sibelius.
 - **`omr_tool.py`** (`${CLAUDE_SKILL_DIR}/scripts/omr_tool.py`): Standalone CLI helper for auditing, unstacking, and validating MusicXML measure structures.
-- **`clean_clefs.py`** (repo root `scripts/clean_clefs.py`, *not* this skill's `scripts/`): Audits and purges redundant `Clef` objects from the score open in Sibelius. Must run under `uv run` so it can import `ai_score_editing`.
+- **`clean_clefs.py`** (`${CLAUDE_SKILL_DIR}/scripts/clean_clefs.py`): Audits and purges redundant `Clef` objects from the score open in Sibelius. Must run under `uv run` so it can import `ai_score_editing`.
 
 ---
 
@@ -78,8 +78,8 @@ uv run --project "${CLAUDE_SKILL_DIR}" python ${CLAUDE_SKILL_DIR}/scripts/omr_to
 
 ### 4. Purge redundant clefs from the imported score (runs against live Sibelius)
 ```bash
-uv run --project "${CLAUDE_SKILL_DIR}" python scripts/clean_clefs.py audit          # report only
-uv run --project "${CLAUDE_SKILL_DIR}" python scripts/clean_clefs.py strip          # backs up, deletes, saves
+uv run --project "${CLAUDE_SKILL_DIR}" python ${CLAUDE_SKILL_DIR}/scripts/clean_clefs.py audit          # report only
+uv run --project "${CLAUDE_SKILL_DIR}" python ${CLAUDE_SKILL_DIR}/scripts/clean_clefs.py strip          # backs up, deletes, saves
 ```
 
 ---
@@ -136,7 +136,7 @@ score open, after the import itself has been verified. See
 
 1. **Audit first — never strip an unreviewed score:**
    ```bash
-   uv run --project "${CLAUDE_SKILL_DIR}" python scripts/clean_clefs.py audit
+   uv run --project "${CLAUDE_SKILL_DIR}" python ${CLAUDE_SKILL_DIR}/scripts/clean_clefs.py audit
    ```
    Findings are grouped per staff, each annotated with the default clef used and
    where it came from (read from bar 1, inferred from the instrument name, or
@@ -145,8 +145,8 @@ score open, after the import itself has been verified. See
    genuinely needs — a real mid-piece clef change — must not be deleted.
 3. **Strip, optionally narrowed to a single staff:**
    ```bash
-   uv run --project "${CLAUDE_SKILL_DIR}" python scripts/clean_clefs.py strip --dry-run   # preview only
-   uv run --project "${CLAUDE_SKILL_DIR}" python scripts/clean_clefs.py strip --staff 16
+   uv run --project "${CLAUDE_SKILL_DIR}" python ${CLAUDE_SKILL_DIR}/scripts/clean_clefs.py strip --dry-run   # preview only
+   uv run --project "${CLAUDE_SKILL_DIR}" python ${CLAUDE_SKILL_DIR}/scripts/clean_clefs.py strip --staff 16
    ```
    `strip` backs up the score first, deletes in reverse index order within each
    bar so earlier indices stay valid, then **saves the score automatically**.
