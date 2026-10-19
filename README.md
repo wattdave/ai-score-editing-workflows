@@ -46,6 +46,25 @@ Claude plan does not include Claude Code; see
 
 `scripts/setup_check.sh` shows what is installed at any time.
 
+## Installing as Claude Code plugins
+
+If you only want the skills and tool servers, without working inside this
+folder, add the marketplace and install the plugins for your editor:
+
+```
+/plugin marketplace add wattdave/ai-score-editing-workflows
+/plugin install score-editing-core --marketplace wattdave/ai-score-editing-workflows
+/plugin install sibelius --marketplace wattdave/ai-score-editing-workflows
+/plugin install dorico --marketplace wattdave/ai-score-editing-workflows
+/plugin install musescore --marketplace wattdave/ai-score-editing-workflows
+```
+
+`score-editing-core` holds the editor-independent skills (`setup`, OMR repair,
+LilyPond import, lyric hyphenation). Install it plus the plugin for each editor
+you use. Each plugin carries the whole repository so the skills' scripts and
+CLIs are available; run `/setup` afterwards to install `uv`, Python and the
+ScoreBridge plug-ins.
+
 ## Using Codex or Antigravity instead
 
 The skills in this folder also work in OpenAI Codex and Google Antigravity,
