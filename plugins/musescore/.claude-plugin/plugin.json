@@ -1,0 +1,8 @@
+{
+  "name": "musescore",
+  "description": "MuseScore 4 back end: inspect and edit the open score.",
+  "author": {
+    "name": "Dave Watt",
+    "email": "dmwatt@gmail.com"
+  }
+}

@@ -1,71 +1,32 @@
 {
   "name": "ai-score-editing",
-  "owner": { "name": "Dave Watt", "email": "dmwatt@gmail.com" },
+  "owner": {
+    "name": "Dave Watt",
+    "email": "dmwatt@gmail.com"
+  },
   "metadata": {
     "description": "Skills and MCP servers for driving Sibelius, Dorico and MuseScore"
   },
   "plugins": [
     {
       "name": "score-editing-core",
-      "source": "./",
-      "strict": false,
-      "description": "Editor-independent score workflows: choosing a back end, setup, OMR repair, LilyPond import, lyric hyphenation.",
-      "skills": [
-        "./.claude/skills/score-editing",
-        "./.claude/skills/setup",
-        "./.claude/skills/halbestunde-omr",
-        "./.claude/skills/omr-score-repair",
-        "./.claude/skills/lilypond-to-score",
-        "./.claude/skills/lyric-hyphenation"
-      ]
+      "source": "./plugins/score-editing-core",
+      "description": "Editor-independent score workflows: choosing a back end, setup, OMR repair, LilyPond import, lyric hyphenation."
     },
     {
       "name": "sibelius",
-      "source": "./",
-      "strict": false,
-      "description": "Sibelius back end and workflows: score editing, SATB splitting, playback repair, rehearsal mixes, melody lines.",
-      "skills": [
-        "./.claude/skills/sibelius",
-        "./.claude/skills/satb-part-splitting",
-        "./.claude/skills/playback-divisi-split",
-        "./.claude/skills/hanging-playback-note-repair",
-        "./.claude/skills/tenor-playback-repair",
-        "./.claude/skills/rehearsal-mixes",
-        "./.claude/skills/swing-playback-copy",
-        "./.claude/skills/melody-line"
-      ],
-      "mcpServers": {
-        "sibelius": {
-          "command": "uv",
-          "args": ["run", "--directory", "${CLAUDE_PLUGIN_ROOT}", "sibelius-mcp"]
-        }
-      }
+      "source": "./plugins/sibelius",
+      "description": "Sibelius back end and workflows: score editing, SATB splitting, playback repair, rehearsal mixes, melody lines."
     },
     {
       "name": "dorico",
-      "source": "./",
-      "strict": false,
-      "description": "Dorico back end: inspect and edit the open project.",
-      "skills": ["./.claude/skills/dorico"],
-      "mcpServers": {
-        "dorico": {
-          "command": "uv",
-          "args": ["run", "--directory", "${CLAUDE_PLUGIN_ROOT}", "dorico-mcp"]
-        }
-      }
+      "source": "./plugins/dorico",
+      "description": "Dorico back end: inspect and edit the open project."
     },
     {
       "name": "musescore",
-      "source": "./",
-      "strict": false,
-      "description": "MuseScore 4 back end: inspect and edit the open score.",
-      "skills": ["./.claude/skills/musescore"],
-      "mcpServers": {
-        "musescore": {
-          "command": "uv",
-          "args": ["run", "--directory", "${CLAUDE_PLUGIN_ROOT}", "musescore-mcp"]
-        }
-      }
+      "source": "./plugins/musescore",
+      "description": "MuseScore 4 back end: inspect and edit the open score."
     }
   ]
 }

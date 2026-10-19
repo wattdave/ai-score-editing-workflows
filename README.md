@@ -61,9 +61,8 @@ folder, add the marketplace and install the plugins for your editor:
 
 `score-editing-core` holds the editor-independent skills (`setup`, OMR repair,
 LilyPond import, lyric hyphenation). Install it plus the plugin for each editor
-you use. Each plugin carries the whole repository so the skills' scripts and
-CLIs are available; run `/setup` afterwards to install `uv`, Python and the
-ScoreBridge plug-ins.
+you use. Each editor plugin starts only its own tool server. Run `/setup`
+afterwards to install `uv`, Python and the ScoreBridge plug-ins.
 
 ## Using Codex or Antigravity instead
 

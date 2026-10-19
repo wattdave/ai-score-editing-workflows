@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "musescore": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${CLAUDE_PLUGIN_ROOT}",
+        "musescore-mcp"
+      ]
+    }
+  }
+}
