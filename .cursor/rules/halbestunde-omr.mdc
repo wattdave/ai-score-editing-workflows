@@ -138,6 +138,14 @@ dropped notes (use `omr-score-repair`). Results so far:
 Expect to merge and rename parts afterwards: the service names parts
 `Voice0`, `Voice1`... by detected voice, not by staff.
 
+- In the Bleak Midwinter piano (17 single-system crops of a grand staff, 6 pages
+  of print): it returned one part of 55 bars for what is 61 bars of print,
+  with the voices and staves tangled, bars missing and extra, and many wrong
+  pitches and chords. It was not usable even as a draft. Dense piano music
+  (chords, 8va/8vb, clef changes, arpeggios) is beyond it; plan to transcribe
+  by hand from zoomed crops, using the scan only to cross-check accidentals
+  (it did read sharps and naturals well). Plain SATB pages scan far better.
+
 Crops for Musicnotes-style pages: hole punches sit at the right edge and a
 licence footer at the bottom, so one rectangle for every page
 (`--crop 40 22 563 748`) drops them and keeps the page numbers and rehearsal
@@ -191,5 +199,7 @@ moved into `set-score-info`.
 - Keep other windows (including the terminal) off the Halbestunde window. A
   terminal covering part of a button hides it from screenshots; clicking the
   visible part worked once.
+- Notification banners or other small windows can appear as the app's first
+  window; `halbestunde_convert.py` now picks the 1020x720 window by size.
 - If Halbestunde opens a PDF passed as an `open -a` argument, it does not load
   it; use the + flow.
