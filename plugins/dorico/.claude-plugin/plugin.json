@@ -1,0 +1,8 @@
+{
+  "name": "dorico",
+  "description": "Dorico back end: inspect and edit the open project.",
+  "author": {
+    "name": "Dave Watt",
+    "email": "dmwatt@gmail.com"
+  }
+}

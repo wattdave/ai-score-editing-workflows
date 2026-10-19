@@ -1,0 +1,8 @@
+{
+  "name": "score-editing-core",
+  "description": "Editor-independent score workflows: choosing a back end, setup, OMR repair, LilyPond import, lyric hyphenation.",
+  "author": {
+    "name": "Dave Watt",
+    "email": "dmwatt@gmail.com"
+  }
+}

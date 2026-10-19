@@ -1,0 +1,8 @@
+{
+  "name": "sibelius",
+  "description": "Sibelius back end and workflows: score editing, SATB splitting, playback repair, rehearsal mixes, melody lines.",
+  "author": {
+    "name": "Dave Watt",
+    "email": "dmwatt@gmail.com"
+  }
+}
