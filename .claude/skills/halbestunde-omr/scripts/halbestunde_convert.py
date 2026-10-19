@@ -53,12 +53,17 @@ def frontmost() -> str:
 
 
 def window_origin() -> tuple[int, int]:
-    raw = osa('tell application "System Events" to tell process "Halbestunde" '
-              'to return (position of window 1) & (size of window 1)')
-    x, y, w, h = (int(float(v)) for v in raw.split(","))
-    if (w, h) != WINDOW_SIZE:
-        raise SystemExit(f"Window is {w}x{h}, expected {WINDOW_SIZE}; resize it or update the offsets.")
-    return x, y
+    # Other small windows (notification overlays) can be listed first, so look for the right size.
+    raw = osa('tell application "System Events" to tell process "Halbestunde" to return '
+              '(position of every window) & (size of every window)')
+    values = [int(float(v)) for v in raw.split(",")]
+    count = len(values) // 4
+    positions = list(zip(values[0:2 * count:2], values[1:2 * count:2]))
+    sizes = list(zip(values[2 * count::2], values[2 * count + 1::2]))
+    for pos, size in zip(positions, sizes):
+        if size == tuple(WINDOW_SIZE):
+            return pos
+    raise SystemExit(f"No window of size {WINDOW_SIZE}; found {sizes}. Resize it or update the offsets.")
 
 
 def focus() -> tuple[int, int]:
