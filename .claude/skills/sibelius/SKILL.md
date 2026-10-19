@@ -8,7 +8,7 @@ description: Apply user-described changes to the score open in Sibelius, includi
 Run all commands from the repository root with:
 
 ```bash
-uv run sibelius-cli <command>
+uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli <command>
 ```
 
 The CLI talks to the frontmost score in Sibelius through Sibelius Connect and

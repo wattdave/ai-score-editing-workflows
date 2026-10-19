@@ -1,7 +1,7 @@
 #!/bin/bash
 # Report which setup requirements are met. Changes nothing.
 #
-# Usage: scripts/setup_check.sh [--connect]
+# Usage: setup_check.sh [--connect]
 #   --connect  also ask the running Sibelius for the bridge plug-in version
 #              (the first connection per Sibelius launch shows an approval
 #              dialog in Sibelius)
@@ -9,7 +9,8 @@
 # Prints one line per requirement: "ok|missing|warn|optional <name> <detail>".
 # Exits 0 when everything required is ok, 1 otherwise.
 
-cd "$(dirname "$0")/.." || exit 2
+cd "$(dirname "$0")" || exit 2
+while [ ! -f pyproject.toml ] && [ "$PWD" != / ]; do cd .. || exit 2; done
 
 # Homebrew is not on PATH in a fresh shell until ~/.zprofile is updated.
 for prefix in /opt/homebrew /usr/local; do

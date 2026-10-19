@@ -1,6 +1,6 @@
 # Command Reference
 
-Use `uv run sibelius-cli <command> --help` for the complete current
+Use `uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli <command> --help` for the complete current
 argument list. Run commands from the repository root.
 
 Batch commands are listed first in each section. Reach for single-object
@@ -244,9 +244,9 @@ through the bridge instead of asking the user to click through the import
 dialog and Save As:
 
 ```bash
-uv run sibelius-cli plugin ScoreBridge OpenScore --args '["/abs/score.xml"]'
-uv run sibelius-cli plugin ScoreBridge ExportScore --args '["/abs/score.sib", "SIBL"]'
-uv run sibelius-cli plugin ScoreBridge OpenScore --args '["/abs/score.sib"]'
+uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli plugin ScoreBridge OpenScore --args '["/abs/score.xml"]'
+uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli plugin ScoreBridge ExportScore --args '["/abs/score.sib", "SIBL"]'
+uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli plugin ScoreBridge OpenScore --args '["/abs/score.sib"]'
 ```
 
 `OpenScore` imports MusicXML silently. `ExportScore` with `SIBL` writes a
@@ -268,5 +268,5 @@ confirm `score-snapshot` reports `no score open`, and then open from disk.
 Use escape hatches only when a purpose-built command does not cover the task,
 and retain the required read/write/verify workflow from the main skill. When a
 task needs many bridge calls with no batch command, write one Python script
-that opens a single `SibeliusClient` session (see `scripts/clean_clefs.py`)
+that opens a single `SibeliusClient` session (see the `omr-score-repair` skill's `scripts/clean_clefs.py`)
 rather than looping CLI invocations.

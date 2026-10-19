@@ -14,7 +14,7 @@ command does. Tell them what you are about to do before you do it.
 ## 1. Check what is already there
 
 ```bash
-scripts/setup_check.sh
+${CLAUDE_SKILL_DIR}/scripts/setup_check.sh
 ```
 
 It changes nothing. Each line is `ok`, `missing`, `warn` or `optional` plus
@@ -50,7 +50,7 @@ skip any.
 
 ## 3. Install, in this order
 
-Run each step, then re-run `scripts/setup_check.sh` to confirm it took
+Run each step, then re-run `${CLAUDE_SKILL_DIR}/scripts/setup_check.sh` to confirm it took
 before moving on. If a step fails, show the error in plain words and do not
 continue past something the later steps depend on.
 
@@ -93,7 +93,7 @@ These steps happen in Sibelius, so the user does them; guide and wait.
    this project needs. Do not try to download it for them.
 2. If `sibelius-launched` is missing, ask them to open Sibelius once, then
    quit it.
-3. **Bridge plug-in:** `uv run sibelius-cli install-plugin`. This also
+3. **Bridge plug-in:** `uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli install-plugin`. This also
    removes the old `sibwscli.plg` bridge if the user has it; for MuseScore,
    `musescore-cli install-plugin` removes the old `sibwscli-bridge` folder.
    After upgrading, the user approves the new plug-in once.
@@ -101,7 +101,7 @@ These steps happen in Sibelius, so the user does them; guide and wait.
    Preferences → Input Devices, turn on Sibelius Connect, keep the port at
    1898, and restart Sibelius so the plug-in loads.
 5. **First connection:** with Sibelius open, run
-   `scripts/setup_check.sh --connect`. Warn them first that Sibelius will
+   `${CLAUDE_SKILL_DIR}/scripts/setup_check.sh --connect`. Warn them first that Sibelius will
    show a dialog asking to allow "sibelius-cli" and that they
    must click OK. `connection` should report a bridge version. If it says
    Sibelius is busy, a dialog is open in Sibelius and they must close it.
@@ -113,7 +113,7 @@ musescore.org). Claude Code starts the MuseScore MCP server from
 `.mcp.json`; the plug-in it talks to is installed with:
 
 ```bash
-uv run musescore-cli install-plugin
+uv run --project "${CLAUDE_SKILL_DIR}" musescore-cli install-plugin
 ```
 
 Then the user:
@@ -126,7 +126,7 @@ Then the user:
    MuseScore session before asking Claude to work on the score. Enabling it
    does not start it.
 
-Check with `uv run musescore-cli overview`: it should name the score. The
+Check with `uv run --project "${CLAUDE_SKILL_DIR}" musescore-cli overview`: it should name the score. The
 bridge only answers requests with the token that `install-plugin` stored,
 so it is safe on shared networks. If the user has the older
 "musescore-mcp-websocket" plug-in installed, suggest deleting it from
@@ -139,11 +139,11 @@ Only if the user works in Dorico 6.2 or newer. Claude Code starts the
 `dorico` MCP server from `.mcp.json`; read the Dorico section of
 [docs/dorico.md](../../../docs/dorico.md) for how the connection is made
 and approved, and walk the user through it. Check with
-`uv run dorico-cli overview`.
+`uv run --project "${CLAUDE_SKILL_DIR}" dorico-cli overview`.
 
 ## 5. Finish
 
-Run `scripts/setup_check.sh --connect` one last time and show the result.
+Run `${CLAUDE_SKILL_DIR}/scripts/setup_check.sh --connect` one last time and show the result.
 Then tell them in two or three sentences what they can do now, with
 example requests they can type, for example:
 

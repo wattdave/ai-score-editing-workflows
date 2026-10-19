@@ -9,7 +9,7 @@ When repairing Optical Music Recognition (OMR) output or reconciling MusicXML di
 Prefer the bundled PDFKit script, which needs nothing installed and renders **every** page. Poppler (`pdfinfo`, `pdftoppm`) is an optional setup item (`brew install poppler`); use `pdfinfo` for page counts and sizes when it is present, but do not assume it is:
 
 ```bash
-swift .claude/skills/omr-score-repair/scripts/render_pdf_pages.swift "<pdf_path>" <scratch_dir> [scale]
+swift ${CLAUDE_SKILL_DIR}/scripts/render_pdf_pages.swift "<pdf_path>" <scratch_dir> [scale]
 ```
 
 - Writes `<scratch_dir>/page1.png`, `page2.png`, ... and prints each path.

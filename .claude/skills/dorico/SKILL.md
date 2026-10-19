@@ -7,7 +7,7 @@ description: Inspect and change the project open in Dorico (notes, pitches, chor
 
 The `dorico` MCP server (`score_overview`, `score_structure`, `query_score`,
 `apply_batch`, `undo`, `save_score`, `export_score`, `read_lyrics`,
-`edit_lyrics`, `project_info`, `set_project_info`) and `uv run dorico-cli`
+`edit_lyrics`, `project_info`, `set_project_info`) and `uv run --project "${CLAUDE_SKILL_DIR}" dorico-cli`
 drive the project open in Dorico 6.2+. Read
 [docs/dorico.md](../../../docs/dorico.md) before anything unusual: it lists
 what Dorico's scripting can and cannot do, and why.

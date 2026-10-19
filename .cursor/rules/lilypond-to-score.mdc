@@ -42,7 +42,7 @@ Scripts are in this skill's `scripts/`; run each with `python3`.
    the order the score uses them. Then:
 
    ```bash
-   python3 scripts/lilypond_prepare.py copy.ly flat.ly \
+   python3 ${CLAUDE_SKILL_DIR}/scripts/lilypond_prepare.py copy.ly flat.ly \
      --part cantoI:treble --part 'altoI:"treble_8"' --part bassoI:bass \
      --language english --drop colorBr ficta unficta \
      --replace 'fourTwoCutTime=\time 4/2'
@@ -56,10 +56,10 @@ Scripts are in this skill's `scripts/`; run each with `python3`.
    \incipitEnd` are removed; LilyPond's built-in `\incipit` is outside the
    notes and needs nothing.
 3. **Convert:** `uvx --from python-ly ly musicxml flat.ly -o notes.xml`.
-4. **Re-bar:** `python3 scripts/rebar.py notes.xml rebar.xml 4 2 P1=treble
+4. **Re-bar:** `python3 ${CLAUDE_SKILL_DIR}/scripts/rebar.py notes.xml rebar.xml 4 2 P1=treble
    P2=treble8 P5=bass`. python-ly's bars follow bar checks and never split a
    note at a barline; this rebuilds them and ties notes across barlines.
-5. **Add lyrics** (skip for untexted parts): `python3 scripts/add_lyrics.py
+5. **Add lyrics** (skip for untexted parts): `python3 ${CLAUDE_SKILL_DIR}/scripts/add_lyrics.py
    copy.ly rebar.xml final.xml P1=NotesS:LyricsS ...`. It refuses to write if
    a part's notes and syllables don't line up.
 6. **Name the parts and title** in the MusicXML (`part-name`, `work-title`,
@@ -71,7 +71,7 @@ Scripts are in this skill's `scripts/`; run each with `python3`.
 ## Check every stage
 
 - After step 3: per part, note count and pitch range against LilyPond's MIDI
-  (`python3 scripts/midi_info.py copy.midi`). MIDI merges tied notes, so
+  (`python3 ${CLAUDE_SKILL_DIR}/scripts/midi_info.py copy.midi`). MIDI merges tied notes, so
   compare after step 4 if the source has ties.
 - After step 4: every bar the full length, and the bar count matching the
   printed edition.

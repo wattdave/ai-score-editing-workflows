@@ -24,7 +24,7 @@ except ImportError:
 
 async def _run_audit_or_strip(staff: int | None, dry_run: bool, is_audit_only: bool) -> int:
     if not HAVE_CLIENT:
-        print("error: ai_score_editing required; run with 'uv run python scripts/clean_clefs.py'", file=sys.stderr)
+        print("error: ai_score_editing required; run with 'uv run python .claude/skills/omr-score-repair/scripts/clean_clefs.py'", file=sys.stderr)
         return 1
 
     async with SibeliusClient(plugins=[BRIDGE_PLUGIN]) as client:
@@ -81,7 +81,7 @@ async def _run_audit_or_strip(staff: int | None, dry_run: bool, is_audit_only: b
             if len(redundant_clefs) > 20:
                 print(f"  ... and {len(redundant_clefs) - 20} more.")
             if is_audit_only:
-                print("\nTo purge these clefs, run: uv run python scripts/clean_clefs.py strip")
+                print("\nTo purge these clefs, run: uv run python .claude/skills/omr-score-repair/scripts/clean_clefs.py strip")
             return 0
 
         # Backup before making changes
