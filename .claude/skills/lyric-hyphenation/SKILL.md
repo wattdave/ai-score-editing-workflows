@@ -18,10 +18,10 @@ editor draws no hyphens. In MusicXML the connection is `<syllabic>`:
 
 ```bash
 # 1. dry run: list the words that would be joined, with counts
-python3 .claude/skills/lyric-hyphenation/scripts/hyphenate_lyrics.py "Score.xml" --dry-run
+python3 ${CLAUDE_SKILL_DIR}/scripts/hyphenate_lyrics.py "Score.xml" --dry-run
 
 # 2. write the corrected file
-python3 .claude/skills/lyric-hyphenation/scripts/hyphenate_lyrics.py "Score.xml" -o "Score (hyphenated).xml"
+python3 ${CLAUDE_SKILL_DIR}/scripts/hyphenate_lyrics.py "Score.xml" -o "Score (hyphenated).xml"
 ```
 
 Options: `--not-word fireside` never joins that word; `--word mistletoe` adds a
@@ -63,5 +63,5 @@ Sibelius cannot change a lyric's syllable type in place. Two options:
   `set-lyric` for this; it cannot change the syllable type, and a bare
   `--raw` write can leave the lyric invisible on the page.
 
-Verify with `uv run sibelius-cli read-lyrics --words`, which prints joined
+Verify with `uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli read-lyrics --words`, which prints joined
 words with hyphens.

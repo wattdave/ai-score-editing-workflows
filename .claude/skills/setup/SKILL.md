@@ -98,7 +98,7 @@ These steps happen in Sibelius, so the user does them; guide and wait.
    this project needs. Do not try to download it for them.
 2. If `sibelius-launched` is missing, ask them to open Sibelius once, then
    quit it.
-3. **Bridge plug-in:** `uv run sibelius-cli install-plugin`. This also
+3. **Bridge plug-in:** `uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli install-plugin`. This also
    removes the old `sibwscli.plg` bridge if the user has it; for MuseScore,
    `musescore-cli install-plugin` removes the old `sibwscli-bridge` folder.
    After upgrading, the user approves the new plug-in once.
@@ -118,7 +118,7 @@ musescore.org). Claude Code starts the MuseScore MCP server from
 `.mcp.json`; the plug-in it talks to is installed with:
 
 ```bash
-uv run musescore-cli install-plugin
+uv run --project "${CLAUDE_SKILL_DIR}" musescore-cli install-plugin
 ```
 
 Then the user:
@@ -131,7 +131,7 @@ Then the user:
    MuseScore session before asking Claude to work on the score. Enabling it
    does not start it.
 
-Check with `uv run musescore-cli overview`: it should name the score. The
+Check with `uv run --project "${CLAUDE_SKILL_DIR}" musescore-cli overview`: it should name the score. The
 bridge only answers requests with the token that `install-plugin` stored,
 so it is safe on shared networks. If the user has the older
 "musescore-mcp-websocket" plug-in installed, suggest deleting it from
@@ -144,7 +144,7 @@ Only if the user works in Dorico 6.2 or newer. Claude Code starts the
 `dorico` MCP server from `.mcp.json`; read the Dorico section of
 [docs/dorico.md](../../../docs/dorico.md) for how the connection is made
 and approved, and walk the user through it. Check with
-`uv run dorico-cli overview`.
+`uv run --project "${CLAUDE_SKILL_DIR}" dorico-cli overview`.
 
 ## 5. Finish
 

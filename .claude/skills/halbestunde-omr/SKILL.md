@@ -29,11 +29,11 @@ empty score for Deck the Halls (one empty staff, no notes), and the same page
 converted fine as the untouched original or with 40 pt of white added.
 
 ```bash
-S=.claude/skills/halbestunde-omr/scripts
+S=${CLAUDE_SKILL_DIR}/scripts
 # crop to a rectangle (points, origin top-left; page is usually 611 x 792)
-uv run --with pymupdf --with numpy python -I $S/clean_pdf.py in.pdf out.pdf --crop 100 40 545 462 --pad 40
+uv run --project "${CLAUDE_SKILL_DIR}" --with pymupdf --with numpy python -I $S/clean_pdf.py in.pdf out.pdf --crop 100 40 545 462 --pad 40
 # or crop each page to its content, dropping page 1 (belongs to another piece)
-uv run --with pymupdf --with numpy python -I $S/clean_pdf.py in.pdf out.pdf --auto --drop 1 --pad 40
+uv run --project "${CLAUDE_SKILL_DIR}" --with pymupdf --with numpy python -I $S/clean_pdf.py in.pdf out.pdf --auto --drop 1 --pad 40
 ```
 
 `--auto` works when the margins differ from page to page (skewed scans); it
@@ -52,8 +52,8 @@ of a carol often belong to its neighbour.
 ## 2. Convert and download
 
 ```bash
-uv run --with pyobjc-framework-Quartz --with pillow --with numpy python -I \
-  .claude/skills/halbestunde-omr/scripts/halbestunde_convert.py "~/Documents/Scores/OSA/01 Silent Night.pdf"
+uv run --project "${CLAUDE_SKILL_DIR}" --with pyobjc-framework-Quartz --with pillow --with numpy python -I \
+  ${CLAUDE_SKILL_DIR}/scripts/halbestunde_convert.py "~/Documents/Scores/OSA/01 Silent Night.pdf"
 ```
 
 It writes `01 Silent Night.xml` next to the PDF (it refuses if that exists).

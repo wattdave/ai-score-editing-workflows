@@ -8,7 +8,7 @@ description: Inspect, compose and edit the score open in MuseScore 4 (notes, pit
 The `musescore` MCP server (`score_overview`, `score_structure`,
 `query_score`, `apply_batch`, `undo`, `save_score`, `export_score`,
 `project_info`, `set_project_info`, `read_lyrics`, `edit_lyrics`,
-`add_instrument`, `set_staff_playback`) and `uv run musescore-cli` drive the
+`add_instrument`, `set_staff_playback`) and `uv run --project "${CLAUDE_SKILL_DIR}" musescore-cli` drive the
 score open in MuseScore 4.6+, through this repository's plug-in
 "ScoreBridge". Read [docs/musescore.md](../../../docs/musescore.md)
 before anything unusual: it has the parity table and what MuseScore's
@@ -16,7 +16,7 @@ plug-in API can and cannot do.
 
 ## Setup
 
-1. `uv run musescore-cli install-plugin`, then restart MuseScore (a changed
+1. `uv run --project "${CLAUDE_SKILL_DIR}" musescore-cli install-plugin`, then restart MuseScore (a changed
    plug-in only loads at startup).
 2. Plugins → Manage plugins: enable "ScoreBridge" (once).
 3. Plugins → ScoreBridge, in the window of the score to work on, every

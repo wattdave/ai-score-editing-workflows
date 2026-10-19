@@ -8,7 +8,7 @@ alwaysApply: false
 
 Worked on nine songs for the OSA carols (Silver Bells, Let It Snow, Rudolph, Last Christmas, Jingle Bell
 Rock, Frosty, Santa Claus Is Comin' to Town, I'll Be Home for Christmas, Here Comes Santa Claus). Bundled
-scripts are in `scripts/`; run them with `uv run --with mido --with lxml --with pyphen python -I SCRIPT`.
+scripts are in `scripts/`; run them with `uv run --project "${CLAUDE_SKILL_DIR}" --with mido --with lxml --with pyphen python -I SCRIPT`.
 
 ## 1. Pick the source
 
@@ -53,14 +53,14 @@ leave it out and say so), an intro verse the MIDI does not contain (start where 
 
 ## 4. Write and import
 
-Copy `scripts/melody_template.py`, set the constants and run `--dump` until the counts match. Then run it
+Copy `${CLAUDE_SKILL_DIR}/scripts/melody_template.py`, set the constants and run `--dump` until the counts match. Then run it
 without `--dump` to write MusicXML (12 divisions per quarter; pickups, tied notes across barlines,
 `prefer_flats`, tempo and one lyric verse are handled). Quantize with `grid=0.5` and `unswing=True` for a
 swung tune you want printed straight. Round the end of long notes to the beat; for a tune that swings, make
 a separate playback copy with the `swing-playback-copy` skill (the template's `--swing`).
 
-Import and save with `scripts/sib_import.py IN.xml OUT.sib`
-(`uv run --with pyobjc-framework-Quartz --with pillow --with numpy python -I scripts/sib_import.py ...`).
+Import and save with `${CLAUDE_SKILL_DIR}/scripts/sib_import.py IN.xml OUT.sib`
+(`uv run --project "${CLAUDE_SKILL_DIR}" --with pyobjc-framework-Quartz --with pillow --with numpy python -I ${CLAUDE_SKILL_DIR}/scripts/sib_import.py ...`).
 It opens the MusicXML (the options dialog needs a real click on OK, which the script does only when
 Sibelius is the frontmost app and it brings Sibelius forward itself), saves the `.sib`, reopens it, and
 exits with an error if a different score is active.

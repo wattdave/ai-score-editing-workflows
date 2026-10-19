@@ -58,8 +58,8 @@ Cantai is set up by the user in Sibelius, not by the CLI:
 ## Export
 
 ```bash
-uv run sibelius-cli playback-sounds
-uv run sibelius-cli --expect-file SCORE rehearsal-mixes --out DIR \
+uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli playback-sounds
+uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli --expect-file SCORE rehearsal-mixes --out DIR \
   [--file SCORE] [--name 1=Soprano] [--all-parts] [--require-sound Cantai] \
   [--bitrate 192k] [--loudness -16] [--keep-stems]
 ```

@@ -38,7 +38,7 @@ boundary timebase mismatch, or a same-pitch re-attack conflict in the playback e
 ## Dependencies & Tools
 
 - **`ScoreBridge` / `sibelius-cli`**: Used to read note objects, adjust ties, delete unwanted artifacts, and export MIDI files.
-- **`hanging_notes.py`** (`scripts/hanging_notes.py`): Standalone CLI helper for:
+- **`hanging_notes.py`** (`${CLAUDE_SKILL_DIR}/scripts/hanging_notes.py`): Standalone CLI helper for:
   - `audit-score`: Scans score bars across one or all staves to detect dangling ties, pitch mismatches, tuplet boundary ties, and same-pitch re-attack conflicts.
   - `audit-midi`: Scans exported MIDI track events for unclosed `Note-On` events or abnormally long sustains.
   - `render-pdf`: Renders high-resolution PNG page images from source PDF sheet music using macOS native `PDFKit` via Swift for visual ground truth comparison.
@@ -88,24 +88,24 @@ Never treat all tie anomalies the same. Score issues fall into three fundamental
 ### 1. Audit Live Score Structure (Single Staff or All Staves)
 ```bash
 # Audit a single staff across a bar range
-python3 .claude/skills/hanging-playback-note-repair/scripts/hanging_notes.py audit-score \
+python3 ${CLAUDE_SKILL_DIR}/scripts/hanging_notes.py audit-score \
   --staff 7 --from-bar 50 --to-bar 75
 
 # Audit ALL staves simultaneously across a passage
-python3 .claude/skills/hanging-playback-note-repair/scripts/hanging_notes.py audit-score \
+python3 ${CLAUDE_SKILL_DIR}/scripts/hanging_notes.py audit-score \
   --staff all --from-bar 55 --to-bar 65
 ```
 
 ### 2. Audit Exported MIDI for Runaway Sustain
 ```bash
-uv run sibelius-cli export --format midi --out /private/tmp/playback_check.mid
-python3 .claude/skills/hanging-playback-note-repair/scripts/hanging_notes.py audit-midi \
+uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli export --format midi --out /private/tmp/playback_check.mid
+python3 ${CLAUDE_SKILL_DIR}/scripts/hanging_notes.py audit-midi \
   /private/tmp/playback_check.mid --max-beats 8.0
 ```
 
 ### 3. Render Source PDF Page for Visual Ground Truth
 ```bash
-python3 .claude/skills/hanging-playback-note-repair/scripts/hanging_notes.py render-pdf \
+python3 ${CLAUDE_SKILL_DIR}/scripts/hanging_notes.py render-pdf \
   "~/Downloads/Score.pdf" 7 --out /private/tmp/ground_truth_p7.png
 ```
 
@@ -122,7 +122,7 @@ Render the corresponding page of the source PDF sheet music using `render-pdf`.
 ### Step 2: Audit the Score Structure
 Run `audit-score --staff all` across the suspect bars:
 ```bash
-python3 .claude/skills/hanging-playback-note-repair/scripts/hanging_notes.py audit-score \
+python3 ${CLAUDE_SKILL_DIR}/scripts/hanging_notes.py audit-score \
   --staff all --from-bar <FROM> --to-bar <TO>
 ```
 Review flagged items:
@@ -133,14 +133,14 @@ Review flagged items:
 ### Step 3A: Repairing Tier 1 Defects (Dangling / Mismatched Ties)
 Remove the invalid tie under `--expect-file` backup protection:
 ```bash
-uv run sibelius-cli --expect-file "<PATH_TO_SIB>" tie \
+uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli --expect-file "<PATH_TO_SIB>" tie \
   --staff <STAFF> --bar <BAR> --index <INDEX> --remove
 ```
 
 ### Step 3B: Repairing Tier 2 Defects (Tuplet Boundary Playback Drone)
 1. Remove the engine tie that triggers the playback hang:
    ```bash
-   uv run sibelius-cli --expect-file "<PATH_TO_SIB>" tie \
+   uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli --expect-file "<PATH_TO_SIB>" tie \
      --staff <STAFF> --bar <BAR> --index <INDEX> --remove
    ```
 2. Apply a **Slur** across the two noteheads in Sibelius (`S` key) to preserve visual engraving while playing legato cleanly.
@@ -148,14 +148,14 @@ uv run sibelius-cli --expect-file "<PATH_TO_SIB>" tie \
 ### Step 3C: Repairing Tier 3 Defects (Same-Pitch Re-Attack Conflicts)
 Remove the forward tie on the intermediate note:
 ```bash
-uv run sibelius-cli --expect-file "<PATH_TO_SIB>" tie \
+uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli --expect-file "<PATH_TO_SIB>" tie \
   --staff <STAFF> --bar <BAR> --index <INDEX> --remove
 ```
 
 ### Step 4: Save and Verify Playback
 1. Apply all Tier 1–3 tie removals in one batch:
    ```bash
-   uv run sibelius-cli --expect-file "<PATH_TO_SIB>" patch-notes \
+   uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli --expect-file "<PATH_TO_SIB>" patch-notes \
      --file /private/tmp/ties.json --save
    ```
 2. Re-run a single `audit-score --staff all` over the range to confirm no

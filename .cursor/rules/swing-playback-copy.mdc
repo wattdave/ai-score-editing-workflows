@@ -29,7 +29,7 @@ Write the line in compound meter, one beat = a dotted quarter:
 | quarter note | dotted quarter |
 | onset n + 0.5 beats | n × 1.5 + 1.0 quarter-lengths |
 
-- `scripts/swing_events.py` does the re-timing for `(onset, duration, pitch)` events on a half-beat grid
+- `${CLAUDE_SKILL_DIR}/scripts/swing_events.py` does the re-timing for `(onset, duration, pitch)` events on a half-beat grid
   (`swing`, plus `swing_playback` with the fixes below). Quarter-grid or triplet material needs hand work.
 - Pickups: a pickup ends on a beat, so the first event's phase is `(1 - pickup) % 1`; its swung length
   is the swung distance from that phase to the beat.
@@ -59,7 +59,7 @@ Cantai playback drones on tied notes: a note whose tie is never released can sou
 3. Check `playback-sounds` shows `Cantai` and the override, then run the `rehearsal-mixes` skill's export
    with `--expect-file` on the swing copy. A single-staff line gives three identical MP3s (all voices,
    only, louder): keep one.
-4. Verify the swing reached the audio: `uv run python scripts/onset_check.py STRAIGHT.mp3 SWUNG.mp3`
+4. Verify the swing reached the audio: `uv run --project "${CLAUDE_SKILL_DIR}" python ${CLAUDE_SKILL_DIR}/scripts/onset_check.py STRAIGHT.mp3 SWUNG.mp3`
    should show the off-beat onsets later than the straight file's, same total length.
 5. Leave the straight score and its mix alone; name the swung file `<Song> - Melody (swing).mp3`.
 

@@ -139,12 +139,12 @@ Scanners emit a full `<attributes>` block, including `<clef>`, at the start of e
 Operate on the score open in Sibelius, using `clean_clefs.py` (repo root `scripts/`, not this skill's `scripts/`):
 1. Audit without modifying anything:
    ```bash
-   uv run python scripts/clean_clefs.py audit
+   uv run --project "${CLAUDE_SKILL_DIR}" python scripts/clean_clefs.py audit
    ```
 2. Review the flagged list against the printed page, then purge:
    ```bash
-   uv run python scripts/clean_clefs.py strip --dry-run   # preview
-   uv run python scripts/clean_clefs.py strip             # backs up, deletes, saves
+   uv run --project "${CLAUDE_SKILL_DIR}" python scripts/clean_clefs.py strip --dry-run   # preview
+   uv run --project "${CLAUDE_SKILL_DIR}" python scripts/clean_clefs.py strip             # backs up, deletes, saves
    ```
 
 A clef is flagged when its `styleId` matches the staff's default clef (read from bar 1 of that staff, falling back to inference from the instrument name), or when it sits at or past the end of its bar, computed from that bar's meter. Where either input is unknown the corresponding check is skipped rather than guessed, so the audit under-reports instead of proposing a wrong deletion — see the caveats in the skill's Common Mistakes.

@@ -38,7 +38,7 @@ systematic architectural and engraving mistakes:
 ## Dependencies
 
 - **`sibelius` skill** (`.claude/skills/sibelius/SKILL.md`): Used for score inspection, lyric checking, and engraving verification after importing the repaired MusicXML into Sibelius.
-- **`omr_tool.py`** (`scripts/omr_tool.py`): Standalone CLI helper for auditing, unstacking, and validating MusicXML measure structures.
+- **`omr_tool.py`** (`${CLAUDE_SKILL_DIR}/scripts/omr_tool.py`): Standalone CLI helper for auditing, unstacking, and validating MusicXML measure structures.
 - **`clean_clefs.py`** (repo root `scripts/clean_clefs.py`, *not* this skill's `scripts/`): Audits and purges redundant `Clef` objects from the score open in Sibelius. Must run under `uv run` so it can import `ai_score_editing`.
 
 ---
@@ -60,12 +60,12 @@ systematic architectural and engraving mistakes:
 
 ### 1. Audit a scanned MusicXML file
 ```bash
-uv run python .claude/skills/omr-score-repair/scripts/omr_tool.py audit "path/to/scan.xml"
+uv run --project "${CLAUDE_SKILL_DIR}" python ${CLAUDE_SKILL_DIR}/scripts/omr_tool.py audit "path/to/scan.xml"
 ```
 
 ### 2. Unstack parts into a single voice with line breaks
 ```bash
-uv run python .claude/skills/omr-score-repair/scripts/omr_tool.py unstack "path/to/scan.xml" \
+uv run --project "${CLAUDE_SKILL_DIR}" python ${CLAUDE_SKILL_DIR}/scripts/omr_tool.py unstack "path/to/scan.xml" \
   --output "path/to/repaired.xml" \
   --prune P1:6 \
   --part-name "Voice"
@@ -73,13 +73,13 @@ uv run python .claude/skills/omr-score-repair/scripts/omr_tool.py unstack "path/
 
 ### 3. Validate measure durations
 ```bash
-uv run python .claude/skills/omr-score-repair/scripts/omr_tool.py validate "path/to/repaired.xml"
+uv run --project "${CLAUDE_SKILL_DIR}" python ${CLAUDE_SKILL_DIR}/scripts/omr_tool.py validate "path/to/repaired.xml"
 ```
 
 ### 4. Purge redundant clefs from the imported score (runs against live Sibelius)
 ```bash
-uv run python scripts/clean_clefs.py audit          # report only
-uv run python scripts/clean_clefs.py strip          # backs up, deletes, saves
+uv run --project "${CLAUDE_SKILL_DIR}" python scripts/clean_clefs.py audit          # report only
+uv run --project "${CLAUDE_SKILL_DIR}" python scripts/clean_clefs.py strip          # backs up, deletes, saves
 ```
 
 ---
@@ -91,7 +91,7 @@ Always inspect the source PDF or image before making musical decisions:
 - Render every page with the bundled PDFKit script (QuickLook's `qlmanage`
   renders only page 1):
   ```bash
-  swift .claude/skills/omr-score-repair/scripts/render_pdf_pages.swift "path/to/score.pdf" /tmp/score_preview
+  swift ${CLAUDE_SKILL_DIR}/scripts/render_pdf_pages.swift "path/to/score.pdf" /tmp/score_preview
   ```
 - Check the printed layout:
   - How many visual lines/systems appear on the page?
@@ -122,11 +122,11 @@ Use `omr_tool.py unstack` to restructure the score:
 ### Step 5: Validate and Handoff to Sibelius
 - Validate measure math:
   ```bash
-  uv run python .claude/skills/omr-score-repair/scripts/omr_tool.py validate "path/to/repaired.xml"
+  uv run --project "${CLAUDE_SKILL_DIR}" python ${CLAUDE_SKILL_DIR}/scripts/omr_tool.py validate "path/to/repaired.xml"
   ```
 - Open the score in Sibelius:
-  - Run `uv run sibelius-cli score-snapshot` to verify staff count, title, keys, and barlines in one call.
-  - Run `uv run sibelius-cli proofread --lyrics` to check words and hyphens in one report.
+  - Run `uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli score-snapshot` to verify staff count, title, keys, and barlines in one call.
+  - Run `uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli proofread --lyrics` to check words and hyphens in one report.
 
 ### Step 6: Purge Redundant Clefs in the Live Score
 Unstacking strips clef restatements at the XML level, but surviving duplicates
@@ -136,7 +136,7 @@ score open, after the import itself has been verified. See
 
 1. **Audit first — never strip an unreviewed score:**
    ```bash
-   uv run python scripts/clean_clefs.py audit
+   uv run --project "${CLAUDE_SKILL_DIR}" python scripts/clean_clefs.py audit
    ```
    Findings are grouped per staff, each annotated with the default clef used and
    where it came from (read from bar 1, inferred from the instrument name, or
@@ -145,8 +145,8 @@ score open, after the import itself has been verified. See
    genuinely needs — a real mid-piece clef change — must not be deleted.
 3. **Strip, optionally narrowed to a single staff:**
    ```bash
-   uv run python scripts/clean_clefs.py strip --dry-run   # preview only
-   uv run python scripts/clean_clefs.py strip --staff 16
+   uv run --project "${CLAUDE_SKILL_DIR}" python scripts/clean_clefs.py strip --dry-run   # preview only
+   uv run --project "${CLAUDE_SKILL_DIR}" python scripts/clean_clefs.py strip --staff 16
    ```
    `strip` backs up the score first, deletes in reverse index order within each
    bar so earlier indices stay valid, then **saves the score automatically**.

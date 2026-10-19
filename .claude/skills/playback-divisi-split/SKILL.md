@@ -33,7 +33,7 @@ These choices change the notes. Do not assume them:
 ## Run
 
 ```bash
-uv run python .claude/skills/playback-divisi-split/scripts/playback_split.py \
+uv run --project "${CLAUDE_SKILL_DIR}" python ${CLAUDE_SKILL_DIR}/scripts/playback_split.py \
   "Score.xml" -o "Score (playback).xml" --melody P1 --unison-until 8
 ```
 
@@ -71,9 +71,9 @@ Import silently and save through the bridge (see the `sibelius` skill), rather
 than asking the user to click through the import dialog:
 
 ```bash
-uv run sibelius-cli plugin ScoreBridge OpenScore --args '["/abs/Score (playback).xml"]'
-uv run sibelius-cli plugin ScoreBridge ExportScore --args '["/abs/Score (playback).sib", "SIBL"]'
-uv run sibelius-cli plugin ScoreBridge OpenScore --args '["/abs/Score (playback).sib"]'
+uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli plugin ScoreBridge OpenScore --args '["/abs/Score (playback).xml"]'
+uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli plugin ScoreBridge ExportScore --args '["/abs/Score (playback).sib", "SIBL"]'
+uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli plugin ScoreBridge OpenScore --args '["/abs/Score (playback).sib"]'
 ```
 
 Then:
