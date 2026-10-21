@@ -40,6 +40,7 @@ says where its limits are.
 | Task | Skill | Works in |
 | --- | --- | --- |
 | LilyPond source to a readable score | `lilypond-to-score` | any editor (MusicXML) |
+| Sibelius-exported vector PDF to MusicXML (no OMR) | `vector-pdf-score` | any editor (MusicXML) |
 | Scanned or OMR-imported MusicXML cleanup | `omr-score-repair` | any editor (checked in Sibelius) |
 | Rehearsal tracks, per-voice MP3s | `rehearsal-mixes` | Sibelius |
 | Split 2-staff choral scores into SATB | `satb-part-splitting` | Sibelius |
