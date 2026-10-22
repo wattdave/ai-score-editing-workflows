@@ -109,39 +109,48 @@ fonts). The tie rule treats any curve between two same-pitch notes as a tie.
 
 ## Dorico PDFs
 
-Tested on one score: Carol of the Bells, the "Choir SATB" layout, 7 pages, 145 bars (the print shows 118:
-multi-bar rests, repeats at bars 35-36 and 37-44, a segno, To Coda, D.S. al Coda, key changes at bars 79
-and 113, 3/4 and 2/4 meter changes). Each system is two staves: treble (soprano and alto) over bass
-(tenor and bass), with cue labels such as "(alto only)" and "(S+A)" saying who sings a single line.
+Tested on one score, Carol of the Bells (145 bars: multi-bar rests, repeats at bars 35-36 and 37-44, a segno,
+To Coda, D.S. al Coda, key changes at bars 79 and 113, 3/4 and 2/4 meter changes), in two layouts:
+
+- **Choral score** (`02 - Choral score`): systems of separate S. / A. / T. / B. staves (the tenor staff is a treble
+  staff with a small 8 below), systems with a condensed pair of staves (Ch.: treble = soprano and alto, bass = tenor
+  and bass, with cue labels such as "(alto only)" and "(S+A)"), and systems with both. **Use this layout.**
+- **Choir SATB** (`01 - Choir SATB`): only the condensed pair. It hides the separate S/A/T/B players, so bars 81-116
+  (where the choir sings in C major) print as multi-bar rests and the reader gets nothing there. Whenever a
+  Dorico score has several layouts, export the one that shows every part, and check the bar numbers against
+  another layout's.
 
 ```bash
 S="${CLAUDE_SKILL_DIR}/scripts"
 uv run --with pymupdf python -I $S/dorico_pdf.py score.pdf                    # bars, key, time, repeats found
 uv run --with pymupdf python -I $S/dorico_pdf_musicxml.py score.pdf out.musicxml \
-  --tempo 144 --tempo-map 35:126 --title "Carol of the Bells" --composer "Mykola Leontovych" --arranger "Walter John Bankovitch"
+  --tempo 144 --tempo-map 35:126          # title, composer and arranger come from the first page
 python3 $S/compare_musicxml.py reference.musicxml out.musicxml --map P1=P1,P2=P2,P3=P3,P4=P4   # when a reference exists
 ```
 
-What it reads, against Dorico's own MusicXML as the answer key (the PDF alone, nothing copied from the key):
+How well it did, with Dorico's own MusicXML (the For Playback file) as the answer key and nothing copied from it:
 
-- **Notes:** all 1,004 notes that the PDF carries match in pitch, onset, duration and ties (the reference has
-  80 + 64 + 82 + 55 more notes in bars 81-116, where this layout prints piano-only rests: they are not in the PDF).
-- **Parts:** soprano, alto, tenor and bass are told apart by chords (top and bottom note), stem direction for two
-  rhythms on one staff, and the cue labels for single lines. Matches the reference in every shared slot.
-- **Lyrics:** 990 of 1,004 syllables match; the rest are extra "oo" vowels the print has, a word that is misspelled in
-  the print ("ssem") and one note the word landed on a neighbour of.
-- **Key, time and repeats:** key changes, 3/4 and 2/4 changes, repeat barlines, multi-bar rests (the count above the
-  rest becomes that many bars), segno, To Coda, D.S. al Coda and the coda, rehearsal marks and text directions
-  (swing and straight phrasing, rallentando) are written as MusicXML; Sibelius plays them in the right order
-  (`play-order` read "1-36, 35-44, 37-133, 17-34, 134-145").
+| PDF | Notes in both | Only in reference | Pitch, onset, duration, ties differ | Lyrics differ |
+|---|---|---|---|---|
+| Choral score | 1,285 | 0 | 0 | 8 (extra "oo" vowels the print has, and a misspelled word in the print) |
+| Choir SATB | 1,004 | 281 (bars 81-116, not printed) | 0 | 14 |
+
+- **Parts:** soprano, alto, tenor and bass come from the staff labels (S. A. T. B.), or for the condensed pair from
+  chords (top and bottom note), stem direction for two rhythms on one staff, and the cue labels for single lines.
+- **Key, time and repeats:** key changes, meter changes, repeat barlines, multi-bar rests (the number above the rest
+  becomes that many bars), segno, To Coda, D.S. al Coda, the coda, rehearsal marks, text directions (swing and
+  straight phrasing, rallentando) and fermatas are written as MusicXML. Sibelius's `play-order` read
+  "1-36, 35-44, 37-133, 17-34, 134-145", the right route through the jumps.
+- **Scale:** every measurement is relative to the staff space, so the 20 pt Choir SATB and the 13.5 pt Choral score
+  exports both read. Text sizes (lyrics, cue labels) are measured from the PDF.
 - **Tempo and swing:** the PDF has no metronome mark. Give `--tempo` and `--tempo-map bar:bpm`; the swing feel is
   only a text direction, so use the `swing-playback-copy` skill for a swung recording.
 
-Layouts it does not cover yet: systems with four separate staves, other staff counts, a single staff, tuplets,
-grace notes, whole notes, dynamics, slurs, voltas (1st and 2nd endings), more than one verse. The geometry
-constants (staff line width 0.62, stems 0.6, barlines 0.99, thick barlines 2.48, notehead glyph U+F4BE and half
-note U+F4BD, notehead width 6.24 at staff space 4.96) are the ones this export uses; another engraving size or
-Dorico version needs a check of them first.
+Not covered: layouts other than these (other staff counts, a single staff, cue-size notes), tuplets, grace notes,
+whole notes, dynamics, slurs, voltas (1st and 2nd endings), more than one verse. The notehead glyphs (U+F4BE black,
+U+F4BD half), staff and stem line widths relative to the staff space (0.125, 0.12), and barlines (0.2, thick 0.5)
+are the ones this Dorico version uses; check them first on a different Dorico version.
+Dorico PDFs printed through "Microsoft Print To PDF" have outlined glyphs and cannot be read.
 
 ## After the MusicXML
 
