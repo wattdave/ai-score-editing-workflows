@@ -22,6 +22,7 @@ from ai_score_editing import (
     batch_lyrics,
     layout,
     lyrics,
+    mix_proof,
     music,
     note_patches,
     polychoral,
@@ -541,6 +542,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-sound", metavar="SOUND_SET",
         help="refuse to export unless every voice plays a sound set containing this, e.g. Cantai",
     )
+    mixes.add_argument("--no-proof", action="store_true", help="skip the proof-listening checks after mixing")
+    proof = sub.add_parser(
+        "proof-mixes",
+        help="check a folder of rehearsal mixes for shared audio, repeats, level jumps and mismatched files",
+        description=(
+            "Proof-listen to rehearsal mixes (needs ffmpeg). Finds the same audio in different voices' "
+            "files, stretches that repeat sample for sample, runs far louder than the rest of a file, "
+            "and files that differ in length or loudness. With --stems, also checks that each mix is "
+            "the stems at fixed gains. Exits non-zero on errors."
+        ),
+    )
+    proof.add_argument("folder", help="folder of MP3s named '<score> - <voice> only.mp3' and so on")
+    proof.add_argument("--stems", help="folder of the per-staff stems (rehearsal-mixes --keep-stems)")
+    proof.add_argument("--json", action="store_true", help="print the report as JSON")
     sounds = sub.add_parser(
         "playback-sounds",
         help="list each staff's playback sound set, patch and sound ID, and any Mixer override",
@@ -2310,6 +2325,14 @@ async def _run_rehearsal_mixes(args: argparse.Namespace) -> int:
                 "file": str(m["file"]), "gains": m["gains"],
                 "gainDb": round(gain_db, 2), "peakDb": round(m["peak"] + gain_db, 2),
             })
+        proof_report = None
+        if not args.no_proof:
+            print("proof-listening to the mixes...", file=sys.stderr)
+            proof_report = mix_proof.proof_folder(
+                out_dir, stems=[s.path for s in stems], loudness_of=rehearsal_mix.integrated_loudness,
+                only=[m["file"] for m in measured],
+            )
+            print(proof_report.format(), file=sys.stderr)
     finally:
         shutil.rmtree(work, ignore_errors=True)
     print(json.dumps({
@@ -2319,8 +2342,30 @@ async def _run_rehearsal_mixes(args: argparse.Namespace) -> int:
         "loudnessLufs": round(level, 1),
         "mixes": results,
         "stems": str(stem_dir) if args.keep_stems else None,
+        "proof": proof_report.to_json() if proof_report else None,
     }, indent=2))
+    if proof_report and not proof_report.ok:
+        print("error: the proof-listening checks found errors; do not upload these mixes until they are "
+              "fixed (see the rehearsal-mixes skill)", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
     return EXIT_OK
+
+
+async def _run_proof_mixes(args: argparse.Namespace) -> int:
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        print("error: proof-mixes needs ffmpeg on PATH (brew install ffmpeg)", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    folder = Path(args.folder).expanduser().resolve()
+    stems = Path(args.stems).expanduser().resolve() if args.stems else None
+    for path in (folder, stems):
+        if path is not None and not path.is_dir():
+            print(f"error: {path} is not a folder", file=sys.stderr)
+            return EXIT_COMMAND_FAILED
+    report = mix_proof.proof_folder(folder, stems=stems, loudness_of=rehearsal_mix.integrated_loudness)
+    print(json.dumps(report.to_json(), indent=2) if args.json else report.format())
+    return EXIT_OK if report.ok else EXIT_COMMAND_FAILED
 
 
 def _export_path(requested: str | None, score_file: str, extension: str) -> Path:
@@ -2663,6 +2708,7 @@ def main(argv: list[str] | None = None) -> int:
         "backup": _run_backup,
         "export": _run_export,
         "rehearsal-mixes": _run_rehearsal_mixes,
+        "proof-mixes": _run_proof_mixes,
         "playback-sounds": _run_playback_sounds,
         "verify-render": _run_verify_render,
         "copy-passage": _run_copy_passage,

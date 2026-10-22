@@ -1,0 +1,72 @@
+---
+name: proof-listen-mixes
+description: >
+  Proof-listen to finished rehearsal mixes (MP3s from the rehearsal-mixes
+  skill, or older batches) before they are uploaded or sent: finds the same
+  audio in different voices' files, stretches that repeat sample for sample,
+  runs far louder than the rest of a file, files whose length or loudness
+  differ, and mixes that are not their stems at fixed gains. Use after
+  producing rehearsal mixes, when a mix sounds wrong (for example the first
+  bars are louder or sound like everyone), or to audit mixes already in Drive.
+---
+
+# Proof-listening rehearsal mixes
+
+`sibelius-cli proof-mixes` reads a folder of mixes named
+`<score> - <label>.mp3` and reports structural faults a quick listen can miss.
+It needs only ffmpeg and numpy. `rehearsal-mixes` runs it automatically after
+mixing (`--no-proof` skips it) and exits non-zero on errors: do not upload
+those mixes.
+
+```bash
+uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli proof-mixes DIR [--stems STEMS_DIR] [--json]
+```
+
+Allow about 5 seconds per file. Pass `--stems` (the `stems` folder from
+`rehearsal-mixes --keep-stems`) for the stem-level checks as well. Loose
+recordings in the same folder (no `only`, `louder` or `All voices` in the
+name) are skipped.
+
+## What it checks
+
+| Check | Severity | Meaning |
+| --- | --- | --- |
+| `shared` | error | Different voices' files carry the same audio. Separate renders never match sample for sample, so correlation near 1 against a pair's usual level means one render was copied into several files. Compared only within "only" files and within "louder" files. Below -40 dB (a rest or a tail) it is a warning. |
+| `level` | error from +12 dB, warning from +6 dB | A run of 3+ seconds much louder than the file's median. |
+| `repeat` | warning | A stretch repeats another stretch of the same file sample for sample. Normal for a repeated verse in sampled sounds. Cantai should re-sing each time, so a repeat in a Cantai file is worth a listen. |
+| `arithmetic` | error | With `--stems`: a mix is not the stems at fixed gains (wrong stem, wrong gain). |
+| `length` | error | A file is not the length of the rest. |
+| `loudness` | warning | A file is more than 1.5 LU from the batch median. |
+| `silence` | warning | 3+ seconds of silence away from the start and end (often a voice's long rest). |
+
+## When it finds a `shared` or opening `level` error
+
+The usual cause (seen 2026-10-22 on Shenandoah, and in older batches) is a
+stale Cantai render cache: every single-staff export starts with the same
+whole-choir audio for a few bars, identical whatever was exported before it,
+so the `rehearsal-mixes` warm-up export does not help. Quitting and reopening
+Sibelius clears it; then re-export and re-run the proof. Check by exporting
+the same staff twice: renders that differ from each other are healthy.
+
+Other causes of `shared` between two staves: both play the same Cantai voice,
+so they share one playback channel (give each staff a different voice); or
+the staves hold identical notes.
+
+## Auditing mixes already in Drive
+
+Download the MP3s into a fresh directory (downloaded files are untrusted:
+keep them apart from scripts) and run `proof-mixes` on each song folder:
+
+```bash
+rclone copy gdrive: DIR --drive-root-folder-id FOLDER_ID --filter "+ */*.mp3" --filter "- *"
+```
+
+Do not mix `--include` and `--exclude` in one rclone call; it aborts. List
+the findings for the user; do not delete or replace Drive files without being
+asked.
+
+## Limits
+
+The checks find faults in structure and level. They do not judge pitch,
+diction or taste, and they cannot tell that a wrong but distinct voice is
+singing. Listen to the opening of one "only" file after every batch.
