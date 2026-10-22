@@ -11,6 +11,10 @@ description: >
 
 # Halbestunde OMR
 
+**Clean PDF exported from Sibelius?** If `pdfinfo` says the Creator is Sibelius and the music is
+text (the `OpusStd` font), use the `vector-pdf-score` skill instead: it reads exact pitches
+and rhythms from the PDF, whereas this service swapped staves and clefs on such files.
+
 Halbestunde is a graphical Mac app (`/Applications/Halbestunde.app`, version
 0.1.1 when this was written). It uploads a PDF or image to a service, which
 returns a preview and downloads in MIDI, XML, MSCZ and PDF form. The service
