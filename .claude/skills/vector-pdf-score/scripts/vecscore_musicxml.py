@@ -8,7 +8,7 @@ Ties come from curve drawings that start on a note and end on the next note of t
 Lyrics are matched to notes by position (greedy, nearest first). A bar whose events do not add up
 (for example two voices on one staff) is reported as BAR SUM and must be given with --override.
 Tenor staves written with a treble-8vb clef (G8) are written one octave lower: MusicXML pitch is sounding pitch.
-Not handled: accidentals other than the key signature (a warning is printed), tuplets, grace notes,
+Accidentals (#, b, natural) are read and held for the rest of the bar. Not handled: tuplets, grace notes,
 repeats, dynamics and text."""
 import argparse, html, json, re, sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -135,7 +135,7 @@ def part_xml(k):
                     s = '<note>' + ('<chord/>' if pi_ else '')
                     if e['rest']: s += '<rest measure="yes"/>' if e['dur'] == BAR else '<rest/>'
                     else:
-                        idx = e['p'][pi_]; st = STEPN[idx % 7]; oc = idx // 7 - (1 if CLEFS[k] == 'G8' else 0); al = altered.get(st, 0)
+                        idx = e['p'][pi_]; st = STEPN[idx % 7]; oc = idx // 7 - (1 if CLEFS[k] == 'G8' else 0); al = e.get('alt', {}).get(idx, altered.get(st, 0))
                         s += f'<pitch><step>{st}</step>' + (f'<alter>{al}</alter>' if al else '') + f'<octave>{oc}</octave></pitch>'
                     ty, dot = TYPES[e['dur']]
                     s += f'<duration>{e["dur"]}</duration>'

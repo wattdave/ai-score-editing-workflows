@@ -70,7 +70,11 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F')):
             if bars and bars[-1]<s['x1']-3: edges.append(s['x1']+1)
             nbars=len(edges)-1
             # noteheads and rests belonging to this staff (y within staff +- 3sp)
-            def mine(y): return top-3.2*sp<=y<=bot+3.2*sp
+            def band_dist(t, b, y): return max(t - y, y - b, 0)
+            def mine(y):
+                # within 4.2 spaces of this staff and nearer to it than to any other staff on the page
+                d = band_dist(top, bot, y)
+                return d <= 4.2*sp and all(d <= band_dist(o['top'], o['bottom'], y) for o in st)
             heads=[(x,y,c) for x,y,c,f in glyphs if c in H_GLYPH and mine(y) and x>s['x0']+25]
             rests=[(x,y,c) for x,y,c,f in glyphs if c in REST and mine(y) and x>s['x0']+25]
             dots=[(x,y) for x,y,c,f in glyphs if c=='™' and mine(y)]
@@ -107,6 +111,24 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F')):
                 if merged and not e['rest'] and not merged[-1]['rest'] and abs(e['x']-merged[-1]['x'])<1.0:
                     merged[-1]['p']=sorted(set(merged[-1]['p']+e['p']))
                 else: merged.append(e)
+            # accidentals printed in the bar: '#', 'b', 'n' glyph left of a notehead at about the same height; they hold
+            # for the same pitch for the rest of the bar. e['alt'] = {pitch index: -1|0|1} for pitches that carry one.
+            accs=[(x,y,{'#':1,'b':-1,'n':0}[c]) for x,y,c,f in glyphs if c in '#bn' and mine(y) and x>s['x0']+25]
+            for e in merged:
+                e['alt']={}
+                if e['rest']: continue
+                for (ax,ay,av) in accs:
+                    if 0<e['x']-ax<18:
+                        for pp in e['p']:
+                            if abs(pitch(ay)-pp)<=0 : e['alt'][pp]=av
+            held={}; lastbar=None
+            for e in merged:
+                bi=next((i for i in range(nbars) if edges[i]<=e['x']<edges[i+1]),None)
+                if bi!=lastbar: held={}; lastbar=bi
+                if e['rest']: continue
+                for pp in e['p']:
+                    if pp in e['alt']: held[pp]=e['alt'][pp]
+                    elif pp in held: e['alt'][pp]=held[pp]
             # distribute to bars
             bar_ev=[[] for _ in range(nbars)]
             for e in merged:

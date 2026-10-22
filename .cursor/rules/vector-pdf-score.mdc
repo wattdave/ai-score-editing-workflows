@@ -67,13 +67,18 @@ dangling hyphen are the usual faults; patch them with `delete-object` plus `add-
 Noteheads (quarter, half), stems, beams (filled quadrilaterals), flags, dots, rests (whole bar,
 half, quarter, eighth), chords (noteheads sharing an x), ties (curve drawings that start on a note
 and end on the next note of the same pitch), barlines, a pickup bar and lyrics (words under a
-staff, hyphens as separate words, matched to the nearest note, greedy and one word per note).
+staff, hyphens as separate words, matched to the nearest note, greedy and one word per note),
+accidentals (sharp, flat and natural glyphs left of a notehead, held for the rest of the bar) and
+notes up to 4.2 staff spaces off the staff (ledger-line notes, for example E3 under a treble staff).
 
 ## Not handled yet
 
-Accidentals other than the key signature, tuplets, grace notes, whole notes, 16th rests and
+Tuplets, grace notes, whole notes, 16th rests and
 shorter, repeats and voltas, dynamics, hairpins, tempo and expression text, slurs (ignored),
-cross-staff notes, key or time changes, more than one verse. Dorico and MuseScore PDFs (different
+cross-staff notes, key or time changes, more than one verse (read each lyric row yourself),
+systems with different numbers of staves (parse with `--staves 1` and assemble the staves by
+hand), and stem-sharing chords in two-voice passages, which can come out as a single note: check
+every chord bar against the print. Dorico and MuseScore PDFs (different
 fonts). The tie rule treats any curve between two same-pitch notes as a tie.
 
 ## After the MusicXML
