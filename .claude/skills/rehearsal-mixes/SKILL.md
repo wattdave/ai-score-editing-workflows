@@ -69,7 +69,8 @@ uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli --expect-file SCORE rehearsa
 ```
 
 Allow about 10 seconds per staff: each staff is exported twice, because an
-export's opening otherwise carries the previous staff's voice. Read
+export's opening can carry the previous staff's voice. That does not cure a
+stale render cache (see Afterwards). Read
 `--help` before composing unusual invocations. Quote `--name` values that
 contain spaces (`--name "2=Contra I"`). Importing MusicXML shows an options
 dialog every time; the user must click OK before the import continues.
@@ -97,5 +98,10 @@ plays at the same level. `--keep-stems` keeps the per-staff stems.
 
 ## Afterwards
 
-Listen to the start of at least one "only" file to confirm no other voice
-bleeds in, and report the files written to the user.
+The command proof-listens to the mixes itself (see the `proof-listen-mixes`
+skill) and exits non-zero if a check fails: do not upload mixes that fail.
+A `shared` error or a loud opening means Cantai served a stale render for the
+first bars; restart Sibelius and export again.
+
+Still listen to the start of at least one "only" file to confirm no other
+voice bleeds in, and report the files written to the user.
