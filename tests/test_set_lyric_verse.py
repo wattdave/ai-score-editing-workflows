@@ -28,7 +28,7 @@ def test_defaults_dy_to_the_verse_spacing_and_needs_bridge_59() -> None:
     assert batch[0] == {"op": "set-lyric-verse", "staff": 3, "fromBar": 1, "toBar": 40, "verse": 1,
                         "hasPosition": False, "dy": -192}
     assert batch[1]["dy"] == -400 and batch[1]["position"] == 0 and batch[1]["hasPosition"] is True
-    assert _batch_bridge_version(batch) == SET_LYRIC_VERSE_BRIDGE_VERSION == CURRENT_BRIDGE_VERSION == 59
+    assert _batch_bridge_version(batch) == SET_LYRIC_VERSE_BRIDGE_VERSION == 59
 
 
 @pytest.mark.parametrize("verse", range(1, 6))
@@ -81,7 +81,7 @@ def _function(source: str, name: str) -> str:
 
 def test_plugin_wires_the_op_into_check_and_run() -> None:
     source = PLUGIN.read_text()
-    assert "CreateDictionary('version', 59)" in source
+    assert "CreateDictionary('version', 60)" in source
     assert "return BatchCheckLyricVerse(score, op);" in _function(source, "BatchCheck")
     assert "return BatchRunLyricVerse(score, op);" in _function(source, "BatchRun")
     # not structural: it keeps the addresses of earlier ops valid

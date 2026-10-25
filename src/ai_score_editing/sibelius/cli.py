@@ -326,6 +326,15 @@ def build_parser() -> argparse.ArgumentParser:
     del_voice.add_argument("--to-bar", type=int, required=True)
     del_voice.add_argument("--voice", type=int, required=True, choices=[1, 2, 3, 4])
     del_voice.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    clear_bars = sub.add_parser(
+        "clear-bars",
+        help="replace bars of one staff with a bar rest, tuplets and slurs included (backs up first)",
+    )
+    clear_bars.add_argument("--staff", type=int, required=True)
+    clear_bars.add_argument("--from-bar", type=int, required=True)
+    clear_bars.add_argument("--to-bar", type=int, required=True)
+    clear_bars.add_argument("--voice", type=int, choices=[1, 2, 3, 4], help="only this voice (default: all)")
+    clear_bars.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     flip = sub.add_parser("flip-stem", help="flip the stem of a NoteRest (backs up first)")
     flip.add_argument("--staff", type=int, required=True)
     flip.add_argument("--bar", type=int, required=True)
@@ -809,7 +818,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 59
+CURRENT_BRIDGE_VERSION = 60
 QUERY_BRIDGE_VERSION = 38
 BATCH_BRIDGE_VERSION = 39
 NUDGE_BRIDGE_VERSION = 41
@@ -825,11 +834,14 @@ DELETE_BARS_BRIDGE_VERSION = 56
 REPEATS_BRIDGE_VERSION = 57
 LYRIC_VERSE_BRIDGE_VERSION = 58
 SET_LYRIC_VERSE_BRIDGE_VERSION = 59
+TUPLET_NOTES_BRIDGE_VERSION = 60
 
 
 def _batch_bridge_version(operations: list[dict[str, Any]]) -> int:
     """The oldest bridge that runs every operation in a validated batch."""
     names = {operation["op"] for operation in operations}
+    if names & {"add-tuplet-notes", "clear-bars"}:
+        return TUPLET_NOTES_BRIDGE_VERSION
     if "set-lyric-verse" in names:
         return SET_LYRIC_VERSE_BRIDGE_VERSION
     if any(
@@ -2037,6 +2049,15 @@ async def _run_delete_voice(args: argparse.Namespace) -> int:
     )
 
 
+async def _run_clear_bars(args: argparse.Namespace) -> int:
+    op: dict[str, Any] = {
+        "op": "clear-bars", "fromBar": args.from_bar, "toBar": args.to_bar, "staff": args.staff,
+    }
+    if args.voice is not None:
+        op["voice"] = args.voice
+    return await _run_op(args, op, lambda result: result["after"])
+
+
 async def _run_flip_stem(args: argparse.Namespace) -> int:
     return await _run_op(
         args,
@@ -2716,6 +2737,7 @@ def main(argv: list[str] | None = None) -> int:
         "tie": _run_tie,
         "delete-object": _run_delete_object,
         "delete-voice": _run_delete_voice,
+        "clear-bars": _run_clear_bars,
         "save": _run_save,
         "reset-design": _run_reset_design,
         "flip-stem": _run_flip_stem,

@@ -76,6 +76,14 @@ and verify once for the whole set.
     below. Deleting a NoteRest leaves a rest.
   - `{"op":"add-note","staff":S,"bar":B,"position":P,"duration":D,"pitches":[..][,"voice":V,"tied":true]}`
     (adds to an existing chord at that position)
+  - `{"op":"add-tuplet-notes","staff":S,"bar":B,"position":P,"left":3,"right":2,"unit":128,"notes":[{"pitches":[..],"duration":D[,"tied":true]},..][,"voice":V]}`
+    (bridge v60): a tuplet bracket (3 in the time of 2, based on 128 =
+    eighths) and its notes, entered with `Tuplet.AddNote`. Durations are
+    written values from the start of the bracket and total at most
+    `left * unit`; empty `pitches` is a rest. A note's length cannot be
+    changed in place (`NoteRest.Duration` is read-only), so to change a
+    tuplet, `delete` its Tuplet object and notes, then add it again. Not
+    `add-tuplet`: the MuseScore back end uses that name for an empty tuplet.
   - `{"op":"add-text","staff":S,"bar":B,"position":P,"text":T[,"styleId":"text.staff.expression","voice":V]}`
   - `{"op":"add-line","staff":S,"bar":B,"position":P,"duration":D,"styleId":"line.staff.hairpin.crescendo"[,"voice":V]}`
     (bridge v48)
@@ -139,6 +147,10 @@ and verify once for the whole set.
     `extraSpacesBelowVocalStaves`, `spacesBetweenSystems` (staff spaces).
     Only the given settings change; `score_structure` reports the current
     values as `layout` and `engraving` (bridge v50).
+  - `{"op":"clear-bars","fromBar":A,"toBar":B,"staff":S[,"voice":V]}` (bridge v60):
+    `Bar.ClearNotesAndModifiers`, leaving a bar rest and removing tuplets
+    and slurs. Redo a bar that held tuplets with this, not `delete-voice`,
+    which leaves rests past the barline.
   - `{"op":"delete-voice","fromBar":A,"toBar":B,"staff":S,"voice":V}`
   - `{"op":"hide-empty-staves","fromBar":A,"toBar":B}`: hides every staff
     with nothing in bars A-B, then optimizes staff spacing there (bridge v52)

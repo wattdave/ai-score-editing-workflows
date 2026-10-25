@@ -47,17 +47,18 @@ WRITABLE_PROPS: dict[str, dict[str, type]] = {
 }
 
 ADDRESSED = {"set", "set-pitch", "tie", "bracket", "flip-stem", "delete", "nudge"}
-ADDING = {"add-note", "add-text", "add-line", "add-lyric"}
+ADDING = {"add-note", "add-tuplet-notes", "add-text", "add-line", "add-lyric"}
 STRUCTURAL = {
     "transpose", "copy-passage", "set-key", "set-time", "set-break",
     "set-barline", "set-bar-number", "add-bars", "delete-voice", "set-layout",
-    "hide-empty-staves", "delete-bars",
+    "hide-empty-staves", "delete-bars", "clear-bars",
 }
 # A range operation on one staff's lyrics. It edits objects in place (the
 # indices addressed ops hold stay valid), so it is not structural.
 LYRIC_RANGE = {"set-lyric-verse"}
 OPERATIONS = ADDRESSED | ADDING | STRUCTURAL | LYRIC_RANGE | {"beam"}
 MAX_VERSE = 5
+MAX_TUPLET = 32
 DEFAULT_TEXT_STYLE = "text.staff.expression"
 DEFAULT_SYSTEM_TEXT_STYLE = "text.system.tempo"
 SYSTEM_STAFF = 0
@@ -225,6 +226,13 @@ def _validate(operation: Any, i: int, extra: ExtraOps) -> dict[str, Any]:
         if not isinstance(tied, bool):
             raise BatchError(f"{label}.tied must be boolean")
         out["tied"] = tied
+    elif op == "add-tuplet-notes":
+        # Not "add-tuplet": the MuseScore back end already uses that name for
+        # an empty tuplet, with different fields.
+        out["left"] = _int(operation, "left", label, minimum=2, maximum=MAX_TUPLET)
+        out["right"] = _int(operation, "right", label, minimum=1, maximum=MAX_TUPLET)
+        out["unit"] = _int(operation, "unit", label, minimum=1)
+        out["notes"] = _tuplet_notes(operation, label, out["left"] * out["unit"])
     elif op == "add-text":
         out["text"] = _str(operation, "text", label)
         default = DEFAULT_SYSTEM_TEXT_STYLE if system else DEFAULT_TEXT_STYLE
@@ -244,6 +252,39 @@ def _validate(operation: Any, i: int, extra: ExtraOps) -> dict[str, Any]:
         if "dy" in operation:
             out["dy"] = _int(operation, "dy", label, minimum=-100000, maximum=100000)
     return out
+
+
+def _tuplet_notes(operation: dict[str, Any], label: str, capacity: int) -> list[dict[str, Any]]:
+    """The notes of an add-tuplet-notes op, in written values, from the start of the bracket.
+
+    An empty `pitches` array is a rest. The written durations may not exceed
+    left * unit; anything left over stays a rest.
+    """
+    items = operation.get("notes")
+    if not isinstance(items, list) or not items:
+        raise BatchError(f"{label}.notes must be a non-empty array")
+    notes: list[dict[str, Any]] = []
+    total = 0
+    for j, item in enumerate(items):
+        where = f"{label}.notes[{j}]"
+        if not isinstance(item, dict):
+            raise BatchError(f"{where} must be an object")
+        if unknown := sorted(item.keys() - {"pitches", "duration", "tied"}):
+            raise BatchError(f"{where} has unknown fields: {', '.join(unknown)}")
+        pitches = item.get("pitches", [])
+        if not isinstance(pitches, list) or not all(
+            _is_type(p, int) and 0 <= p <= 127 for p in pitches
+        ):
+            raise BatchError(f"{where}.pitches must be an array of MIDI pitches (empty for a rest)")
+        duration = _int(item, "duration", where, minimum=1)
+        tied = item.get("tied", False)
+        if not isinstance(tied, bool):
+            raise BatchError(f"{where}.tied must be boolean")
+        total += duration
+        notes.append({"pitches": pitches, "duration": duration, "tied": tied})
+    if total > capacity:
+        raise BatchError(f"{label}.notes last {total} but the tuplet holds {capacity} (left * unit)")
+    return notes
 
 
 def verse_dy(verse: int) -> int:
@@ -289,7 +330,7 @@ def _validate_lyric_verse(operation: dict[str, Any], label: str) -> dict[str, An
 
 def _validate_structural(operation: dict[str, Any], op: str, label: str) -> dict[str, Any]:
     out: dict[str, Any] = {"op": op}
-    if op in {"transpose", "copy-passage", "delete-voice", "hide-empty-staves", "delete-bars"}:
+    if op in {"transpose", "copy-passage", "delete-voice", "hide-empty-staves", "delete-bars", "clear-bars"}:
         out["fromBar"] = _int(operation, "fromBar", label, minimum=1)
         out["toBar"] = _int(operation, "toBar", label, minimum=out["fromBar"])
     if op in {"transpose", "copy-passage"}:
@@ -307,6 +348,10 @@ def _validate_structural(operation: dict[str, Any], op: str, label: str) -> dict
     elif op == "delete-voice":
         out["staff"] = _int(operation, "staff", label, minimum=1)
         out["voice"] = _int(operation, "voice", label, minimum=1, maximum=4)
+    elif op == "clear-bars":
+        out["staff"] = _int(operation, "staff", label, minimum=1)
+        if "voice" in operation:
+            out["voice"] = _int(operation, "voice", label, minimum=1, maximum=4)
     elif op == "set-key":
         key = _str(operation, "key", label)
         minor = operation.get("minor", False)
