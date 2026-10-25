@@ -276,6 +276,10 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
     Adding operations take staff, bar and position instead of index:
 
     - {"op":"add-note",...,"duration":D,"pitches":[..][,"voice":V,"tied":true]}
+    - {"op":"add-tuplet-notes",...,"left":3,"right":2,"unit":128,"notes":[{"pitches":[..],
+      "duration":D[,"tied":true]},...][,"voice":V]}: a tuplet bracket and its notes. Durations
+      are written values from the start of the bracket and may total at most left * unit; empty
+      pitches is a rest. To change a tuplet, delete it and add it again. Bridge v60
     - {"op":"add-text",...,"text":T[,"styleId":"text.staff.expression","voice":V]}
     - {"op":"add-line",...,"duration":D,"styleId":"line.staff.hairpin.crescendo"[,"voice":V]}
     - {"op":"add-lyric",...,"duration":D,"text":T[,"syllableType":"middle","voice":V,"verse":1-5,"dy":N]}
@@ -323,6 +327,9 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
       (mm), "spacesBetweenStaves", "extraSpacesBelowVocalStaves",
       "spacesBetweenSystems" (staff spaces)}: only the given settings change
     - {"op":"delete-voice","fromBar":A,"toBar":B,"staff":S,"voice":V}
+    - {"op":"clear-bars","fromBar":A,"toBar":B,"staff":S[,"voice":V]}: replace the bars with a bar
+      rest, tuplets and slurs included. Use it, not delete-voice, to redo a bar that held tuplets
+      (delete-voice leaves rests past the barline). Bridge v60
     - {"op":"hide-empty-staves","fromBar":A,"toBar":B}: hide staves with
       nothing in bars A-B, then optimize staff spacing there
 

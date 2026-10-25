@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 59);
+		return CreateDictionary('version', 60);
 	}"
 
 	Echo "(value) {
@@ -1195,6 +1195,9 @@
 		if (opName = 'transpose' or opName = 'copy-passage' or opName = 'delete-voice') {
 			return True;
 		}
+		if (opName = 'clear-bars') {
+			return True;
+		}
 		if (opName = 'set-key' or opName = 'set-time' or opName = 'set-break') {
 			return True;
 		}
@@ -1367,6 +1370,14 @@
 				return 'voice must be 1-4';
 			}
 		}
+		if (opName = 'clear-bars') {
+			if (op['staff'] < 1 or op['staff'] > score.StaffCount) {
+				return 'no staff ' & op['staff'];
+			}
+			if (op['voice'] != null and (op['voice'] < 1 or op['voice'] > 4)) {
+				return 'voice must be 1-4';
+			}
+		}
 		if (opName = 'set-time') {
 			// A zero numerator crashes Sibelius (docs/sibelius-protocol.md 1.3.1).
 			d = op['denominator'];
@@ -1487,6 +1498,21 @@
 				selection.Clear();
 			}
 			return CreateDictionary('staff', op['staff'], 'voice', voice, 'objects', found);
+		}
+		if (opName = 'clear-bars') {
+			// Bar.ClearNotesAndModifiers leaves a bar rest. Selecting the bars
+			// and deleting (as delete-voice does) leaves rests past the barline
+			// in a bar that held tuplets.
+			staff = score.NthStaff(op['staff']);
+			for barNum = op['fromBar'] to op['toBar'] + 1 {
+				if (op['voice'] = null) {
+					staff.NthBar(barNum).ClearNotesAndModifiers();
+				} else {
+					staff.NthBar(barNum).ClearNotesAndModifiers(op['voice']);
+				}
+			}
+			return CreateDictionary(
+				'staff', op['staff'], 'fromBar', op['fromBar'], 'toBar', op['toBar']);
 		}
 		if (opName = 'delete-bars') {
 			// Every staff, as Delete Bars does on a system passage.
@@ -1855,6 +1881,41 @@
 				noteRest.AddNote(pitches[i], tied);
 			}
 			return DescribeObject(noteRest, -1);
+		}
+		if (opName = 'add-tuplet-notes') {
+			// A tuplet bracket and its notes in one step. Bar.AddNote cannot be
+			// used inside a tuplet (it snaps to the nearest slot), so every note
+			// goes through Tuplet.AddNote, positioned in written values.
+			tup = bar.AddTuplet(op['position'], voice, op['left'], op['right'], op['unit']);
+			if (tup = null) {
+				return null;
+			}
+			items = op['notes'];
+			tupPos = 0;
+			addedNotes = 0;
+			for i = 0 to items.Length {
+				item = items[i];
+				itemPitches = item['pitches'];
+				if (itemPitches.Length > 0) {
+					itemTied = False;
+					if (item['tied'] = True) {
+						itemTied = True;
+					}
+					firstNote = tup.AddNote(tupPos, itemPitches[0], item['duration'], itemTied);
+					if (firstNote = null) {
+						return null;
+					}
+					noteRest = firstNote.ParentNoteRest;
+					for p = 1 to itemPitches.Length {
+						noteRest.AddNote(itemPitches[p], itemTied);
+					}
+					addedNotes = addedNotes + 1;
+				}
+				tupPos = tupPos + item['duration'];
+			}
+			return CreateDictionary(
+				'type', 'Tuplet', 'left', tup.Left, 'right', tup.Right, 'unit', tup.Unit,
+				'addedNotes', addedNotes);
 		}
 		if (opName = 'add-text') {
 			if (op['staff'] = 0) {

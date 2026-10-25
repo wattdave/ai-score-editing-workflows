@@ -49,7 +49,12 @@ def test_validate_normalizes_each_operation() -> None:
         {"op": "add-text", "staff": 1, "bar": 1, "position": 0, "text": "dolce"},
         {"op": "add-lyric", "staff": 1, "bar": 1, "position": 0, "duration": 256, "text": "la",
          "syllableType": "middle", "voice": 2},
+        {"op": "add-tuplet-notes", "staff": 1, "bar": 24, "position": 256, "left": 3, "right": 2,
+         "unit": 128, "notes": [{"pitches": [71], "duration": 192}, {"pitches": [72], "duration": 64},
+                                {"pitches": [], "duration": 128}]},
     ])
+    assert batch[6]["notes"][0] == {"pitches": [71], "duration": 192, "tied": False}
+    assert batch[6]["notes"][2]["pitches"] == []
     assert batch[0] == {"op": "set", "staff": 1, "bar": 2, "index": 0, "type": "NoteRest",
                         "position": 256, "prop": "Dx", "value": -16}
     assert batch[1]["tied"] is True and "remove" not in batch[1]
@@ -57,6 +62,17 @@ def test_validate_normalizes_each_operation() -> None:
     assert batch[3]["tied"] is False
     assert batch[4]["styleId"] == DEFAULT_TEXT_STYLE
     assert batch[5]["voice"] == 2 and batch[5]["syllableType"] == "middle"
+
+
+def test_clear_bars_takes_an_optional_voice() -> None:
+    batch = validate_batch([
+        {"op": "clear-bars", "fromBar": 24, "toBar": 25, "staff": 4},
+        {"op": "clear-bars", "fromBar": 3, "toBar": 3, "staff": 1, "voice": 2},
+    ])
+    assert batch[0] == {"op": "clear-bars", "fromBar": 24, "toBar": 25, "staff": 4}
+    assert batch[1]["voice"] == 2
+    with pytest.raises(BatchError, match="voice must be"):
+        validate_batch([{"op": "clear-bars", "fromBar": 1, "toBar": 1, "staff": 1, "voice": 5}])
 
 
 @pytest.mark.parametrize(
@@ -86,6 +102,15 @@ def test_validate_normalizes_each_operation() -> None:
           "styleId": "line.staff.hairpin.crescendo"}, "duration"),
         ({"op": "add-note", "staff": 1, "bar": 1, "position": 0, "duration": 256, "pitches": [128]}, "MIDI"),
         ({"op": "add-text", "staff": 1, "bar": 1, "position": 0, "text": "x", "styleId": "bogus"}, "styleId"),
+        ({"op": "add-tuplet-notes", "staff": 1, "bar": 1, "position": 0, "left": 3, "right": 2,
+          "unit": 128, "notes": [{"pitches": [60], "duration": 256}, {"pitches": [62], "duration": 256}]},
+         "holds 384"),
+        ({"op": "add-tuplet-notes", "staff": 1, "bar": 1, "position": 0, "left": 1, "right": 2,
+          "unit": 128, "notes": [{"pitches": [60], "duration": 128}]}, "left must be"),
+        ({"op": "add-tuplet-notes", "staff": 1, "bar": 1, "position": 0, "left": 3, "right": 2,
+          "unit": 128, "notes": []}, "non-empty"),
+        ({"op": "add-tuplet-notes", "staff": 1, "bar": 1, "position": 0, "left": 3, "right": 2,
+          "unit": 128, "notes": [{"pitches": [200], "duration": 128}]}, "MIDI"),
         ({"op": "add-lyric", "staff": 1, "bar": 1, "position": 0, "duration": 256, "text": "x",
           "voice": 5}, "voice must be"),
         ({"op": "add-lyric", "staff": 1, "bar": 1, "position": 0, "duration": 256, "text": "x",
