@@ -106,6 +106,10 @@ def build_parser() -> argparse.ArgumentParser:
         "score-info",
         help="read info about the open score (requires the bundled ScoreBridge plug-in)",
     )
+    sub.add_parser(
+        "text-styles",
+        help="list the font and size of each text and lyric style in use; flags music fonts on lyric styles",
+    )
     sub.add_parser("staves", help="list staves of the open score (requires bridge plug-in)")
     sub.add_parser("selection", help="describe the current selection (requires bridge plug-in)")
     sub.add_parser(
@@ -818,7 +822,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 60
+CURRENT_BRIDGE_VERSION = 62
 QUERY_BRIDGE_VERSION = 38
 BATCH_BRIDGE_VERSION = 39
 NUDGE_BRIDGE_VERSION = 41
@@ -835,6 +839,8 @@ REPEATS_BRIDGE_VERSION = 57
 LYRIC_VERSE_BRIDGE_VERSION = 58
 SET_LYRIC_VERSE_BRIDGE_VERSION = 59
 TUPLET_NOTES_BRIDGE_VERSION = 60
+TEXT_FONTS_BRIDGE_VERSION = 61
+QUERY_CONTAINERS_BRIDGE_VERSION = 62
 
 
 def _batch_bridge_version(operations: list[dict[str, Any]]) -> int:
@@ -1070,6 +1076,34 @@ async def _run_bridge_call(
     print(json.dumps(response) if args.json else json.dumps(value, indent=2))
     if isinstance(value, dict) and "error" in value:
         return EXIT_COMMAND_FAILED
+    return EXIT_OK
+
+
+async def _run_text_styles(args: argparse.Namespace) -> int:
+    from ai_score_editing import text_styles
+
+    selector = {
+        "staves": [],
+        "types": ["Text", "LyricItem"],
+        "where": [],
+        "fields": [],
+        "voice": 0,
+        "limit": 100000,
+    }
+    try:
+        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            await _require_bridge(client, TEXT_FONTS_BRIDGE_VERSION, "text-styles")
+            info = await _bridge(client, "GetScoreInfo")
+            found = []
+            for system, staves in ((True, [0]), (False, [])):
+                selector["staves"] = staves
+                result = await _bridge(client, "Query", [selector])
+                found += [(obj.get("styleId", ""), system) for obj in result["objects"]]
+            probed = await _bridge(client, "GetTextStyleFonts", [text_styles.style_requests(found)])
+    except BridgeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    print(json.dumps(text_styles.build_report(info, probed["styles"]), indent=None if args.json else 2))
     return EXIT_OK
 
 
@@ -1428,6 +1462,7 @@ async def _run_patch_notes(args: argparse.Namespace) -> int:
 
 
 async def _run_query(args: argparse.Namespace) -> int:
+    from ai_score_editing import query as query_mod
     from ai_score_editing.query import QueryError, build_selector, resolve_staves
 
     from_b, to_b = (None, None)
@@ -1447,6 +1482,10 @@ async def _run_query(args: argparse.Namespace) -> int:
         )
         async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
             await _require_bridge(client, QUERY_BRIDGE_VERSION, "query")
+            if query_mod.CONTAINER_KINDS & set(selector["types"]):
+                await _require_bridge(client, QUERY_CONTAINERS_BRIDGE_VERSION, "query of Bar or Staff")
+            if any(f in query_mod.FONT_FIELDS for f in selector["fields"]):
+                await _require_bridge(client, TEXT_FONTS_BRIDGE_VERSION, "query of text fonts")
             if args.staff:
                 selector["staves"] = resolve_staves(args.staff, await _bridge(client, "GetStaves"))
                 if 0 in selector["staves"]:
@@ -2707,6 +2746,7 @@ def main(argv: list[str] | None = None) -> int:
         "repl": _run_repl,
         "plugin": _run_plugin,
         "score-info": _run_score_info,
+        "text-styles": _run_text_styles,
         "staves": _run_staves,
         "selection": _run_selection,
         "inspect": _run_inspect,

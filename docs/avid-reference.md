@@ -30,6 +30,11 @@ chapter to the path above.
 
 Found by running code against Sibelius; not in Avid's text.
 
+- **`LyricItem` has no font properties.** `InitialFontName`, `InitialFontSize`
+  and `TextWithFormattingAsString` exist on `Text`/`SystemTextItem` only;
+  reading them from a `LyricItem` raises 'No field named' (bridge v13). The
+  guide lists no object that reads a text style's font; `text-styles` probes
+  a throwaway `Text` instead.
 - **`Staff.SoundIDAtPosition` does not exist.** The method is
   `SoundInfoAtPosition([bar number,[position,[nth repeat]]])`; the documented
   name raises "Method SoundIDAtPosition not found". Verified 2026-09-24.

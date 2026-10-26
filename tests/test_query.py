@@ -1,6 +1,8 @@
 """Tests for generic Query selector parsing and the property allow-list."""
 
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -27,11 +29,11 @@ def _plugin_prop_table() -> tuple[set[str], dict[str, set[str]]]:
     source = PLUGIN.read_text()
     start = source.index('QueryPropTable "() {')
     body = source[start:source.index('}"', start)]
-    common_part, types_part = body.split("types = CreateDictionary(", 1)
-    common = set(re.findall(r"'(\w+)', True", common_part))
+    common = set(re.findall(r"common\['(\w+)'\] = True", body))
     types: dict[str, set[str]] = {}
-    for kind, props in re.findall(r"'(\w+)', CreateDictionary\(([^)]*)\)", types_part):
-        types[kind] = set(re.findall(r"'(\w+)', True", props))
+    for block in body.split("props = CreateDictionary();")[1:]:
+        kind = re.search(r"types\['(\w+)'\] = props;", block).group(1)
+        types[kind] = set(re.findall(r"props\['(\w+)'\] = True", block))
     return common, types
 
 
@@ -39,6 +41,12 @@ def test_python_allow_list_matches_plugin() -> None:
     common, types = _plugin_prop_table()
     assert common == set(COMMON_PROPS)
     assert types == {kind: set(props) for kind, props in READABLE_PROPS.items()}
+
+
+def test_generated_plugin_table_is_current() -> None:
+    script = Path(__file__).resolve().parent.parent / "scripts" / "gen_query_props.py"
+    result = subprocess.run([sys.executable, str(script), "--check"], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize(
@@ -110,3 +118,29 @@ def test_build_selector_rejects_bad_voice_or_limit(voice, limit) -> None:
             staves=[], from_bar=None, to_bar=None, types=[], voice=voice,
             where=[], fields=[], limit=limit,
         )
+
+
+def test_container_kinds_take_only_their_own_props() -> None:
+    from ai_score_editing.query import CONTAINER_KINDS
+
+    assert CONTAINER_KINDS == {"Bar", "Staff"}
+    assert {"Length", "BreakType"} <= READABLE_PROPS["Bar"]
+    assert {"InstrumentName", "StaffNum"} <= READABLE_PROPS["Staff"]
+    source = PLUGIN.read_text()
+    guard = source[source.index('QueryIsReadable "('):]
+    guard = guard[:guard.index('}"')]
+    assert "kind != 'Bar' and kind != 'Staff'" in guard
+    # Bar and Staff rows are built by their own helper, never by DescribeObject
+    assert "QueryContainerRow(staff, 'Staff'" in source
+    assert "QueryContainerRow(staff.NthBar(barNum), 'Bar'" in source
+    assert "('version', 62)" in source
+
+
+def test_bar_and_staff_query_selector() -> None:
+    selector = build_selector(
+        staves=[1], from_bar=2, to_bar=4, types=["Bar,Staff"], voice=None,
+        where=["Length>1024"], fields=["Length,BreakType"],
+    )
+    assert selector["types"] == ["Bar", "Staff"]
+    assert selector["fields"] == ["Length", "BreakType"]
+    assert selector["where"] == [{"prop": "Length", "op": ">", "value": 1024}]

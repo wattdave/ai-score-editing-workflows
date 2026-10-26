@@ -27,14 +27,46 @@ Batch reads (one session, compact output):
   and `Bracketed` match if any note of a chord matches (each note in the
   results also lists its `bracketed` state), and `StemFlipped=true` finds
   flipped stems. Properties are allow-listed per
-  object type (an unknown name is rejected with the full list); objects lacking a
+  object type (an unknown name is rejected with the full list). The list is
+  `src/ai_score_editing/query_props.json`, one entry per kind of bar object:
+  `NoteRest`, `LyricItem`, `Text`, `Line`, `Clef`, `KeySignature`,
+  `TimeSignature`, `Tuplet`, `BarRest`, `Comment`, `SymbolItem`,
+  `SystemSymbolItem`, `InstrumentChange`, `RehearsalMark` and `GuitarFrame`
+  (chord symbols), plus common fields on all (`Color*`, `DrawOrder`, `Time`,
+  `Voices`, ...). After editing the JSON run `python3 scripts/gen_query_props.py`
+  to regenerate the plug-in table (a test runs it with `--check`); new names
+  need a bridge version bump. Objects lacking a
   filtered property never match. Use instead of reading bar ranges to hunt
   for objects, e.g. `query --staff Tenor --where 'Pitch>=67'` or
   `query --type Text --field Dx,Dy`. Output is capped at 500 objects; a
   `truncated: true` result means narrow the query. `--staff 0` (or
   `--staff system`) reads the system staff: tempo, metronome and other system
   text, and system lines such as rit./rall. (bridge v48). It is only read
-  when asked for.
+  when asked for. `Text` objects (including system text) also give
+  `--field InitialFontName,InitialFontSize` (bridge v61; size in 1/32 spaces,
+  not points). `LyricItem` has no font properties in ManuScript, so use
+  `text-styles` for lyrics.
+- `query --type Bar|Staff` (bridge v62): one row per bar or per staff, from
+  `NthBar`/`NthStaff` rather than bar objects. `--staff`, `--bars`, `--where`
+  and `--limit` apply; `--voice` is ignored. Bar rows are addressed
+  `staff`/`bar`; Staff rows have `bar` 0, ignore `--bars` and skip the system
+  staff. Only their own fields are readable (no `Dx`, `Position`, ...), e.g.
+  `query --type Bar --staff 1 --field Length,BreakType` or
+  `query --type Staff --field InstrumentName,Channel`. `Bar` fields:
+  `Length`, `BarNumber`, `BreakType`, `ExternalBarNumberString`, `Time`,
+  `InMultirest`, `SectionEnd`, `GapBefore`, `GapAfter`, page/system position
+  fields and more (see `query_props.json`); `Staff` fields: instrument and
+  staff names, `StaffNum`, `BarCount`, `Channel`, `Volume`, `Pan`, `Solo`,
+  `MuteMode`, `Small`, clef and style ids.
+- `text-styles`: list the font name and size of each text style in use
+  plus the lyric styles (bridge v61), with the score's main text, main music
+  and music text fonts. Lyric styles whose font is a music-symbol font (Opus,
+  Opus Text Std, Reprise, ...) are flagged `musicFont` and listed in
+  `warnings`: lyrics in such a style render as music symbols, as happens when
+  a missing font is replaced by Opus Text Std. It reads each style by adding a
+  throwaway text object in bar 1 of staff 1 (or the system staff) and deleting
+  it, so the score is briefly edited and shows as modified; per-character
+  `\f...\` overrides inside one lyric are not visible.
 - `verify-render [--format png|pdf] [--out PATH]`: export once and verify that
   rendered files exist, are non-empty, and optionally match page/hash checks.
 
@@ -134,10 +166,10 @@ and verify once for the whole set.
   - A bar longer than its content shows Sibelius's own rests filling the
     rest of it, after the last note (a 1200-long bar holding 1024 of music
     ends in rests of 128, 32 and 16). Bars are the same length on every
-    staff, so no staff-level edit removes them. Replace the bar: `delete-bars`,
-    then `add-bars` with `bar` and `length`, then re-enter it on every staff.
-    `add-note` refuses a position past the bar's length, which tells you the
-    length.
+    staff, so no staff-level edit removes them. Read a bar's length directly
+    with `query --type Bar --field Length` (bridge v62), not by probing with
+    `add-note`. Replace the bar: `delete-bars`, then `add-bars` with `bar` and
+    `length`, then re-enter it on every staff.
   - `{"op":"add-bars","count":N[,"bar":B,"length":L]}`: appends N bars at the
     end, or inserts them before bar B; `length` (1/256 quarters) makes them
     irregular bars (`bar`/`length` bridge v50)

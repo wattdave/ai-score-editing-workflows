@@ -81,7 +81,7 @@ def _function(source: str, name: str) -> str:
 
 def test_plugin_wires_the_op_into_check_and_run() -> None:
     source = PLUGIN.read_text()
-    assert "CreateDictionary('version', 60)" in source
+    assert "CreateDictionary('version', 62)" in source
     assert "return BatchCheckLyricVerse(score, op);" in _function(source, "BatchCheck")
     assert "return BatchRunLyricVerse(score, op);" in _function(source, "BatchRun")
     # not structural: it keeps the addresses of earlier ops valid

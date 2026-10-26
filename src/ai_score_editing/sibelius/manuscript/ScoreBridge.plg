@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 60);
+		return CreateDictionary('version', 62);
 	}"
 
 	Echo "(value) {
@@ -933,33 +933,256 @@
 		return CreateDictionary('converted', converted);
 	}"
 
+	GetTextStyleFonts "(styles) {
+		// LyricItem has no font properties, so the font a text style gives is
+		// read from a throwaway Text object in that style. Each item of styles
+		// is a dictionary with styleId and system (True for system text styles).
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		rows = CreateSparseArray();
+		for i = 0 to styles.Length {
+			item = styles[i];
+			styleId = item['styleId'];
+			if (item['system']) {
+				bar = score.SystemStaff.NthBar(1);
+				text = bar.AddText(0, 'x', styleId);
+			} else {
+				bar = score.NthStaff(1).NthBar(1);
+				text = bar.AddText(0, 'x', styleId, 1);
+			}
+			if (text = null) {
+				rows.Push(CreateDictionary('styleId', styleId, 'skipped', 'AddText refused the style'));
+			} else {
+				if (text.Type = 'Text' or text.Type = 'SystemTextItem') {
+					rows.Push(CreateDictionary(
+						'styleId', styleId,
+						'styleAsText', '' & text.StyleAsText,
+						'fontName', '' & text.InitialFontName,
+						'fontSize', text.InitialFontSize));
+				} else {
+					rows.Push(CreateDictionary('styleId', styleId, 'skipped', 'not a Text object: ' & text.Type));
+				}
+				text.Delete();
+			}
+		}
+		return CreateDictionary('styles', rows);
+	}"
+
 	QueryPropTable "() {
 		// Properties Query may read through obj.@name, per object kind. An
 		// unknown name raises a modal dialog that blocks Sibelius (docs/sibelius-protocol.md
 		// 1.3.1), so nothing outside this table is ever dereferenced.
-		// Mirrored by query.py READABLE_PROPS; a test keeps them in sync.
-		common = CreateDictionary(
-			'Position', True, 'VoiceNumber', True, 'Hidden', True, 'Dx', True,
-			'Dy', True, 'CueSize', True, 'Selected', True, 'Type', True);
-		types = CreateDictionary(
-			'NoteRest', CreateDictionary(
-				'Duration', True, 'NoteCount', True, 'Beam', True, 'GraceNote', True,
-				'StemFlipped', True, 'CrossStaff', True, 'RestPosition', True),
-			'LyricItem', CreateDictionary(
-				'Duration', True, 'NumNotes', True, 'Text', True, 'StyleId', True, 'StyleAsText', True),
-			'Text', CreateDictionary(
-				'Text', True, 'StyleId', True, 'StyleAsText', True),
-			'Line', CreateDictionary(
-				'Duration', True, 'EndBarNumber', True, 'EndPosition', True,
-				'StyleId', True, 'StyleAsText', True, 'RhDx', True),
-			'Clef', CreateDictionary(
-				'StyleId', True, 'ConcertClefStyleId', True),
-			'KeySignature', CreateDictionary(
-				'AsText', True, 'Major', True, 'Sharps', True),
-			'TimeSignature', CreateDictionary(
-				'Numerator', True, 'Denominator', True, 'Text', True),
-			'Tuplet', CreateDictionary(
-				'Text', True, 'FullDuration', True));
+		// Generated from query_props.json, which query.py also reads.
+		// BEGIN GENERATED from query_props.json (scripts/gen_query_props.py)
+		common = CreateDictionary();
+		common['Position'] = True;
+		common['VoiceNumber'] = True;
+		common['Hidden'] = True;
+		common['Dx'] = True;
+		common['Dy'] = True;
+		common['CueSize'] = True;
+		common['Selected'] = True;
+		common['Type'] = True;
+		common['Color'] = True;
+		common['ColorAlpha'] = True;
+		common['ColorRed'] = True;
+		common['ColorGreen'] = True;
+		common['ColorBlue'] = True;
+		common['CanBeInMultipleVoices'] = True;
+		common['CurrentTempo'] = True;
+		common['DrawOrder'] = True;
+		common['HasCustomDrawOrder'] = True;
+		common['Time'] = True;
+		common['UsesMagneticLayout'] = True;
+		common['UsesMagneticLayoutSettingOverridden'] = True;
+		common['Voices'] = True;
+		types = CreateDictionary();
+		props = CreateDictionary();
+		props['Duration'] = True;
+		props['NoteCount'] = True;
+		props['Beam'] = True;
+		props['GraceNote'] = True;
+		props['StemFlipped'] = True;
+		props['CrossStaff'] = True;
+		props['RestPosition'] = True;
+		props['ArpeggioDx'] = True;
+		props['ArpeggioType'] = True;
+		props['ArpeggioTopDy'] = True;
+		props['ArpeggioBottomDy'] = True;
+		props['ArpeggioHidden'] = True;
+		props['DoubleTremolos'] = True;
+		props['FallDx'] = True;
+		props['FallType'] = True;
+		props['FeatheredBeamType'] = True;
+		props['HasStemlet'] = True;
+		props['IsAcciaccatura'] = True;
+		props['IsAppoggiatura'] = True;
+		props['PositionInTuplet'] = True;
+		props['ScoopDx'] = True;
+		props['ScoopType'] = True;
+		props['SingleTremolos'] = True;
+		props['StemletType'] = True;
+		props['Stemweight'] = True;
+		types['NoteRest'] = props;
+		props = CreateDictionary();
+		props['Duration'] = True;
+		props['NumNotes'] = True;
+		props['Text'] = True;
+		props['StyleId'] = True;
+		props['StyleAsText'] = True;
+		props['SyllableType'] = True;
+		types['LyricItem'] = props;
+		props = CreateDictionary();
+		props['Text'] = True;
+		props['StyleId'] = True;
+		props['StyleAsText'] = True;
+		props['InitialFontName'] = True;
+		props['InitialFontSize'] = True;
+		props['EraseBackground'] = True;
+		props['EraseBackgroundOverridden'] = True;
+		props['JumpAtEndOfBar'] = True;
+		props['TextWithFormattingAsString'] = True;
+		types['Text'] = props;
+		props = CreateDictionary();
+		props['Duration'] = True;
+		props['EndBarNumber'] = True;
+		props['EndPosition'] = True;
+		props['StyleId'] = True;
+		props['StyleAsText'] = True;
+		props['RhDx'] = True;
+		props['RhDy'] = True;
+		types['Line'] = props;
+		props = CreateDictionary();
+		props['StyleId'] = True;
+		props['ConcertClefStyleId'] = True;
+		props['ClefStyle'] = True;
+		props['ConcertClefStyle'] = True;
+		props['TransposingClefStyle'] = True;
+		props['TransposingClefStyleId'] = True;
+		types['Clef'] = props;
+		props = CreateDictionary();
+		props['AsText'] = True;
+		props['Major'] = True;
+		props['Sharps'] = True;
+		props['IsOneStaffOnly'] = True;
+		types['KeySignature'] = props;
+		props = CreateDictionary();
+		props['Numerator'] = True;
+		props['Denominator'] = True;
+		props['Text'] = True;
+		props['AllowCautionary'] = True;
+		types['TimeSignature'] = props;
+		props = CreateDictionary();
+		props['Text'] = True;
+		props['FullDuration'] = True;
+		props['Bracket'] = True;
+		props['Left'] = True;
+		props['Right'] = True;
+		props['Style'] = True;
+		props['Unit'] = True;
+		props['PlayedDuration'] = True;
+		props['PositionInTuplet'] = True;
+		types['Tuplet'] = props;
+		props = CreateDictionary();
+		props['PauseType'] = True;
+		props['RestType'] = True;
+		types['BarRest'] = props;
+		props = CreateDictionary();
+		props['Maximized'] = True;
+		props['Text'] = True;
+		props['TextWithFormattingAsString'] = True;
+		props['UserName'] = True;
+		types['Comment'] = props;
+		props = CreateDictionary();
+		props['Index'] = True;
+		props['Name'] = True;
+		props['Size'] = True;
+		types['SymbolItem'] = props;
+		props = CreateDictionary();
+		props['Index'] = True;
+		props['Name'] = True;
+		props['Size'] = True;
+		types['SystemSymbolItem'] = props;
+		props = CreateDictionary();
+		props['FullInstrumentName'] = True;
+		props['FullStaffName'] = True;
+		props['ShortInstrumentName'] = True;
+		props['ShortStaffName'] = True;
+		props['TextLabel'] = True;
+		types['InstrumentChange'] = props;
+		props = CreateDictionary();
+		props['Mark'] = True;
+		props['MarkAsText'] = True;
+		types['RehearsalMark'] = props;
+		props = CreateDictionary();
+		props['RootAsString'] = True;
+		props['BassAsString'] = True;
+		props['SuffixText'] = True;
+		props['ChordNameAsPlainText'] = True;
+		props['ChordNameAsStyledString'] = True;
+		props['ChromaticRoot'] = True;
+		props['ChromaticBass'] = True;
+		props['Recognized'] = True;
+		props['FrameIsVisible'] = True;
+		props['TextIsVisible'] = True;
+		types['GuitarFrame'] = props;
+		props = CreateDictionary();
+		props['BarNumber'] = True;
+		props['BarObjectCount'] = True;
+		props['BreakType'] = True;
+		props['ExternalBarNumberString'] = True;
+		props['GapAfter'] = True;
+		props['GapBefore'] = True;
+		props['InMultirest'] = True;
+		props['Length'] = True;
+		props['NthBarInSystem'] = True;
+		props['NumBlankPages'] = True;
+		props['NumBlankPagesBefore'] = True;
+		props['OnHiddenStave'] = True;
+		props['OnNthPage'] = True;
+		props['OnNthPageExternal'] = True;
+		props['OnNthSystem'] = True;
+		props['SectionEnd'] = True;
+		props['Selected'] = True;
+		props['SpecialPageBreakType'] = True;
+		props['SplitMultirest'] = True;
+		props['Time'] = True;
+		props['Type'] = True;
+		types['Bar'] = props;
+		props = CreateDictionary();
+		props['BankHigh'] = True;
+		props['BankLow'] = True;
+		props['BarCount'] = True;
+		props['Channel'] = True;
+		props['Distance'] = True;
+		props['FullInstrumentName'] = True;
+		props['FullInstrumentNameWithFormatting'] = True;
+		props['FullStaffName'] = True;
+		props['FullStaffNameWithFormatting'] = True;
+		props['InitialClefStyle'] = True;
+		props['InitialClefStyleId'] = True;
+		props['InitialStyleId'] = True;
+		props['InstrumentName'] = True;
+		props['IsSystemStaff'] = True;
+		props['IsVocalStaff'] = True;
+		props['MuteMode'] = True;
+		props['NumStavesInSameInstrument'] = True;
+		props['Pan'] = True;
+		props['ShortInstrumentName'] = True;
+		props['ShortInstrumentNameWithFormatting'] = True;
+		props['ShortStaffName'] = True;
+		props['ShortStaffNameWithFormatting'] = True;
+		props['ShowInFocusOnStaves'] = True;
+		props['Small'] = True;
+		props['Solo'] = True;
+		props['SoundIdOverrideIfAny'] = True;
+		props['StaffNum'] = True;
+		props['Type'] = True;
+		props['Volume'] = True;
+		types['Staff'] = props;
+		// END GENERATED
 		return CreateDictionary('common', common, 'types', types);
 	}"
 
@@ -975,8 +1198,9 @@
 	}"
 
 	QueryIsReadable "(table, kind, prop) {
+		// Bar and Staff are containers, not bar objects: only their own list applies.
 		common = table['common'];
-		if (common[prop] = True) {
+		if (kind != 'Bar' and kind != 'Staff' and common[prop] = True) {
 			return True;
 		}
 		typeTable = table['types'];
@@ -1073,6 +1297,25 @@
 		return False;
 	}"
 
+	QueryContainerRow "(obj, kind, staffNum, barNum, where, fields, table) {
+		// Row for a Bar or Staff; null when the where conditions do not hold.
+		if (QueryMatches(obj, kind, where, table) = False) {
+			return null;
+		}
+		d = CreateDictionary('index', 0, 'type', kind, 'staff', staffNum, 'bar', barNum);
+		if (fields != null and fields.Length > 0) {
+			values = CreateDictionary();
+			for fi = 0 to fields.Length {
+				prop = fields[fi];
+				if (QueryIsReadable(table, kind, prop)) {
+					values[prop] = obj.@prop;
+				}
+			}
+			d['fields'] = values;
+		}
+		return d;
+	}"
+
 	Query "(selector) {
 		score = RequireScore();
 		if (score = null) {
@@ -1106,6 +1349,19 @@
 		if (limit = null or limit < 1) {
 			limit = 500;
 		}
+		wantBar = False;
+		wantStaff = False;
+		scanObjects = True;
+		if (types != null and types.Length > 0) {
+			wantBar = QueryInList(types, 'Bar');
+			wantStaff = QueryInList(types, 'Staff');
+			scanObjects = False;
+			for ti = 0 to types.Length {
+				if (types[ti] != 'Bar' and types[ti] != 'Staff') {
+					scanObjects = True;
+				}
+			}
+		}
 		objects = CreateSparseArray();
 		truncated = False;
 		for si = 0 to staves.Length {
@@ -1113,6 +1369,16 @@
 			staff = StaffByNum(score, staffNum);
 			if (staff = null) {
 				return CreateDictionary('error', 'staff ' & staffNum & ' out of range');
+			}
+			if (wantStaff and staffNum > 0) {
+				row = QueryContainerRow(staff, 'Staff', staffNum, 0, where, fields, table);
+				if (row != null) {
+					if (objects.Length >= limit) {
+						truncated = True;
+					} else {
+						objects.Push(row);
+					}
+				}
 			}
 			fromBar = selector['fromBar'];
 			if (fromBar = null or fromBar < 1) {
@@ -1123,7 +1389,18 @@
 				toBar = staff.BarCount;
 			}
 			for barNum = fromBar to toBar + 1 {
+				if (wantBar) {
+					row = QueryContainerRow(staff.NthBar(barNum), 'Bar', staffNum, barNum, where, fields, table);
+					if (row != null) {
+						if (objects.Length >= limit) {
+							truncated = True;
+						} else {
+							objects.Push(row);
+						}
+					}
+				}
 				index = 0;
+				if (scanObjects) {
 				for each obj in staff.NthBar(barNum) {
 					kind = QueryKind(obj);
 					keep = True;
@@ -1160,6 +1437,7 @@
 						}
 					}
 					index = index + 1;
+				}
 				}
 			}
 		}
