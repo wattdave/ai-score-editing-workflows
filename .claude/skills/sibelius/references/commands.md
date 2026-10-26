@@ -151,6 +151,13 @@ and verify once for the whole set.
   - `{"op":"set-break","bar":B,"type":"system"|"page"|"none"}`
   - `{"op":"set-barline","bar":B,"type":T}`: types as in `set-barline`;
     replaces any special barline already there
+  - A bar longer than its content shows Sibelius's own rests filling the
+    rest of it, after the last note (a 1200-long bar holding 1024 of music
+    ends in rests of 128, 32 and 16). Bars are the same length on every
+    staff, so no staff-level edit removes them. Replace the bar: `delete-bars`,
+    then `add-bars` with `bar` and `length`, then re-enter it on every staff.
+    `add-note` refuses a position past the bar's length, which tells you the
+    length.
   - `{"op":"add-bars","count":N[,"bar":B,"length":L]}`: appends N bars at the
     end, or inserts them before bar B; `length` (1/256 quarters) makes them
     irregular bars (`bar`/`length` bridge v50)
@@ -169,8 +176,8 @@ and verify once for the whole set.
     values as `layout` and `engraving` (bridge v50).
   - `{"op":"clear-bars","fromBar":A,"toBar":B,"staff":S[,"voice":V]}` (bridge v60):
     `Bar.ClearNotesAndModifiers`, leaving a bar rest and removing tuplets
-    and slurs. Redo a bar that held tuplets with this, not `delete-voice`,
-    which leaves rests past the barline.
+    and slurs, in every voice unless `voice` is given. It needs no
+    selection, unlike `delete-voice`.
   - `{"op":"delete-voice","fromBar":A,"toBar":B,"staff":S,"voice":V}`
   - `{"op":"hide-empty-staves","fromBar":A,"toBar":B}`: hides every staff
     with nothing in bars A-B, then optimizes staff spacing there (bridge v52)

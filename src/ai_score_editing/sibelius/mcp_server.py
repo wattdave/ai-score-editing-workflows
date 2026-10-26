@@ -338,8 +338,7 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
       "spacesBetweenSystems" (staff spaces)}: only the given settings change
     - {"op":"delete-voice","fromBar":A,"toBar":B,"staff":S,"voice":V}
     - {"op":"clear-bars","fromBar":A,"toBar":B,"staff":S[,"voice":V]}: replace the bars with a bar
-      rest, tuplets and slurs included. Use it, not delete-voice, to redo a bar that held tuplets
-      (delete-voice leaves rests past the barline). Bridge v60
+      rest, tuplets and slurs included, in every voice unless one is given. Bridge v60
     - {"op":"hide-empty-staves","fromBar":A,"toBar":B}: hide staves with
       nothing in bars A-B, then optimize staff spacing there
 

@@ -1670,9 +1670,7 @@
 			return CreateDictionary('staff', op['staff'], 'voice', voice, 'objects', found);
 		}
 		if (opName = 'clear-bars') {
-			// Bar.ClearNotesAndModifiers leaves a bar rest. Selecting the bars
-			// and deleting (as delete-voice does) leaves rests past the barline
-			// in a bar that held tuplets.
+			// Bar.ClearNotesAndModifiers leaves a bar rest, with no selection.
 			staff = score.NthStaff(op['staff']);
 			for barNum = op['fromBar'] to op['toBar'] + 1 {
 				if (op['voice'] = null) {
