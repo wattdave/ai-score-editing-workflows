@@ -1,0 +1,158 @@
+{
+ "comment": "Properties Query may read through obj.@name. Edit here, then run scripts/gen_query_props.py to regenerate the ScoreBridge.plg QueryPropTable.",
+ "common": [
+  "Position",
+  "VoiceNumber",
+  "Hidden",
+  "Dx",
+  "Dy",
+  "CueSize",
+  "Selected",
+  "Type",
+  "Color",
+  "ColorAlpha",
+  "ColorRed",
+  "ColorGreen",
+  "ColorBlue",
+  "CanBeInMultipleVoices",
+  "CurrentTempo",
+  "DrawOrder",
+  "HasCustomDrawOrder",
+  "OnNthBlankPage",
+  "Time",
+  "UsesMagneticLayout",
+  "UsesMagneticLayoutSettingOverridden",
+  "Voices"
+ ],
+ "types": {
+  "NoteRest": [
+   "Duration",
+   "NoteCount",
+   "Beam",
+   "GraceNote",
+   "StemFlipped",
+   "CrossStaff",
+   "RestPosition",
+   "ArpeggioDx",
+   "ArpeggioType",
+   "ArpeggioTopDy",
+   "ArpeggioBottomDy",
+   "ArpeggioHidden",
+   "DoubleTremolos",
+   "FallDx",
+   "FallType",
+   "FeatheredBeamType",
+   "HasStemlet",
+   "IsAcciaccatura",
+   "IsAppoggiatura",
+   "PositionInTuplet",
+   "ScoopDx",
+   "ScoopType",
+   "SingleTremolos",
+   "StemletType",
+   "Stemweight"
+  ],
+  "LyricItem": [
+   "Duration",
+   "NumNotes",
+   "Text",
+   "StyleId",
+   "StyleAsText",
+   "SyllableType"
+  ],
+  "Text": [
+   "Text",
+   "StyleId",
+   "StyleAsText",
+   "InitialFontName",
+   "InitialFontSize",
+   "EraseBackground",
+   "EraseBackgroundOverridden",
+   "JumpAtEndOfBar",
+   "TextWithFormattingAsString"
+  ],
+  "Line": [
+   "Duration",
+   "EndBarNumber",
+   "EndPosition",
+   "StyleId",
+   "StyleAsText",
+   "RhDx",
+   "RhDy"
+  ],
+  "Clef": [
+   "StyleId",
+   "ConcertClefStyleId",
+   "ClefStyle",
+   "ConcertClefStyle",
+   "TransposingClefStyle",
+   "TransposingClefStyleId"
+  ],
+  "KeySignature": [
+   "AsText",
+   "Major",
+   "Sharps",
+   "IsOneStaffOnly"
+  ],
+  "TimeSignature": [
+   "Numerator",
+   "Denominator",
+   "Text",
+   "AllowCautionary"
+  ],
+  "Tuplet": [
+   "Text",
+   "FullDuration",
+   "Bracket",
+   "Left",
+   "Right",
+   "Style",
+   "Unit",
+   "PlayedDuration",
+   "PositionInTuplet"
+  ],
+  "BarRest": [
+   "PauseType",
+   "RestType"
+  ],
+  "Comment": [
+   "Maximized",
+   "Text",
+   "TextWithFormattingAsString",
+   "UserName"
+  ],
+  "SymbolItem": [
+   "Index",
+   "Name",
+   "Size"
+  ],
+  "SystemSymbolItem": [
+   "Index",
+   "Name",
+   "Size"
+  ],
+  "InstrumentChange": [
+   "FullInstrumentName",
+   "FullStaffName",
+   "ShortInstrumentName",
+   "ShortStaffName",
+   "TextLabel"
+  ],
+  "RehearsalMark": [
+   "Mark",
+   "MarkAsText"
+  ],
+  "GuitarFrame": [
+   "RootAsString",
+   "BassAsString",
+   "SuffixText",
+   "ChordNameAsPlainText",
+   "ChordNameAsStyledString",
+   "ChromaticRoot",
+   "ChromaticBass",
+   "Recognized",
+   "FrameIsVisible",
+   "TextIsVisible"
+  ]
+ }
+}

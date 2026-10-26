@@ -2,27 +2,20 @@
 
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
 from typing import Any
 
-# Properties the bridge may read through obj.@name, per object kind. Mirrors
-# QueryPropTable in ScoreBridge.plg (a test keeps them in sync). The plug-in
-# enforces its own copy; this one turns typos into errors before connecting,
-# since an unknown name there would silently match nothing.
-COMMON_PROPS = frozenset(
-    {"Position", "VoiceNumber", "Hidden", "Dx", "Dy", "CueSize", "Selected", "Type"}
-)
+# Properties the bridge may read through obj.@name, per object kind. The
+# source of truth is query_props.json, which scripts/gen_query_props.py turns
+# into QueryPropTable in ScoreBridge.plg (a test runs it with --check). The
+# plug-in enforces its own copy; this one turns typos into errors before
+# connecting, since an unknown name there would silently match nothing.
+_PROPS = json.loads((Path(__file__).with_name("query_props.json")).read_text())
+COMMON_PROPS = frozenset(_PROPS["common"])
 READABLE_PROPS: dict[str, frozenset[str]] = {
-    "NoteRest": frozenset(
-        {"Duration", "NoteCount", "Beam", "GraceNote", "StemFlipped", "CrossStaff", "RestPosition"}
-    ),
-    "LyricItem": frozenset({"Duration", "NumNotes", "Text", "StyleId", "StyleAsText"}),
-    "Text": frozenset({"Text", "StyleId", "StyleAsText", "InitialFontName", "InitialFontSize"}),
-    "Line": frozenset({"Duration", "EndBarNumber", "EndPosition", "StyleId", "StyleAsText", "RhDx"}),
-    "Clef": frozenset({"StyleId", "ConcertClefStyleId"}),
-    "KeySignature": frozenset({"AsText", "Major", "Sharps"}),
-    "TimeSignature": frozenset({"Numerator", "Denominator", "Text"}),
-    "Tuplet": frozenset({"Text", "FullDuration"}),
+    kind: frozenset(names) for kind, names in _PROPS["types"].items()
 }
 # Note-level properties; match if any note of a NoteRest chord matches.
 # Handled specially by the bridge, and filter-only: results list every

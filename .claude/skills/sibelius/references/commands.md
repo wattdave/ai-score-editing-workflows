@@ -27,7 +27,15 @@ Batch reads (one session, compact output):
   and `Bracketed` match if any note of a chord matches (each note in the
   results also lists its `bracketed` state), and `StemFlipped=true` finds
   flipped stems. Properties are allow-listed per
-  object type (an unknown name is rejected with the full list); objects lacking a
+  object type (an unknown name is rejected with the full list). The list is
+  `src/ai_score_editing/query_props.json`, one entry per kind of bar object:
+  `NoteRest`, `LyricItem`, `Text`, `Line`, `Clef`, `KeySignature`,
+  `TimeSignature`, `Tuplet`, `BarRest`, `Comment`, `SymbolItem`,
+  `SystemSymbolItem`, `InstrumentChange`, `RehearsalMark` and `GuitarFrame`
+  (chord symbols), plus common fields on all (`Color*`, `DrawOrder`, `Time`,
+  `Voices`, ...). After editing the JSON run `python3 scripts/gen_query_props.py`
+  to regenerate the plug-in table (a test runs it with `--check`); new names
+  need a bridge version bump. Objects lacking a
   filtered property never match. Use instead of reading bar ranges to hunt
   for objects, e.g. `query --staff Tenor --where 'Pitch>=67'` or
   `query --type Text --field Dx,Dy`. Output is capped at 500 objects; a

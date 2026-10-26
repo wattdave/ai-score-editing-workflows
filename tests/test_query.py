@@ -1,6 +1,8 @@
 """Tests for generic Query selector parsing and the property allow-list."""
 
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -27,11 +29,11 @@ def _plugin_prop_table() -> tuple[set[str], dict[str, set[str]]]:
     source = PLUGIN.read_text()
     start = source.index('QueryPropTable "() {')
     body = source[start:source.index('}"', start)]
-    common_part, types_part = body.split("types = CreateDictionary(", 1)
-    common = set(re.findall(r"'(\w+)', True", common_part))
+    common = set(re.findall(r"common\['(\w+)'\] = True", body))
     types: dict[str, set[str]] = {}
-    for kind, props in re.findall(r"'(\w+)', CreateDictionary\(([^)]*)\)", types_part):
-        types[kind] = set(re.findall(r"'(\w+)', True", props))
+    for block in body.split("props = CreateDictionary();")[1:]:
+        kind = re.search(r"types\['(\w+)'\] = props;", block).group(1)
+        types[kind] = set(re.findall(r"props\['(\w+)'\] = True", block))
     return common, types
 
 
@@ -39,6 +41,12 @@ def test_python_allow_list_matches_plugin() -> None:
     common, types = _plugin_prop_table()
     assert common == set(COMMON_PROPS)
     assert types == {kind: set(props) for kind, props in READABLE_PROPS.items()}
+
+
+def test_generated_plugin_table_is_current() -> None:
+    script = Path(__file__).resolve().parent.parent / "scripts" / "gen_query_props.py"
+    result = subprocess.run([sys.executable, str(script), "--check"], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize(

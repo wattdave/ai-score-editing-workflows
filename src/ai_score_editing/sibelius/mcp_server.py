@@ -224,7 +224,11 @@ async def query_score(
     type such as Slur. voice: 1-4. where: conditions that must all hold, e.g.
     "Pitch>=72" or "Bracketed=true" (any note of a chord), "StemFlipped=true",
     "Hidden=true", "Text='dolce'". fields:
-    extra properties to return, e.g. ["Dx", "Dy"]; Text objects also give
+    extra properties to return, e.g. ["Dx", "Dy"]; readable kinds are
+    NoteRest, LyricItem, Text, Line, Clef, KeySignature, TimeSignature, Tuplet,
+    BarRest, Comment, SymbolItem, SystemSymbolItem, InstrumentChange,
+    RehearsalMark and GuitarFrame (chord symbols), with their documented
+    simple properties plus Color, DrawOrder, Time and Voices on all; Text objects also give
     "InitialFontName" and "InitialFontSize" (1/32 spaces); LyricItem has no
     font properties, so read the font of lyric styles with sibelius-cli
     text-styles. Only allow-listed
