@@ -17,7 +17,7 @@ READABLE_PROPS: dict[str, frozenset[str]] = {
         {"Duration", "NoteCount", "Beam", "GraceNote", "StemFlipped", "CrossStaff", "RestPosition"}
     ),
     "LyricItem": frozenset({"Duration", "NumNotes", "Text", "StyleId", "StyleAsText"}),
-    "Text": frozenset({"Text", "StyleId", "StyleAsText"}),
+    "Text": frozenset({"Text", "StyleId", "StyleAsText", "InitialFontName", "InitialFontSize"}),
     "Line": frozenset({"Duration", "EndBarNumber", "EndPosition", "StyleId", "StyleAsText", "RhDx"}),
     "Clef": frozenset({"StyleId", "ConcertClefStyleId"}),
     "KeySignature": frozenset({"AsText", "Major", "Sharps"}),
@@ -27,6 +27,7 @@ READABLE_PROPS: dict[str, frozenset[str]] = {
 # Note-level properties; match if any note of a NoteRest chord matches.
 # Handled specially by the bridge, and filter-only: results list every
 # note's pitch and bracketed state anyway.
+FONT_FIELDS = frozenset({"InitialFontName", "InitialFontSize"})
 PSEUDO_PROPS = frozenset({"Pitch", "Bracketed"})
 OPERATORS = ("<=", ">=", "!=", "=", "<", ">")
 DEFAULT_LIMIT = 500

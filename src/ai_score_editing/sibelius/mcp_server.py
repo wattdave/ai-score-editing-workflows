@@ -26,6 +26,7 @@ from ai_score_editing.sibelius.cli import (
     QUERY_BRIDGE_VERSION,
     STRUCTURE_READ_BRIDGE_VERSION,
     SYSTEM_STAFF_BRIDGE_VERSION,
+    TEXT_FONTS_BRIDGE_VERSION,
     BridgeError,
     _apply_batch,
     _backup,
@@ -35,7 +36,7 @@ from ai_score_editing.sibelius.cli import (
     parse_bar_range,
 )
 from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient
-from ai_score_editing.query import QueryError, build_selector, resolve_staves
+from ai_score_editing.query import FONT_FIELDS, QueryError, build_selector, resolve_staves
 
 T = TypeVar("T")
 
@@ -223,7 +224,10 @@ async def query_score(
     type such as Slur. voice: 1-4. where: conditions that must all hold, e.g.
     "Pitch>=72" or "Bracketed=true" (any note of a chord), "StemFlipped=true",
     "Hidden=true", "Text='dolce'". fields:
-    extra properties to return, e.g. ["Dx", "Dy"]. Only allow-listed
+    extra properties to return, e.g. ["Dx", "Dy"]; Text objects also give
+    "InitialFontName" and "InitialFontSize" (1/32 spaces); LyricItem has no
+    font properties, so read the font of lyric styles with sibelius-cli
+    text-styles. Only allow-listed
     properties exist; an unknown one is rejected with the list.
 
     Returns {objects, count, truncated}. Each object has staff, bar, index,
@@ -249,6 +253,8 @@ async def query_score(
                 raise ToolError(str(exc)) from exc
             if 0 in selector["staves"]:
                 await _guarded(_require_bridge(client, SYSTEM_STAFF_BRIDGE_VERSION, "query_score of the system staff"))
+        if FONT_FIELDS & set(selector["fields"]):
+            await _guarded(_require_bridge(client, TEXT_FONTS_BRIDGE_VERSION, "query_score of text fonts"))
         return await _call(client, "Query", [selector])
 
     return await session.run(action, retry=True)

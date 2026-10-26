@@ -34,7 +34,19 @@ Batch reads (one session, compact output):
   `truncated: true` result means narrow the query. `--staff 0` (or
   `--staff system`) reads the system staff: tempo, metronome and other system
   text, and system lines such as rit./rall. (bridge v48). It is only read
-  when asked for.
+  when asked for. `Text` objects (including system text) also give
+  `--field InitialFontName,InitialFontSize` (bridge v61; size in 1/32 spaces,
+  not points). `LyricItem` has no font properties in ManuScript, so use
+  `text-styles` for lyrics.
+- `text-styles`: list the font name and size of each text style in use
+  plus the lyric styles (bridge v61), with the score's main text, main music
+  and music text fonts. Lyric styles whose font is a music-symbol font (Opus,
+  Opus Text Std, Reprise, ...) are flagged `musicFont` and listed in
+  `warnings`: lyrics in such a style render as music symbols, as happens when
+  a missing font is replaced by Opus Text Std. It reads each style by adding a
+  throwaway text object in bar 1 of staff 1 (or the system staff) and deleting
+  it, so the score is briefly edited and shows as modified; per-character
+  `\f...\` overrides inside one lyric are not visible.
 - `verify-render [--format png|pdf] [--out PATH]`: export once and verify that
   rendered files exist, are non-empty, and optionally match page/hash checks.
 

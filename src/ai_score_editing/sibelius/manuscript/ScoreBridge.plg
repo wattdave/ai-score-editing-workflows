@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 60);
+		return CreateDictionary('version', 61);
 	}"
 
 	Echo "(value) {
@@ -933,6 +933,43 @@
 		return CreateDictionary('converted', converted);
 	}"
 
+	GetTextStyleFonts "(styles) {
+		// LyricItem has no font properties, so the font a text style gives is
+		// read from a throwaway Text object in that style. Each item of styles
+		// is a dictionary with styleId and system (True for system text styles).
+		score = RequireScore();
+		if (score = null) {
+			return CreateDictionary('error', 'no score open');
+		}
+		rows = CreateSparseArray();
+		for i = 0 to styles.Length {
+			item = styles[i];
+			styleId = item['styleId'];
+			if (item['system']) {
+				bar = score.SystemStaff.NthBar(1);
+				text = bar.AddText(0, 'x', styleId);
+			} else {
+				bar = score.NthStaff(1).NthBar(1);
+				text = bar.AddText(0, 'x', styleId, 1);
+			}
+			if (text = null) {
+				rows.Push(CreateDictionary('styleId', styleId, 'skipped', 'AddText refused the style'));
+			} else {
+				if (text.Type = 'Text' or text.Type = 'SystemTextItem') {
+					rows.Push(CreateDictionary(
+						'styleId', styleId,
+						'styleAsText', '' & text.StyleAsText,
+						'fontName', '' & text.InitialFontName,
+						'fontSize', text.InitialFontSize));
+				} else {
+					rows.Push(CreateDictionary('styleId', styleId, 'skipped', 'not a Text object: ' & text.Type));
+				}
+				text.Delete();
+			}
+		}
+		return CreateDictionary('styles', rows);
+	}"
+
 	QueryPropTable "() {
 		// Properties Query may read through obj.@name, per object kind. An
 		// unknown name raises a modal dialog that blocks Sibelius (docs/sibelius-protocol.md
@@ -948,7 +985,8 @@
 			'LyricItem', CreateDictionary(
 				'Duration', True, 'NumNotes', True, 'Text', True, 'StyleId', True, 'StyleAsText', True),
 			'Text', CreateDictionary(
-				'Text', True, 'StyleId', True, 'StyleAsText', True),
+				'Text', True, 'StyleId', True, 'StyleAsText', True,
+				'InitialFontName', True, 'InitialFontSize', True),
 			'Line', CreateDictionary(
 				'Duration', True, 'EndBarNumber', True, 'EndPosition', True,
 				'StyleId', True, 'StyleAsText', True, 'RhDx', True),
