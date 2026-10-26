@@ -994,7 +994,6 @@
 		common['CurrentTempo'] = True;
 		common['DrawOrder'] = True;
 		common['HasCustomDrawOrder'] = True;
-		common['OnNthBlankPage'] = True;
 		common['Time'] = True;
 		common['UsesMagneticLayout'] = True;
 		common['UsesMagneticLayoutSettingOverridden'] = True;
@@ -1142,7 +1141,6 @@
 		props['NumBlankPages'] = True;
 		props['NumBlankPagesBefore'] = True;
 		props['OnHiddenStave'] = True;
-		props['OnNthBlankPage'] = True;
 		props['OnNthPage'] = True;
 		props['OnNthPageExternal'] = True;
 		props['OnNthSystem'] = True;
