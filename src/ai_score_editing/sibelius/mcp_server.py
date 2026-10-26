@@ -26,6 +26,7 @@ from ai_score_editing.sibelius.cli import (
     QUERY_BRIDGE_VERSION,
     STRUCTURE_READ_BRIDGE_VERSION,
     SYSTEM_STAFF_BRIDGE_VERSION,
+    QUERY_CONTAINERS_BRIDGE_VERSION,
     TEXT_FONTS_BRIDGE_VERSION,
     BridgeError,
     _apply_batch,
@@ -36,7 +37,7 @@ from ai_score_editing.sibelius.cli import (
     parse_bar_range,
 )
 from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient
-from ai_score_editing.query import FONT_FIELDS, QueryError, build_selector, resolve_staves
+from ai_score_editing.query import CONTAINER_KINDS, FONT_FIELDS, QueryError, build_selector, resolve_staves
 
 T = TypeVar("T")
 
@@ -226,7 +227,8 @@ async def query_score(
     "Hidden=true", "Text='dolce'". fields:
     extra properties to return, e.g. ["Dx", "Dy"]; readable kinds are
     NoteRest, LyricItem, Text, Line, Clef, KeySignature, TimeSignature, Tuplet,
-    BarRest, Comment, SymbolItem, SystemSymbolItem, InstrumentChange,
+    Bar and Staff (one row per bar or staff: Length, InstrumentName, ...; Staff
+    rows have bar 0, ignore bars, and need a non-system staff), BarRest, Comment, SymbolItem, SystemSymbolItem, InstrumentChange,
     RehearsalMark and GuitarFrame (chord symbols), with their documented
     simple properties plus Color, DrawOrder, Time and Voices on all; Text objects also give
     "InitialFontName" and "InitialFontSize" (1/32 spaces); LyricItem has no
@@ -257,6 +259,8 @@ async def query_score(
                 raise ToolError(str(exc)) from exc
             if 0 in selector["staves"]:
                 await _guarded(_require_bridge(client, SYSTEM_STAFF_BRIDGE_VERSION, "query_score of the system staff"))
+        if CONTAINER_KINDS & set(selector["types"]):
+            await _guarded(_require_bridge(client, QUERY_CONTAINERS_BRIDGE_VERSION, "query_score of Bar or Staff"))
         if FONT_FIELDS & set(selector["fields"]):
             await _guarded(_require_bridge(client, TEXT_FONTS_BRIDGE_VERSION, "query_score of text fonts"))
         return await _call(client, "Query", [selector])

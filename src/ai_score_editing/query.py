@@ -20,6 +20,9 @@ READABLE_PROPS: dict[str, frozenset[str]] = {
 # Note-level properties; match if any note of a NoteRest chord matches.
 # Handled specially by the bridge, and filter-only: results list every
 # note's pitch and bracketed state anyway.
+# Enumerated from NthBar / NthStaff rather than from bar objects; they take
+# only their own properties, not COMMON_PROPS.
+CONTAINER_KINDS = frozenset(_PROPS["containers"])
 FONT_FIELDS = frozenset({"InitialFontName", "InitialFontSize"})
 PSEUDO_PROPS = frozenset({"Pitch", "Bracketed"})
 OPERATORS = ("<=", ">=", "!=", "=", "<", ">")

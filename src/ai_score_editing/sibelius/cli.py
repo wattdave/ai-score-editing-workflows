@@ -822,7 +822,7 @@ async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | No
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 61
+CURRENT_BRIDGE_VERSION = 62
 QUERY_BRIDGE_VERSION = 38
 BATCH_BRIDGE_VERSION = 39
 NUDGE_BRIDGE_VERSION = 41
@@ -840,6 +840,7 @@ LYRIC_VERSE_BRIDGE_VERSION = 58
 SET_LYRIC_VERSE_BRIDGE_VERSION = 59
 TUPLET_NOTES_BRIDGE_VERSION = 60
 TEXT_FONTS_BRIDGE_VERSION = 61
+QUERY_CONTAINERS_BRIDGE_VERSION = 62
 
 
 def _batch_bridge_version(operations: list[dict[str, Any]]) -> int:
@@ -1481,6 +1482,8 @@ async def _run_query(args: argparse.Namespace) -> int:
         )
         async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
             await _require_bridge(client, QUERY_BRIDGE_VERSION, "query")
+            if query_mod.CONTAINER_KINDS & set(selector["types"]):
+                await _require_bridge(client, QUERY_CONTAINERS_BRIDGE_VERSION, "query of Bar or Staff")
             if any(f in query_mod.FONT_FIELDS for f in selector["fields"]):
                 await _require_bridge(client, TEXT_FONTS_BRIDGE_VERSION, "query of text fonts")
             if args.staff:

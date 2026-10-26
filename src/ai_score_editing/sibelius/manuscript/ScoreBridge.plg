@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 61);
+		return CreateDictionary('version', 62);
 	}"
 
 	Echo "(value) {
@@ -1129,6 +1129,61 @@
 		props['FrameIsVisible'] = True;
 		props['TextIsVisible'] = True;
 		types['GuitarFrame'] = props;
+		props = CreateDictionary();
+		props['BarNumber'] = True;
+		props['BarObjectCount'] = True;
+		props['BreakType'] = True;
+		props['ExternalBarNumberString'] = True;
+		props['GapAfter'] = True;
+		props['GapBefore'] = True;
+		props['InMultirest'] = True;
+		props['Length'] = True;
+		props['NthBarInSystem'] = True;
+		props['NumBlankPages'] = True;
+		props['NumBlankPagesBefore'] = True;
+		props['OnHiddenStave'] = True;
+		props['OnNthBlankPage'] = True;
+		props['OnNthPage'] = True;
+		props['OnNthPageExternal'] = True;
+		props['OnNthSystem'] = True;
+		props['SectionEnd'] = True;
+		props['Selected'] = True;
+		props['SpecialPageBreakType'] = True;
+		props['SplitMultirest'] = True;
+		props['Time'] = True;
+		props['Type'] = True;
+		types['Bar'] = props;
+		props = CreateDictionary();
+		props['BankHigh'] = True;
+		props['BankLow'] = True;
+		props['BarCount'] = True;
+		props['Channel'] = True;
+		props['Distance'] = True;
+		props['FullInstrumentName'] = True;
+		props['FullInstrumentNameWithFormatting'] = True;
+		props['FullStaffName'] = True;
+		props['FullStaffNameWithFormatting'] = True;
+		props['InitialClefStyle'] = True;
+		props['InitialClefStyleId'] = True;
+		props['InitialStyleId'] = True;
+		props['InstrumentName'] = True;
+		props['IsSystemStaff'] = True;
+		props['IsVocalStaff'] = True;
+		props['MuteMode'] = True;
+		props['NumStavesInSameInstrument'] = True;
+		props['Pan'] = True;
+		props['ShortInstrumentName'] = True;
+		props['ShortInstrumentNameWithFormatting'] = True;
+		props['ShortStaffName'] = True;
+		props['ShortStaffNameWithFormatting'] = True;
+		props['ShowInFocusOnStaves'] = True;
+		props['Small'] = True;
+		props['Solo'] = True;
+		props['SoundIdOverrideIfAny'] = True;
+		props['StaffNum'] = True;
+		props['Type'] = True;
+		props['Volume'] = True;
+		types['Staff'] = props;
 		// END GENERATED
 		return CreateDictionary('common', common, 'types', types);
 	}"
@@ -1145,8 +1200,9 @@
 	}"
 
 	QueryIsReadable "(table, kind, prop) {
+		// Bar and Staff are containers, not bar objects: only their own list applies.
 		common = table['common'];
-		if (common[prop] = True) {
+		if (kind != 'Bar' and kind != 'Staff' and common[prop] = True) {
 			return True;
 		}
 		typeTable = table['types'];
@@ -1243,6 +1299,25 @@
 		return False;
 	}"
 
+	QueryContainerRow "(obj, kind, staffNum, barNum, where, fields, table) {
+		// Row for a Bar or Staff; null when the where conditions do not hold.
+		if (QueryMatches(obj, kind, where, table) = False) {
+			return null;
+		}
+		d = CreateDictionary('index', 0, 'type', kind, 'staff', staffNum, 'bar', barNum);
+		if (fields != null and fields.Length > 0) {
+			values = CreateDictionary();
+			for fi = 0 to fields.Length {
+				prop = fields[fi];
+				if (QueryIsReadable(table, kind, prop)) {
+					values[prop] = obj.@prop;
+				}
+			}
+			d['fields'] = values;
+		}
+		return d;
+	}"
+
 	Query "(selector) {
 		score = RequireScore();
 		if (score = null) {
@@ -1276,6 +1351,19 @@
 		if (limit = null or limit < 1) {
 			limit = 500;
 		}
+		wantBar = False;
+		wantStaff = False;
+		scanObjects = True;
+		if (types != null and types.Length > 0) {
+			wantBar = QueryInList(types, 'Bar');
+			wantStaff = QueryInList(types, 'Staff');
+			scanObjects = False;
+			for ti = 0 to types.Length {
+				if (types[ti] != 'Bar' and types[ti] != 'Staff') {
+					scanObjects = True;
+				}
+			}
+		}
 		objects = CreateSparseArray();
 		truncated = False;
 		for si = 0 to staves.Length {
@@ -1283,6 +1371,16 @@
 			staff = StaffByNum(score, staffNum);
 			if (staff = null) {
 				return CreateDictionary('error', 'staff ' & staffNum & ' out of range');
+			}
+			if (wantStaff and staffNum > 0) {
+				row = QueryContainerRow(staff, 'Staff', staffNum, 0, where, fields, table);
+				if (row != null) {
+					if (objects.Length >= limit) {
+						truncated = True;
+					} else {
+						objects.Push(row);
+					}
+				}
 			}
 			fromBar = selector['fromBar'];
 			if (fromBar = null or fromBar < 1) {
@@ -1293,7 +1391,18 @@
 				toBar = staff.BarCount;
 			}
 			for barNum = fromBar to toBar + 1 {
+				if (wantBar) {
+					row = QueryContainerRow(staff.NthBar(barNum), 'Bar', staffNum, barNum, where, fields, table);
+					if (row != null) {
+						if (objects.Length >= limit) {
+							truncated = True;
+						} else {
+							objects.Push(row);
+						}
+					}
+				}
 				index = 0;
+				if (scanObjects) {
 				for each obj in staff.NthBar(barNum) {
 					kind = QueryKind(obj);
 					keep = True;
@@ -1330,6 +1439,7 @@
 						}
 					}
 					index = index + 1;
+				}
 				}
 			}
 		}

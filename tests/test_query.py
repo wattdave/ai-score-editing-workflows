@@ -118,3 +118,29 @@ def test_build_selector_rejects_bad_voice_or_limit(voice, limit) -> None:
             staves=[], from_bar=None, to_bar=None, types=[], voice=voice,
             where=[], fields=[], limit=limit,
         )
+
+
+def test_container_kinds_take_only_their_own_props() -> None:
+    from ai_score_editing.query import CONTAINER_KINDS
+
+    assert CONTAINER_KINDS == {"Bar", "Staff"}
+    assert {"Length", "BreakType"} <= READABLE_PROPS["Bar"]
+    assert {"InstrumentName", "StaffNum"} <= READABLE_PROPS["Staff"]
+    source = PLUGIN.read_text()
+    guard = source[source.index('QueryIsReadable "('):]
+    guard = guard[:guard.index('}"')]
+    assert "kind != 'Bar' and kind != 'Staff'" in guard
+    # Bar and Staff rows are built by their own helper, never by DescribeObject
+    assert "QueryContainerRow(staff, 'Staff'" in source
+    assert "QueryContainerRow(staff.NthBar(barNum), 'Bar'" in source
+    assert "('version', 62)" in source
+
+
+def test_bar_and_staff_query_selector() -> None:
+    selector = build_selector(
+        staves=[1], from_bar=2, to_bar=4, types=["Bar,Staff"], voice=None,
+        where=["Length>1024"], fields=["Length,BreakType"],
+    )
+    assert selector["types"] == ["Bar", "Staff"]
+    assert selector["fields"] == ["Length", "BreakType"]
+    assert selector["where"] == [{"prop": "Length", "op": ">", "value": 1024}]

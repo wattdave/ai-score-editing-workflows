@@ -70,7 +70,7 @@ def test_font_fields_accepted_for_text_only() -> None:
 
 def test_plugin_probe_and_version() -> None:
     source = PLUGIN.read_text()
-    assert cli.TEXT_FONTS_BRIDGE_VERSION == cli.CURRENT_BRIDGE_VERSION == 61
+    assert cli.TEXT_FONTS_BRIDGE_VERSION == 61 <= cli.CURRENT_BRIDGE_VERSION
     start = source.index('GetTextStyleFonts "(')
     body = source[start:source.index('}"\n', start)]
     # LyricItem has no font properties; the probe reads a Text object only

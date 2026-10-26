@@ -1,5 +1,5 @@
 {
- "comment": "Properties Query may read through obj.@name. Edit here, then run scripts/gen_query_props.py to regenerate the ScoreBridge.plg QueryPropTable.",
+ "comment": "Properties Query may read through obj.@name. Edit here, then run scripts/gen_query_props.py to regenerate the ScoreBridge.plg QueryPropTable. Bar and Staff are container kinds: Query enumerates them from NthBar/NthStaff, and they do not take the common (bar object) properties.",
  "common": [
   "Position",
   "VoiceNumber",
@@ -153,6 +153,65 @@
    "Recognized",
    "FrameIsVisible",
    "TextIsVisible"
+  ],
+  "Bar": [
+   "BarNumber",
+   "BarObjectCount",
+   "BreakType",
+   "ExternalBarNumberString",
+   "GapAfter",
+   "GapBefore",
+   "InMultirest",
+   "Length",
+   "NthBarInSystem",
+   "NumBlankPages",
+   "NumBlankPagesBefore",
+   "OnHiddenStave",
+   "OnNthBlankPage",
+   "OnNthPage",
+   "OnNthPageExternal",
+   "OnNthSystem",
+   "SectionEnd",
+   "Selected",
+   "SpecialPageBreakType",
+   "SplitMultirest",
+   "Time",
+   "Type"
+  ],
+  "Staff": [
+   "BankHigh",
+   "BankLow",
+   "BarCount",
+   "Channel",
+   "Distance",
+   "FullInstrumentName",
+   "FullInstrumentNameWithFormatting",
+   "FullStaffName",
+   "FullStaffNameWithFormatting",
+   "InitialClefStyle",
+   "InitialClefStyleId",
+   "InitialStyleId",
+   "InstrumentName",
+   "IsSystemStaff",
+   "IsVocalStaff",
+   "MuteMode",
+   "NumStavesInSameInstrument",
+   "Pan",
+   "ShortInstrumentName",
+   "ShortInstrumentNameWithFormatting",
+   "ShortStaffName",
+   "ShortStaffNameWithFormatting",
+   "ShowInFocusOnStaves",
+   "Small",
+   "Solo",
+   "SoundIdOverrideIfAny",
+   "StaffNum",
+   "Type",
+   "Volume"
   ]
- }
+ },
+ "containers": [
+  "Bar",
+  "Staff"
+ ]
 }
