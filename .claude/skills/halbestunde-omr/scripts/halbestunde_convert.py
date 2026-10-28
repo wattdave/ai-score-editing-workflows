@@ -38,6 +38,7 @@ MIDI_BOX = (547, 300)
 XML_BOX = (360, 332)
 NAME_FIELD = (535, 404)
 SAVE = (386, 509)
+CHANGE_FOLDER = (692, 439)  # "Change..." link beside "Save to:"; opens a macOS folder chooser
 MODAL_X = {"confirm": (707, 242), "form": (707, 211)}  # close buttons of the two Save As states
 
 
@@ -148,6 +149,17 @@ def set_box(rel: tuple[int, int], want: bool, name: str) -> None:
         raise SystemExit(f"Could not {'check' if want else 'uncheck'} {name}.")
 
 
+def set_save_folder(folder: Path) -> None:
+    """The form remembers its last folder (not the PDF's), so choose the PDF's folder first."""
+    click(CHANGE_FOLDER)
+    keys('keystroke "g" using {command down, shift down}')
+    keys(f'keystroke "{folder}"')
+    keys("key code 36")  # Return: go to the folder
+    keys("key code 36")  # Return: Open, which chooses it
+    if not is_modal_grey(pixel(shot(), (500, 190))):
+        raise SystemExit("The Save As form is not showing after choosing the folder.")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("pdf", type=Path)
@@ -193,20 +205,25 @@ def main() -> int:
     set_box(XML_BOX, True, "XML")
     if box_checked(shot(), MIDI_BOX):
         raise SystemExit("MIDI is still ticked after ticking XML.")
+    set_save_folder(pdf.parent)
     click(NAME_FIELD)
     keys('keystroke "a" using {command down}')
     keys(f'keystroke "{pdf.stem}"')
     click(SAVE)
 
+    # the app may change the case of the name (MI BURRITO SABANERO.xml), so match without case
     for _ in range(20):
-        if target.exists():
-            size = target.stat().st_size
+        found = [f for f in pdf.parent.glob("*.xml") if f.stem.lower() == pdf.stem.lower()]
+        if found:
+            size = found[0].stat().st_size
             time.sleep(1)
-            if size and size == target.stat().st_size:
+            if size and size == found[0].stat().st_size:
+                if found[0] != target:
+                    found[0].rename(target)
                 print(target)
                 return 0
         time.sleep(1)
-    raise SystemExit(f"{target} did not appear. The save folder in the dialog may differ; check 'Save to'.")
+    raise SystemExit(f"{target} did not appear. Check 'Save to' in the Save As dialog.")
 
 
 if __name__ == "__main__":
