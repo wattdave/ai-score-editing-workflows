@@ -30,7 +30,7 @@ from ai_score_editing import (
 )
 from ai_score_editing.barrange import parse_bar_range
 from ai_score_editing.intervals import compute_transposition
-from ai_score_editing.sibelius import launcher, protocol, repeats
+from ai_score_editing.sibelius import copy_range, launcher, protocol, repeats
 from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient, run_sync
 from ai_score_editing.token_store import TokenStore
 
@@ -301,7 +301,14 @@ def build_parser() -> argparse.ArgumentParser:
     copyp.add_argument("--bottom-staff", type=int, help="default: same as --top-staff")
     copyp.add_argument("--dest-staff", type=int, required=True)
     copyp.add_argument("--dest-bar", type=int, required=True)
-    copyp.add_argument("--dest-pos", type=int, default=0, help="1/256th-quarter offset in dest bar")
+    copyp.add_argument("--dest-pos", type=int, help="1/256th-quarter offset in dest bar (default 0; with a range, the range's own start)")
+    copyp.add_argument("--from-pos", type=int, help="copy only from this 1/256th-quarter position of the (single) source bar")
+    copyp.add_argument("--to-pos", type=int, help="copy only up to (not including) this position of the source bar")
+    copyp.add_argument("--beats", help="copy only these beats of the source bar, e.g. 3-4 (counted from 1)")
+    copyp.add_argument("--beat-unit", choices=["quarter", "signature"], default="quarter",
+                       help="what --beats counts: quarter notes (default) or the time signature's own beat (half notes in 2/2)")
+    copyp.add_argument("--dry-run", action="store_true",
+                       help="check the copy and show what the destination holds now against what it would hold; change nothing")
     copyp.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     set_note = sub.add_parser("set-note", help="repitch one note in a chord/NoteRest (backs up first)")
     set_note.add_argument("--staff", type=int, required=True)
@@ -976,6 +983,7 @@ async def _run_op(
     operation: dict[str, Any] | Callable[[SibeliusClient], Awaitable[dict[str, Any]]],
     legacy: Callable[[dict[str, Any]], Any],
     min_bridge: int = BATCH_BRIDGE_VERSION,
+    before_write: Callable[[SibeliusClient, list[dict[str, Any]]], Awaitable[Any]] | None = None,
 ) -> int:
     """Run one edit as a one-operation ApplyBatch.
 
@@ -983,7 +991,9 @@ async def _run_op(
     address fails without saving anything. legacy() maps the batch result to
     the command's historical output shape. An operation that depends on the
     score (such as defaults of "the whole score") is passed as an async
-    builder, called once connected.
+    builder, called once connected. before_write(client, batch) runs after the
+    check and returns a report: with --dry-run it is printed and nothing is
+    written, otherwise it goes to stderr before the write.
     """
     batch: list[dict[str, Any]] = []
     if isinstance(operation, dict):
@@ -1004,6 +1014,12 @@ async def _run_op(
         checked = await _apply_batch(client, batch, True)
         if "error" in checked:
             raise BridgeError(checked["error"])
+        report = await before_write(client, batch) if before_write else None
+        if getattr(args, "dry_run", False):
+            print(json.dumps({"dryRun": True, "checked": len(batch), "preview": report}, indent=2))
+            return EXIT_OK
+        if report is not None:
+            print(json.dumps({"replacing": report}, indent=2), file=sys.stderr)
         backup = await _backup(client, f"before {args.subcommand}")
         print(f"backed up: {backup['copy']}", file=sys.stderr)
         result = await _apply_batch(client, batch, False)
@@ -2032,15 +2048,132 @@ async def _run_play_on_pass(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+async def _read_rows(client: SibeliusClient, staff: int, from_bar: int, to_bar: int) -> list[dict[str, Any]]:
+    """Every object of one staff in the bars, as Query reports it."""
+    from ai_score_editing.query import build_selector
+
+    selector = build_selector(
+        staves=[staff], from_bar=from_bar, to_bar=to_bar, types=[], voice=None, where=[], fields=[], limit=5000,
+    )
+    return list((await _bridge(client, "Query", [selector])).get("objects", []))
+
+
+def _time_signature_at(info: dict[str, Any], bar: int) -> tuple[int, int]:
+    found = (4, 4)
+    for signature in info.get("timeSignatures", []):
+        if signature.get("bar", 1) <= bar:
+            found = (signature.get("numerator", 4), signature.get("denominator", 4))
+    return found
+
+
 async def _run_copy_passage(args: argparse.Namespace) -> int:
+    if args.beats or args.from_pos is not None or args.to_pos is not None:
+        return await _run_copy_range(args)
+    dest_pos = args.dest_pos or 0
     operation = {
         "op": "copy-passage", "fromBar": args.from_bar, "toBar": args.to_bar,
         "topStaff": args.top_staff, "bottomStaff": args.bottom_staff or args.top_staff,
-        "destStaff": args.dest_staff, "destBar": args.dest_bar, "destPosition": args.dest_pos,
+        "destStaff": args.dest_staff, "destBar": args.dest_bar, "destPosition": dest_pos,
     }
+
+    async def replacing(client: SibeliusClient, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """What each destination bar holds now, against what the source bar brings."""
+        rows = []
+        for offset in range(operation["bottomStaff"] - operation["topStaff"] + 1):
+            for bar_offset in range(operation["toBar"] - operation["fromBar"] + 1):
+                source = await _read_rows(client, operation["topStaff"] + offset, operation["fromBar"] + bar_offset,
+                                          operation["fromBar"] + bar_offset)
+                dest = await _read_rows(client, operation["destStaff"] + offset, operation["destBar"] + bar_offset,
+                                        operation["destBar"] + bar_offset)
+                start = dest_pos if bar_offset == 0 else 0
+                rows.append({
+                    "staff": operation["destStaff"] + offset, "bar": operation["destBar"] + bar_offset,
+                    "destinationBefore": copy_range.describe(dest, start, 10**9),
+                    "copied": copy_range.describe(source, 0, 10**9),
+                })
+        return rows
+
     return await _run_op(
-        args, operation, lambda result: {k: v for k, v in operation.items() if k != "op"}
+        args, operation, lambda result: {k: v for k, v in operation.items() if k != "op"}, before_write=replacing,
     )
+
+
+async def _run_copy_range(args: argparse.Namespace) -> int:
+    """Copy part of one bar (a position or beat range) by composing ordinary batch ops."""
+    if args.from_bar != args.to_bar:
+        print("error: a position or beat range copies within one source bar; use whole bars for --from-bar/--to-bar spans",
+              file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    top = args.top_staff
+    bottom = args.bottom_staff or top
+    try:
+        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            await _require_bridge(client, LYRIC_VERSE_BRIDGE_VERSION, "copy-passage with a range")
+            await _assert_expected_score(client, args)
+            info = await _bridge(client, "GetScoreInfo")
+            numerator, denominator = _time_signature_at(info, args.from_bar)
+            note = None
+            if args.beats:
+                first, last = copy_range.parse_beats(args.beats)
+                start, end = copy_range.beats_to_positions(first, last, numerator, denominator, args.beat_unit)
+                note = copy_range.beat_note(numerator, denominator, args.beat_unit, first, last, start, end)
+            else:
+                start = args.from_pos or 0
+                end = args.to_pos if args.to_pos is not None else numerator * copy_range.WHOLE // denominator
+                if not 0 <= start < end:
+                    raise copy_range.CopyRangeError(f"the range {start}-{end} is empty or backwards")
+            dest_start = args.dest_pos if args.dest_pos is not None else start
+            if note:
+                print(note, file=sys.stderr)
+            if (args.dest_staff, args.dest_bar) == (top, args.from_bar) and dest_start < end and start < dest_start + (end - start):
+                raise copy_range.CopyRangeError("the destination range overlaps the source range on the same staff and bar")
+
+            plans, sources = [], []
+            for offset in range(bottom - top + 1):
+                source = await _read_rows(client, top + offset, args.from_bar, args.from_bar)
+                dest_bars = await _read_rows(client, args.dest_staff + offset, max(1, args.dest_bar - 1), args.dest_bar)
+                dest = [r for r in dest_bars if r["bar"] == args.dest_bar]
+                prior = [r for r in dest_bars if r["bar"] < args.dest_bar or (r["bar"] == args.dest_bar and r["position"] < dest_start)]
+                sources.append(source)
+                plans.append(copy_range.plan_staff(
+                    top + offset, args.dest_staff + offset, args.from_bar, args.dest_bar,
+                    source, dest, start, end, dest_start, prior,
+                ))
+            batch = batch_ops.validate_batch([op for plan in plans for op in plan.ops])
+            await _require_bridge(client, _batch_bridge_version(batch), "copy-passage with a range")
+            checked = await _apply_batch(client, batch, True)
+            if "error" in checked:
+                raise BridgeError(checked["error"])
+            report: dict[str, Any] = {
+                "sourceBar": args.from_bar, "range": [start, end], "destBar": args.dest_bar, "destPosition": dest_start,
+                "staves": [plan.summary() for plan in plans],
+            }
+            if note:
+                report["beats"] = note
+            if args.dry_run:
+                print(json.dumps({"dryRun": True, "checked": len(batch), **report}, indent=2))
+                return EXIT_OK
+            backup = await _backup(client, f"before {args.subcommand}")
+            print(f"backed up: {backup['copy']}", file=sys.stderr)
+            result = await _apply_batch(client, batch, False)
+            if "error" in result:
+                raise BridgeError(f"{result['error']}; restore from {backup.get('copy')}")
+            verified = True
+            for offset, source in enumerate(sources):
+                after = [r for r in await _read_rows(client, args.dest_staff + offset, args.dest_bar, args.dest_bar)]
+                verified = verified and copy_range.verify(source, after, start, end, dest_start)
+            report["verified"] = verified
+            if getattr(args, "save", False):
+                saved = await _bridge(client, "Save")
+                print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
+    except (copy_range.CopyRangeError, batch_ops.BatchError, BridgeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    for plan in plans:
+        for warning in plan.warnings:
+            print(f"warning: staff {plan.dest_staff}: {warning}", file=sys.stderr)
+    print(json.dumps(report, indent=2))
+    return EXIT_OK
 
 
 async def _run_set_note(args: argparse.Namespace) -> int:

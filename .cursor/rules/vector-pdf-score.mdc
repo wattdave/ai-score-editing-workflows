@@ -1,5 +1,5 @@
 ---
-description: Turn a vector sheet-music PDF (exported from Sibelius, so the music is text in the Opus font and not a scanned image) into MusicXML without OMR: exact pitches, rhythms, ties and lyrics read from the glyph positions. Use first for any clean PDF whose Creator is Sibelius; fall back to halbestunde-omr for scans and for PDFs from other programs. Shenandoah (SATB, 21 bars) and three short pieces came out right with it.
+description: Turn a vector sheet-music PDF (exported from Sibelius, so the music is text in the Opus or Helsinki font and not a scanned image) into MusicXML without OMR: exact pitches, rhythms, ties and lyrics read from the glyph positions. Use first for any clean PDF whose Creator is Sibelius; fall back to halbestunde-omr for scans and for PDFs from other programs. Shenandoah (Opus, SATB, 21 bars), three short Opus pieces and a Helsinki one-page choir piece were read correctly.
 globs: *
 alwaysApply: false
 ---
@@ -17,9 +17,11 @@ pdfinfo score.pdf | grep Creator            # "Sibelius version ..." is what thi
 uv run --with pymupdf python -I -c "import pymupdf,sys; p=pymupdf.open(sys.argv[1])[0]; print({s['font'] for b in p.get_text('rawdict')['blocks'] for l in b.get('lines',[]) for s in l['spans']})" score.pdf
 ```
 
-The font set must contain `OpusStd`. Scans, photos and PDFs from Dorico or MuseScore are **not
-covered** (their music fonts have other glyph codes; verifying them is still to do): use
-`halbestunde-omr`.
+The font set must contain `OpusStd` or `HelsinkiStd` (Sibelius's two music fonts; the reader takes any
+font whose name starts with `Opus` or `Helsinki`). Both use the same legacy glyph codes (noteheads
+`œ ˙`, rests `Ó Œ ‰`, clefs `& ?`, flags `j J`, dot `™`), and neither is SMuFL (no private-use
+codepoints), so one table serves both. Scans, photos and PDFs from Dorico or MuseScore (Bravura,
+Leland, Petaluma use SMuFL codepoints) are **not covered**: use `halbestunde-omr`.
 
 Then look at the pages (render at 100 dpi and read the picture) and note: staves per system and
 which voice each is, clefs (a treble clef with a small 8 below is a tenor: `G8`), key, time, tempo,
@@ -32,7 +34,12 @@ Ask the user for staff roles when the print does not label them.
 uv run --with pymupdf python -I "${CLAUDE_SKILL_DIR}/scripts/vecscore.py" score.pdf --staves 4 --clefs G,G,G8,F
 ```
 
-Every bar must add up (16 sixteenths in 4/4). Bars that do not are two voices on one staff, a
+For pages whose systems differ in size (a solo staff beside three-staff systems), use
+`--staves auto --clefs auto`: systems are found from the thin line joining the staves at the left,
+and each clef from its `&` or `?` glyph (it never finds `G8`, so a tenor needs `--clefs`). The dump
+marks repeat starts (`|:`), repeat ends, double and final barlines, and multi-bar rests (`x7bars`).
+
+Every bar must add up (16 sixteenths in 2/2 or 4/4). Bars that do not are two voices on one staff, a
 missing rest or dot, or a glyph the reader does not know: look at the print at 260 dpi, then give
 the bar by hand (below).
 
@@ -71,7 +78,16 @@ staff, hyphens as separate words, matched to the nearest note, greedy and one wo
 accidentals (sharp, flat and natural glyphs left of a notehead, held for the rest of the bar) and
 notes up to 4.2 staff spaces off the staff (ledger-line notes, for example E3 under a treble staff).
 
+Helsinki details: stems are 0.60 wide and barlines 0.75 (the reader switches thresholds per page),
+and the repeat dots and augmentation dots are the same glyph (repeat dots are told apart by sitting
+in a pair on the middle line beside a barline).
+
 ## Not handled yet
+
+`vecscore_musicxml.py` still assumes every system has the same staves, so for a mixed page like the
+Helsinki test piece it cannot write the whole file: read it with `vecscore.py --staves auto`, and
+write the MusicXML by hand or from per-section runs. Voltas (1.2. / 3.) are not read, neither is the
+bar count of a multi-bar rest beyond the number printed above it.
 
 Tuplets, grace notes, whole notes, 16th rests and
 shorter, repeats and voltas, dynamics, hairpins, tempo and expression text, slurs (ignored),
@@ -86,3 +102,14 @@ fonts). The tie rule treats any curve between two same-pitch notes as a tie.
 Use `lyric-hyphenation` only if syllables came without hyphens. For playback copies see
 `playback-divisi-split` (it refuses a staff with two voices in a bar and does not split bass divisi
 into extra staves; for those, split by hand: top note to the first staff, bottom note to the last).
+
+## What was verified
+
+- Opus: `vecscore.py` output on Shenandoah and Sail Away Ladies, and the MusicXML for Shenandoah,
+  are identical before and after the Helsinki change.
+- Helsinki: Sibelius 26.8 export, one page, 2/2, G major, SAB with a solo-staff section, repeat and
+  voltas, three lyric verses (Mi Burrito Sabanero). With `--staves auto --clefs auto` every bar's
+  pitches, durations (half-bar pickup, dotted quarters, beamed eighths, half and quarter rests) and
+  repeat barlines matched a by-eye transcription, for all 3 SAB staves and the 16 bars of the
+  single-staff section. Not verified: ties, lyrics and MusicXML output on Helsinki (the page mixes
+  system sizes), HelsinkiTextStd/HelsinkiSpecialStd glyphs beyond the dot, whole notes, 16ths.

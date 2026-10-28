@@ -157,6 +157,17 @@ and verify once for the whole set.
     or `"degree"` (±21) and `"intervalType"` (0-10) instead of the notes
   - `{"op":"copy-passage","fromBar":A,"toBar":B,"topStaff":T,"bottomStaff":U,"destStaff":S,"destBar":D[,"destPosition":P]}`:
     overwrites the destination; pasting past the last bar adds bars
+  - `copy-passage` also takes a range inside one source bar (CLI only; it is
+    built from `delete`, `add-note` and `add-lyric` ops in one batch, so one
+    undo step and no newer bridge): `--beats 3-4` (counted in quarter notes;
+    `--beat-unit signature` counts the meter's own beat, a half note in 2/2) or
+    `--from-pos`/`--to-pos` (1/256 quarters, end exclusive). `--dest-pos`
+    defaults to the range's own start, so the same beats of another bar. Only
+    notes, ties, voices and lyrics (with verse and Dy) are copied; the output
+    lists other objects it skips. It refuses a note that crosses either edge of
+    the range. `--dry-run` prints what the destination holds now against what
+    it would hold. Every copy lists what it replaces (stderr for whole bars)
+    and a range copy reports `verified`.
   - `{"op":"set-key","bar":B,"key":"Bb"[,"minor":true]}`: one of the 15
     standard keys per mode; adds a double barline, as Sibelius does
   - `{"op":"set-time","bar":B,"numerator":N,"denominator":D[,"symbol":"common"|"cut"]}`

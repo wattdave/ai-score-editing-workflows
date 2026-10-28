@@ -25,7 +25,9 @@ Use `--from-note X --to-note X --octaves N` for a pure octave transposition.
 2. Check whether the source contains lyrics or text absent from the destination
    staff. If it does, ask whether those objects should also be copied because
    paste carries them with the music.
-3. Run `copy-passage` with the source bars/staves and destination staff/bar.
+3. Run `copy-passage` with the source bars/staves and destination staff/bar. Add
+   `--dry-run` first to see what it replaces; for part of a bar use `--beats 3-4`
+   (quarter-note beats by default; the command prints how it read them).
 4. Apply any requested transposition to only the destination range.
 5. Remove unwanted copied objects with one `patch-notes` file of `delete`
    ops, using addresses from a single read; the CLI orders deletes by

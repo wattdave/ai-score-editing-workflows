@@ -92,9 +92,11 @@ crop before blaming the scan.
 6. **Download Now** (upper right) opens Save As after a moment. File types are
    MSCZ, MIDI, XML and PDF, and they behave like radio buttons: one at a time,
    **MIDI by default** (the dialog remembers the last choice). Tick XML, which
-   unticks MIDI; clicking a ticked box does nothing. Enter the file name without
-   an extension, check the "Save to" folder (the Change link edits it; it
-   remembers the last folder), and press Save. The app adds `.xml`. "File
+   unticks MIDI; clicking a ticked box does nothing. Click **Change...**
+   (beside "Save to") first: it opens a macOS folder chooser, so Cmd+Shift+G, the
+   PDF's folder, Return, Return. The form remembers its last folder, not the PDF's,
+   and a Mi Burrito Sabanero run landed in ~/Documents/Scores/OSA. Then enter the
+   file name without an extension and press Save; the app may upper-case the name. The app adds `.xml`. "File
    downloaded successfully!" confirms the path.
 7. `+` starts the next upload. Close the confirmation first with its X; Escape
    does nothing.
