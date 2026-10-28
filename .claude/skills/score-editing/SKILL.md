@@ -41,6 +41,7 @@ says where its limits are.
 | --- | --- | --- |
 | LilyPond source to a readable score | `lilypond-to-score` | any editor (MusicXML) |
 | Sibelius-exported vector PDF to MusicXML (no OMR) | `vector-pdf-score` | any editor (MusicXML) |
+| PDF to score with MuseScore's online converter (4.7.6+) | `musescore-pdf-convert` | MuseScore (then MusicXML) |
 | Scanned or OMR-imported MusicXML cleanup | `omr-score-repair` | any editor (checked in Sibelius) |
 | Rehearsal tracks, per-voice MP3s | `rehearsal-mixes` | Sibelius |
 | Split 2-staff choral scores into SATB | `satb-part-splitting` | Sibelius |
