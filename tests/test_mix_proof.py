@@ -130,3 +130,21 @@ def test_proof_folder_end_to_end(tmp_path):
         assert "Loose recording.wav" not in report.files
         assert report.ok is (not leak)
         assert any(f.check == "shared" for f in report.findings) is leak
+
+
+def test_identical_mixes_over_resting_voices_are_a_note():
+    accompaniment = voice(50, pitch=110, level=0.04)
+    mixes, stems = {}, {}
+    for i, part in enumerate(("Alto", "Bass")):
+        sung = voice(i, pitch=200 + 50 * i)
+        sung[5 * SR:15 * SR] = 0  # the voice rests
+        stems[f"0{i + 1} {part}.aiff"] = sung
+        mixes[f"Song - {part} only.mp3"] = sung + accompaniment
+    findings = mp.check_shared(mixes)
+    assert findings and all(f.severity == "error" for f in findings)
+    noted = mp.note_accompaniment_only(findings, stems)
+    assert [f.severity for f in noted] == ["note"] * len(findings)
+    # a voice that sings through the stretch keeps the error
+    stems["01 Alto.aiff"] = voice(0, pitch=200)
+    kept = mp.note_accompaniment_only(findings, stems)
+    assert all(f.severity == "error" for f in kept)
