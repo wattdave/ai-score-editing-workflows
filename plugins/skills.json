@@ -5,6 +5,7 @@
   "hanging-playback-note-repair": "sibelius",
   "lilypond-to-score": "score-editing-core",
   "lyric-hyphenation": "score-editing-core",
+  "lyric-sheet": "score-editing-core",
   "melody-line": "sibelius",
   "musescore": "musescore",
   "musescore-pdf-convert": "musescore",
