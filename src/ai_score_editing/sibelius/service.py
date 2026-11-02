@@ -18,6 +18,7 @@ from typing import Any
 
 from ai_score_editing import batch_ops
 from ai_score_editing.batch_ops import BatchError
+from ai_score_editing.cli_common import DEFAULT_LIMIT, canonical_format
 from ai_score_editing.query import (
     CONTAINER_KINDS,
     FONT_FIELDS,
@@ -97,7 +98,7 @@ def query_selector(
     voice: int | None = None,
     where: list[str] | None = None,
     fields: list[str] | None = None,
-    limit: int = 200,
+    limit: int = DEFAULT_LIMIT,
 ) -> dict[str, Any]:
     """Validate a query without connecting (staff names are resolved later); raises QueryError."""
     return build_selector(
@@ -116,7 +117,7 @@ async def query(
     voice: int | None = None,
     where: list[str] | None = None,
     fields: list[str] | None = None,
-    limit: int = 200,
+    limit: int = DEFAULT_LIMIT,
 ) -> dict[str, Any]:
     """Find bar objects; staves are numbers or instrument names. Gates on the bridge version."""
     selector = query_selector(
@@ -205,12 +206,24 @@ async def undo(b: SibeliusBridge, steps: int = 1) -> dict[str, Any]:
     return {"undone": steps}
 
 
-async def save(b: SibeliusBridge) -> dict[str, Any]:
+async def save(b: SibeliusBridge, path: str | None = None) -> dict[str, Any]:
+    """Save the open score to its own file. A copy under another name is refused.
+
+    ManuScript's SaveAs to .sib behaves like File > Save As: the open score
+    would switch to the new file, so the user's score would silently move.
+    """
+    if path:
+        raise BridgeError(
+            "Sibelius cannot save a copy under another name (SaveAs to .sib would switch the open "
+            "score to the new file). Call save_score without a path, then copy the saved file, "
+            "or use export_score for another format"
+        )
     return await b.call("Save")
 
 
 async def export(b: SibeliusBridge, format: str, path: str | None = None) -> dict[str, Any]:
     """Export the open score; returns the bridge result plus "files" and "size"."""
+    format = canonical_format(format)
     if format not in EXPORT_FORMATS:
         raise BatchError(f"format must be one of: {', '.join(EXPORT_FORMATS)}")
     saveas_type, extension = EXPORT_FORMATS[format]

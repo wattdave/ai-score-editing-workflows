@@ -25,6 +25,10 @@ class MuseScoreError(Exception):
     """The bridge could not be reached, refused a request, or reported an error."""
 
 
+class MuseScoreConnectionError(MuseScoreError):
+    """The bridge could not be reached (the CLI exits 2)."""
+
+
 class MuseScoreClient:
     def __init__(self, port: int = install.DEFAULT_PORT, token: str | None = None,
                  timeout: float = RECV_TIMEOUT) -> None:
@@ -41,12 +45,12 @@ class MuseScoreClient:
         if self.token is None:
             self.token = install.read_token()
         if not self.token:
-            raise MuseScoreError("no bridge token: run 'musescore-cli install-plugin', restart MuseScore, "
+            raise MuseScoreConnectionError("no bridge token: run 'musescore-cli install-plugin', restart MuseScore, "
                                  f"then {RUN_HINT}")
         try:
             self._ws = await websockets.connect(f"ws://{DEFAULT_HOST}:{self.port}", max_size=None)
         except OSError as exc:
-            raise MuseScoreError(f"the MuseScore bridge is not running on port {self.port} ({exc}). "
+            raise MuseScoreConnectionError(f"the MuseScore bridge is not running on port {self.port} ({exc}). "
                                  f"{RUN_HINT}") from exc
 
     async def close(self) -> None:

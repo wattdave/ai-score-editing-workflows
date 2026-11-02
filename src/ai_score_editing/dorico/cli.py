@@ -14,11 +14,26 @@ from pathlib import Path
 from typing import Any
 
 from ai_score_editing.barrange import parse_bar_range
+from ai_score_editing.cli_common import (
+    DEFAULT_LIMIT,
+    EXIT_COMMAND_FAILED,
+    EXIT_CONNECTION_FAILED,
+    EXIT_OK,
+    add_path_or_positional,
+    canonical_format,
+    resolve_path,
+)
 
 from . import lyrics_dialog, project_info, service
 from .bridge import DoricoBridge
-from .client import DEFAULT_PORT, DoricoClient, DoricoError
+from .client import DEFAULT_PORT, DoricoClient, DoricoConnectionError, DoricoError
 from .score import DoricoBatchError
+
+
+def add_staff_or_player(parser: argparse.ArgumentParser) -> None:
+    """--staff (number or player name), or the old positional player name."""
+    parser.add_argument("player", nargs="?", help="player name (deprecated positional; use --staff)")
+    parser.add_argument("--staff", help="staff number or player name")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,7 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     query.add_argument("--type", action="append", dest="types")
     query.add_argument("--voice", type=int)
     query.add_argument("--where", action="append")
-    query.add_argument("--limit", type=int, default=200)
+    query.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
     query.add_argument("--lyrics", action="store_true", help="add lyric text (exports MusicXML)")
     apply = sub.add_parser("apply", help="apply a JSON batch as one undo step")
     source = apply.add_mutually_exclusive_group(required=True)
@@ -44,22 +59,24 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("--json")
     apply.add_argument("--dry-run", action="store_true")
     lyrics = sub.add_parser("lyrics", help="read a player's line of lyrics")
-    lyrics.add_argument("player")
+    add_staff_or_player(lyrics)
     lyrics.add_argument("--verse", type=int, default=1)
     edit_lyrics = sub.add_parser("edit-lyrics", help="replace a player's line of lyrics (same syllable count)")
-    edit_lyrics.add_argument("player")
-    edit_lyrics.add_argument("text")
+    add_staff_or_player(edit_lyrics)
+    edit_lyrics.add_argument("positional_text", nargs="?", metavar="text", help="the new line of lyrics")
+    edit_lyrics.add_argument("--text", help="the new line of lyrics")
     edit_lyrics.add_argument("--verse", type=int, default=1)
     sub.add_parser("info", help="read the Project Info fields")
     set_info = sub.add_parser("set-info", help="set Project Info fields, e.g. Composer=Traditional")
-    set_info.add_argument("fields", nargs="+", metavar="NAME=VALUE")
+    set_info.add_argument("fields", nargs="*", metavar="NAME=VALUE")
+    set_info.add_argument("--field", action="append", default=[], metavar="NAME=VALUE", help="same as the positionals")
     undo = sub.add_parser("undo")
     undo.add_argument("--steps", type=int, default=1)
-    save = sub.add_parser("save", help="save the project to a .dorico file")
-    save.add_argument("path")
+    save = sub.add_parser("save", help="save the project (to its own file, or a copy at path)")
+    add_path_or_positional(save, "save a copy to this .dorico file instead")
     export = sub.add_parser("export", help="export as pdf, musicxml or a first-page preview")
-    export.add_argument("path")
-    export.add_argument("--format", choices=service.EXPORT_FORMATS, default="pdf")
+    add_path_or_positional(export, "where to write the export (required in Dorico)")
+    export.add_argument("--format", type=canonical_format, choices=service.EXPORT_FORMATS, default="pdf")
     return parser
 
 
@@ -81,22 +98,33 @@ async def run(args: argparse.Namespace) -> Any:
             text = Path(args.file).expanduser().read_text() if args.file else args.json
             return await service.apply(bridge, json.loads(text), flow=args.flow, dry_run=args.dry_run)
         if args.command == "lyrics":
-            return await lyrics_dialog.read_lyrics(bridge, args.player, args.verse)
+            player = await service.resolve_player(bridge, args.staff, args.player, args.flow)
+            return await lyrics_dialog.read_lyrics(bridge, player, args.verse)
         if args.command == "edit-lyrics":
-            return await lyrics_dialog.edit_lyrics(bridge, args.player, args.text, args.verse)
+            if args.staff is not None and args.player is not None and args.positional_text is None:
+                args.player, args.positional_text = None, args.player  # edit-lyrics --staff 1 "text"
+            if args.text is not None and args.positional_text is not None:
+                raise ValueError("pass the text once: positionally or with --text")
+            text = args.text if args.text is not None else args.positional_text
+            if text is None:
+                raise ValueError("edit-lyrics needs the new text (--text)")
+            player = await service.resolve_player(bridge, args.staff, args.player, args.flow)
+            return await lyrics_dialog.edit_lyrics(bridge, player, text, args.verse)
         if args.command == "info":
             return await project_info.read_project_info(bridge)
         if args.command == "set-info":
-            pairs = [f.split("=", 1) for f in args.fields]
+            pairs = [f.split("=", 1) for f in [*args.fields, *args.field]]
+            if not pairs:
+                raise ValueError("set-info needs at least one NAME=VALUE (--field)")
             if any(len(p) != 2 for p in pairs):
                 raise ValueError("fields must be NAME=VALUE")
             return await project_info.set_project_info(bridge, dict(pairs))
         if args.command == "undo":
             return await service.undo(bridge, args.steps)
         if args.command == "save":
-            return await service.save(bridge, args.path)
+            return await service.save(bridge, resolve_path(args))
         if args.command == "export":
-            return await service.export(bridge, args.format, args.path)
+            return await service.export(bridge, args.format, resolve_path(args))
     raise AssertionError(args.command)
 
 
@@ -104,11 +132,14 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         result = asyncio.run(run(args))
+    except DoricoConnectionError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_CONNECTION_FAILED
     except (DoricoError, DoricoBatchError, json.JSONDecodeError, OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return 1
+        return EXIT_COMMAND_FAILED
     print(json.dumps(result, indent=2))
-    return 0
+    return EXIT_OK
 
 
 if __name__ == "__main__":

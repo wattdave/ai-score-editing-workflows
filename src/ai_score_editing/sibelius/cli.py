@@ -28,6 +28,13 @@ from ai_score_editing import (
     rehearsal_mix,
 )
 from ai_score_editing.barrange import parse_bar_range
+from ai_score_editing.cli_common import (  # noqa: F401  (re-exported)
+    DEFAULT_LIMIT,
+    EXIT_COMMAND_FAILED,
+    EXIT_CONNECTION_FAILED,
+    EXIT_OK,
+    canonical_format,
+)
 from ai_score_editing.intervals import compute_transposition
 from ai_score_editing.sibelius import bridge, copy_range, launcher, protocol, repeats, service
 from ai_score_editing.sibelius.bridge import (  # noqa: F401  (re-exported for skill scripts and tests)
@@ -60,11 +67,6 @@ from ai_score_editing.sibelius.bridge import (  # noqa: F401  (re-exported for s
 from ai_score_editing.sibelius.clefs import delete_redundant_clefs, find_redundant_clefs
 from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient, run_sync
 from ai_score_editing.token_store import TokenStore
-
-EXIT_OK = 0
-EXIT_COMMAND_FAILED = 1
-EXIT_CONNECTION_FAILED = 2
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -110,7 +112,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = parser.add_subparsers(dest="subcommand", required=True)
     sub.add_parser("ping", help="check that Sibelius responds")
-    sub.add_parser("save", help="save the active score in Sibelius")
+    save = sub.add_parser("save", help="save the active score in Sibelius")
+    save.add_argument("--path", help="save a copy here (not supported in Sibelius: refused)")
     cmd = sub.add_parser("command", help="send a single command and print the response")
     cmd.add_argument("command_name")
     invoke = sub.add_parser("invoke", help="send a batch of command IDs via invokeCommands")
@@ -204,7 +207,9 @@ def build_parser() -> argparse.ArgumentParser:
     query.add_argument("--voice", type=int, help="voice 1-4")
     query.add_argument("--where", action="append", default=[], help="property filter, e.g. 'Pitch>=72' or 'Hidden=true'; repeatable, all must match")
     query.add_argument("--field", action="append", default=[], help="extra properties to return, e.g. Dx,Dy; repeatable or comma-separated")
-    query.add_argument("--limit", type=int, default=500, help="maximum objects to return (default: 500)")
+    query.add_argument(
+        "--limit", type=int, default=DEFAULT_LIMIT, help=f"maximum objects to return (default: {DEFAULT_LIMIT})"
+    )
     read_abc = sub.add_parser("read-abc", help="format bar contents as standard ABC notation")
     read_abc.add_argument("--staff", type=int, default=1, help="staff number, from 1")
     read_abc.add_argument("--from", dest="from_bar", type=int, help="first bar, from 1")
@@ -557,8 +562,10 @@ def build_parser() -> argparse.ArgumentParser:
     read_barlines.add_argument("--from", dest="from_bar", type=int, help="first bar")
     read_barlines.add_argument("--to", dest="to_bar", type=int, help="last bar")
     export = sub.add_parser("export", help="export the active (or a given) score to another format")
-    export.add_argument("--format", choices=sorted(EXPORT_FORMATS), default="musicxml")
-    export.add_argument("--out", help="output path (default: next to the source file)")
+    export.add_argument("--format", type=canonical_format, choices=sorted(EXPORT_FORMATS), default="musicxml")
+    export.add_argument(
+        "--path", "--out", dest="out", help="output path (default: next to the source file); --out is the old name"
+    )
     export.add_argument("--file", dest="sib_file", help=".sib file to open first (default: active score)")
     mixes = sub.add_parser(
         "rehearsal-mixes",
@@ -613,7 +620,7 @@ def build_parser() -> argparse.ArgumentParser:
         "verify-render",
         help="export a score and verify that the rendered files are present and non-empty",
     )
-    verify_render.add_argument("--format", choices=sorted(EXPORT_FORMATS), default="png")
+    verify_render.add_argument("--format", type=canonical_format, choices=sorted(EXPORT_FORMATS), default="png")
     verify_render.add_argument("--out", help="output path (default: next to the source file)")
     verify_render.add_argument("--file", dest="sib_file", help=".sib file to open first (default: active score)")
     verify_render.add_argument("--expect-pages", type=int, help="require exactly this many rendered files")
@@ -899,7 +906,7 @@ async def _run_write(
         print(f"backed up: {backup['copy']}", file=sys.stderr)
         result = await _bridge(client, method, call_args)
         if getattr(args, "save", False):
-            saved = await service.save(_CliBridge(client))
+            saved = await service.save(_CliBridge(client), args.path)
             print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
     print(json.dumps(result, indent=2))
     return EXIT_OK
