@@ -68,7 +68,8 @@ description lists every op's fields.
 - `save_score` saves in place (as Cmd-S) and can copy the saved `.mscz` to a
   path. A score never saved is refused: ask the user to save it once.
 - `export_score`: pdf, png, svg (one file per page when there are several),
-  musicxml (`.musicxml`/`.xml`), mxl, mid, mp3, wav, flac, ogg.
+  musicxml (`.musicxml`/`.xml`), mxl, midi (`mid` works too), mp3, wav, flac, ogg. Without `path` the
+  file goes beside the score with the format's extension.
 - `set_project_info` is **not undoable**: the result has the old values.
   The title frame on the page is separate text and does not change.
 - `edit_lyrics` needs the same syllable count; add or delete syllables with

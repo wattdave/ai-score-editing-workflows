@@ -48,6 +48,10 @@ use one session, one backup, one verification, and a compact summary:
 | `export --format png` | `verify-render` |
 | several `invoke` calls | one `invoke ID1 ID2 ...` |
 
+- Command shapes match the other back ends: `export --format F [--path P]`
+  (`--out` still works; `mid` is accepted for `midi`), `save` (a `--path`
+  copy is refused: Sibelius would switch the open score to it),
+  `query --limit` defaults to 200.
 - Scope reads with `--bars` and `--staff`; prefer `read --abc` and
   `read-lyrics --compact|--words`; avoid `--json`.
 - Collect all edits, then write once with `--save` instead of a later `save`.

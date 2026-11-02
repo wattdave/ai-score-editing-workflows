@@ -10,8 +10,13 @@ score-conversion workflows (LilyPond, MusicXML, scanned-score repair).
 | Dorico (6.2+) | Remote Control API plus Lua scripting | `dorico-cli`, `dorico-mcp` | experimental, see [docs/dorico.md](docs/dorico.md) |
 | MuseScore (4.6+) | ScoreBridge QML plug-in (WebSocket) | `musescore-cli`, `musescore-mcp` | see [docs/musescore.md](docs/musescore.md) |
 
-All three share the same tool shapes and units, so a request such as "transpose
-bars 5–8 up a tone" works the same way in each. Ask Claude with the
+All three share the same tool names, parameter names and units (checked by
+`tests/test_mcp_parity.py` and `tests/test_cli_parity.py`): `save_score(path?)`,
+`export_score(format="pdf", path?)` with `midi` as the MIDI format (`mid` is an
+alias), `read_lyrics(staff, verse)` and `edit_lyrics(staff, text, verse)`, a
+200-object default `limit`, and exit code 2 when the editor cannot be reached.
+A request such as "transpose bars 5–8 up a tone" works the same way in each.
+What differs is listed per editor (for example Dorico's `flow`). Ask Claude with the
 `score-editing` skill, or use the app's own skill (`/sibelius`, `/dorico`,
 `/musescore`). The sections below start with Sibelius, the original back end,
 and then cover Dorico and MuseScore.
