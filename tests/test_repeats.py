@@ -50,21 +50,12 @@ def test_plugin_defines_the_bridge_methods_and_matches_the_cli_version() -> None
     assert "BarPlaybackOrder" in source and "SetPlayedOnNthPass" in source
 
 
-def _context() -> tuple[MagicMock, MagicMock]:
-    client = MagicMock()
-    context = MagicMock()
-    context.__aenter__ = AsyncMock(return_value=client)
-    context.__aexit__ = AsyncMock(return_value=False)
-    return context, client
+pytestmark = pytest.mark.usefixtures("cli_session")  # patches cli._client and the guards
 
 
 async def _run(runner: Any, argv: list[str], bridge: AsyncMock) -> tuple[int, AsyncMock]:
-    context, _ = _context()
     backup = AsyncMock(return_value={"copy": "/tmp/x.backup.sib"})
     with (
-        patch("ai_score_editing.sibelius.cli._client", return_value=context),
-        patch("ai_score_editing.sibelius.cli._require_bridge", new=AsyncMock()),
-        patch("ai_score_editing.sibelius.cli._assert_expected_score", new=AsyncMock()),
         patch("ai_score_editing.sibelius.cli._backup", new=backup),
         patch("ai_score_editing.sibelius.cli._bridge", new=bridge),
     ):

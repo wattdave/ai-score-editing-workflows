@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 import websockets
 
+from fakes import CliSession
 from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient
 from ai_score_editing.token_store import TokenStore
 
@@ -484,7 +485,7 @@ def test_parser_new_subcommands_and_flags():
     assert args.save is True
 
 
-async def test_run_set_lyric_adopts_predominant_font() -> None:
+async def test_run_set_lyric_adopts_predominant_font(cli_session: CliSession) -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
     from ai_score_editing.sibelius.cli import _run_set_lyric, build_parser
 
@@ -501,9 +502,7 @@ async def test_run_set_lyric_adopts_predominant_font() -> None:
     mock_client = AsyncMock()
     mock_client_ctx.__aenter__.return_value = mock_client
 
-    with patch("ai_score_editing.sibelius.cli._client", return_value=mock_client_ctx), \
-         patch("ai_score_editing.sibelius.cli._check_bridge_version", new=AsyncMock()), \
-         patch("ai_score_editing.sibelius.cli._bridge", new=AsyncMock(return_value=staff_lyrics)), \
+    with patch("ai_score_editing.sibelius.cli._bridge", new=AsyncMock(return_value=staff_lyrics)), \
          patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
 
         res = await _run_set_lyric(args)
@@ -515,7 +514,7 @@ async def test_run_set_lyric_adopts_predominant_font() -> None:
         }
 
 
-async def test_run_set_lyric_adopts_predominant_font_when_existing_is_outlier() -> None:
+async def test_run_set_lyric_adopts_predominant_font_when_existing_is_outlier(cli_session: CliSession) -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
     from ai_score_editing.sibelius.cli import _run_set_lyric, build_parser
 
@@ -533,9 +532,7 @@ async def test_run_set_lyric_adopts_predominant_font_when_existing_is_outlier() 
     mock_client = AsyncMock()
     mock_client_ctx.__aenter__.return_value = mock_client
 
-    with patch("ai_score_editing.sibelius.cli._client", return_value=mock_client_ctx), \
-         patch("ai_score_editing.sibelius.cli._check_bridge_version", new=AsyncMock()), \
-         patch("ai_score_editing.sibelius.cli._bridge", new=AsyncMock(return_value=staff_lyrics)), \
+    with patch("ai_score_editing.sibelius.cli._bridge", new=AsyncMock(return_value=staff_lyrics)), \
          patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
 
         res = await _run_set_lyric(args)
@@ -567,7 +564,7 @@ async def test_run_set_lyric_explicit_font_overrides_predominant() -> None:
         }
 
 
-async def test_run_set_lyric_adopts_score_default_font_and_size_when_unstyled() -> None:
+async def test_run_set_lyric_adopts_score_default_font_and_size_when_unstyled(cli_session: CliSession) -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
     from ai_score_editing.sibelius.cli import _run_set_lyric, build_parser
 
@@ -592,9 +589,7 @@ async def test_run_set_lyric_adopts_score_default_font_and_size_when_unstyled() 
             return staff_lyrics
         return None
 
-    with patch("ai_score_editing.sibelius.cli._client", return_value=mock_client_ctx), \
-         patch("ai_score_editing.sibelius.cli._check_bridge_version", new=AsyncMock()), \
-         patch("ai_score_editing.sibelius.cli._bridge", side_effect=bridge_side_effect), \
+    with patch("ai_score_editing.sibelius.cli._bridge", side_effect=bridge_side_effect), \
          patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
 
         res = await _run_set_lyric(args)

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock
+from dataclasses import dataclass
+from unittest.mock import AsyncMock, MagicMock
 
 BUSY = {"message": "busyError"}
 
@@ -42,3 +43,18 @@ class FakeSibeliusClient:
 
     def methods(self) -> list[str]:
         return [method for method, _ in self.calls]
+
+
+@dataclass
+class CliSession:
+    """What the ``cli_session`` fixture installs in front of the CLI handlers.
+
+    ``context`` is what ``cli._client(args)`` returns: an async context manager
+    that yields ``client``. The version, bridge-requirement and expected-score
+    guards are replaced by no-ops, so a test only supplies the bridge answers it
+    cares about (through ``client.replies``, or by patching ``cli._bridge`` for
+    bespoke behaviour).
+    """
+
+    client: FakeSibeliusClient
+    context: MagicMock

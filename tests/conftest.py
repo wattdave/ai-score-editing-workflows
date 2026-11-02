@@ -7,6 +7,8 @@ connect) and edit, back up and save whatever score is open.
 
 import pytest
 
+from fakes import CliSession, FakeSibeliusClient
+
 from ai_score_editing.sibelius import protocol
 from ai_score_editing.sibelius.client import SibeliusClient
 from ai_score_editing.dorico import client as dorico_client
@@ -63,3 +65,26 @@ def _isolated_home(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg-cache"))
+
+
+@pytest.fixture
+def cli_session(monkeypatch: pytest.MonkeyPatch) -> CliSession:
+    """Single seam for CLI handler tests: ``cli._client`` returns a fake client.
+
+    Only the client factory and the three pre-flight guards are replaced, so
+    handlers can move between modules without the tests noticing, as long as
+    they obtain the client through ``cli._client``.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    from ai_score_editing.sibelius import cli
+
+    client = FakeSibeliusClient()
+    context = MagicMock()
+    context.__aenter__ = AsyncMock(return_value=client)
+    context.__aexit__ = AsyncMock(return_value=False)
+    monkeypatch.setattr(cli, "_client", MagicMock(return_value=context))
+    monkeypatch.setattr(cli, "_check_bridge_version", AsyncMock())
+    monkeypatch.setattr(cli, "_require_bridge", AsyncMock())
+    monkeypatch.setattr(cli, "_assert_expected_score", AsyncMock())
+    return CliSession(client=client, context=context)
