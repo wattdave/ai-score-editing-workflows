@@ -14,6 +14,7 @@ import re
 from typing import Any
 
 from ai_score_editing import intervals, lyrics
+from ai_score_editing.units import UNITS_PER_QUARTER
 from ai_score_editing.batch_ops import LAYOUT_NUMBERS, ORIENTATIONS, PAGE_SIZES
 
 from .bridge import BarMap
@@ -113,7 +114,7 @@ def command_value(text: str) -> str:
     return text.replace(",", "\\,").replace("&", "\\&")
 OPERATIONS = ADDRESSED | ADDING | COMMAND_OPS | {"transpose", "delete-voice"}
 #: A quarter note in the back end's units.
-UNIT_QUARTER = 256
+UNIT_QUARTER = UNITS_PER_QUARTER
 #: Sibelius ops with no Dorico route yet, and why (docs/dorico.md).
 NOT_ON_DORICO = {
     "set-bar-number": "a bar number change goes through a dialog scripting cannot drive yet",

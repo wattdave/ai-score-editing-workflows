@@ -21,7 +21,7 @@ from typing import Any
 
 from ai_score_editing import batch_ops, intervals
 
-UNITS_PER_QUARTER = 256
+from ai_score_editing.units import UNITS_PER_QUARTER  # noqa: E402,F401
 SYSTEM_STAFF = 0
 
 # Order of objects at one tick (docs/musescore-backend-plan.md, Addresses):

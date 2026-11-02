@@ -9,8 +9,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ai_score_editing.units import UNITS_PER_QUARTER
+
 # Default unit note length in ticks (1/4 note = 256 ticks)
-DEFAULT_UNIT_TICKS = 256
+DEFAULT_UNIT_TICKS = UNITS_PER_QUARTER
 
 
 # Key signature accidentals for standard major keys

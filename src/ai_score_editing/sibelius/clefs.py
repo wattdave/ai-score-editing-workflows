@@ -19,10 +19,11 @@ from typing import Any, Mapping
 
 from ai_score_editing import batch_ops
 from ai_score_editing.sibelius import bridge
+from ai_score_editing.units import UNITS_PER_WHOLE
 
 
 # Sibelius expresses object positions in ticks, where a quarter note is 256.
-TICKS_PER_WHOLE = 1024
+TICKS_PER_WHOLE = UNITS_PER_WHOLE
 DEFAULT_METER = (4, 4)
 
 # Instrument-name keywords, matched *before* the vocal-part names below: a name
