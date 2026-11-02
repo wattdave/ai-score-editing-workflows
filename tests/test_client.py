@@ -11,7 +11,7 @@ import websockets
 
 from fakes import CliSession
 from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient
-from ai_score_editing.token_store import TokenStore
+from ai_score_editing.core.token_store import TokenStore
 
 FAKE_TOKEN = "{fake-token-1234}"
 

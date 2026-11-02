@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from ai_score_editing.batch_lyrics import (
+from ai_score_editing.sibelius.batch_lyrics import (
     BatchLyricsError,
     AffectedRange,
     LyricPatch,

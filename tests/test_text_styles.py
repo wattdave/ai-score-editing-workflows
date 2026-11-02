@@ -6,7 +6,7 @@ import pytest
 
 from ai_score_editing.query import QueryError, build_selector
 from ai_score_editing.sibelius import cli
-from ai_score_editing.text_styles import (
+from ai_score_editing.sibelius.text_styles import (
     LYRIC_STYLE_IDS,
     build_report,
     is_music_font,

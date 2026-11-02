@@ -10,6 +10,12 @@ SHIMS = {
     "ai_score_editing.barrange": "ai_score_editing.core.barrange",
     "ai_score_editing.lyrics": "ai_score_editing.core.lyrics",
     "ai_score_editing.music": "ai_score_editing.core.music",
+    "ai_score_editing.layout": "ai_score_editing.sibelius.layout",
+    "ai_score_editing.note_patches": "ai_score_editing.sibelius.note_patches",
+    "ai_score_editing.text_styles": "ai_score_editing.sibelius.text_styles",
+    "ai_score_editing.batch_lyrics": "ai_score_editing.sibelius.batch_lyrics",
+    "ai_score_editing.agent_output": "ai_score_editing.sibelius.agent_output",
+    "ai_score_editing.token_store": "ai_score_editing.core.token_store",
 }
 
 

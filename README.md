@@ -397,7 +397,7 @@ Sources: `src/ai_score_editing/`. Each editor has its own subpackage:
 token/approval handling, `launcher.py` process detection and launch, `cli.py`,
 `mcp_server.py`, and the ScoreBridge plug-in under `manuscript/`), `dorico/` and
 `musescore/`. Modules at the top level (`batch_ops`, `query`, `lyrics`,
-`intervals`, `token_store`, the MusicXML tools) are shared.
+`intervals`, the MusicXML tools) are shared; the token store lives in `core/token_store.py`.
 
 ## Contributing
 
