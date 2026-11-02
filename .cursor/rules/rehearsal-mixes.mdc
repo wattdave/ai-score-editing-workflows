@@ -96,8 +96,11 @@ plays at the same level. `--keep-stems` keeps the per-staff stems.
 
 The command proof-listens to the mixes itself (see the `proof-listen-mixes`
 skill) and exits non-zero if a check fails: do not upload mixes that fail.
-A `shared` error or a loud opening means Cantai served a stale render for the
-first bars; restart Sibelius and export again.
+A `shared` error or a loud opening can mean Cantai served a stale render for
+the first bars; restart Sibelius and export again. But stretches where
+every voice rests (only the accompaniment plays) are reported as `note`s, not
+errors; if a `shared` error remains, check its time range against the score
+before restarting.
 
 Still listen to the start of at least one "only" file to confirm no other
 voice bleeds in, and report the files written to the user.
