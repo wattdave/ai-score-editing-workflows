@@ -216,11 +216,41 @@ def test_core_parse_fields_uses_readable_subset() -> None:
         (3, "=", 3, True), (3, "!=", 3, False), (3, "<", 4, True), (3, ">", 4, False),
         (3, ">=", 3, True), (3, "<=", 2, False),
         ("a", "<", 3, False),   # unorderable: never matches
-        ("a", "!=", 3, False),  # kept as before: every operator is evaluated, so != raises too
+        ("a", "!=", 3, True),   # different types are not equal
     ],
 )
 def test_core_compare(actual, op, value, result) -> None:
     assert core.compare(actual, op, value) is result
+
+
+_ALL = {"=": False, "!=": True, "<": False, ">": False, "<=": False, ">=": False}
+
+
+@pytest.mark.parametrize("op", ["=", "!=", "<", ">", "<=", ">="])
+@pytest.mark.parametrize(
+    ("actual", "value", "expected"),
+    [
+        (3, 3, {"=": True, "!=": False, "<": False, ">": False, "<=": True, ">=": True}),
+        (3, 4, {"=": False, "!=": True, "<": True, ">": False, "<=": True, ">=": False}),
+        ("a", "b", {"=": False, "!=": True, "<": True, ">": False, "<=": True, ">=": False}),
+        ("a", "a", {"=": True, "!=": False, "<": False, ">": False, "<=": True, ">=": True}),
+        # mixed types: == False, != True, ordering False and never an exception
+        ("a", 3, _ALL),
+        (3, "a", _ALL),
+        (60, "C5", _ALL),
+    ],
+)
+def test_core_compare_every_operator(actual, value, expected, op) -> None:
+    assert core.compare(actual, op, value) is expected[op]
+
+
+def test_core_holds_chord_not_equal_means_any_note_differs() -> None:
+    notes = {"Pitch": [60, 72]}
+    ne = {"prop": "Pitch", "op": "!=", "value": 60}
+    assert core.holds({}, ne, notes)                                  # 72 differs
+    assert not core.holds({}, ne, {"Pitch": [60]})
+    assert core.holds({}, {**ne, "value": "C5"}, notes)               # mixed types: all differ
+    assert not core.holds({}, {**ne, "op": "=", "value": "C5"}, notes)
 
 
 def test_core_holds_single_missing_and_multi() -> None:
