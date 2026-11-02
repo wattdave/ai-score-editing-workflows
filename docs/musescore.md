@@ -97,7 +97,10 @@ tie, bracket, flip-stem, nudge, delete and beam. Objects are addressed by
 staff/bar/index, with `ticks` (480 per quarter) beside `position` because
 tuplet positions don't convert exactly. A dry run makes the edits and rolls
 them back, reporting each object before and after. A real run first writes a
-MusicXML copy to `~/.cache/ai-score-editing/musescore/backups/`.
+MusicXML copy to `~/.cache/ai-score-editing/musescore/backups/`
+(`$MUSESCORE_BACKUP_DIR` or `$SCORE_BACKUP_DIR` move it), named
+`<score>.backup-YYYYmmdd-HHMMSS.musicxml` like every back end's backups
+(`backups.py`).
 Differences from Sibelius: `Beam` takes MuseScore's beam modes (0 auto,
 1 none, 2 begin, 5 middle); a lyric's melisma is set with `Duration`, not
 `NumNotes`; a tie needs a next note of the same pitch. The opening clef is

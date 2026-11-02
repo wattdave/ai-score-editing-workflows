@@ -39,7 +39,8 @@ it.
    marks); it is only listed when asked for.
 3. `apply_batch` with `dry_run: true`, then for real. A dry run really makes
    the edits and rolls them back, so it catches what would fail. A real
-   batch is one undo step and writes a MusicXML backup first.
+   batch is one undo step and writes a MusicXML backup first (result `backup`; folder from
+   `$MUSESCORE_BACKUP_DIR` or `$SCORE_BACKUP_DIR`).
 4. Read back with `query_score` / `score_structure` and report exact results.
 
 Units are the Sibelius tools': 1/256 of a quarter note, position within the

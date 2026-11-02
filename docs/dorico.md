@@ -141,7 +141,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `score_overview` | ✅ | title, flows, players, staves with voice streams, layouts, selection |
 | `score_structure` | ⚠️ | from a MusicXML export when any staff has lyrics (full time/key info); otherwise bar lengths and key positions only |
 | `query_score` | ✅ | staves, bars, types (Sibelius names or Dorico's), voice, `where`; lyric staves via `dump()` with ids, lyric text with `lyrics=true` |
-| `apply_batch` + `dry_run` | ✅ | every op checked first; one undo step |
+| `apply_batch` + `dry_run` | ✅ | every op checked first; one undo step. A real run first saves a copy of the project (`bridge.save`) to `~/.cache/ai-score-editing/dorico/backups/<title>.backup-YYYYmmdd-HHMMSS.dorico` (`$DORICO_BACKUP_DIR`, `$SCORE_BACKUP_DIR`, `--backup-dir` move it) and reports it as `backup`; a dry run takes none; `backup=false` / `--no-backup` skips it. A copy save does not change where Cmd-S saves. Not yet timed on a large project |
 | `set-pitch` | ✅ | replaces the note, spelled as asked; new id reported |
 | `delete` | ✅ | |
 | `add-note` (chords), `add-rest`, `add-text` | ✅ | into voices that already exist |

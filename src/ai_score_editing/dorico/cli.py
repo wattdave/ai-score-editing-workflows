@@ -58,6 +58,8 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("--file")
     source.add_argument("--json")
     apply.add_argument("--dry-run", action="store_true")
+    apply.add_argument("--no-backup", action="store_true", help="do not save a copy of the project before a real run")
+    apply.add_argument("--backup-dir", help="where the copy goes (else $DORICO_BACKUP_DIR, $SCORE_BACKUP_DIR, the cache)")
     lyrics = sub.add_parser("lyrics", help="read a player's line of lyrics")
     add_staff_or_player(lyrics)
     lyrics.add_argument("--verse", type=int, default=1)
@@ -96,7 +98,8 @@ async def run(args: argparse.Namespace) -> Any:
             )
         if args.command == "apply":
             text = Path(args.file).expanduser().read_text() if args.file else args.json
-            return await service.apply(bridge, json.loads(text), flow=args.flow, dry_run=args.dry_run)
+            return await service.apply(bridge, json.loads(text), flow=args.flow, dry_run=args.dry_run,
+                                      backup_copy=not args.no_backup, backup_dir=args.backup_dir)
         if args.command == "lyrics":
             player = await service.resolve_player(bridge, args.staff, args.player, args.flow)
             return await lyrics_dialog.read_lyrics(bridge, player, args.verse)
