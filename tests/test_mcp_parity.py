@@ -24,7 +24,9 @@ ALLOWED_EXTRA: dict[str, dict[str, set[str]]] = {
     "score_overview": {"dorico": {"flow"}},
     "score_structure": {"dorico": {"flow"}},
     "query_score": {"dorico": {"flow", "lyrics"}},
-    "apply_batch": {"dorico": {"flow"}},
+    # backup is Dorico's opt-out of its default-on pre-apply backup (Phase 10);
+    # Sibelius and MuseScore always back up before a real apply.
+    "apply_batch": {"dorico": {"flow", "backup"}},
     # player is the deprecated alias of staff in Dorico's lyric tools.
     "read_lyrics": {"dorico": {"player"}},
     "edit_lyrics": {"dorico": {"player"}},

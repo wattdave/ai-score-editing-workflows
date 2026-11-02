@@ -34,7 +34,9 @@ COMMANDS = {
 ALLOWED_EXTRA: dict[str, dict[str, set[str]]] = {
     "query": {"dorico": {"--lyrics"}},
     "export": {"sibelius": {"--out", "--file"}},
-    "apply": {"sibelius": {"--save"}},
+    # --no-backup / --backup-dir: Dorico's opt-out of its default-on pre-apply
+    # backup (Phase 10); Sibelius and MuseScore always back up.
+    "apply": {"sibelius": {"--save"}, "dorico": {"--no-backup", "--backup-dir"}},
     "install-plugin": {"sibelius": {"--plugin-dir"}},
 }
 #: Options a back end lacks although another has them.
