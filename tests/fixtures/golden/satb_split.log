@@ -1,0 +1,5 @@
+rc=0
+--stdout--
+Reconnected 6 multi-syllable words across parts.
+Successfully split into 4-staff score: <TMP>/satb.musicxml
+--stderr--
