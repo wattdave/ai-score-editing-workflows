@@ -8,15 +8,13 @@ CLI and the MCP server each translate these exceptions for their own audience.
 
 from __future__ import annotations
 
-import os
 import shutil
 import sys
 from collections.abc import Awaitable, Callable
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ai_score_editing import batch_ops
+from ai_score_editing import backups, batch_ops
 from ai_score_editing.batch_ops import BatchError
 from ai_score_editing.query import (
     CONTAINER_KINDS,
@@ -67,9 +65,8 @@ class BatchFailed(BatchError):
 
 
 def backup_folder(arg: str | Path | None = None) -> Path | None:
-    """Where backups go: the argument, else $SIBELIUS_BACKUP_DIR, else None (beside the score)."""
-    chosen = arg or os.environ.get(BACKUP_DIR_ENV)
-    return Path(chosen).expanduser() if chosen else None
+    """Where backups go (backups.folder): argument, env, else None (beside the score)."""
+    return backups.folder("sibelius", arg)
 
 
 async def overview(b: SibeliusBridge) -> dict[str, Any]:
@@ -249,9 +246,8 @@ async def backup(b: SibeliusBridge, name: str, folder: Path | None) -> dict[str,
         raise BridgeError(
             f"score {saved['fileName']!r} has never been saved as a .sib; save it in Sibelius first"
         )
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     target = folder or source.parent
     target.mkdir(parents=True, exist_ok=True)
-    copy = target / f"{source.stem}.backup-{stamp}{source.suffix}"
+    copy = target / backups.name(source.stem, source.suffix)
     shutil.copy2(source, copy)
     return {"version": version, "savedTo": str(source), "copy": str(copy)}
