@@ -29,3 +29,20 @@ def client(args: argparse.Namespace, plugins: list[str] | None = None) -> Any:
     from ai_score_editing.sibelius import cli
 
     return cli._client(args, plugins)
+
+
+class _LateCli:
+    """Proxy that resolves attributes on ``sibelius.cli`` at call time.
+
+    Tests and skill scripts patch ``cli._bridge``, ``cli._backup``,
+    ``cli._apply_batch`` and friends, so handlers must look them up on every
+    call. ``cli`` is imported lazily to avoid a circular import.
+    """
+
+    def __getattr__(self, name: str) -> Any:
+        from ai_score_editing.sibelius import cli as _cli_module
+
+        return getattr(_cli_module, name)
+
+
+cli = _LateCli()

@@ -13,22 +13,8 @@ from ai_score_editing.barrange import parse_bar_range
 from ai_score_editing.sibelius.bridge import BATCH_BRIDGE_VERSION, BRIDGE_PLUGIN
 from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK
 from ai_score_editing.sibelius.commands._common import client as _client
+from ai_score_editing.sibelius.commands._common import cli as _cli
 
-
-class _Cli:
-    """Late lookup of ``sibelius.cli`` attributes.
-
-    Tests and skill scripts patch ``cli._bridge``, ``cli._backup``,
-    ``cli._apply_batch`` and friends, so handlers resolve them at call time.
-    """
-
-    def __getattr__(self, name: str) -> Any:
-        from ai_score_editing.sibelius import cli
-
-        return getattr(cli, name)
-
-
-_cli = _Cli()
 
 
 def register(sub: Any) -> dict[str, Callable[..., Any]]:
