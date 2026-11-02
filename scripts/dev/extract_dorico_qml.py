@@ -9,7 +9,7 @@ writes the files (named by content hash; rcc's name table is not parsed)
 plus an INDEX.txt of each file's root type, visible titles and controller
 calls. See docs/dorico.md.
 
-    python3 scripts/extract_dorico_qml.py OUTPUT_DIR [--binary PATH]
+    python3 scripts/dev/extract_dorico_qml.py OUTPUT_DIR [--binary PATH]
 """
 
 from __future__ import annotations

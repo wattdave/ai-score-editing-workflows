@@ -279,7 +279,7 @@ Milestone 6 (bridge version 6) adds `add_instrument` and
 
 ## Live check
 
-`scripts/musescore_live_check.py` runs a fixed scenario on the open score
+`scripts/dev/musescore_live_check.py` runs a fixed scenario on the open score
 (it refuses scores whose name lacks "Scratch" unless `--force`): a marker
 text, then a dry run of a batch with every kind of adding and structural op
 (the score must read back identical), the same batch for real (one undo
@@ -303,7 +303,7 @@ plug-in's handler answers on the first one's port. Start only the bridge.
 ## Probe results (MuseScore Studio 4.7.5, macOS)
 
 Milestone 0 of [musescore-backend-plan.md](musescore-backend-plan.md).
-Probes ran through `scripts/musescore_probe.py` and its plug-in on a
+Probes ran through `scripts/dev/musescore_probe.py` and its plug-in on a
 throwaway score (Clarinet in B♭ and Piano). The plug-in requires a token,
 because MuseScore's WebSocket server listens on every interface (checked:
 `*:8767`; requests with a wrong or missing token were refused). Each edit

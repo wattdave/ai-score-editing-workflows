@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from ai_score_editing.dorico.bridge import BarMap
 
 ROOT = Path(__file__).parent.parent
-spec = importlib.util.spec_from_file_location("dorico_selection_probe", ROOT / "scripts" / "dorico_selection_probe.py")
+spec = importlib.util.spec_from_file_location("dorico_selection_probe", ROOT / "scripts" / "dev" / "dorico_selection_probe.py")
 probe = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(probe)
 

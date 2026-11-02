@@ -6,10 +6,10 @@ trial selects, runs the command under test, reads the events through Lua (no
 MusicXML export), then undoes until the events match the baseline. The
 script never saves. See docs/dorico-selection-research-plan.md.
 
-    uv run python scripts/dorico_selection_probe.py bars [--staff N] [--bars 5,20] [--steps 8]
-    uv run python scripts/dorico_selection_probe.py plan [--span 3]
-    uv run python scripts/dorico_selection_probe.py copy [--ranges 5-8,7-10] [--dest-bar 20]
-    uv run python scripts/dorico_selection_probe.py run --anchor 1:5 --extend 2 \\
+    uv run python scripts/dev/dorico_selection_probe.py bars [--staff N] [--bars 5,20] [--steps 8]
+    uv run python scripts/dev/dorico_selection_probe.py plan [--span 3]
+    uv run python scripts/dev/dorico_selection_probe.py copy [--ranges 5-8,7-10] [--dest-bar 20]
+    uv run python scripts/dev/dorico_selection_probe.py run --anchor 1:5 --extend 2 \\
         --cmd Edit.TransposeSelection --measure changed
 
 `plan` checks that score._extension_plan (what delete-bars uses) removes exactly

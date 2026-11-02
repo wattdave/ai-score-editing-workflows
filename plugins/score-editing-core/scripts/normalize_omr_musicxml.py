@@ -1,0 +1,1 @@
+../../../scripts/normalize_omr_musicxml.py

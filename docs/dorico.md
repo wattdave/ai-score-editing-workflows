@@ -396,7 +396,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   sources are compiled into the main binary as readable text. The build has
   no QML debugging enabler and ships no `qmltooling` plugins, so Qt's QML
   inspector/debugger is not available; GammaRay-style injection would
-  fight the hardened runtime. `scripts/extract_dorico_qml.py OUT_DIR`
+  fight the hardened runtime. `scripts/dev/extract_dorico_qml.py OUT_DIR`
   recovers them (324 unique files in 6.2.30, named by content hash, with an
   INDEX.txt of root type, titles and controller calls). They are layout
   bound to C++ `controller` objects (`controller.onLyricsPopoverButtonClicked()`),

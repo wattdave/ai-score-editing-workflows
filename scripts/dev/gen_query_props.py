@@ -13,10 +13,10 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 PROPS = ROOT / "src" / "ai_score_editing" / "query_props.json"
 PLUGIN = ROOT / "src" / "ai_score_editing" / "sibelius" / "manuscript" / "ScoreBridge.plg"
-BEGIN = "\t\t// BEGIN GENERATED from query_props.json (scripts/gen_query_props.py)\n"
+BEGIN = "\t\t// BEGIN GENERATED from query_props.json (scripts/dev/gen_query_props.py)\n"
 END = "\t\t// END GENERATED\n"
 
 
@@ -47,7 +47,7 @@ def main() -> int:
     updated = generate(source, data)
     if args.check:
         if updated != source:
-            print("ScoreBridge.plg QueryPropTable is out of date; run scripts/gen_query_props.py", file=sys.stderr)
+            print("ScoreBridge.plg QueryPropTable is out of date; run scripts/dev/gen_query_props.py", file=sys.stderr)
             return 1
         print("QueryPropTable is in sync with query_props.json.")
         return 0
