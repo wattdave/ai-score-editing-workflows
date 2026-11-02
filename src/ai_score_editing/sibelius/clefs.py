@@ -18,8 +18,8 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from ai_score_editing import batch_ops
+from ai_score_editing.sibelius import bridge
 from ai_score_editing.units import UNITS_PER_WHOLE
-from ai_score_editing.sibelius import cli
 
 
 # Sibelius expresses object positions in ticks, where a quarter note is 256.
@@ -170,7 +170,7 @@ async def _staff_default_clef(
     it rather than guessing. Returns (clef, source-description).
     """
     try:
-        bars = await cli._bridge(client, "ReadBars", [staff_num, 1, 1])
+        bars = await bridge.call(client, "ReadBars", [staff_num, 1, 1])
     except Exception:  # noqa: BLE001 - fall back to inference on any read failure
         bars = None
 
@@ -187,13 +187,13 @@ async def _staff_default_clef(
 
 async def find_redundant_clefs(client: Any, staff: int | None = None) -> list[dict[str, Any]]:
     """Return conservative redundant-clef findings for one or all staves."""
-    score_info = await cli._bridge(client, "GetScoreInfo")
+    score_info = await bridge.call(client, "GetScoreInfo")
     staff_count = int(score_info.get("staffCount", 0))
     bar_count = int(score_info.get("barCount", 0))
     meter_map = build_meter_map(score_info.get("timeSignatures"), bar_count)
     target_staves = [staff] if staff and staff > 0 else list(range(1, staff_count + 1))
 
-    staves_info = await cli._bridge(client, "GetStaves")
+    staves_info = await bridge.call(client, "GetStaves")
     instrument_names: dict[int, str] = {}
     staff_bar_counts: dict[int, int] = {}
     for sinfo in staves_info if isinstance(staves_info, list) else []:
@@ -210,7 +210,7 @@ async def find_redundant_clefs(client: Any, staff: int | None = None) -> list[di
         last_bar = min(bar_count, staff_bar_counts.get(target, bar_count))
         for start_bar in range(1, last_bar + 1, 30):
             end_bar = min(start_bar + 29, last_bar)
-            bars = await cli._bridge(client, "ReadBars", [target, start_bar, end_bar])
+            bars = await bridge.call(client, "ReadBars", [target, start_bar, end_bar])
             findings.extend(
                 audit_score_clefs(bars, staff_num=target, default_clef=default_clef, bar_ticks=meter_map)
             )
@@ -231,7 +231,7 @@ async def delete_redundant_clefs(client: Any, findings: list[dict[str, Any]]) ->
         {"op": "delete", "staff": staff, "bar": bar, "index": index, "type": "Clef"}
         for staff, bar, index in addresses
     ])
-    outcome = await cli._apply_batch(client, batch, False)
+    outcome = await bridge.apply_batch(client, batch, False)
     if "error" in outcome:
-        raise cli.BridgeError(f"clef deletion refused: {outcome['error']}")
+        raise bridge.BridgeError(f"clef deletion refused: {outcome['error']}")
     return int(outcome.get("applied", 0))

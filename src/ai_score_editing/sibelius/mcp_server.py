@@ -20,22 +20,24 @@ from mcp.types import ToolAnnotations
 
 from ai_score_editing import batch_ops
 from ai_score_editing.sibelius import protocol
-from ai_score_editing.sibelius.cli import (
+from ai_score_editing.sibelius.bridge import (
     BRIDGE_PLUGIN,
+    BUSY_MESSAGE,
     EXPORT_FORMATS,
     QUERY_BRIDGE_VERSION,
     STRUCTURE_READ_BRIDGE_VERSION,
     SYSTEM_STAFF_BRIDGE_VERSION,
     QUERY_CONTAINERS_BRIDGE_VERSION,
     TEXT_FONTS_BRIDGE_VERSION,
+    BridgeBusy,
     BridgeError,
-    _apply_batch,
-    _backup,
-    _batch_bridge_version,
-    _export_path,
-    _require_bridge,
-    parse_bar_range,
+    raise_if_busy,
 )
+from ai_score_editing.sibelius.bridge import apply_batch as _apply_batch
+from ai_score_editing.sibelius.bridge import batch_bridge_version as _batch_bridge_version
+from ai_score_editing.sibelius.bridge import export_path as _export_path
+from ai_score_editing.sibelius.bridge import require_bridge as _require_bridge
+from ai_score_editing.sibelius.cli import _backup, parse_bar_range
 from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient
 from ai_score_editing.query import CONTAINER_KINDS, FONT_FIELDS, QueryError, build_selector, resolve_staves
 
@@ -123,7 +125,7 @@ session = Session(_default_client)
 async def _call(client: SibeliusClient, method: str, args: list[Any] | None = None) -> Any:
     """Call a bridge method, translating failures into tool errors."""
     response = await client.invoke_plugin(BRIDGE_PLUGIN, method, args)
-    _raise_if_busy(response)
+    _busy_to_tool_error(response)
     if not protocol.is_success(response):
         raise ToolError(
             "the ScoreBridge plug-in is not loaded; run "
@@ -135,21 +137,20 @@ async def _call(client: SibeliusClient, method: str, args: list[Any] | None = No
     return value
 
 
-def _raise_if_busy(response: dict[str, Any]) -> None:
-    if response.get("message") == "busyError":
-        raise ToolError(
-            "Sibelius is busy: a dialog is probably open in Sibelius. Ask the user to "
-            "dismiss it, then try again."
-        )
+def _busy_to_tool_error(response: dict[str, Any]) -> None:
+    try:
+        raise_if_busy(response)
+    except BridgeBusy as exc:
+        raise ToolError(BUSY_MESSAGE) from exc
 
 
 async def _guarded(awaitable: Awaitable[T]) -> T:
     try:
         return await awaitable
+    except BridgeBusy as exc:
+        raise ToolError(BUSY_MESSAGE) from exc
     except BridgeError as exc:
         message = str(exc.payload) if isinstance(exc.payload, str) else str(exc)
-        if "busyError" in message:
-            _raise_if_busy({"message": "busyError"})
         raise ToolError(message) from exc
 
 
@@ -386,7 +387,7 @@ async def undo(steps: int = 1) -> dict[str, Any]:
 
     async def action(client: SibeliusClient) -> dict[str, Any]:
         response = await client.invoke_commands(["undo"] * steps)
-        _raise_if_busy(response)
+        _busy_to_tool_error(response)
         return {"undone": steps}
 
     return await session.run(action, retry=False)
