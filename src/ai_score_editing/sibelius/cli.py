@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
 import logging
 import os
@@ -15,9 +14,7 @@ from typing import Any
 
 from ai_score_editing import (
     batch_ops,
-    layout,
     lyrics,  # noqa: F401  (tests patch cli.lyrics.*)
-    music,
 )
 from ai_score_editing.barrange import parse_bar_range  # noqa: F401  (re-exported)
 from ai_score_editing.cli_common import (  # noqa: F401  (re-exported)
@@ -121,6 +118,19 @@ from ai_score_editing.sibelius.commands.musicxml import (  # noqa: F401  (re-exp
     _run_round,
     _run_split_parts,
 )
+from ai_score_editing.sibelius.commands.score import (  # noqa: F401  (re-exported for tests)
+    NAMED_OPERATIONS,
+    _run_add_bars,
+    _run_add_staff,
+    _run_apply,
+    _run_backup,
+    _run_do,
+    _run_duplicate_octave_down_to_voice2,
+    _run_save,
+    _run_set_score_info,
+    _run_set_initial_instrument,
+    _run_set_staff_name,
+)
 from ai_score_editing.sibelius.commands.lyrics import (  # noqa: F401  (re-exported for tests)
     _run_check_lyrics,
     _run_patch_lyrics,
@@ -180,109 +190,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="subcommand", required=True)
     _MIGRATED.clear()
     _MIGRATED.update(commands.register_all(sub))
-    save = sub.add_parser("save", help="save the active score in Sibelius")
-    save.add_argument("--path", help="save a copy here (not supported in Sibelius: refused)")
-    apply = sub.add_parser(
-        "apply",
-        help="apply a JSON batch of edits as one undo step (requires bridge plug-in)",
-    )
-    apply.add_argument("--file", required=True, help="JSON operation array; see the sibelius skill's command reference")
-    apply.add_argument("--save", action="store_true", help="save after the batch succeeds")
-    apply.add_argument("--dry-run", action="store_true", help="check every operation against the open score without changing it")
-    add_staff = sub.add_parser(
-        "add-staff",
-        aliases=["create-staff"],
-        help="add an instrument staff to the score (backs up first)",
-    )
-    add_staff.add_argument(
-        "--instrument",
-        "--style",
-        dest="instrument",
-        help="instrument alias or style ID, e.g. 'soprano', 'piano', 'violin'",
-    )
-    add_staff.add_argument(
-        "--position",
-        choices=["bottom", "top", "auto"],
-        default="bottom",
-        help="where to place the new staff (default: bottom)",
-    )
-    add_staff.add_argument("--full-name", help="custom full instrument name")
-    add_staff.add_argument("--short-name", help="custom short instrument name")
-    add_staff.add_argument("--above-staff", type=int, help="add an extra staff above this staff")
-    add_staff.add_argument("--below-staff", type=int, help="add an extra staff below this staff")
-    add_staff.add_argument("--ossia", action="store_true", help="make the added staff an ossia staff")
-    add_staff.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
-    add_bars = sub.add_parser(
-        "add-bars",
-        help="add empty bars to the end of the score (backs up first)",
-    )
-    add_bars.add_argument("--count", type=int, default=1, help="number of bars to add (default: 1)")
-    add_bars.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
-    set_staff_name = sub.add_parser(
-        "set-staff-name",
-        help="set full and short instrument names for a staff (backs up first)",
-    )
-    set_staff_name.add_argument("--staff", type=int, required=True, help="staff number (from 1)")
-    set_staff_name.add_argument("--full", help="full instrument name (e.g. 'Soprano')")
-    set_staff_name.add_argument("--short", help="short instrument name (e.g. 'S.')")
-    set_staff_name.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
-    set_initial_instrument = sub.add_parser(
-        "set-initial-instrument",
-        help="set a staff's instrument at score start (backs up first)",
-    )
-    set_initial_instrument.add_argument("--staff", type=int, required=True, help="staff number (from 1)")
-    set_initial_instrument.add_argument(
-        "--instrument",
-        required=True,
-        help="instrument alias or style ID, e.g. 'bass' or 'instrument.singers.bass'",
-    )
-    set_initial_instrument.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
-    duplicate_octave_down = sub.add_parser(
-        "duplicate-octave-down-to-voice2",
-        help="add hidden voice-2 copies of octave-down chord tones (backs up first)",
-    )
-    duplicate_octave_down.add_argument("--staff", type=int, required=True, help="staff number (from 1)")
-    duplicate_octave_down.add_argument("--from-bar", type=int, required=True, help="first bar (from 1)")
-    duplicate_octave_down.add_argument("--to-bar", type=int, required=True, help="last bar")
-    duplicate_octave_down.add_argument("--save", action="store_true", help="save active score after change")
-    set_score_info = sub.add_parser(
-        "set-score-info",
-        help="set title, composer, and lyricist in Score Info (backs up first)",
-    )
-    set_score_info.add_argument("--title", help="score title")
-    set_score_info.add_argument("--composer", help="composer name")
-    set_score_info.add_argument("--lyricist", help="lyricist name")
-    set_score_info.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
-    backup = sub.add_parser("backup", help="in-file version + save + timestamped file copy")
-    backup.add_argument("--name", default="ai-score-editing backup")
-    do = sub.add_parser("do", help="run a named operation (curated command IDs)")
-    do.add_argument(
-        "operation",
-        choices=sorted(NAMED_OPERATIONS),
-        metavar="operation",
-        help=f"one of: {', '.join(sorted(NAMED_OPERATIONS))}",
-    )
     return parser
 
 
 _emit = _common.emit
-
-
-# Curated friendly names -> ManuScript command IDs (see docs/avid-reference.md).
-# Note these are fire-and-forget: Sibelius acknowledges receipt but never
-# reports whether the command did anything (docs/sibelius-protocol.md 1.2).
-NAMED_OPERATIONS = {
-    "undo": "undo",
-    "redo": "redo",
-    "save": "save",
-    "select-all": "select_all",
-    "select-none": "select_none",
-    "delete": "delete",
-    "add-bar": "add_bar_at_end",
-    "play": "play_from_selection",
-    "play-stop": "play/stop",
-    "transpose-dialog": "transpose",
-}
 
 
 async def _assert_expected_score(
@@ -431,100 +342,6 @@ def _notes(description: dict[str, Any] | None) -> list[dict[str, Any]]:
     return list((description or {}).get("notes", []))
 
 
-async def _run_save(args: argparse.Namespace) -> int:
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _check_bridge_version(client)
-        await _assert_expected_score(client, args)
-        saved = await service.save(_CliBridge(client), getattr(args, "path", None))
-    print(json.dumps(saved) if args.json else f"saved: {saved.get('fileName', '')}")
-    return EXIT_OK
-
-
-async def _run_apply(args: argparse.Namespace) -> int:
-    try:
-        operations = batch_ops.load_batch(args.file)
-    except batch_ops.BatchError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return EXIT_COMMAND_FAILED
-
-    backup = None
-    saved = None
-    failure: service.BatchFailed | None = None
-    try:
-        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-            sb = _CliBridge(client)
-            await _require_bridge(client, _batch_bridge_version(operations), "apply")
-            await _assert_expected_score(client, args)
-            try:
-                # Check first so a refused batch neither saves nor backs up.
-                result = await service.check(sb, operations)
-                if not args.dry_run:
-                    result = await service.commit(
-                        sb, operations, backup_name="before apply",
-                        backup_fn=lambda b, name: _backup(b.client, name),
-                    )
-                    backup = result.get("backup")
-            except service.BatchFailed as exc:
-                failure, result, backup = exc, exc.result, exc.backup
-            if args.save and not args.dry_run and failure is None:
-                saved = await service.save(sb)
-    except BridgeError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return EXIT_COMMAND_FAILED
-
-    summary: dict[str, Any] = {"operations": len(operations), **result}
-    if backup is not None:
-        summary["backup"] = backup
-    if saved is not None:
-        summary["saved"] = saved.get("fileName", "")
-    print(layout.compact_summary(summary))
-    if failure is not None:
-        applied = failure.applied
-        hint = (
-            "nothing was changed" if not applied
-            else f"{applied} op(s) were applied as one undo step; run 'invoke undo' to revert them"
-        )
-        print(f"error: {result['error']} — {hint}", file=sys.stderr)
-        return EXIT_COMMAND_FAILED
-    return EXIT_OK
-
-
-
-
-async def _run_do(args: argparse.Namespace) -> int:
-    command_id = NAMED_OPERATIONS[args.operation]
-    async with _client(args) as client:
-        response = await client.invoke_commands([command_id])
-    return _emit(args, response, f"sent {args.operation} ({command_id})")
-
-
-async def _run_set_staff_name(args: argparse.Namespace) -> int:
-    return await _run_write(
-        args, "SetStaffName", [args.staff, args.full or "", args.short or ""]
-    )
-
-
-async def _run_set_initial_instrument(args: argparse.Namespace) -> int:
-    style_id = music.resolve_instrument_style(args.instrument)
-    return await _run_write(args, "SetInitialInstrument", [args.staff, style_id])
-
-
-async def _run_duplicate_octave_down_to_voice2(args: argparse.Namespace) -> int:
-    return await _run_write(
-        args,
-        "DuplicateOctaveDownToVoice2",
-        [args.staff, args.from_bar, args.to_bar],
-    )
-
-
-async def _run_set_score_info(args: argparse.Namespace) -> int:
-    return await _run_write(
-        args,
-        "SetScoreInfo",
-        [args.title or "", args.composer or "", args.lyricist or ""],
-    )
-
-
 async def _read_rows(client: SibeliusClient, staff: int, from_bar: int, to_bar: int) -> list[dict[str, Any]]:
     """Every object of one staff in the bars, as Query reports it."""
     from ai_score_editing.query import build_selector
@@ -541,51 +358,6 @@ def _time_signature_at(info: dict[str, Any], bar: int) -> tuple[int, int]:
         if signature.get("bar", 1) <= bar:
             found = (signature.get("numerator", 4), signature.get("denominator", 4))
     return found
-
-
-async def _run_add_staff(args: argparse.Namespace) -> int:
-    if getattr(args, "above_staff", None):
-        return await _run_write(
-            args,
-            "AddStaffToInstrument",
-            [args.above_staff, True, bool(getattr(args, "ossia", False))],
-        )
-    if getattr(args, "below_staff", None):
-        return await _run_write(
-            args,
-            "AddStaffToInstrument",
-            [args.below_staff, False, bool(getattr(args, "ossia", False))],
-        )
-    if not getattr(args, "instrument", None):
-        print(
-            "error: --instrument is required (unless --above-staff or --below-staff is given)",
-            file=sys.stderr,
-        )
-        return EXIT_COMMAND_FAILED
-    style_id = music.resolve_instrument_style(args.instrument)
-    return await _run_write(
-        args,
-        "CreateStaff",
-        [style_id, args.position, args.full_name or "", args.short_name or ""],
-    )
-
-
-async def _run_add_bars(args: argparse.Namespace) -> int:
-    count = getattr(args, "count", 1)
-    return await _run_op(
-        args,
-        {"op": "add-bars", "count": count},
-        lambda result: {"addedBars": result["after"]["addedBars"], "totalBars": result["after"]["barCount"]},
-    )
-
-
-async def _run_backup(args: argparse.Namespace) -> int:
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _check_bridge_version(client)
-        await _assert_expected_score(client, args)
-        result = await _backup(client, args.name)
-    print(json.dumps(result, indent=2))
-    return EXIT_OK
 
 
 def _client(args: argparse.Namespace, plugins: list[str] | None = None) -> SibeliusClient:
@@ -613,25 +385,9 @@ def main(argv: list[str] | None = None) -> int:
         format="%(message)s",
     )
 
-    legacy = {
-        "do": _run_do,
-        "apply": _run_apply,
-        "backup": _run_backup,
-        "save": _run_save,
-        "add-staff": _run_add_staff,
-        "create-staff": _run_add_staff,
-        "add-bars": _run_add_bars,
-        "set-staff-name": _run_set_staff_name,
-        "set-initial-instrument": _run_set_initial_instrument,
-        "duplicate-octave-down-to-voice2": _run_duplicate_octave_down_to_voice2,
-        "set-score-info": _run_set_score_info,
-    }
-    runner = _MIGRATED.get(args.subcommand)
-    if runner is not None:
-        # A re-exported ``cli._run_*`` name wins, so tests can patch handlers on ``cli``.
-        runner = globals().get(runner.__name__, runner)
-    else:
-        runner = legacy[args.subcommand]
+    runner = _MIGRATED[args.subcommand]
+    # A re-exported ``cli._run_*`` name wins, so tests can patch handlers on ``cli``.
+    runner = globals().get(runner.__name__, runner)
     try:
         result = runner(args)
         if isawaitable(result):
