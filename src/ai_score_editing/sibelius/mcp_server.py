@@ -8,17 +8,16 @@ them with apply_batch, and undo a batch as a single step.
 
 from __future__ import annotations
 
-import asyncio
 import os
 from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
-import websockets.exceptions
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp.types import ToolAnnotations
 
 from ai_score_editing import batch_ops
+from ai_score_editing.mcp_common import EXPORT, READ_ONLY, WRITE, env_port, parse_bars
+from ai_score_editing.mcp_common import Session as CommonSession
 from ai_score_editing.query import QueryError
 from ai_score_editing.sibelius import bridge, protocol, service
 from ai_score_editing.sibelius.bridge import BRIDGE_PLUGIN, BUSY_MESSAGE, EXPORT_FORMATS, BridgeBusy, BridgeError
@@ -50,55 +49,28 @@ person must dismiss it; do not retry until they have.
 server = MCPServer("sibelius", instructions=INSTRUCTIONS)
 
 
-class Session:
+class Session(CommonSession[bridge.SibeliusBridge]):
     """One lazily opened Sibelius Connect session, used by one call at a time."""
 
     def __init__(self, factory: Callable[[], SibeliusClient]) -> None:
-        self._factory = factory
-        self._client: SibeliusClient | None = None
-        self._lock = asyncio.Lock()
+        super().__init__(
+            "Sibelius", factory, bridge.for_client, ConnectionFailed,
+            (BridgeError, QueryError, batch_ops.BatchError), _message_for,
+        )
 
-    async def run(self, action: Callable[[SibeliusClient], Awaitable[T]], *, retry: bool) -> T:
-        """Run action on the session, reconnecting if the connection dropped.
 
-        Only read-only actions retry: a write whose connection dropped may
-        already have been applied, and repeating it could apply it twice.
-        """
-        async with self._lock:
-            try:
-                return await action(await self._connected())
-            except (websockets.exceptions.ConnectionClosed, OSError):
-                await self._reset()
-                if not retry:
-                    raise ToolError(
-                        "the connection to Sibelius dropped during a change; it may or may not "
-                        "have been applied. Check with query_score before trying again."
-                    ) from None
-                return await action(await self._connected())
-
-    async def _connected(self) -> SibeliusClient:
-        if self._client is None:
-            client = self._factory()
-            try:
-                await client.connect()
-            except ConnectionFailed as exc:
-                raise ToolError(f"cannot connect to Sibelius: {exc}") from exc
-            self._client = client
-        return self._client
-
-    async def _reset(self) -> None:
-        if self._client is not None:
-            try:
-                await self._client.close()
-            except Exception:
-                pass
-            self._client = None
+def _message_for(exc: Exception) -> str | None:
+    if isinstance(exc, BridgeBusy):
+        return BUSY_MESSAGE
+    if isinstance(exc, BridgeError) and isinstance(exc.payload, str):
+        return exc.payload
+    return None
 
 
 def _default_client() -> SibeliusClient:
     return SibeliusClient(
         host=os.environ.get("SIBELIUS_HOST", protocol.DEFAULT_HOST),
-        port=int(os.environ.get("SIBELIUS_PORT", protocol.DEFAULT_PORT)),
+        port=env_port("SIBELIUS_PORT", protocol.DEFAULT_PORT),
         plugins=[BRIDGE_PLUGIN],
     )
 
@@ -113,22 +85,7 @@ async def _backup(client: SibeliusClient, name: str) -> dict[str, Any]:
 
 async def _run(action: Callable[[bridge.SibeliusBridge], Awaitable[T]], *, retry: bool) -> T:
     """Run action on the session's bridge, turning service errors into tool errors."""
-
-    async def on_client(client: SibeliusClient) -> T:
-        try:
-            return await action(bridge.for_client(client))
-        except BridgeBusy as exc:
-            raise ToolError(BUSY_MESSAGE) from exc
-        except BridgeError as exc:
-            raise ToolError(str(exc.payload) if isinstance(exc.payload, str) else str(exc)) from exc
-        except (QueryError, batch_ops.BatchError) as exc:
-            raise ToolError(str(exc)) from exc
-
-    return await session.run(on_client, retry=retry)
-
-
-READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
-WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False)
+    return await session.run(action, retry=retry)
 
 
 @server.tool(annotations=READ_ONLY)
@@ -154,11 +111,7 @@ async def score_structure(bars: str | None = None) -> dict[str, Any]:
     engraving (spaces between staves and systems) use the names set-layout
     takes.
     """
-    try:
-        from_bar, to_bar = parse_bar_range(bars=bars) if bars else (None, None)
-    except ValueError as exc:
-        raise ToolError(str(exc)) from exc
-
+    from_bar, to_bar = parse_bars(bars)
     return await _run(lambda b: service.structure(b, from_bar, to_bar), retry=True)
 
 
@@ -327,7 +280,7 @@ async def save_score() -> dict[str, Any]:
     return await _run(service.save, retry=False)
 
 
-@server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+@server.tool(annotations=EXPORT)
 async def export_score(format: str, path: str | None = None) -> dict[str, Any]:
     """Export the open score as musicxml, mxl, pdf, midi or png.
 
