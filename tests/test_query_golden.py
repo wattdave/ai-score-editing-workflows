@@ -15,7 +15,6 @@ from ai_score_editing import query as sibelius_query
 from ai_score_editing.dorico import score as dorico
 from ai_score_editing.dorico.bridge import BarMap
 from ai_score_editing.musescore import score as musescore
-from ai_score_editing.musescore import service as musescore_service
 
 # ------------------------------------------------------------------ Sibelius
 
@@ -59,9 +58,9 @@ def test_sibelius_staff_resolution() -> None:
     resolve = sibelius_query.resolve_staves
     assert resolve(["2", "soprano", "T."], SIBELIUS_STAVES) == [2, 1, 2]
     assert resolve(["0", "System"], SIBELIUS_STAVES) == [0, 0]
-    with pytest.raises(sibelius_query.QueryError, match="^staff 3 does not exist$"):
+    with pytest.raises(sibelius_query.QueryError, match="^no staff 3; staves are 1-2$"):
         resolve(["3"], SIBELIUS_STAVES)
-    with pytest.raises(sibelius_query.QueryError, match="^no staff named 'Alto'$"):
+    with pytest.raises(sibelius_query.QueryError, match="^no staff named 'Alto'; names: S\\., Soprano, T\\., Tenor$"):
         resolve(["Alto"], SIBELIUS_STAVES)
 
 
@@ -146,28 +145,30 @@ MUSESCORE_STAVES = [
 
 
 def _selector(*where: str, fields: list[str] | None = None) -> dict[str, Any]:
-    return musescore_service.build_selector(
+    return musescore.build_selector(
         staves=[], from_bar=None, to_bar=None, types=[], voice=None, where=list(where), fields=fields or [],
     )
 
 
 def test_musescore_staff_resolution() -> None:
-    resolve = musescore_service.resolve_staves
+    resolve = musescore.resolve_staves
     assert resolve(["PIANO", "cl."], MUSESCORE_STAVES) == [2, 1]
     assert resolve(["0", "System"], MUSESCORE_STAVES) == [0, 0]
     with pytest.raises(musescore.MuseScoreBatchError, match="^no staff 3; staves are 1-2$"):
         resolve(["3"], MUSESCORE_STAVES)
-    with pytest.raises(musescore.MuseScoreBatchError, match="^no staff named 'Oboe'; parts: Clarinet, Piano$"):
+    with pytest.raises(musescore.MuseScoreBatchError, match="^no staff named 'Oboe'; names: Cl\\., Clarinet, Piano, Pno\\.$"):
         resolve(["Oboe"], MUSESCORE_STAVES)
 
 
-def test_musescore_where_names_are_checked_against_sibelius_today() -> None:
+def test_musescore_where_names_come_from_its_own_vocabulary() -> None:
     assert _selector("Pitch>=60")["where"] == [{"prop": "Pitch", "op": ">=", "value": 60}]
     assert _selector("VoiceNumber=1")["where"] == [{"prop": "VoiceNumber", "op": "=", "value": 1}]
-    # Sibelius-only names are accepted although MuseScore reports no such value.
-    assert _selector("InitialFontName=x")["where"][0]["prop"] == "InitialFontName"
-    with pytest.raises(sibelius_query.QueryError, match="unknown property 'Nope'"):
-        _selector("Nope=1")
+    # INTENTIONAL CHANGE: Sibelius-only names used to be accepted (and matched nothing).
+    for name in ("InitialFontName", "Nope"):
+        with pytest.raises(sibelius_query.QueryError, match=f"unknown property '{name}'.*readable: Beam,"):
+            _selector(f"{name}=1")
+    with pytest.raises(sibelius_query.QueryError, match=r"unknown field\(s\) InitialFontName"):
+        _selector(fields=["InitialFontName"])
 
 
 def _chord(pitches: list[int], position: int = 0) -> dict[str, Any]:
@@ -199,7 +200,7 @@ def test_musescore_where_conditions(where, count) -> None:
     assert musescore.query(objects, selector)["count"] == count
 
 
-def test_musescore_set_validated_against_sibelius_table() -> None:
+def test_musescore_set_validated_against_its_own_table() -> None:
     def prepare(op: dict[str, Any]) -> None:
         musescore.prepare_batch([op], [], MUSESCORE_STAVES, 480, {})
 

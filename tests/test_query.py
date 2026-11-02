@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from ai_score_editing.cli_common import DEFAULT_LIMIT
 from ai_score_editing.query import (
     COMMON_PROPS,
     READABLE_PROPS,
@@ -108,7 +109,7 @@ def test_build_selector_defaults_omit_bars() -> None:
         staves=[], from_bar=None, to_bar=None, types=[], voice=None, where=[], fields=[],
     )
     assert "fromBar" not in selector and "toBar" not in selector
-    assert selector["voice"] == 0 and selector["limit"] == 500
+    assert selector["voice"] == 0 and selector["limit"] == DEFAULT_LIMIT
 
 
 @pytest.mark.parametrize(("voice", "limit"), [(5, 10), (1, 0)])
@@ -144,3 +145,131 @@ def test_bar_and_staff_query_selector() -> None:
     assert selector["types"] == ["Bar", "Staff"]
     assert selector["fields"] == ["Length", "BreakType"]
     assert selector["where"] == [{"prop": "Length", "op": ">", "value": 1024}]
+
+
+# ------------------------------------------------------------------ shared engine (core/query.py)
+
+from ai_score_editing.core import query as core  # noqa: E402
+
+VOCAB = core.Vocabulary(properties={"Pitch": int, "Text": str, "Hidden": bool, "Any": None})
+
+
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        ("Pitch>=72", {"prop": "Pitch", "op": ">=", "value": 72}),
+        ("Pitch = -3", {"prop": "Pitch", "op": "=", "value": -3}),
+        ("Pitch='72'", {"prop": "Pitch", "op": "=", "value": 72}),   # an int field reads a quoted number
+        ("Text=true", {"prop": "Text", "op": "=", "value": "true"}),  # a str field keeps text
+        ("Text=12", {"prop": "Text", "op": "=", "value": "12"}),
+        ("Text='12'", {"prop": "Text", "op": "=", "value": "12"}),
+        ("Hidden=TRUE", {"prop": "Hidden", "op": "=", "value": True}),
+        ("Any=true", {"prop": "Any", "op": "=", "value": True}),
+        ("Any=12", {"prop": "Any", "op": "=", "value": 12}),
+        ("Any='12'", {"prop": "Any", "op": "=", "value": "12"}),
+        ("Any=\"la la\"", {"prop": "Any", "op": "=", "value": "la la"}),
+        ("Any=la", {"prop": "Any", "op": "=", "value": "la"}),
+        ("Pitch!=C5", {"prop": "Pitch", "op": "!=", "value": "C5"}),
+    ],
+)
+def test_core_parse_where(expression, expected) -> None:
+    assert core.parse_where(expression, VOCAB) == expected
+
+
+@pytest.mark.parametrize(
+    ("expression", "message"),
+    [
+        ("Pitch", "cannot parse condition 'Pitch'"),
+        ("Pitch>=", "missing value in where condition"),
+        ("pitch>=1", "unknown property 'pitch' in where condition; readable: Any, Hidden, Pitch, Text"),
+    ],
+)
+def test_core_parse_where_errors(expression, message) -> None:
+    with pytest.raises(QueryError, match=message):
+        core.parse_where(expression, VOCAB)
+
+
+def test_core_vocabulary_picks_the_error_and_wording() -> None:
+    class Mine(ValueError):
+        pass
+
+    vocab = core.Vocabulary(
+        properties={"B": None, "A": None}, error=Mine, sort_names=False,
+        unparsable="bad {expression!r} ({names})", unknown="no {prop} ({names})",
+    )
+    with pytest.raises(Mine, match=r"bad 'x' \(B, A\)"):
+        core.parse_where("x", vocab)
+    with pytest.raises(Mine, match=r"no C \(B, A\)"):
+        core.parse_where("C=1", vocab)
+
+
+def test_core_parse_fields_uses_readable_subset() -> None:
+    vocab = core.Vocabulary(properties={"Pitch": int, "Dx": int}, fields=frozenset({"Dx"}))
+    assert core.parse_fields(["Dx, Dx"], vocab) == ["Dx", "Dx"]
+    with pytest.raises(QueryError, match=r"unknown field\(s\) Pitch"):
+        core.parse_fields(["Pitch"], vocab)
+
+
+@pytest.mark.parametrize(
+    ("actual", "op", "value", "result"),
+    [
+        (3, "=", 3, True), (3, "!=", 3, False), (3, "<", 4, True), (3, ">", 4, False),
+        (3, ">=", 3, True), (3, "<=", 2, False),
+        ("a", "<", 3, False),   # unorderable: never matches
+        ("a", "!=", 3, False),  # kept as before: every operator is evaluated, so != raises too
+    ],
+)
+def test_core_compare(actual, op, value, result) -> None:
+    assert core.compare(actual, op, value) is result
+
+
+def test_core_holds_single_missing_and_multi() -> None:
+    cond = {"prop": "Pitch", "op": "=", "value": 60}
+    assert core.holds({"Pitch": 60}, cond)
+    assert not core.holds({"Pitch": 61}, cond)
+    assert not core.holds({}, cond)                                  # no value matches nothing ...
+    assert core.holds({}, {**cond, "op": "!="})                      # ... except "not equal"
+    assert core.holds({"Pitch": None}, {**cond, "op": "!="})
+    assert core.holds({}, cond, {"Pitch": [48, 60]})                 # any note
+    assert not core.holds({}, cond, {"Pitch": []})                   # no notes: never, not even !=
+    assert not core.holds({}, {**cond, "op": "!="}, {"Pitch": []})
+    assert core.holds({"Pitch": 1}, cond, {"Other": [60]}) is False  # multi covers only its names
+
+
+NAMED = [
+    {"n": 1, "short": "Pno.", "long": "Piano"},
+    {"n": 2, "short": "Pno.", "long": "Piano"},
+    {"n": 3, "short": "Vn.", "long": "Violin"},
+]
+
+
+def test_core_resolve_staves() -> None:
+    def resolve(requested):
+        return core.resolve_staves(requested, NAMED, number_key="n", name_keys=("short", "long"))
+
+    assert resolve(["PIANO", "3"]) == [1, 2, 3]
+    assert resolve(["vn.", " violin "]) == [3, 3]
+    assert resolve(["0", "System", "SYSTEM"]) == [0, 0, 0]
+    assert resolve([2]) == [2]
+    assert isinstance(resolve(["1"]), list)
+    with pytest.raises(QueryError, match=r"^no staff 4; staves are 1-3$"):
+        resolve(["4"])
+    with pytest.raises(QueryError, match=r"^no staff named 'Oboe'; names: Piano, Pno\., Violin, Vn\.$"):
+        resolve(["Oboe"])
+
+
+def test_core_resolve_staves_raises_the_given_error() -> None:
+    class Mine(ValueError):
+        pass
+
+    with pytest.raises(Mine):
+        core.resolve_staves(["x"], NAMED, number_key="n", name_keys=("short",), error=Mine)
+
+
+def test_core_build_selector_default_limit_is_the_shared_one() -> None:
+    selector = core.build_selector(
+        staves=[], from_bar=None, to_bar=None, types=["A, B"], voice=None, where=["Pitch>1"], fields=[],
+        vocabulary=VOCAB,
+    )
+    assert selector["limit"] == DEFAULT_LIMIT == core.DEFAULT_LIMIT
+    assert selector["types"] == ["A", "B"] and selector["where"][0]["value"] == 1
