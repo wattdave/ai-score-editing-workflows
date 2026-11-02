@@ -120,7 +120,9 @@ async def query_score(
 
 
 @server.tool(annotations=WRITE)
-async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, flow: int = 1) -> dict[str, Any]:
+async def apply_batch(
+    operations: list[dict[str, Any]], dry_run: bool = False, flow: int = 1, backup: bool = True
+) -> dict[str, Any]:
     """Apply a list of edits to a flow as one undo step.
 
     Every operation is checked against the score before anything changes.
@@ -236,8 +238,15 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False, f
 
     No operation may target an event another operation already changes.
     Returns each operation's before/after events and the number applied.
+
+    A real run first saves a copy of the project (the result's "backup"; a
+    dry run takes none). It goes to $DORICO_BACKUP_DIR, else $SCORE_BACKUP_DIR,
+    else ~/.cache/ai-score-editing/dorico/backups, and does not change where
+    Cmd-S saves. Pass backup=false to skip it.
     """
-    return await session.run(lambda b: service.apply(b, operations, flow=flow, dry_run=dry_run), retry=False)
+    return await session.run(
+        lambda b: service.apply(b, operations, flow=flow, dry_run=dry_run, backup_copy=backup), retry=False
+    )
 
 
 @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))

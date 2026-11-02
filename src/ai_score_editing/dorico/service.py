@@ -11,10 +11,12 @@ import asyncio
 import shutil
 import tempfile
 import zipfile
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ai_score_editing import backups
 from ai_score_editing.intervals import LETTERS
 
 from . import layout, musicxml_read, score
@@ -287,10 +289,42 @@ async def query(
     )
 
 
+async def backup(bridge: DoricoBridge, flow: int = 1, folder: str | Path | None = None) -> str:
+    """Save a copy of the project to the backup folder and return its path.
+
+    A copy save does not change where Cmd-S saves: the open project keeps its
+    own file. The folder is backups.folder("dorico", folder).
+    """
+    target = backups.folder("dorico", folder)
+    assert target is not None
+    target.mkdir(parents=True, exist_ok=True)
+    title = str((await bridge.overview(flow)).get("title") or "").strip()
+    stem = "".join(c if c.isalnum() or c in " -_" else "_" for c in title).strip() or "dorico-project"
+    path = target / backups.name(stem, ".dorico")
+    await bridge.save(path)
+    if not path.exists():
+        raise DoricoError(f"could not write the backup copy {path}; nothing was changed")
+    return str(path)
+
+
 async def apply(
-    bridge: DoricoBridge, operations: list[dict[str, Any]], *, flow: int = 1, dry_run: bool = False
+    bridge: DoricoBridge,
+    operations: list[dict[str, Any]],
+    *,
+    flow: int = 1,
+    dry_run: bool = False,
+    backup_copy: bool = True,
+    backup_dir: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Apply a batch as one undo step; nothing changes unless every op checks out."""
+    """Apply a batch as one undo step; nothing changes unless every op checks out.
+
+    A real run first saves a copy of the project (result "backup"), after the
+    batch has been checked and before anything is written; a dry run takes
+    none. backup_copy=False skips it. The copy goes to backup_dir, else
+    $DORICO_BACKUP_DIR, else $SCORE_BACKUP_DIR, else
+    ~/.cache/ai-score-editing/dorico/backups. Saving a copy does not change
+    where Cmd-S saves.
+    """
     snap = await snapshot(bridge, flow)
     prepared = score.prepare_batch(operations, snap.located, snap.staves, snap.bars)
     status = await bridge.client.status()
@@ -299,12 +333,14 @@ async def apply(
     # Decide on the resolved ops: set-pitch/delete/transpose on notes read
     # from dump() become command ops (repitch, delete-by-id).
     if any(op["op"] in score.COMMAND_OPS | score.ROUTED_COMMAND_OPS for op in prepared):
-        return await _apply_commands(bridge, prepared, snap, flow, dry_run)
+        take = (lambda: backup(bridge, flow, backup_dir)) if backup_copy else None
+        return await _apply_commands(bridge, prepared, snap, flow, dry_run, take)
     checked = await bridge.apply(prepared, flow, dry_run=True)
     if "error" in checked:
         raise DoricoError(f"{checked['error']}; nothing was changed")
     if dry_run:
         return {"dryRun": True, "operations": prepared, "checked": checked.get("results")}
+    copy = await backup(bridge, flow, backup_dir) if backup_copy else None
     result = await bridge.apply(prepared, flow)
     if "error" in result:
         applied = result.get("applied", 0)
@@ -312,11 +348,15 @@ async def apply(
             f"{result['error']}; {applied} operation(s) were applied as one undo step. "
             "Call undo once to revert them."
         )
-    return {"applied": result.get("applied"), "results": result.get("results")}
+    out = {"applied": result.get("applied"), "results": result.get("results")}
+    if copy:
+        out["backup"] = copy
+    return out
 
 
 async def _apply_commands(
-    bridge: DoricoBridge, prepared: list[dict[str, Any]], snap: Snapshot, flow: int, dry_run: bool
+    bridge: DoricoBridge, prepared: list[dict[str, Any]], snap: Snapshot, flow: int, dry_run: bool,
+    take_backup: Callable[[], Awaitable[str]] | None = None,
 ) -> dict[str, Any]:
     """Run a batch of command ops (set-break, add-lyrics) in order.
 
@@ -358,6 +398,7 @@ async def _apply_commands(
     await _resolve_layouts(bridge, commands)
     if dry_run:
         return {"dryRun": True, "operations": prepared, "undoSteps": planned}
+    copy = await take_backup() if take_backup else None
     steps = 0
     results: list[dict[str, Any]] = []
     if removals:
@@ -485,6 +526,8 @@ async def _apply_commands(
     outcome: dict[str, Any] = {"applied": len(results), "undoSteps": steps, "results": results}
     if lyrics:
         outcome["lyricsCheck"] = await _check_lyrics(bridge, lyrics, flow)
+    if copy:
+        outcome["backup"] = copy
     return outcome
 
 

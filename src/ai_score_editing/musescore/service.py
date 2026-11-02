@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ai_score_editing import paths
+from ai_score_editing import backups
 from ai_score_editing.query import build_selector
 
 from . import score
@@ -53,7 +53,9 @@ async def snapshot(bridge: MuseScoreBridge) -> Snapshot:
 
 
 def backup_dir() -> Path:
-    return paths.cache_dir("musescore", "backups")
+    folder = backups.folder("musescore")
+    assert folder is not None
+    return folder
 
 
 async def overview(bridge: MuseScoreBridge) -> dict[str, Any]:
@@ -127,7 +129,7 @@ async def apply(bridge: MuseScoreBridge, operations: list[dict[str, Any]], *, dr
     if not dry_run:
         folder = backup_dir()
         folder.mkdir(parents=True, exist_ok=True)
-        path = folder / f"{snap.info['name']}-{time.strftime('%Y%m%d-%H%M%S')}.musicxml"
+        path = folder / backups.name(snap.info["name"], ".musicxml")
         written = await bridge.write_copy(str(path))
         if not written.get("written") or not path.exists():
             raise MuseScoreError(f"could not write the backup copy {path}; nothing was changed")

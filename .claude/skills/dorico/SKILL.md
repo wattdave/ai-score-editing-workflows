@@ -17,7 +17,9 @@ what Dorico's scripting can and cannot do, and why.
 1. `score_overview` (or `dorico-cli overview`) to see flows, staves and voices.
 2. `query_score` to find events. Each has staff, bar, index, type and
    position (its address), plus a stable `id`.
-3. `apply_batch` with `dry_run: true`, then for real.
+3. `apply_batch` with `dry_run: true`, then for real. A real run first saves
+   a copy of the project and reports it as `backup` (`backup: false` skips it;
+   folder from `$DORICO_BACKUP_DIR` or `$SCORE_BACKUP_DIR`).
 4. Read back with `query_score` and report exact results.
 
 Units are the Sibelius tools': 1/256 of a quarter note, position within the
