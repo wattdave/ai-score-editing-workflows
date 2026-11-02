@@ -1135,9 +1135,29 @@ async def resolve_player(
     if not text.isdigit():
         return text
     number = int(text)
-    for item in (await snapshot(bridge, flow)).staves:
+    staves = (await snapshot(bridge, flow)).staves
+    for item in staves:
         if item["staff"] == number:
             if not item.get("name"):
                 raise DoricoError(f"staff {number} has no player name; pass the player's name")
-            return str(item["name"])
+            name = str(item["name"])
+            await _require_lyric_layout(bridge, number, name, staves)
+            return name
     raise DoricoError(f"no staff {number} in flow {flow}")
+
+
+async def _require_lyric_layout(bridge: DoricoBridge, number: int, name: str, staves: list[dict[str, Any]]) -> None:
+    """Dorico keeps a score's lyrics per part layout, so a staff number only
+    works when the staff's name is that of a part layout. Say so now, and name
+    the staves that do work, rather than failing later with a bare lookup error."""
+    layouts = [str(l["layoutName"]) for l in await bridge.client.layouts() if l.get("layoutType") == "kPartLayout"]
+    if name.strip().lower() in {l.strip().lower() for l in layouts}:
+        return
+    options = []
+    for layout in layouts:
+        numbers = [str(s["staff"]) for s in staves if str(s.get("name", "")).strip().lower() == layout.strip().lower()]
+        options.append(f"{layout} (staves {', '.join(numbers)})" if numbers else layout)
+    raise DoricoError(
+        f"staff {number} is {name!r}, which is not a part layout, and Dorico keeps lyrics per part layout. "
+        f"Use a staff that carries a part layout's name, or pass the layout name. Part layouts: {'; '.join(options)}"
+    )
