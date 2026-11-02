@@ -30,7 +30,35 @@ from ai_score_editing import (
 )
 from ai_score_editing.barrange import parse_bar_range
 from ai_score_editing.intervals import compute_transposition
-from ai_score_editing.sibelius import copy_range, launcher, protocol, repeats
+from ai_score_editing.sibelius import bridge, copy_range, launcher, protocol, repeats
+from ai_score_editing.sibelius.bridge import (  # noqa: F401  (re-exported for skill scripts and tests)
+    BRIDGE_PLUGIN,
+    EXPORT_FORMATS,
+    BridgeBusy,
+    BridgeError,
+    batch_bridge_version,
+    MIN_BRIDGE_VERSION,
+    CURRENT_BRIDGE_VERSION,
+    QUERY_BRIDGE_VERSION,
+    BATCH_BRIDGE_VERSION,
+    NUDGE_BRIDGE_VERSION,
+    STRUCTURAL_BRIDGE_VERSION,
+    STRUCTURE_READ_BRIDGE_VERSION,
+    BEAM_RESULT_BRIDGE_VERSION,
+    SYSTEM_STAFF_BRIDGE_VERSION,
+    LAYOUT_BATCH_BRIDGE_VERSION,
+    HIDE_EMPTY_STAVES_BRIDGE_VERSION,
+    AUDIO_EXPORT_BRIDGE_VERSION,
+    PLAYBACK_SOUNDS_BRIDGE_VERSION,
+    DELETE_BARS_BRIDGE_VERSION,
+    REPEATS_BRIDGE_VERSION,
+    LYRIC_VERSE_BRIDGE_VERSION,
+    SET_LYRIC_VERSE_BRIDGE_VERSION,
+    TUPLET_NOTES_BRIDGE_VERSION,
+    TEXT_FONTS_BRIDGE_VERSION,
+    QUERY_CONTAINERS_BRIDGE_VERSION,
+)
+from ai_score_editing.sibelius.clefs import delete_redundant_clefs, find_redundant_clefs
 from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient, run_sync
 from ai_score_editing.token_store import TokenStore
 
@@ -751,17 +779,6 @@ async def _run_repl(args: argparse.Namespace) -> int:
             print(json.dumps(response, indent=2))
 
 
-BRIDGE_PLUGIN = "ScoreBridge"
-
-# CLI format name -> (ManuScript SaveAs type, file extension)
-EXPORT_FORMATS = {
-    "musicxml": ("MUSICXML", ".musicxml"),
-    "mxl": ("MXL", ".mxl"),
-    "pdf": ("PDF", ".pdf"),
-    "midi": ("Midi", ".mid"),
-    "png": ("PNG", ".png"),
-}
-
 # Curated friendly names -> ManuScript command IDs (see docs/avid-reference.md).
 # Note these are fire-and-forget: Sibelius acknowledges receipt but never
 # reports whether the command did anything (docs/sibelius-protocol.md 1.2).
@@ -808,108 +825,6 @@ async def _run_score_info(args: argparse.Namespace) -> int:
     return await _run_bridge_call(args, "GetScoreInfo")
 
 
-class BridgeError(Exception):
-    def __init__(self, payload: Any) -> None:
-        super().__init__(json.dumps(payload))
-        self.payload = payload
-
-
-async def _bridge(client: SibeliusClient, method: str, call_args: list[Any] | None = None) -> Any:
-    """Call a bridge method; raise BridgeError on transport or bridge failure."""
-    response = await client.invoke_plugin(BRIDGE_PLUGIN, method, call_args)
-    if not protocol.is_success(response):
-        raise BridgeError(
-            "bridge plug-in not reachable — run 'sibelius-cli "
-            f"install-plugin' and restart Sibelius. Response: {json.dumps(response)}"
-        )
-    value = protocol.plugin_return_value(response)
-    if isinstance(value, dict) and "error" in value:
-        raise BridgeError(value["error"])
-    return value
-
-
-MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 62
-QUERY_BRIDGE_VERSION = 38
-BATCH_BRIDGE_VERSION = 39
-NUDGE_BRIDGE_VERSION = 41
-STRUCTURAL_BRIDGE_VERSION = 44
-STRUCTURE_READ_BRIDGE_VERSION = 45
-BEAM_RESULT_BRIDGE_VERSION = 46
-SYSTEM_STAFF_BRIDGE_VERSION = 48
-LAYOUT_BATCH_BRIDGE_VERSION = 50
-HIDE_EMPTY_STAVES_BRIDGE_VERSION = 52
-AUDIO_EXPORT_BRIDGE_VERSION = 54
-PLAYBACK_SOUNDS_BRIDGE_VERSION = 55
-DELETE_BARS_BRIDGE_VERSION = 56
-REPEATS_BRIDGE_VERSION = 57
-LYRIC_VERSE_BRIDGE_VERSION = 58
-SET_LYRIC_VERSE_BRIDGE_VERSION = 59
-TUPLET_NOTES_BRIDGE_VERSION = 60
-TEXT_FONTS_BRIDGE_VERSION = 61
-QUERY_CONTAINERS_BRIDGE_VERSION = 62
-
-
-def _batch_bridge_version(operations: list[dict[str, Any]]) -> int:
-    """The oldest bridge that runs every operation in a validated batch."""
-    names = {operation["op"] for operation in operations}
-    if names & {"add-tuplet-notes", "clear-bars"}:
-        return TUPLET_NOTES_BRIDGE_VERSION
-    if "set-lyric-verse" in names:
-        return SET_LYRIC_VERSE_BRIDGE_VERSION
-    if any(
-        operation["op"] == "add-lyric" and ("verse" in operation or "dy" in operation)
-        for operation in operations
-    ):
-        return LYRIC_VERSE_BRIDGE_VERSION
-    if "delete-bars" in names:
-        return DELETE_BARS_BRIDGE_VERSION
-    if "hide-empty-staves" in names:
-        return HIDE_EMPTY_STAVES_BRIDGE_VERSION
-    if names & {"set-bar-number", "set-layout"} or any(
-        operation.get("prop") == "NumNotes"
-        or (operation["op"] == "add-bars" and ("bar" in operation or "length" in operation))
-        for operation in operations
-    ):
-        return LAYOUT_BATCH_BRIDGE_VERSION
-    if "add-line" in names or any(operation.get("staff") == batch_ops.SYSTEM_STAFF for operation in operations):
-        return SYSTEM_STAFF_BRIDGE_VERSION
-    if names & (batch_ops.STRUCTURAL | {"beam"}):
-        return STRUCTURAL_BRIDGE_VERSION
-    if "nudge" in names:
-        return NUDGE_BRIDGE_VERSION
-    return BATCH_BRIDGE_VERSION
-
-
-async def _check_bridge_version(client: SibeliusClient) -> None:
-    info = await _bridge(client, "GetBridgeVersion")
-    if not (isinstance(info, dict) and info.get("version", 0) >= MIN_BRIDGE_VERSION):
-        raise BridgeError(
-            f"bridge v{MIN_BRIDGE_VERSION}+ required, got {info!r} — run install-plugin and restart Sibelius"
-        )
-
-
-async def _require_bridge(client: SibeliusClient, version: int, feature: str) -> None:
-    info = await _bridge(client, "GetBridgeVersion")
-    if not (isinstance(info, dict) and info.get("version", 0) >= version):
-        raise BridgeError(
-            f"{feature} needs bridge v{version}+, got {info!r} — run install-plugin and restart Sibelius"
-        )
-
-
-async def _apply_batch(
-    client: SibeliusClient, operations: list[dict[str, Any]], dry_run: bool
-) -> dict[str, Any]:
-    """Run ApplyBatch; return its result, including any partial results on failure."""
-    response = await client.invoke_plugin(BRIDGE_PLUGIN, "ApplyBatch", [operations, dry_run])
-    if not protocol.is_success(response):
-        raise BridgeError(f"bridge plug-in not reachable. Response: {json.dumps(response)}")
-    value = protocol.plugin_return_value(response)
-    if not isinstance(value, dict):
-        raise BridgeError(f"unexpected ApplyBatch result: {value!r}")
-    return value
-
-
 async def _assert_expected_score(
     client: SibeliusClient,
     args: argparse.Namespace,
@@ -929,6 +844,16 @@ async def _assert_expected_score(
     if actual != expected:
         raise BridgeError(f"active score mismatch: expected {expected}, got {actual}")
     return info
+
+
+# Private names kept for skill scripts and tests; code below calls them through
+# this module's globals so patches on ``cli._bridge`` etc. still take effect.
+_bridge = bridge.call
+_apply_batch = bridge.apply_batch
+_require_bridge = bridge.require_bridge
+_check_bridge_version = bridge.check_bridge_version
+_batch_bridge_version = batch_bridge_version
+_export_path = bridge.export_path
 
 
 _BACKUP_DIR: Path | None = None  # set by main() from --backup-dir / SIBELIUS_BACKUP_DIR
@@ -1343,7 +1268,6 @@ async def _run_patch_layout(args: argparse.Namespace) -> int:
                 continue
             await flush()
             if op == "remove-redundant-clefs":
-                from .clefs import delete_redundant_clefs, find_redundant_clefs
 
                 target_staff = operation.get("staff")
                 findings = await find_redundant_clefs(client, target_staff)
@@ -2560,18 +2484,6 @@ async def _run_proof_mixes(args: argparse.Namespace) -> int:
     print(json.dumps(report.to_json(), indent=2) if args.json else report.format())
     return EXIT_OK if report.ok else EXIT_COMMAND_FAILED
 
-
-def _export_path(requested: str | None, score_file: str, extension: str) -> Path:
-    """Resolve an export target that always carries the format's extension.
-
-    Sibelius appends the extension itself when it is missing (``--out proof``
-    is written as ``proof.png``), so the path is normalized up front to name
-    the file Sibelius actually writes.
-    """
-    out = Path(requested).expanduser().resolve() if requested else Path(score_file).with_suffix(extension)
-    if out.suffix.lower() != extension:
-        out = out.with_name(out.name + extension)
-    return out
 
 
 async def _run_export(args: argparse.Namespace) -> int:
