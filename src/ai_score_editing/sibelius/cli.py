@@ -25,7 +25,6 @@ from ai_score_editing import (
     mix_proof,
     music,
     note_patches,
-    polychoral,
     rehearsal_mix,
 )
 from ai_score_editing.barrange import parse_bar_range

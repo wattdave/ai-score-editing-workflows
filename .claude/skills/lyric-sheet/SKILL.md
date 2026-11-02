@@ -1,0 +1,167 @@
+---
+name: lyric-sheet
+description: >
+  Sibelius (via sibelius-cli) plus Markdown and Word. Build a lyric sheet or
+  lyrics book for a show or concert: pick the songs a group sings from a
+  running order, read each piece's words out of its Sibelius file, check them
+  against the printed PDF, assemble one Markdown file in running order and
+  convert it to Word for a layout person. Use when asked for lyric sheets, a
+  lyrics book, words for a programme or handout, or to pull lyrics out of
+  Sibelius files.
+---
+
+# Lyric sheet
+
+Turns a running order and a folder of Sibelius files into one lyrics book.
+Worked out on the Revels 2026 adult-chorus book (21 pieces, Sibelius files in
+~/Documents/Scores and Google Drive, handed to a layout person as Word).
+
+Needs: Sibelius with the bridge plug-in (see `setup`), `pandoc` for Word, and
+LibreOffice + poppler to render and check the Word file
+(`brew install pandoc poppler && brew install --cask libreoffice`).
+
+## 1. Scope with the user first
+
+- Read the running order (a Google Sheet or similar). Rows are mostly dialogue,
+  dances and children's pieces; the "Who" column is often empty. Make a table
+  of the song rows, who sings each, and the source file. **The user confirms
+  which songs are in the book** before any extraction. Ask about: songs only
+  children, YPs or a band sing; pieces with no file; audience songs.
+- If there is more than one running order, ask which is the master.
+- Ask which verses the show uses ("3 verses", "verses 1, 4, 5") and print only
+  those. Check names of playback files ("verses 1, 4, 5") for hints.
+- Work in **batches of 4-5 pieces**, cleanest first. Show each batch's text and
+  the decisions you made (below) and wait for the user before the next.
+
+## 2. Pick one source file per piece
+
+Prefer the working (non-playback) score: playback copies are unrolled (verses
+repeated, parts split, rounds expanded) and would print words many times. Old
+2009 archives and OMR-sourced files are the messiest. If the show arrangement
+is a separate file (e.g. "... with instruments for playback"), use that for the
+show's verse structure. Download Drive files with
+`rclone copyto --drive-root-folder-id FOLDER_ID "gdrive:name.sib" local.sib`
+(into a fresh folder, not the repo). Say which file you used for each piece.
+
+## 3. Read the lyrics from Sibelius
+
+One score at a time, never in parallel:
+
+```bash
+${CLAUDE_SKILL_DIR}/scripts/sib_read_lyrics.sh SLUG "/path/score.sib" raw/
+```
+
+It opens the file, waits (up to 2 minutes; some scores are slow), answers the
+"Update Score" dialog that old-format files raise (that dialog otherwise blocks
+every later open and makes `score-info` return nothing), saves
+`raw/SLUG.json`, `.words.txt` and `.staves.txt`, then **closes the window**
+(Sibelius eats memory; close files when done) and answers "save changes?" with
+No. It never saves. Run it with the sandbox disabled, as sibelius-cli needs.
+Leave the user's own open windows alone. Afterwards confirm no source `.sib`
+changed (`find ... -newer`).
+
+If an open fails (`NOT-OPEN`), look at the screen (`screencapture -x`) for a
+dialog before retrying; do not click anything else.
+
+## 4. Clean the text
+
+```bash
+python3 -I ${CLAUDE_SKILL_DIR}/scripts/lyrics_text.py raw/SLUG.json --staves raw/SLUG.staves.txt
+```
+
+This rebuilds words from `syllableType` and groups staves with identical text.
+Do not use `read-lyrics --words` or `--compact` for this: they drop the syllable
+type, so a word split across a barline ("pre | serve") comes out as two words.
+
+Expect messy output. Typical problems: parts that repeat different phrases;
+verses split across staves; OMR typos ("thousandmiles", "confind"); the same
+word in two spellings; a verse number typed into the text ("1.Wassail"); missing
+verses; first/second endings that print a word twice ("tree tree").
+
+## 5. Check every piece against the printed PDF
+
+```bash
+pdftotext -layout "Piece.pdf" - | grep -E '[A-Za-z]{2,}' | head -60
+```
+
+Stacked verse lines in the PDF show verse order and which parts sing what, and
+settle most doubts (volta text, echoes, extra words in one part). The PDF is
+the ground truth for order; Sibelius lyrics are the draft. Where Anne-style
+bilingual lyric docs exist on Drive, use them for Spanish/English and other
+non-English text and say so.
+
+## 6. Decide, and report each decision
+
+Print **one clean text per piece**, not each part's sung repeats, unless the
+user wants the repeats. Keep the printed spelling and capitalisation (e.g.
+Billings capitalises nouns), fix only clear typos, and **list every change**
+for the user: a changed typo, a normalised spelling, a word you dropped or
+added, a credit you added from your own knowledge (say so). Do not "improve"
+words that are printed; ask ("persevere" vs "preserve": the user kept the
+score's word). Do not fix ranges or notes. Questions to ask per batch: which
+text wins when parts differ; whether to print repeats; spellings; credits.
+
+## 7. Format (what Ken, the layout person, received)
+
+Per piece, in a `lyrics-batchN.md`:
+
+```markdown
+## Piece Title
+*Credit line, e.g. William Walker, shape note*
+
+**1.**
+First line,
+second line,
+third line.
+
+**2.**
+...
+```
+
+- One line of text per line of verse (single newlines; no blank line between
+  the number and its lines). Blank line between stanzas.
+- Echo or response lines in italics; a role label in bold (**Afuera:**); a
+  note in italics in parentheses, e.g. `*(chorus, after Rene's solo verse)*`,
+  `*(repeat)*`, `*(round)*`. Spanish/other-language text gets the English
+  underneath in italics.
+- Titles match the score or the user's choice ("Slow Traveller", not the
+  running-order nickname); ask when they differ.
+- No notes to yourself in the book. Keep review notes in chat or a separate file.
+
+## 8. Songs you must not type out
+
+For a song still under copyright (or whose status is disputed: "This Land Is
+Your Land" is the case here) do not write the lyrics yourself or from memory.
+Leave a marked slot (`**[LYRICS TO BE INSERTED]**`) and let the user paste text
+they have cleared. A short chorus the user types in themselves (Lord of the
+Dance) is fine. Say which songs are slots.
+
+## 9. Assemble, convert, check, deliver
+
+```bash
+# order.txt: "# Act 1" lines start groups; every other line is a piece title
+python3 -I ${CLAUDE_SKILL_DIR}/scripts/assemble_lyrics.py --order order.txt \
+  --title "Show: Adult Chorus Lyrics" --out "Show - Lyrics.md" lyrics-batch*.md
+${CLAUDE_SKILL_DIR}/scripts/md_to_docx.sh "Show - Lyrics.md" "Show - Lyrics.docx" --check
+```
+
+`assemble_lyrics.py` reports any ordered title with no section (it adds an
+"insert" slot, nothing is dropped silently) and any section not in the order.
+The `--check` run renders the Word file to PDF and page images; **look at a
+few pages** (Read the `.jpg` files) before you hand it over. Headings are real
+Word Heading 1/2 styles so the recipient can restyle them.
+
+Save the Markdown and Word files next to the scores, and when asked upload
+both to the Drive folder (`rclone copyto`; check first that no file of that
+name exists, so nothing is overwritten). Do not email anything for the user.
+
+## Pitfalls seen
+
+- A `.sib` path in the user's notes may not exist (the Drive copy has a
+  different name). Look in Downloads and Drive before concluding it is missing.
+- `sibelius-cli score-info` reports whichever score is active; always pass
+  `--expect-file` to later commands (the script does).
+- Lyric lines the user "inadvertently" interrupted by typing in Sibelius can
+  make an open time out; just retry.
+- Do not lose a piece: count the pieces in the order file against the sections
+  (the assembler does) before saying the book is complete.
