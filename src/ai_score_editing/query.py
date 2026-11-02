@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from ai_score_editing.core.errors import ScoreEditingError
+
 # Properties the bridge may read through obj.@name, per object kind. The
 # source of truth is query_props.json, which scripts/dev/gen_query_props.py turns
 # into QueryPropTable in ScoreBridge.plg (a test runs it with --check). The
@@ -31,7 +33,7 @@ DEFAULT_LIMIT = 500
 _WHERE = re.compile(r"^\s*([A-Za-z]+)\s*(<=|>=|!=|=|<|>)\s*(.*?)\s*$")
 
 
-class QueryError(ValueError):
+class QueryError(ScoreEditingError):
     """A query selector is malformed or names an unreadable property."""
 
 

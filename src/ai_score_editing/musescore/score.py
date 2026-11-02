@@ -19,9 +19,12 @@ import re
 from fractions import Fraction
 from typing import Any
 
-from ai_score_editing import batch_ops, intervals
+from ai_score_editing.core import batch_schema, intervals
+from ai_score_editing.core.errors import BatchError
+from ai_score_editing.core.units import UNITS_PER_QUARTER  # noqa: F401
 
-from ai_score_editing.units import UNITS_PER_QUARTER  # noqa: E402,F401
+# Phase 7: MuseScore still validates `set` against Sibelius's writable table.
+from ai_score_editing.sibelius.batch_ops import WRITABLE
 SYSTEM_STAFF = 0
 
 # Order of objects at one tick (docs/musescore-backend-plan.md, Addresses):
@@ -53,12 +56,12 @@ OBJECT_OPS = {"set", "set-pitch", "tie", "bracket", "flip-stem", "nudge", "delet
 NOTE_OPS = {"add-dynamic", "set-articulation", "add-slur", "add-tempo", "add-rehearsal-mark"}
 DORICO_OPS = {"add-rest", "add-tuplet", "add-clef"} | NOTE_OPS
 #: Ops that add objects; they come after every OBJECT_OPS op in a batch.
-ADDING_OPS = batch_ops.ADDING | DORICO_OPS
+ADDING_OPS = batch_schema.ADDING | DORICO_OPS
 #: Valid batch operations the MuseScore back end does not do yet, with the
 #: milestone of docs/musescore-backend-plan.md that adds them.
 NOT_YET: dict[str, int] = {}
 #: Ops that change bars or the whole score; batch_ops puts them last.
-STRUCTURAL_OPS = batch_ops.STRUCTURAL
+STRUCTURAL_OPS = batch_schema.STRUCTURAL
 #: Structural ops that move or re-bar what follows; ops that name objects by
 #: ref (transpose, delete-voice) cannot come after them in a batch.
 REBARRING = {"set-time", "add-bars", "delete-bars"}
@@ -115,7 +118,7 @@ CLEF_TYPES = {"treble": 0, "treble-8vb": 2, "treble-8va": 3, "alto": 10, "tenor"
 MAX_TUPLET = 32
 
 
-class MuseScoreBatchError(ValueError):
+class MuseScoreBatchError(BatchError):
     """A batch or query cannot be run against the score as read."""
 
 
@@ -353,8 +356,8 @@ def prepare_batch(
     copy-passage copies before the batch opens (None without one).
     """
     try:
-        normalized = batch_ops.validate_batch(operations, EXTRA_OPS)
-    except batch_ops.BatchError as exc:
+        normalized = batch_schema.validate_batch(operations, EXTRA_OPS, WRITABLE)
+    except BatchError as exc:
         raise MuseScoreBatchError(str(exc)) from exc
     first_adding = rebarred = numbered = None
     for i, operation in enumerate(normalized):
@@ -620,7 +623,7 @@ def layout_style(operation: dict[str, Any], label: str, current: dict[str, Any])
     values: dict[str, Any] = {}
     width, height = current.get("pageWidth"), current.get("pageHeight")
     if "pageSize" in operation:
-        name = batch_ops.PAGE_SIZES[operation["pageSize"]]
+        name = batch_schema.PAGE_SIZES[operation["pageSize"]]
         if name not in PAGE_SIZES_MM:
             raise MuseScoreBatchError(f"{label}: page size {name} is not available on MuseScore; use one of "
                                       f"{', '.join(PAGE_SIZES_MM)}")
@@ -629,7 +632,7 @@ def layout_style(operation: dict[str, Any], label: str, current: dict[str, Any])
         raise MuseScoreBatchError(f"{label}: the current page size could not be read")
     landscape = width > height
     if "orientation" in operation:
-        landscape = batch_ops.ORIENTATIONS[operation["orientation"]] == "landscape"
+        landscape = batch_schema.ORIENTATIONS[operation["orientation"]] == "landscape"
     if landscape != (width > height):
         width, height = height, width
     if "pageSize" in operation or "orientation" in operation:
@@ -748,14 +751,14 @@ def _req_int(operation: dict[str, Any], field: str, label: str, minimum: int, ma
     if not isinstance(value, int) or isinstance(value, bool) or value < minimum \
             or (maximum is not None and value > maximum):
         bound = f"{minimum}-{maximum}" if maximum is not None else f">= {minimum}"
-        raise batch_ops.BatchError(f"{label}.{field} must be an integer {bound}")
+        raise BatchError(f"{label}.{field} must be an integer {bound}")
     return value
 
 
 def _req_str(operation: dict[str, Any], field: str, label: str) -> str:
     value = operation.get(field)
     if not isinstance(value, str) or not value.strip():
-        raise batch_ops.BatchError(f"{label}.{field} must be a non-empty string")
+        raise BatchError(f"{label}.{field} must be a non-empty string")
     return value
 
 
@@ -786,13 +789,13 @@ def _validate_tuplet(operation: dict[str, Any], label: str) -> dict[str, Any]:
            "actual": _req_int(operation, "actual", label, 2, MAX_TUPLET),
            "normal": _req_int(operation, "normal", label, 1, MAX_TUPLET)}
     if out["actual"] == out["normal"]:
-        raise batch_ops.BatchError(f"{label}: actual and normal must differ")
+        raise BatchError(f"{label}: actual and normal must differ")
     notes = operation.get("notes")
     if not isinstance(notes, list) or not 1 <= len(notes) <= out["actual"] or not all(
         isinstance(n, list) and all(isinstance(p, int) and not isinstance(p, bool) and 0 <= p <= 127 for p in n)
         for n in notes
     ):
-        raise batch_ops.BatchError(
+        raise BatchError(
             f"{label}.notes must list up to {out['actual']} chords, each a list of MIDI pitches ([] for a rest)"
         )
     out["notes"] = notes
@@ -802,7 +805,7 @@ def _validate_tuplet(operation: dict[str, Any], label: str) -> dict[str, Any]:
 def _validate_clef(operation: dict[str, Any], label: str) -> dict[str, Any]:
     clef = _req_str(operation, "clef", label).removeprefix("clef.")
     if clef not in CLEF_TYPES:
-        raise batch_ops.BatchError(f"{label}.clef must be one of: {', '.join(CLEF_TYPES)}")
+        raise BatchError(f"{label}.clef must be one of: {', '.join(CLEF_TYPES)}")
     return {**_placed(operation, label), "clef": clef}
 
 
@@ -812,12 +815,12 @@ def _validate_note_op(operation: dict[str, Any], label: str) -> dict[str, Any]:
     if op == "add-dynamic":
         dynamic = _req_str(operation, "dynamic", label)
         if dynamic not in DYNAMIC_TYPES:
-            raise batch_ops.BatchError(f"{label}.dynamic must be one of: {', '.join(DYNAMIC_TYPES)}")
+            raise BatchError(f"{label}.dynamic must be one of: {', '.join(DYNAMIC_TYPES)}")
         out["dynamic"] = dynamic
     elif op == "set-articulation":
         name = _req_str(operation, "articulation", label)
         if name not in ARTICULATION_ACTIONS:
-            raise batch_ops.BatchError(
+            raise BatchError(
                 f"{label}.articulation must be one of: {', '.join(ARTICULATION_ACTIONS)} "
                 "(MuseScore's plug-ins can only add these by name)"
             )
@@ -831,7 +834,7 @@ def _validate_note_op(operation: dict[str, Any], label: str) -> dict[str, Any]:
     return out
 
 
-EXTRA_OPS: batch_ops.ExtraOps = {
+EXTRA_OPS: batch_schema.ExtraOps = {
     "add-rest": _validate_rest, "add-tuplet": _validate_tuplet, "add-clef": _validate_clef,
     **{op: _validate_note_op for op in NOTE_OPS},
 }
