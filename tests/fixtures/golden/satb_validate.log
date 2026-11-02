@@ -1,0 +1,4 @@
+rc=0
+--stdout--
+Clean validation: all 4 parts have consistent measure durations across satb.musicxml.
+--stderr--
