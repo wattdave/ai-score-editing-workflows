@@ -2,7 +2,7 @@
 
 The plug-in is written from msbridge.qml.in with a token, the port and the
 bridge version filled in. The token is kept in
-~/.config/sibelius-websocket-cli/musescore-token (mode 600) and reused, so
+~/.config/ai-score-editing/musescore-token (mode 600) and reused, so
 reinstalling does not invalidate a plug-in that is already running.
 """
 
@@ -13,6 +13,8 @@ import shutil
 import secrets
 from pathlib import Path
 
+from ai_score_editing import paths
+
 #: Bump when msbridge.qml.in changes; the client refuses an older bridge.
 BRIDGE_VERSION = 10
 DEFAULT_PORT = 8766
@@ -21,7 +23,7 @@ TEMPLATE = Path(__file__).with_name("msbridge.qml.in")
 
 
 def config_dir() -> Path:
-    return Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / "sibelius-websocket-cli"
+    return paths.config_dir()
 
 
 def token_path() -> Path:

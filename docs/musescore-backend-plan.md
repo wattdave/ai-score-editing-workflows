@@ -135,7 +135,7 @@ score (it was started in another window, or the score was reopened).
   with the upstream plug-in on 8765 while both exist.
 - **Token, required** because the server is reachable from the network.
   `musescore-cli install-plugin` generates a long random token, stores it in
-  `~/.config/sibelius-websocket-cli/musescore-token` (mode 600), and writes
+  `~/.config/ai-score-editing/musescore-token` (mode 600), and writes
   it into the installed QML. The plug-in compares it on every request
   and closes the connection on the first wrong one, without saying why.
   The token isn't encrypted in transit; that's acceptable because the
@@ -233,7 +233,7 @@ All of these properties exist and are writable [src].
 
   Layout breaks are `LayoutBreak` items in `measure.elements` [seen].
   Anything else the API doesn't show comes from a MusicXML export that
-  `WriteCopy` writes to `~/.cache/sibelius-websocket-cli/musescore/` with
+  `WriteCopy` writes to `~/.cache/ai-score-editing/musescore/` with
   `writeScore`; it left the score's name unchanged [seen]. MusicXML holds
   written pitch for transposing instruments [seen], so `musicxml_read.py`
   converts back with each part's `<transpose>`. (`.mscx` can't be

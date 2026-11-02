@@ -25,7 +25,7 @@ from typing import Any
 
 from .bridge import DoricoBridge
 from .client import DoricoError
-from .export import _osascript, bring_to_front
+from .export import osascript, bring_to_front
 
 DIALOG = "Edit Lyrics"
 DIALOG_TIMEOUT = 8.0
@@ -103,7 +103,7 @@ def _normal(text: str) -> str:
 
 
 async def _dialog_open() -> bool:
-    return await _osascript(_DIALOG_OPEN) == "yes"
+    return await osascript(_DIALOG_OPEN) == "yes"
 
 
 async def _dialog_closed() -> bool:
@@ -124,7 +124,7 @@ async def _undo_title(changed_from: str | None = None) -> str:
     deadline = time.monotonic() + MENU_SETTLE_TIMEOUT
     last = None
     while True:
-        title = await _osascript(_UNDO_TITLE)
+        title = await osascript(_UNDO_TITLE)
         if title == last and title != changed_from:
             return title
         if time.monotonic() > deadline:
@@ -190,14 +190,14 @@ async def _in_dialog(bridge: DoricoBridge, player: str, verse: int, new_text: st
             raise DoricoError(f"{player} has no lyrics in verse {verse}")
         await client.command("Edit.LineOfLyrics")
         await _wait(_dialog_open, DIALOG_TIMEOUT, "the Edit Lyrics dialog")
-        current = await _osascript(_DIALOG_ACT, "", "")
+        current = await osascript(_DIALOG_ACT, "", "")
         if new_text is not None:
             await _replace(current, new_text, player, verse)
             await _wait(_dialog_closed, DIALOG_TIMEOUT, "Dorico to accept the edit")
             selections.clear()  # now under the edit: undoing them would undo it
     finally:
         if await _dialog_open():
-            await _osascript(_DIALOG_ACT, "", "Cancel")
+            await osascript(_DIALOG_ACT, "", "Cancel")
         await client.command(
             f"Window.SwitchToLayout?OpenScoreID={score_id}&ScoreLayoutViewContainerID={view_id}&LayoutID={original_layout}"
         )
@@ -215,7 +215,7 @@ async def _replace(current: str, new_text: str, player: str, verse: int) -> None
             f"the new text has {syllable_count(new_text)} syllables but {player}'s verse {verse} has "
             f"{syllable_count(current)}; Dorico only applies edits that keep the count"
         )
-    await _osascript(_DIALOG_ACT, new_text, "OK")
+    await osascript(_DIALOG_ACT, new_text, "OK")
 
 
 async def read_lyrics(bridge: DoricoBridge, player: str, verse: int = 1) -> dict[str, Any]:
