@@ -756,7 +756,7 @@ async def test_backup_dir_collects_backups_in_one_folder(tmp_path: Path) -> None
     score.write_bytes(b"sib")
     folder = tmp_path / "backups" / "nested"
     responses = {"AddVersion": {"ok": True}, "Save": {"fileName": str(score)}}
-    with patch("ai_score_editing.sibelius.cli._BACKUP_DIR", folder), patch(
+    with patch.dict("os.environ", {"SIBELIUS_BACKUP_DIR": str(folder)}), patch(
         "ai_score_editing.sibelius.cli._bridge",
         new=AsyncMock(side_effect=lambda _client, method, *_: responses[method]),
     ):
@@ -767,18 +767,16 @@ async def test_backup_dir_collects_backups_in_one_folder(tmp_path: Path) -> None
 
 
 def test_backup_dir_option_and_environment_set_the_folder(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    from ai_score_editing.sibelius import cli
+    from ai_score_editing.sibelius import cli, service
 
     monkeypatch.setattr(cli, "_run_ping", AsyncMock(return_value=EXIT_OK), raising=True)
-    monkeypatch.setattr(cli, "_BACKUP_DIR", None)
     monkeypatch.setenv("SIBELIUS_BACKUP_DIR", str(tmp_path / "env"))
     cli.main(["ping"])
-    assert cli._BACKUP_DIR == tmp_path / "env"
+    assert service.backup_folder() == tmp_path / "env"
     cli.main(["--backup-dir", str(tmp_path / "flag"), "ping"])
-    assert cli._BACKUP_DIR == tmp_path / "flag"
+    assert service.backup_folder() == tmp_path / "flag"
     monkeypatch.delenv("SIBELIUS_BACKUP_DIR")
-    cli.main(["ping"])
-    assert cli._BACKUP_DIR is None
+    assert service.backup_folder() is None
 
 
 async def test_run_op_checks_before_backup_and_prints_legacy_output(

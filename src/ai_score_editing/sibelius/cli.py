@@ -29,7 +29,7 @@ from ai_score_editing import (
 )
 from ai_score_editing.barrange import parse_bar_range
 from ai_score_editing.intervals import compute_transposition
-from ai_score_editing.sibelius import bridge, copy_range, launcher, protocol, repeats
+from ai_score_editing.sibelius import bridge, copy_range, launcher, protocol, repeats, service
 from ai_score_editing.sibelius.bridge import (  # noqa: F401  (re-exported for skill scripts and tests)
     BRIDGE_PLUGIN,
     EXPORT_FORMATS,
@@ -855,34 +855,37 @@ _batch_bridge_version = batch_bridge_version
 _export_path = bridge.export_path
 
 
-_BACKUP_DIR: Path | None = None  # set by main() from --backup-dir / SIBELIUS_BACKUP_DIR
+class _CliBridge(bridge.SibeliusBridge):
+    """A SibeliusBridge whose calls go through this module's ``_bridge`` & co.
+
+    The service functions use it, so patches of ``cli._bridge``,
+    ``cli._require_bridge`` and ``cli._apply_batch`` still take effect.
+    """
+
+    async def call(self, method: str, args: list[Any] | None = None) -> Any:
+        if args is None:
+            return await _bridge(self.client, method)
+        return await _bridge(self.client, method, args)
+
+    async def apply_batch(self, operations: list[dict[str, Any]], dry_run: bool) -> dict[str, Any]:
+        return await _apply_batch(self.client, operations, dry_run)
+
+    async def require(self, version: int, feature: str) -> None:
+        await _require_bridge(self.client, version, feature)
 
 
 async def _backup(client: SibeliusClient, name: str) -> dict[str, Any]:
-    """In-file version + save + timestamped filesystem copy. Returns details."""
-    import shutil
-    from datetime import datetime
+    """In-file version + save + timestamped copy, into $SIBELIUS_BACKUP_DIR if set.
 
-    try:
-        version = await _bridge(client, "AddVersion", [name, "automatic backup before write"])
-    except BridgeError as exc:
-        # In-file versioning is best-effort; the filesystem copy below is the
-        # real backup. Sibelius sometimes refuses AddVersion (returns null).
-        version = {"skipped": str(exc)}
-        print(f"warning: in-file version skipped: {exc}", file=sys.stderr)
-    saved = await _bridge(client, "Save")
-    source = Path(saved["fileName"])
-    if not source.is_absolute():
-        # Bridges before v36 accept an imported score's bare title as a path.
-        raise BridgeError(
-            f"score {saved['fileName']!r} has never been saved as a .sib; save it in Sibelius first"
-        )
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    folder = _BACKUP_DIR or source.parent
-    folder.mkdir(parents=True, exist_ok=True)
-    copy = folder / f"{source.stem}.backup-{stamp}{source.suffix}"
-    shutil.copy2(source, copy)
-    return {"version": version, "savedTo": str(source), "copy": str(copy)}
+    Kept for skill scripts; main() exports --backup-dir to the environment.
+    """
+    return await service.backup(_CliBridge(client), name, service.backup_folder())
+
+
+async def _backup_and_report(b: bridge.SibeliusBridge, name: str) -> dict[str, Any]:
+    made = await _backup(b.client, name)
+    print(f"backed up: {made['copy']}", file=sys.stderr)
+    return made
 
 
 async def _run_write(
@@ -896,7 +899,7 @@ async def _run_write(
         print(f"backed up: {backup['copy']}", file=sys.stderr)
         result = await _bridge(client, method, call_args)
         if getattr(args, "save", False):
-            saved = await _bridge(client, "Save")
+            saved = await service.save(_CliBridge(client))
             print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
     print(json.dumps(result, indent=2))
     return EXIT_OK
@@ -935,22 +938,25 @@ async def _run_op(
                 return EXIT_COMMAND_FAILED
         await _require_bridge(client, max(min_bridge, _batch_bridge_version(batch)), args.subcommand)
         await _assert_expected_score(client, args)
-        checked = await _apply_batch(client, batch, True)
-        if "error" in checked:
-            raise BridgeError(checked["error"])
+        sb = _CliBridge(client)
+        try:
+            await service.check(sb, batch)
+        except service.BatchFailed as exc:
+            raise BridgeError(exc.result["error"]) from exc
         report = await before_write(client, batch) if before_write else None
         if getattr(args, "dry_run", False):
             print(json.dumps({"dryRun": True, "checked": len(batch), "preview": report}, indent=2))
             return EXIT_OK
         if report is not None:
             print(json.dumps({"replacing": report}, indent=2), file=sys.stderr)
-        backup = await _backup(client, f"before {args.subcommand}")
-        print(f"backed up: {backup['copy']}", file=sys.stderr)
-        result = await _apply_batch(client, batch, False)
-        if "error" in result:
-            raise BridgeError(f"{result['error']}; restore from {backup.get('copy')}")
+        try:
+            result = await service.commit(
+                sb, batch, backup_name=f"before {args.subcommand}", backup_fn=_backup_and_report
+            )
+        except service.BatchFailed as exc:
+            raise BridgeError(f"{exc.result['error']}; restore from {exc.backup}") from exc
         if getattr(args, "save", False):
-            saved = await _bridge(client, "Save")
+            saved = await service.save(sb)
             print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
     print(json.dumps(legacy(result["results"][0]), indent=2))
     return EXIT_OK
@@ -968,7 +974,7 @@ async def _run_save(args: argparse.Namespace) -> int:
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         await _check_bridge_version(client)
         await _assert_expected_score(client, args)
-        saved = await _bridge(client, "Save")
+        saved = await service.save(_CliBridge(client))
     print(json.dumps(saved) if args.json else f"saved: {saved.get('fileName', '')}")
     return EXIT_OK
 
@@ -1318,29 +1324,37 @@ async def _run_apply(args: argparse.Namespace) -> int:
 
     backup = None
     saved = None
+    failure: service.BatchFailed | None = None
     try:
         async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            sb = _CliBridge(client)
             await _require_bridge(client, _batch_bridge_version(operations), "apply")
             await _assert_expected_score(client, args)
-            # Check first so a refused batch neither saves nor backs up.
-            result = await _apply_batch(client, operations, True)
-            if not args.dry_run and "error" not in result:
-                backup = await _backup(client, "before apply")
-                result = await _apply_batch(client, operations, False)
-            if args.save and not args.dry_run and "error" not in result:
-                saved = await _bridge(client, "Save")
+            try:
+                # Check first so a refused batch neither saves nor backs up.
+                result = await service.check(sb, operations)
+                if not args.dry_run:
+                    result = await service.commit(
+                        sb, operations, backup_name="before apply",
+                        backup_fn=lambda b, name: _backup(b.client, name),
+                    )
+                    backup = result.get("backup")
+            except service.BatchFailed as exc:
+                failure, result, backup = exc, exc.result, exc.backup
+            if args.save and not args.dry_run and failure is None:
+                saved = await service.save(sb)
     except BridgeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_COMMAND_FAILED
 
     summary: dict[str, Any] = {"operations": len(operations), **result}
     if backup is not None:
-        summary["backup"] = backup.get("copy")
+        summary["backup"] = backup
     if saved is not None:
         summary["saved"] = saved.get("fileName", "")
     print(layout.compact_summary(summary))
-    if "error" in result:
-        applied = result.get("applied", 0)
+    if failure is not None:
+        applied = failure.applied
         hint = (
             "nothing was changed" if not applied
             else f"{applied} op(s) were applied as one undo step; run 'invoke undo' to revert them"
@@ -1401,39 +1415,20 @@ async def _run_patch_notes(args: argparse.Namespace) -> int:
 
 
 async def _run_query(args: argparse.Namespace) -> int:
-    from ai_score_editing import query as query_mod
-    from ai_score_editing.query import QueryError, build_selector, resolve_staves
+    from ai_score_editing.query import QueryError
 
     from_b, to_b = (None, None)
     if args.bars:
         from_b, to_b = parse_bar_range(bars=args.bars)
+    params: dict[str, Any] = {
+        "from_bar": from_b, "to_bar": to_b, "types": args.type, "voice": args.voice,
+        "where": args.where, "fields": args.field, "limit": args.limit,
+    }
     try:
-        # Validate everything but staff names before connecting.
-        selector = build_selector(
-            staves=[],
-            from_bar=from_b,
-            to_bar=to_b,
-            types=args.type,
-            voice=args.voice,
-            where=args.where,
-            fields=args.field,
-            limit=args.limit,
-        )
+        service.query_selector(**params)  # validate everything but staff names before connecting
         async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-            await _require_bridge(client, QUERY_BRIDGE_VERSION, "query")
-            if query_mod.CONTAINER_KINDS & set(selector["types"]):
-                await _require_bridge(client, QUERY_CONTAINERS_BRIDGE_VERSION, "query of Bar or Staff")
-            if any(f in query_mod.FONT_FIELDS for f in selector["fields"]):
-                await _require_bridge(client, TEXT_FONTS_BRIDGE_VERSION, "query of text fonts")
-            if args.staff:
-                selector["staves"] = resolve_staves(args.staff, await _bridge(client, "GetStaves"))
-                if 0 in selector["staves"]:
-                    await _require_bridge(client, SYSTEM_STAFF_BRIDGE_VERSION, "query of the system staff")
-            result = await _bridge(client, "Query", [selector])
-    except QueryError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return EXIT_COMMAND_FAILED
-    except BridgeError as exc:
+            result = await service.query(_CliBridge(client), staves=args.staff, **params)
+    except (QueryError, BridgeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_COMMAND_FAILED
     print(json.dumps(result, indent=None if args.json else 2))
@@ -2486,7 +2481,6 @@ async def _run_proof_mixes(args: argparse.Namespace) -> int:
 
 
 async def _run_export(args: argparse.Namespace) -> int:
-    saveas_type, extension = EXPORT_FORMATS[args.format]
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         await _check_bridge_version(client)
         if args.sib_file:
@@ -2496,22 +2490,11 @@ async def _run_export(args: argparse.Namespace) -> int:
                 return EXIT_COMMAND_FAILED
             opened = await _bridge(client, "OpenScore", [str(source)])
             print(f"opened: {opened['fileName']}", file=sys.stderr)
-        info = await _bridge(client, "GetScoreInfo")
-        if not info["fileName"] and not args.out:
-            print("error: active score has never been saved; pass --out", file=sys.stderr)
+        try:
+            result = await service.export(_CliBridge(client), args.format, args.out)
+        except BridgeError as exc:
+            print(f"error: {exc}", file=sys.stderr)
             return EXIT_COMMAND_FAILED
-        out = _export_path(args.out, info["fileName"], extension)
-        result = await _bridge(client, "ExportScore", [str(out), saveas_type])
-    # Sibelius appends page suffixes for image formats (foo_0001.png).
-    produced = [out] if out.exists() else sorted(out.parent.glob(f"{out.stem}_*{out.suffix}"))
-    if not produced:
-        print(
-            f"error: Sibelius reported the export but {out} does not exist",
-            file=sys.stderr,
-        )
-        return EXIT_COMMAND_FAILED
-    result["files"] = [str(f) for f in produced]
-    result["size"] = sum(f.stat().st_size for f in produced)
     print(json.dumps(result, indent=2))
     return EXIT_OK
 
@@ -2767,9 +2750,11 @@ def _client(args: argparse.Namespace, plugins: list[str] | None = None) -> Sibel
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    global _BACKUP_DIR
-    backup_dir = args.backup_dir or os.environ.get("SIBELIUS_BACKUP_DIR")
-    _BACKUP_DIR = Path(backup_dir).expanduser() if backup_dir else None
+    # Resolve the backup folder once; every backup (CLI, skill scripts) reads it back
+    # through service.backup_folder().
+    folder = service.backup_folder(args.backup_dir)
+    if folder is not None:
+        os.environ[service.BACKUP_DIR_ENV] = str(folder)
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.WARNING,
         format="%(message)s",

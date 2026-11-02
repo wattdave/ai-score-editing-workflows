@@ -8,25 +8,20 @@ serializing calls.
 
 from __future__ import annotations
 
-import asyncio
-import os
-from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar
+from collections.abc import Callable
+from typing import Any
 
-import websockets
 from mcp.server.mcpserver import MCPServer
-from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from ai_score_editing.barrange import parse_bar_range
+from ai_score_editing.mcp_common import EXPORT, READ_ONLY, WRITE, env_port, parse_bars
+from ai_score_editing.mcp_common import Session as CommonSession
 
 from . import lyrics_dialog, service
 from . import project_info as project_info_mod
 from .bridge import DoricoBridge
 from .client import DEFAULT_PORT, DoricoClient, DoricoError
 from .score import DoricoBatchError
-
-T = TypeVar("T")
 
 INSTRUCTIONS = """\
 Controls the score open in Dorico (the active project, one flow at a time).
@@ -52,68 +47,18 @@ answer, a dialog is probably open in Dorico and a person must dismiss it.
 server = MCPServer("dorico", instructions=INSTRUCTIONS)
 
 
-class Session:
+class Session(CommonSession[DoricoBridge]):
     """One lazily opened Dorico connection, used by one call at a time."""
 
     def __init__(self, factory: Callable[[], DoricoClient]) -> None:
-        self._factory = factory
-        self._bridge: DoricoBridge | None = None
-        self._lock = asyncio.Lock()
-
-    async def run(self, action: Callable[[DoricoBridge], Awaitable[T]], *, retry: bool) -> T:
-        async with self._lock:
-            try:
-                return await self._guard(action(await self._connected()))
-            except (websockets.exceptions.ConnectionClosed, OSError):
-                await self._reset()
-                if not retry:
-                    raise ToolError(
-                        "the connection to Dorico dropped during a change; it may or may not "
-                        "have been applied. Check with query_score before trying again."
-                    ) from None
-                return await self._guard(action(await self._connected()))
-
-    @staticmethod
-    async def _guard(awaitable: Awaitable[T]) -> T:
-        try:
-            return await awaitable
-        except (DoricoError, DoricoBatchError) as exc:
-            raise ToolError(str(exc)) from exc
-
-    async def _connected(self) -> DoricoBridge:
-        if self._bridge is None:
-            client = self._factory()
-            try:
-                await client.connect()
-            except DoricoError as exc:
-                raise ToolError(f"cannot connect to Dorico: {exc}") from exc
-            self._bridge = DoricoBridge(client)
-        return self._bridge
-
-    async def _reset(self) -> None:
-        if self._bridge is not None:
-            try:
-                await self._bridge.client.close()
-            except Exception:
-                pass
-            self._bridge = None
+        super().__init__("Dorico", factory, DoricoBridge, DoricoError, (DoricoError, DoricoBatchError))
 
 
 def _default_client() -> DoricoClient:
-    return DoricoClient(port=int(os.environ.get("DORICO_PORT", DEFAULT_PORT)))
+    return DoricoClient(port=env_port("DORICO_PORT", DEFAULT_PORT))
 
 
 session = Session(_default_client)
-
-READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
-WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False)
-
-
-def _bars(bars: str | None) -> tuple[int | None, int | None]:
-    try:
-        return parse_bar_range(bars=bars) if bars else (None, None)
-    except ValueError as exc:
-        raise ToolError(str(exc)) from exc
 
 
 @server.tool(annotations=READ_ONLY)
@@ -164,7 +109,7 @@ async def query_score(
     type and position (its address for apply_batch), plus id, flowPosition,
     duration, voice, and pitch and spelled name for notes.
     """
-    first, last = _bars(bars)
+    first, last = parse_bars(bars)
     return await session.run(
         lambda b: service.query(
             b, flow=flow, staves=staves, from_bar=first, to_bar=last,
@@ -359,7 +304,7 @@ async def save_score(path: str) -> dict[str, Any]:
     return await session.run(lambda b: service.save(b, path), retry=False)
 
 
-@server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+@server.tool(annotations=EXPORT)
 async def export_score(path: str, format: str = "pdf") -> dict[str, Any]:
     """Export the open project to path as pdf, musicxml, preview-pdf or preview-png.
 
