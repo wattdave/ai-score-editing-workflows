@@ -100,6 +100,9 @@ class DoricoClient:
         legacy = entry is None and self.client_name == DEFAULT_CLIENT_NAME and self._legacy_host != self._store_host
         if legacy:
             entry = self.store.load(self._legacy_host, self.port)
+            # Nothing to fall back from if no old approval is stored; without
+            # this a refused fresh connection would retry forever.
+            legacy = entry is not None
         hello: dict[str, Any] = {
             "message": "connect",
             "clientName": self.client_name,
@@ -116,7 +119,15 @@ class DoricoClient:
         await self._send(hello)
         timeout = RECV_TIMEOUT if entry else self.approval_timeout
         while True:
-            reply = await self._recv(timeout)
+            try:
+                reply = await self._recv(timeout)
+            except websockets.exceptions.ConnectionClosed as exc:
+                # Dorico refuses a token presented under a client name it was
+                # not issued to by closing the socket with a reason, such as
+                # kClientRejected_ConnectClientNameAndTokenMismatch, rather
+                # than sending a reply. Handle it as the refusal it is.
+                reason = (exc.rcvd.reason if exc.rcvd is not None else "") or str(exc)
+                reply = {"message": "disconnect", "reason": reason}
             if reply.get("code") == "kConnected":
                 if legacy and entry:
                     self.store.save(self._store_host, self.port, entry.token)
