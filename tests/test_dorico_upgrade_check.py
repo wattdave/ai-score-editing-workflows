@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-spec = importlib.util.spec_from_file_location("dorico_upgrade_check", ROOT / "scripts" / "dorico_upgrade_check.py")
+spec = importlib.util.spec_from_file_location("dorico_upgrade_check", ROOT / "scripts" / "dev" / "dorico_upgrade_check.py")
 check = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(check)
 

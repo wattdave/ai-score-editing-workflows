@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -77,6 +78,108 @@ alwaysApply: false
 
 {cursor_body.strip()}
 """
+
+
+#: User-facing scripts exposed through plugins/score-editing-core/scripts/.
+#: Developer probes live in scripts/dev/ and are not shipped.
+CORE_PLUGIN = "score-editing-core"
+USER_SCRIPTS = (
+    "attach_lyrics.py",
+    "musescore_mcp.sh",
+    "musicxml_to_abc.py",
+    "normalize_omr_musicxml.py",
+    "sanitize_omr_musicxml.py",
+    "split_16voices.py",
+)
+
+
+def load_manifest(root: Path) -> dict[str, str | None]:
+    """Read plugins/skills.json (skill name -> owning plugin directory or null)."""
+    manifest = root / "plugins" / "skills.json"
+    if not manifest.is_file():
+        return {}
+    return json.loads(manifest.read_text(encoding="utf-8"))
+
+
+def check_plugins(root: Path, skill_names: set[str]) -> list[str]:
+    """Check skill ownership links, script links and the marketplace listing."""
+    issues: list[str] = []
+    plugins = root / "plugins"
+    manifest_path = plugins / "skills.json"
+    if not manifest_path.is_file():
+        return issues  # no plugin layout in this tree
+    manifest = load_manifest(root)
+
+    for name in sorted(skill_names - manifest.keys()):
+        issues.append(f"Skill {name} is missing from plugins/skills.json")
+    for name in sorted(manifest.keys() - skill_names):
+        issues.append(f"plugins/skills.json lists {name}, which is not in .claude/skills")
+
+    expected: dict[str, set[str]] = {}
+    for name, owner in manifest.items():
+        if owner is None or name not in skill_names:
+            continue
+        if not (plugins / owner).is_dir():
+            issues.append(f"Skill {name} is owned by unknown plugin {owner!r}")
+            continue
+        expected.setdefault(owner, set()).add(name)
+        link = plugins / owner / "skills" / name
+        want = f"../../../.claude/skills/{name}"
+        if not link.is_symlink():
+            issues.append(f"Plugin skill link {link.relative_to(root)} is missing")
+        elif os.readlink(link) != want:
+            issues.append(
+                f"Plugin skill link {link.relative_to(root)} points to "
+                f"{os.readlink(link)!r}, expected {want!r}"
+            )
+
+    for plugin in sorted(p for p in plugins.iterdir() if p.is_dir()):
+        skills_dir = plugin / "skills"
+        if not skills_dir.is_dir():
+            continue
+        for item in sorted(skills_dir.iterdir()):
+            if item.name not in expected.get(plugin.name, set()):
+                issues.append(f"Extra plugin skill link {item.relative_to(root)}")
+
+    # Core plugin scripts: a real folder of per-file symlinks.
+    scripts_dir = plugins / CORE_PLUGIN / "scripts"
+    if scripts_dir.is_dir() or scripts_dir.is_symlink():
+        if scripts_dir.is_symlink() or not scripts_dir.is_dir():
+            issues.append(f"{scripts_dir.relative_to(root)} must be a real folder of symlinks")
+        else:
+            for name in USER_SCRIPTS:
+                link = scripts_dir / name
+                want = f"../../../scripts/{name}"
+                if not link.is_symlink():
+                    issues.append(f"Plugin script link {link.relative_to(root)} is missing")
+                elif os.readlink(link) != want:
+                    issues.append(
+                        f"Plugin script link {link.relative_to(root)} points to "
+                        f"{os.readlink(link)!r}, expected {want!r}"
+                    )
+            for item in sorted(scripts_dir.iterdir()):
+                if item.name not in USER_SCRIPTS:
+                    issues.append(f"Extra plugin script {item.relative_to(root)}")
+    else:
+        issues.append(f"{scripts_dir.relative_to(root)} is missing")
+
+    # Marketplace lists every plugin directory.
+    marketplace = root / ".claude-plugin" / "marketplace.json"
+    plugin_dirs = {p.name for p in plugins.iterdir() if p.is_dir()}
+    if not marketplace.is_file():
+        issues.append(".claude-plugin/marketplace.json is missing")
+    else:
+        listed = {
+            Path(entry.get("source", "")).name
+            for entry in json.loads(marketplace.read_text(encoding="utf-8")).get(
+                "plugins", []
+            )
+        }
+        for name in sorted(plugin_dirs - listed):
+            issues.append(f"plugins/{name} is not listed in .claude-plugin/marketplace.json")
+        for name in sorted(listed - plugin_dirs):
+            issues.append(f"marketplace.json lists {name}, which is not in plugins/")
+    return issues
 
 
 def check_sync(root_dir: Path | None = None) -> tuple[bool, list[str]]:
@@ -172,7 +275,53 @@ def check_sync(root_dir: Path | None = None) -> tuple[bool, list[str]]:
                     f"Orphan Antigravity skill without Claude skill: {item.relative_to(root)}"
                 )
 
+    issues.extend(check_plugins(root, skill_names))
+
     return len(issues) == 0, issues
+
+
+def link_plugin_assets(root: Path, skill_names: set[str]) -> None:
+    """Create plugins/<owner>/skills/<name> and core script symlinks."""
+    plugins = root / "plugins"
+    if not (plugins / "skills.json").is_file():
+        return
+    manifest = load_manifest(root)
+    for name in sorted(skill_names):
+        owner = manifest.get(name)
+        if owner is None:
+            continue
+        skills_dir = plugins / owner / "skills"
+        skills_dir.mkdir(parents=True, exist_ok=True)
+        link = skills_dir / name
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(f"../../../.claude/skills/{name}")
+        print(f"Linked plugin skill: {link.relative_to(root)}")
+    # Remove links no longer in the manifest.
+    for plugin in plugins.iterdir():
+        skills_dir = plugin / "skills"
+        if not skills_dir.is_dir():
+            continue
+        for item in skills_dir.iterdir():
+            if item.is_symlink() and manifest.get(item.name) != plugin.name:
+                item.unlink()
+                print(f"Removed stale plugin skill link: {item.relative_to(root)}")
+
+    core = plugins / CORE_PLUGIN
+    if core.is_dir():
+        scripts_dir = core / "scripts"
+        if scripts_dir.is_symlink():
+            scripts_dir.unlink()
+        scripts_dir.mkdir(exist_ok=True)
+        for item in scripts_dir.iterdir():
+            if item.name not in USER_SCRIPTS:
+                item.unlink()
+        for name in USER_SCRIPTS:
+            link = scripts_dir / name
+            if link.is_symlink() or link.exists():
+                link.unlink()
+            link.symlink_to(f"../../../scripts/{name}")
+        print(f"Linked plugin scripts: {scripts_dir.relative_to(root)}")
 
 
 def sync_all(root_dir: Path | None = None) -> None:
@@ -222,6 +371,15 @@ def sync_all(root_dir: Path | None = None) -> None:
         mdc_content = generate_cursor_mdc(meta, body, skill_name)
         mdc_file.write_text(mdc_content, encoding="utf-8")
         print(f"Updated Cursor rule: {mdc_file.relative_to(root)}")
+
+    link_plugin_assets(
+        root,
+        {
+            d.name
+            for d in claude_skills.iterdir()
+            if d.is_dir() and (d / "SKILL.md").exists()
+        },
+    )
 
     print("Sync complete.")
 

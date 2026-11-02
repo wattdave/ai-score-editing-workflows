@@ -975,7 +975,7 @@
 		// unknown name raises a modal dialog that blocks Sibelius (docs/sibelius-protocol.md
 		// 1.3.1), so nothing outside this table is ever dereferenced.
 		// Generated from query_props.json, which query.py also reads.
-		// BEGIN GENERATED from query_props.json (scripts/gen_query_props.py)
+		// BEGIN GENERATED from query_props.json (scripts/dev/gen_query_props.py)
 		common = CreateDictionary();
 		common['Position'] = True;
 		common['VoiceNumber'] = True;

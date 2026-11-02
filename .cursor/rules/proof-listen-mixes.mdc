@@ -25,7 +25,7 @@ name) are skipped.
 
 | Check | Severity | Meaning |
 | --- | --- | --- |
-| `shared` | error | Different voices' files carry the same audio. Separate renders never match sample for sample, so correlation near 1 against a pair's usual level means one render was copied into several files. Compared only within "only" files and within "louder" files. Below -40 dB (a rest or a tail) it is a warning. |
+| `shared` | error | Different voices' files carry the same audio. Separate renders never match sample for sample, so correlation near 1 against a pair's usual level means one render was copied into several files. Compared only within "only" files and within "louder" files. Below -40 dB (a rest or a tail) it is a warning. With `--stems`, a stretch where the named voices' stems are silent is a `note` instead (see below). |
 | `level` | error from +12 dB, warning from +6 dB | A run of 3+ seconds much louder than the file's median. |
 | `repeat` | warning | A stretch repeats another stretch of the same file sample for sample. Normal for a repeated verse in sampled sounds. Cantai should re-sing each time, so a repeat in a Cantai file is worth a listen. |
 | `arithmetic` | error | With `--stems`: a mix is not the stems at fixed gains (wrong stem, wrong gain). |
@@ -35,12 +35,24 @@ name) are skipped.
 
 ## When it finds a `shared` or opening `level` error
 
-The usual cause (seen 2026-10-22 on Shenandoah, and in older batches) is a
-stale Cantai render cache: every single-staff export starts with the same
-whole-choir audio for a few bars, identical whatever was exported before it,
-so the `rehearsal-mixes` warm-up export does not help. Quitting and reopening
-Sibelius clears it; then re-export and re-run the proof. Check by exporting
-the same staff twice: renders that differ from each other are healthy.
+**Accompaniment-only stretches are not faults.** Where all the voices rest
+(an intro, an interlude), each "only" mix is just the accompaniment, so the
+files are identical there. With the stems (`rehearsal-mixes` passes them
+itself), `shared` over a stretch where the named voices' stems are silent
+(below -50 dB, ignoring the first and last second of a stretch longer than two) is reported as a
+`note`, which never fails the batch. A stretch where a voice is sounding
+stays an error, and so does any stretch if the stems are not at hand: check
+the flagged ranges against the score (do the sung staves rest there?) before
+treating the error as a stale render. The stems' own `shared` check still
+catches a render copied into several stems.
+
+The usual cause of a real `shared` or opening `level` error (seen 2026-10-22
+on Shenandoah, and in older batches) is a stale Cantai render cache: every
+single-staff export starts with the same whole-choir audio for a few bars,
+identical whatever was exported before it, so the `rehearsal-mixes` warm-up
+export does not help. Quitting and reopening Sibelius clears it; then
+re-export and re-run the proof. Check by exporting the same staff twice:
+renders that differ from each other are healthy.
 
 Other causes of `shared` between two staves: both play the same Cantai voice,
 so they share one playback channel (give each staff a different voice); or

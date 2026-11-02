@@ -1,0 +1,1 @@
+../../../scripts/musescore_mcp.sh

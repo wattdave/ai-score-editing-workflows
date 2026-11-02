@@ -1,4 +1,4 @@
-"""Tests for scripts/extract_dorico_qml.py on a synthetic rcc-style blob."""
+"""Tests for scripts/dev/extract_dorico_qml.py on a synthetic rcc-style blob."""
 
 import importlib.util
 import struct
@@ -6,7 +6,7 @@ import zlib
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location(
-    "extract_dorico_qml", Path(__file__).parent.parent / "scripts" / "extract_dorico_qml.py"
+    "extract_dorico_qml", Path(__file__).parent.parent / "scripts" / "dev" / "extract_dorico_qml.py"
 )
 extract_dorico_qml = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(extract_dorico_qml)

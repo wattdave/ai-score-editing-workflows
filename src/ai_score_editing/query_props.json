@@ -1,5 +1,5 @@
 {
- "comment": "Properties Query may read through obj.@name. Edit here, then run scripts/gen_query_props.py to regenerate the ScoreBridge.plg QueryPropTable. Bar and Staff are container kinds: Query enumerates them from NthBar/NthStaff, and they do not take the common (bar object) properties.",
+ "comment": "Properties Query may read through obj.@name. Edit here, then run scripts/dev/gen_query_props.py to regenerate the ScoreBridge.plg QueryPropTable. Bar and Staff are container kinds: Query enumerates them from NthBar/NthStaff, and they do not take the common (bar object) properties.",
  "common": [
   "Position",
   "VoiceNumber",

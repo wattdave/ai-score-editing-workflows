@@ -11,7 +11,7 @@ It edits the score, so it only runs on a score whose name contains
 "Scratch" unless --force is given. Needs at least 8 bars and 2 staves; it
 works in the last four bars of staff 2 (which should be empty).
 
-    uv run python scripts/musescore_live_check.py [--port 8766] [--force]
+    uv run python scripts/dev/musescore_live_check.py [--port 8766] [--force]
 """
 
 from __future__ import annotations

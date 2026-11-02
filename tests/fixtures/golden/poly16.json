@@ -1,0 +1,171 @@
+{
+  "audit": [
+    {
+      "layout": "open-score",
+      "measure": "1",
+      "sources": {
+        "C1_A1": "P2",
+        "C1_A2": "P2",
+        "C1_B1": "P4",
+        "C1_B2": "P4",
+        "C1_S1": "P1",
+        "C1_S2": "P1",
+        "C1_T1": "P3",
+        "C1_T2": "P3",
+        "C2_A1": "P6",
+        "C2_A2": "P6",
+        "C2_B1": "P8",
+        "C2_B2": "P8",
+        "C2_S1": "P5",
+        "C2_S2": "P5",
+        "C2_T1": "P7",
+        "C2_T2": "P7"
+      }
+    },
+    {
+      "layout": "short-score",
+      "measure": "2",
+      "sources": {
+        "C1_A1": "P9",
+        "C1_A2": "P9",
+        "C1_B1": "P9",
+        "C1_B2": "P9",
+        "C1_S1": "P9",
+        "C1_S2": "P9",
+        "C1_T1": "P9",
+        "C1_T2": "P9",
+        "C2_A1": "C1 (intentional unison)",
+        "C2_A2": "C1 (intentional unison)",
+        "C2_B1": "C1 (intentional unison)",
+        "C2_B2": "C1 (intentional unison)",
+        "C2_S1": "C1 (intentional unison)",
+        "C2_S2": "C1 (intentional unison)",
+        "C2_T1": "C1 (intentional unison)",
+        "C2_T2": "C1 (intentional unison)"
+      }
+    },
+    {
+      "layout": "open-score",
+      "measure": "3",
+      "sources": {
+        "C1_A1": "P2",
+        "C1_A2": "P2",
+        "C1_B1": "P4",
+        "C1_B2": "P4",
+        "C1_S1": "P1",
+        "C1_S2": "P1",
+        "C1_T1": "P3",
+        "C1_T2": "P3",
+        "C2_A1": "C1 (intentional unison)",
+        "C2_A2": "C1 (intentional unison)",
+        "C2_B1": "C1 (intentional unison)",
+        "C2_B2": "C1 (intentional unison)",
+        "C2_S1": "C1 (intentional unison)",
+        "C2_S2": "C1 (intentional unison)",
+        "C2_T1": "C1 (intentional unison)",
+        "C2_T2": "C1 (intentional unison)"
+      }
+    }
+  ],
+  "inputFile": "<FIX>/polychoral_raw_12.musicxml",
+  "issues": [
+    {
+      "code": "measure-overflow",
+      "measure": "1",
+      "message": "MusicXML cursor reaches 1280, expected 1024; no duration was shortened",
+      "severity": "error",
+      "source": "P3"
+    },
+    {
+      "code": "target-overflow",
+      "measure": "1",
+      "message": "Target C1_T1 reaches 1280, expected 1024; no duration was shortened",
+      "severity": "error",
+      "source": "C1_T1"
+    },
+    {
+      "code": "target-overflow",
+      "measure": "1",
+      "message": "Target C1_T2 reaches 1280, expected 1024; no duration was shortened",
+      "severity": "error",
+      "source": "C1_T2"
+    },
+    {
+      "code": "missing-pitch-slot",
+      "measure": "2",
+      "message": "Pitch slot 4 is unavailable",
+      "severity": "error",
+      "source": "P9/staff 2/voice 3/onset 0"
+    },
+    {
+      "code": "unsupported-pitch-count",
+      "measure": "3",
+      "message": "3 simultaneous pitches exceed 2 supported slots; source was not silently reduced",
+      "severity": "error",
+      "source": "P2/staff 1/voice 1/onset 0"
+    },
+    {
+      "code": "unsupported-pitch-count",
+      "measure": "3",
+      "message": "3 simultaneous pitches exceed 2 supported slots; source was not silently reduced",
+      "severity": "error",
+      "source": "P2/staff 1/voice 1/onset 0"
+    },
+    {
+      "code": "ambiguous-xml-voices",
+      "measure": "3",
+      "message": "3 XML voices cannot be combined into two monophonic targets",
+      "severity": "error",
+      "source": "1, 2, 3"
+    },
+    {
+      "code": "target-overlap",
+      "measure": "3",
+      "message": "Target C1_B1 has overlapping events at onset 0",
+      "severity": "error",
+      "source": "C1_B1"
+    },
+    {
+      "code": "target-overlap",
+      "measure": "3",
+      "message": "Target C1_B2 has overlapping events at onset 0",
+      "severity": "error",
+      "source": "C1_B2"
+    },
+    {
+      "code": "target-overlap",
+      "measure": "3",
+      "message": "Target C2_B1 has overlapping events at onset 0",
+      "severity": "error",
+      "source": "C2_B1"
+    },
+    {
+      "code": "target-overlap",
+      "measure": "3",
+      "message": "Target C2_B2 has overlapping events at onset 0",
+      "severity": "error",
+      "source": "C2_B2"
+    }
+  ],
+  "outputFile": "<TMP>/poly16.musicxml",
+  "parts": [
+    "C1_S1",
+    "C1_S2",
+    "C1_A1",
+    "C1_A2",
+    "C1_T1",
+    "C1_T2",
+    "C1_B1",
+    "C1_B2",
+    "C2_S1",
+    "C2_S2",
+    "C2_A1",
+    "C2_A2",
+    "C2_T1",
+    "C2_T2",
+    "C2_B1",
+    "C2_B2"
+  ],
+  "partsCount": 16,
+  "totalMeasures": 3
+}

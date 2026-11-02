@@ -41,8 +41,9 @@ Claude plan does not include Claude Code; see
    asks whether to trust this folder and approve its `sibelius` tool server;
    say yes to both.
 4. Type `/setup`. Claude explains what is missing (Homebrew, git, uv,
-   Python 3.13, ffmpeg, the ScoreBridge plug-in for your editor), asks whether to install it
-   all at once or one item at a time, and does the work.
+   Python 3.13, ffmpeg, the ScoreBridge plug-in for your editor, and the
+   optional pandoc and LibreOffice for Word documents), asks whether to
+   install it all at once or one item at a time, and does the work.
 
 `.claude/skills/setup/scripts/setup_check.sh` shows what is installed at any time.
 
@@ -60,7 +61,7 @@ folder, add the marketplace and install the plugins for your editor:
 ```
 
 `score-editing-core` holds the editor-independent skills (`setup`, OMR repair,
-LilyPond import, lyric hyphenation). Install it plus the plugin for each editor
+LilyPond import, lyric hyphenation, lyric sheets). Install it plus the plugin for each editor
 you use. Each editor plugin starts only its own tool server. Run `/setup`
 afterwards to install `uv`, Python and the ScoreBridge plug-ins.
 
@@ -107,6 +108,15 @@ The same steps by hand, in Terminal, from this folder:
    brew install git uv ffmpeg
    uv python install 3.13
    uv sync
+   ```
+
+   Optional, for making Word documents such as lyric sheets from Markdown
+   (`pandoc`) and checking them by rendering to PDF (`libreoffice`, about
+   350 MB). Also useful: `poppler` for page images of PDF scores.
+
+   ```bash
+   brew install pandoc poppler
+   brew install --cask libreoffice
    ```
 
 4. Open Sibelius once and quit it, then install the bridge plug-in:
@@ -320,7 +330,7 @@ Addresses, units and batches follow the Sibelius tools, and a dry run
 really runs the batch and rolls it back. Hairpins can't be added (they
 crashed MuseScore). [docs/musescore.md](docs/musescore.md) has the parity
 table, the probe results and a live check
-(`scripts/musescore_live_check.py`); the `musescore` skill (`/musescore`)
+(`scripts/dev/musescore_live_check.py`); the `musescore` skill (`/musescore`)
 covers using it.
 
 This replaced the third-party [ghchen99/mcp-musescore](https://github.com/ghchen99/mcp-musescore)
@@ -343,6 +353,13 @@ automatically loading them. Keep the harness files in sync:
 python scripts/sync_skills.py          # sync .claude/skills, .agents/skills, and .cursor/rules
 python scripts/sync_skills.py --check  # check for drift without modifying files
 ```
+
+`plugins/skills.json` maps each skill to the plugin that ships it (`null` for
+repo-only skills such as `git-workflow`); the sync script also creates the
+`plugins/<owner>/skills/<name>` links and the per-file links in
+`plugins/score-editing-core/scripts/`. User-facing scripts stay in `scripts/`;
+developer probes (Dorico and MuseScore probes, fixture and generator scripts)
+live in `scripts/dev/` and are not shipped with the plug-ins.
 
 ## Documentation
 

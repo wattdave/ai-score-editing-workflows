@@ -1,0 +1,4 @@
+rc=0
+--stdout--
+Successfully reconnected 2 words in <TMP>/reconnected.musicxml
+--stderr--

@@ -267,8 +267,8 @@ async def test_patch_layout_removes_redundant_clefs_from_installed_package(
         patch("ai_score_editing.sibelius.cli._require_bridge", new=AsyncMock()),
         patch("ai_score_editing.sibelius.cli._assert_expected_score", new=AsyncMock()),
         patch("ai_score_editing.sibelius.cli._backup", new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"})),
-        patch("ai_score_editing.sibelius.cli._bridge", side_effect=bridge_side_effect),
-        patch("ai_score_editing.sibelius.cli._apply_batch", side_effect=apply_batch),
+        patch("ai_score_editing.sibelius.bridge.call", side_effect=bridge_side_effect),
+        patch("ai_score_editing.sibelius.bridge.apply_batch", side_effect=apply_batch),
     ):
         assert await _run_patch_layout(args) == EXIT_OK
 

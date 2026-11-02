@@ -20,6 +20,18 @@ def midi(note: Element) -> int:
     return 12 * (int(pitch.findtext("octave") or "0") + 1) + SEMITONES[pitch.findtext("step") or "C"] + alter
 
 
+def insert_note_child(note: Element, child: Element) -> None:
+    """Insert a child into a note element respecting strict MusicXML schema order."""
+    child_rank = NOTE_TAG_ORDER.index(child.tag) if child.tag in NOTE_TAG_ORDER else 999
+    insert_idx = len(note)
+    for idx, existing in enumerate(note):
+        existing_rank = NOTE_TAG_ORDER.index(existing.tag) if existing.tag in NOTE_TAG_ORDER else 999
+        if existing_rank > child_rank:
+            insert_idx = idx
+            break
+    note.insert(insert_idx, child)
+
+
 def clean_note(note: Element, voice: str = "1") -> Element:
     clone = copy.deepcopy(note)
     for tag in ("staff", "chord", "stem", "instrument"):

@@ -8,6 +8,8 @@ a quick listen can miss:
   different voices never match sample for sample, so a window where several
   files correlate far above their usual level is one render copied into all
   (a stale Cantai render cache gave every staff the same first four bars).
+  Where the voices' own stems are silent for the whole stretch, the files carry
+  only the accompaniment and are identical as they should be: a ``note``.
 - ``repeat``: a stretch of one file that repeats an earlier or later stretch
   sample for sample. Even a repeated phrase is re-rendered with new samples.
 - ``level``: a stretch much louder than the rest of its file.
@@ -37,6 +39,8 @@ SHARED_RISE = 0.4
 SHARED_MIN_SECONDS = 2
 # shared audio quieter than this is a rest or a tail: a warning, not an error
 SHARED_AUDIBLE_DB = -40.0
+# a voice stem quieter than this is resting
+VOICE_REST_DB = -50.0
 # repeat: sample-for-sample repeats
 REPEAT_CORR = 0.97
 REPEAT_MIN_LAG_SECONDS = 2.0
@@ -62,7 +66,7 @@ MIX_KIND = re.compile(r" - (?P<label>.+?)\.(?:mp3|wav|aiff|m4a)$")
 
 @dataclass(frozen=True)
 class Finding:
-    severity: str  # "error" or "warning"
+    severity: str  # "error", "warning" or "note" (information, never fails a batch)
     check: str
     message: str
     files: tuple[str, ...] = ()
@@ -337,6 +341,50 @@ def kind_of(path: Path) -> str:
     return "other"
 
 
+def _stem_key(name: str) -> str:
+    """'04 Soprano.aiff' -> 'soprano', the name a mix label uses."""
+    return re.sub(r"^\d+\s+", "", Path(name).stem).lower()
+
+
+def _voice_key(name: str) -> str:
+    """'Song - Soprano only.mp3' -> 'soprano'."""
+    match = MIX_KIND.search(name)
+    label = match.group("label") if match else Path(name).stem
+    return re.sub(r" (?:only|louder)$", "", label, flags=re.IGNORECASE).lower()
+
+
+def note_accompaniment_only(findings: list[Finding], stems: dict[str, np.ndarray]) -> list[Finding]:
+    """Turn `shared` findings over stretches where the voices rest into notes.
+
+    When every voice named by a finding has a stem of its own and each is
+    silent for the stretch (leaving out its first and last second when the
+    stretch is longer than two, where a voice can still be dying away or coming
+    in), the files hold nothing but the accompaniment and are identical for
+    that reason. A voice with no matching stem keeps the finding as it was, and
+    the stems' own `shared` check still catches a copied render.
+    """
+    by_voice = {_stem_key(n): x for n, x in stems.items()}
+    out = []
+    for f in findings:
+        voices = [by_voice.get(_voice_key(n)) for n in f.files]
+        if f.check != "shared" or f.start is None or any(v is None for v in voices):
+            out.append(f)
+            continue
+        start, end = int(f.start), int(f.end)
+        if end - start > 2:  # the edges can hold a voice's last notes or first entry
+            start, end = start + 1, end - 1
+        if all(window_db(v)[start:end].max() < VOICE_REST_DB for v in voices):
+            out.append(Finding(
+                "note", "shared",
+                "only the accompaniment plays here (these voices rest), so the files are identical: "
+                + ", ".join(f.files),
+                f.files, f.start, f.end,
+            ))
+        else:
+            out.append(f)
+    return out
+
+
 def proof_folder(
     folder: Path, stems: Path | list[Path] | None = None, loudness_of=None, only: list[Path] | None = None
 ) -> ProofReport:
@@ -359,9 +407,11 @@ def proof_folder(
     signals = {p.name: load_mono(p) for p in audio}
     for name, x in signals.items():
         report.findings += check_level(name, x) + check_repeats(name, x) + check_silence(name, x)
+    shared = []
     for kind in ("only", "louder"):
         group = {p.name: signals[p.name] for p in audio if kind_of(p) == kind}
-        report.findings += check_shared(group)
+        shared += check_shared(group)
+    report.findings += shared
     report.findings += check_batch(
         {n: len(x) / SAMPLE_RATE for n, x in signals.items()},
         {p.name: loudness_of(p) for p in audio} if loudness_of else {},
@@ -371,6 +421,9 @@ def proof_folder(
             stems if isinstance(stems, list) else (p for p in stems.iterdir() if p.suffix.lower() in {".aiff", ".wav"})
         )
         stem_signals = {p.name: load_mono(p) for p in stem_files}
+        report.findings = [f for f in report.findings if f not in shared] + note_accompaniment_only(
+            shared, stem_signals
+        )
         report.files += [f"stems/{n}" for n in stem_signals]
         for name, x in stem_signals.items():
             report.findings += [

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Install and talk to the MuseScore probe plug-in (scripts/musescore_probe/).
+"""Install and talk to the MuseScore probe plug-in (scripts/dev/musescore_probe/).
 
-    uv run python scripts/musescore_probe.py install
-    uv run python scripts/musescore_probe.py eval 'return curScore.nmeasures;'
-    uv run python scripts/musescore_probe.py run probe.js
+    uv run python scripts/dev/musescore_probe.py install
+    uv run python scripts/dev/musescore_probe.py eval 'return curScore.nmeasures;'
+    uv run python scripts/dev/musescore_probe.py run probe.js
 
 `install` generates a token (or reuses the stored one), stores it in
 ~/.config/ai-score-editing/musescore-probe-token (mode 600) and writes
