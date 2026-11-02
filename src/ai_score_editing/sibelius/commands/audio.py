@@ -23,34 +23,7 @@ from ai_score_editing.sibelius.bridge import (
 )
 from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK
 from ai_score_editing.sibelius.commands._common import client as _client
-
-
-# Collaborators that tests and skill scripts patch on ``sibelius.cli``. They are
-# looked up there at call time (like ``_common.client``), so patches still work.
-def _cli() -> Any:
-    from ai_score_editing.sibelius import cli
-
-    return cli
-
-
-async def _bridge(client: Any, *rest: Any) -> Any:
-    return await _cli()._bridge(client, *rest)
-
-
-async def _require_bridge(client: Any, *rest: Any) -> Any:
-    return await _cli()._require_bridge(client, *rest)
-
-
-async def _check_bridge_version(client: Any) -> Any:
-    return await _cli()._check_bridge_version(client)
-
-
-async def _assert_expected_score(client: Any, *rest: Any) -> Any:
-    return await _cli()._assert_expected_score(client, *rest)
-
-
-def _export_path(*a: Any) -> Path:
-    return _cli()._export_path(*a)
+from ai_score_editing.sibelius.commands._common import cli as _cli
 
 
 def register(sub: Any) -> dict[str, Callable[..., Any]]:
@@ -132,8 +105,8 @@ def _print_playback_sounds(staves: list[dict]) -> None:
 
 async def _run_playback_sounds(args: argparse.Namespace) -> int:
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _require_bridge(client, PLAYBACK_SOUNDS_BRIDGE_VERSION, "playback-sounds")
-        staves = await _bridge(client, "GetPlaybackSounds")
+        await _cli._require_bridge(client, PLAYBACK_SOUNDS_BRIDGE_VERSION, "playback-sounds")
+        staves = await _cli._bridge(client, "GetPlaybackSounds")
     _print_playback_sounds(staves)
     print(json.dumps(staves, indent=2))
     if args.require:
@@ -174,21 +147,21 @@ async def _run_rehearsal_mixes(args: argparse.Namespace) -> int:
     stem_dir.mkdir(exist_ok=True)
     try:
         async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-            await _require_bridge(client, AUDIO_EXPORT_BRIDGE_VERSION, "rehearsal-mixes")
+            await _cli._require_bridge(client, AUDIO_EXPORT_BRIDGE_VERSION, "rehearsal-mixes")
             if args.sib_file:
-                await _bridge(client, "OpenScore", [str(Path(args.sib_file).expanduser().resolve())])
-            await _assert_expected_score(client, args)
-            info = await _bridge(client, "GetScoreInfo")
-            staves = await _bridge(client, "GetStaves")
+                await _cli._bridge(client, "OpenScore", [str(Path(args.sib_file).expanduser().resolve())])
+            await _cli._assert_expected_score(client, args)
+            info = await _cli._bridge(client, "GetScoreInfo")
+            staves = await _cli._bridge(client, "GetStaves")
             if unknown := sorted(set(overrides) - {s["staffNum"] for s in staves}):
                 print(f"error: --name for staves not in the score: {unknown}", file=sys.stderr)
                 return EXIT_COMMAND_FAILED
             vocal = set()
             for staff in staves:
-                if args.all_parts or await _bridge(client, "ReadLyrics", [staff["staffNum"], 1, info["barCount"]]):
+                if args.all_parts or await _cli._bridge(client, "ReadLyrics", [staff["staffNum"], 1, info["barCount"]]):
                     vocal.add(staff["staffNum"])
-            await _require_bridge(client, PLAYBACK_SOUNDS_BRIDGE_VERSION, "rehearsal-mixes sound check")
-            playback = await _bridge(client, "GetPlaybackSounds")
+            await _cli._require_bridge(client, PLAYBACK_SOUNDS_BRIDGE_VERSION, "rehearsal-mixes sound check")
+            playback = await _cli._bridge(client, "GetPlaybackSounds")
             _print_playback_sounds(playback)
             if args.require_sound:
                 problems = rehearsal_mix.sound_problems(playback, vocal, args.require_sound)
@@ -209,8 +182,8 @@ async def _run_rehearsal_mixes(args: argparse.Namespace) -> int:
                 # The first seconds of an export still sound the previous
                 # export's voice (Cantai switches voices late), so a throwaway
                 # export of the same staff comes first; the second is clean.
-                await _bridge(client, "ExportAudio", [str(work / "warm-up.aiff"), num])
-                await _bridge(client, "ExportAudio", [str(path), num])
+                await _cli._bridge(client, "ExportAudio", [str(work / "warm-up.aiff"), num])
+                await _cli._bridge(client, "ExportAudio", [str(path), num])
                 if not path.exists():
                     raise BridgeError(f"Sibelius reported exporting {path}, but it does not exist")
                 stems.append(rehearsal_mix.Stem(num, name, path, vocal=num in vocal))
@@ -286,20 +259,20 @@ async def _run_verify_render(args: argparse.Namespace) -> int:
         return EXIT_COMMAND_FAILED
     saveas_type, extension = EXPORT_FORMATS[args.format]
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _check_bridge_version(client)
+        await _cli._check_bridge_version(client)
         if args.sib_file:
             source = Path(args.sib_file).expanduser().resolve()
             if not source.exists():
                 print(f"error: {source} does not exist", file=sys.stderr)
                 return EXIT_COMMAND_FAILED
-            await _bridge(client, "OpenScore", [str(source)])
-        info = await _bridge(client, "GetScoreInfo")
-        await _assert_expected_score(client, args, info)
+            await _cli._bridge(client, "OpenScore", [str(source)])
+        info = await _cli._bridge(client, "GetScoreInfo")
+        await _cli._assert_expected_score(client, args, info)
         if not info.get("fileName") and not args.out:
             print("error: active score has never been saved; pass --out", file=sys.stderr)
             return EXIT_COMMAND_FAILED
-        out = _export_path(args.out, info["fileName"], extension)
-        await _bridge(client, "ExportScore", [str(out), saveas_type])
+        out = _cli._export_path(args.out, info["fileName"], extension)
+        await _cli._bridge(client, "ExportScore", [str(out), saveas_type])
 
     produced = [out] if out.exists() else sorted(out.parent.glob(f"{out.stem}_*{out.suffix}"))
     files: list[dict[str, Any]] = []
