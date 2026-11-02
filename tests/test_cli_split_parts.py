@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from fakes import CliSession
+
 from ai_score_editing.sibelius.cli import (
     EXIT_COMMAND_FAILED,
     EXIT_OK,
@@ -156,7 +158,7 @@ async def test_split_parts_satb_and_audit_mode(tmp_path: Path, capsys: pytest.Ca
 
 
 @pytest.mark.asyncio
-async def test_split_parts_active_score_roundtrip(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+async def test_split_parts_active_score_roundtrip(cli_session: CliSession, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     export_target = tmp_path / "fake_exported.musicxml"
     _create_minimal_valid_score(export_target)
     out_file = tmp_path / "split_from_active.mxl"
@@ -179,9 +181,7 @@ async def test_split_parts_active_score_roundtrip(tmp_path: Path, capsys: pytest
     parser = build_parser()
     args = parser.parse_args(["split-parts", "-o", str(out_file)])
 
-    with patch("ai_score_editing.sibelius.cli._client", return_value=mock_context), \
-         patch("ai_score_editing.sibelius.cli._check_bridge_version", new_callable=AsyncMock), \
-         patch("ai_score_editing.sibelius.cli._bridge", side_effect=fake_bridge):
+    with patch("ai_score_editing.sibelius.cli._bridge", side_effect=fake_bridge):
         ret = await _run_split_parts(args)
         assert ret == EXIT_OK
         assert out_file.exists()

@@ -1,0 +1,4448 @@
+{
+ "arguments": [
+  {
+   "choices": null,
+   "const": null,
+   "default": "localhost",
+   "dest": "host",
+   "kind": "_StoreAction",
+   "metavar": null,
+   "nargs": null,
+   "options": [
+    "--host"
+   ],
+   "required": false,
+   "type": null
+  },
+  {
+   "choices": null,
+   "const": null,
+   "default": 1898,
+   "dest": "port",
+   "kind": "_StoreAction",
+   "metavar": null,
+   "nargs": null,
+   "options": [
+    "--port"
+   ],
+   "required": false,
+   "type": "int"
+  },
+  {
+   "choices": null,
+   "const": null,
+   "default": "ai-score-editing",
+   "dest": "client_name",
+   "kind": "_StoreAction",
+   "metavar": null,
+   "nargs": null,
+   "options": [
+    "--client-name"
+   ],
+   "required": false,
+   "type": null
+  },
+  {
+   "choices": null,
+   "const": null,
+   "default": 120.0,
+   "dest": "timeout",
+   "kind": "_StoreAction",
+   "metavar": null,
+   "nargs": null,
+   "options": [
+    "--timeout"
+   ],
+   "required": false,
+   "type": "float"
+  },
+  {
+   "choices": null,
+   "const": null,
+   "default": true,
+   "dest": "launch",
+   "kind": "BooleanOptionalAction",
+   "metavar": null,
+   "nargs": 0,
+   "options": [
+    "--launch",
+    "--no-launch"
+   ],
+   "required": false,
+   "type": null
+  },
+  {
+   "choices": null,
+   "const": null,
+   "default": 30.0,
+   "dest": "launch_timeout",
+   "kind": "_StoreAction",
+   "metavar": null,
+   "nargs": null,
+   "options": [
+    "--launch-timeout"
+   ],
+   "required": false,
+   "type": "float"
+  },
+  {
+   "choices": null,
+   "const": null,
+   "default": null,
+   "dest": "sibelius_path",
+   "kind": "_StoreAction",
+   "metavar": null,
+   "nargs": null,
+   "options": [
+    "--sibelius-path"
+   ],
+   "required": false,
+   "type": null
+  },
+  {
+   "choices": null,
+   "const": true,
+   "default": false,
+   "dest": "json",
+   "kind": "_StoreTrueAction",
+   "metavar": null,
+   "nargs": 0,
+   "options": [
+    "--json"
+   ],
+   "required": false,
+   "type": null
+  },
+  {
+   "choices": null,
+   "const": null,
+   "default": null,
+   "dest": "expect_file",
+   "kind": "_StoreAction",
+   "metavar": null,
+   "nargs": null,
+   "options": [
+    "--expect-file"
+   ],
+   "required": false,
+   "type": null
+  },
+  {
+   "choices": null,
+   "const": null,
+   "default": null,
+   "dest": "backup_dir",
+   "kind": "_StoreAction",
+   "metavar": null,
+   "nargs": null,
+   "options": [
+    "--backup-dir"
+   ],
+   "required": false,
+   "type": null
+  },
+  {
+   "choices": null,
+   "const": true,
+   "default": false,
+   "dest": "verbose",
+   "kind": "_StoreTrueAction",
+   "metavar": null,
+   "nargs": 0,
+   "options": [
+    "-v",
+    "--verbose"
+   ],
+   "required": false,
+   "type": null
+  }
+ ],
+ "subcommands": {
+  "add-abc": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": 1,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": 0,
+     "dest": "pos",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--pos",
+      "--position"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "abc",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": "?",
+     "options": [],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "abc_opt",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--abc"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "const": null,
+     "default": 1,
+     "dest": "voice",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--voice"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "add-bars": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": 1,
+     "dest": "count",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--count"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "add-note": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": 0,
+     "dest": "pos",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--pos",
+      "--position"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "pitches",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--pitch",
+      "--pitches"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": "quarter",
+     "dest": "duration",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--duration",
+      "--dur"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "notes",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--notes",
+      "--sequence"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "const": null,
+     "default": 1,
+     "dest": "voice",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--voice"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "tied",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--tied"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "add-notes": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": 0,
+     "dest": "pos",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--pos",
+      "--position"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "pitches",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--pitch",
+      "--pitches"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": "quarter",
+     "dest": "duration",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--duration",
+      "--dur"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "notes",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--notes",
+      "--sequence"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "const": null,
+     "default": 1,
+     "dest": "voice",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--voice"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "tied",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--tied"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "add-staff": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "instrument",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--instrument",
+      "--style"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": [
+      "bottom",
+      "top",
+      "auto"
+     ],
+     "const": null,
+     "default": "bottom",
+     "dest": "position",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--position"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "full_name",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--full-name"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "short_name",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--short-name"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "above_staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--above-staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "below_staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--below-staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "ossia",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--ossia"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "apply": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "file",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--file"
+     ],
+     "required": true,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "dry_run",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--dry-run"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "backup": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": "ai-score-editing backup",
+     "dest": "name",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--name"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "beam": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "from_index",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--from-index"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "to_index",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--to-index"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "bracket": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "index",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--index"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "remove",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--remove"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "bridge-version": {
+   "arguments": []
+  },
+  "check-lyrics": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": 0,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "from_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--from"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "to_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--to"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bars",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bars"
+     ],
+     "required": false,
+     "type": "str"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "verse",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--verse"
+     ],
+     "required": false,
+     "type": "int"
+    }
+   ]
+  },
+  "clear-bars": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "from_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--from-bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "to_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--to-bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "const": null,
+     "default": null,
+     "dest": "voice",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--voice"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "command": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "command_name",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [],
+     "required": true,
+     "type": null
+    }
+   ]
+  },
+  "copy-passage": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "from_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--from-bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "to_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--to-bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "top_staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--top-staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bottom_staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bottom-staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "dest_staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--dest-staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "dest_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--dest-bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "dest_pos",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--dest-pos"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "from_pos",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--from-pos"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "to_pos",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--to-pos"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "beats",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--beats"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": [
+      "quarter",
+      "signature"
+     ],
+     "const": null,
+     "default": "quarter",
+     "dest": "beat_unit",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--beat-unit"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "dry_run",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--dry-run"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "create-staff": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "instrument",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--instrument",
+      "--style"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": [
+      "bottom",
+      "top",
+      "auto"
+     ],
+     "const": null,
+     "default": "bottom",
+     "dest": "position",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--position"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "full_name",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--full-name"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "short_name",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--short-name"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "above_staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--above-staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "below_staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--below-staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "ossia",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--ossia"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "delete-object": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "index",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--index"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "delete-voice": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "from_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--from-bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "to_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--to-bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": [
+      1,
+      2,
+      3,
+      4
+     ],
+     "const": null,
+     "default": null,
+     "dest": "voice",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--voice"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "demix": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "score_file",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": "?",
+     "options": [],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "file_opt",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--file",
+      "-f"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": [
+      "16voices",
+      "satb"
+     ],
+     "const": null,
+     "default": "16voices",
+     "dest": "preset",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--preset"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "out",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--out",
+      "-o"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": true,
+     "dest": "validate",
+     "kind": "BooleanOptionalAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--validate",
+      "--no-validate"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "audit",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--audit"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "soprano_solo",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--soprano-solo"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "tenor_solo",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--tenor-solo"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bass_solo",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bass-solo"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "open",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--open"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "do": {
+   "arguments": [
+    {
+     "choices": [
+      "add-bar",
+      "delete",
+      "play",
+      "play-stop",
+      "redo",
+      "save",
+      "select-all",
+      "select-none",
+      "transpose-dialog",
+      "undo"
+     ],
+     "const": null,
+     "default": null,
+     "dest": "operation",
+     "kind": "_StoreAction",
+     "metavar": "operation",
+     "nargs": null,
+     "options": [],
+     "required": true,
+     "type": null
+    }
+   ]
+  },
+  "duplicate-octave-down-to-voice2": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "from_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--from-bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "to_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--to-bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "export": {
+   "arguments": [
+    {
+     "choices": [
+      "midi",
+      "musicxml",
+      "mxl",
+      "pdf",
+      "png"
+     ],
+     "const": null,
+     "default": "musicxml",
+     "dest": "format",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--format"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "out",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--out"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "sib_file",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--file"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "flip-stem": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "index",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--index"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "forget-token": {
+   "arguments": []
+  },
+  "inspect": {
+   "arguments": []
+  },
+  "install-plugin": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "plugin_dir",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--plugin-dir"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "invoke": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "command_ids",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": "+",
+     "options": [],
+     "required": true,
+     "type": null
+    }
+   ]
+  },
+  "nudge": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "index",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--index"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": 0,
+     "dest": "dx",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--dx"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": 0,
+     "dest": "dy",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--dy"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "patch-layout": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "file",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--file"
+     ],
+     "required": true,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "dry_run",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--dry-run"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "patch-lyrics": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "file",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--file"
+     ],
+     "required": true,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "font",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--font"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "font_size",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--font-size"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "patch-notes": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "file",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--file"
+     ],
+     "required": true,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "dry_run",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--dry-run"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "ping": {
+   "arguments": []
+  },
+  "play-on-pass": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "passes",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--passes"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": [
+      "start_repeat",
+      "end_repeat",
+      "double",
+      "final",
+      "dashed",
+      "invisible",
+      "between_staves",
+      "tick",
+      "short",
+      "dotted",
+      "triple",
+      "thick"
+     ],
+     "const": null,
+     "default": "end_repeat",
+     "dest": "type",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--type"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "position",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--position"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "play-order": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "order",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": "?",
+     "options": [],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "playback-sounds": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "require",
+     "kind": "_StoreAction",
+     "metavar": "SOUND_SET",
+     "nargs": null,
+     "options": [
+      "--require"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "plugin": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "name",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [],
+     "required": true,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "method",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": "?",
+     "options": [],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "plugin_args",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--args"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "proof-mixes": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "folder",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [],
+     "required": true,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "stems",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--stems"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "json",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--json"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "proofread": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bars",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bars"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": 0,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "lyrics",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--lyrics"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": false,
+     "default": true,
+     "dest": "barlines",
+     "kind": "_StoreFalseAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--no-barlines"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "query": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": [],
+     "dest": "staff",
+     "kind": "_AppendAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bars",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bars"
+     ],
+     "required": false,
+     "type": "str"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": [],
+     "dest": "type",
+     "kind": "_AppendAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--type"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "voice",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--voice"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": [],
+     "dest": "where",
+     "kind": "_AppendAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--where"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": [],
+     "dest": "field",
+     "kind": "_AppendAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--field"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": 500,
+     "dest": "limit",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--limit"
+     ],
+     "required": false,
+     "type": "int"
+    }
+   ]
+  },
+  "raw": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "json_message",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [],
+     "required": true,
+     "type": null
+    }
+   ]
+  },
+  "read": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": 1,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "from_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--from"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "to_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--to"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bars",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bars"
+     ],
+     "required": false,
+     "type": "str"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "abc",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--abc"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "read-abc": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": 1,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "from_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--from"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "to_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--to"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bars",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bars"
+     ],
+     "required": false,
+     "type": "str"
+    }
+   ]
+  },
+  "read-barlines": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bars",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bars"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "from_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--from"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "to_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--to"
+     ],
+     "required": false,
+     "type": "int"
+    }
+   ]
+  },
+  "read-lyrics": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": 0,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "from_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--from"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "to_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--to"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bars",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bars"
+     ],
+     "required": false,
+     "type": "str"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "verse",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--verse"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "words",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--words"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "by_bar",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--by-bar"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "compact",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--compact"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "rehearsal-mixes": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "out",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--out"
+     ],
+     "required": true,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "sib_file",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--file"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": "192k",
+     "dest": "bitrate",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bitrate"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": [],
+     "dest": "name",
+     "kind": "_AppendAction",
+     "metavar": "STAFF=NAME",
+     "nargs": null,
+     "options": [
+      "--name"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "keep_stems",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--keep-stems"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": -16.0,
+     "dest": "loudness",
+     "kind": "_StoreAction",
+     "metavar": "LUFS",
+     "nargs": null,
+     "options": [
+      "--loudness"
+     ],
+     "required": false,
+     "type": "float"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "all_parts",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--all-parts"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "require_sound",
+     "kind": "_StoreAction",
+     "metavar": "SOUND_SET",
+     "nargs": null,
+     "options": [
+      "--require-sound"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "no_proof",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--no-proof"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "repl": {
+   "arguments": []
+  },
+  "reset-design": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "lyrics",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--lyrics"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "round": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "score_file",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [],
+     "required": true,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "out",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--out",
+      "-o"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "voices",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--voices"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "gap",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--gap"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": 2,
+     "dest": "passes",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--passes"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": 53,
+     "dest": "program",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--program"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": false,
+     "default": true,
+     "dest": "hold_final",
+     "kind": "_StoreFalseAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--no-hold-final"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "open",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--open"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "save": {
+   "arguments": []
+  },
+  "score-info": {
+   "arguments": []
+  },
+  "score-snapshot": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bars",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bars"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": 0,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "lyrics",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--lyrics"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": false,
+     "default": true,
+     "dest": "barlines",
+     "kind": "_StoreFalseAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--no-barlines"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "selection": {
+   "arguments": []
+  },
+  "set-barline": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": [
+      "double",
+      "start_repeat",
+      "end_repeat",
+      "final",
+      "dashed",
+      "invisible",
+      "between_staves",
+      "normal",
+      "tick",
+      "short",
+      "dotted",
+      "triple",
+      "thick",
+      "none"
+     ],
+     "const": null,
+     "default": "double",
+     "dest": "type",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--type"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "set-break": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": [
+      "system",
+      "page",
+      "none"
+     ],
+     "const": null,
+     "default": "system",
+     "dest": "type",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--type"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "set-initial-instrument": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "instrument",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--instrument"
+     ],
+     "required": true,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "set-key": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": 1,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "key",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--key"
+     ],
+     "required": true,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "minor",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--minor"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "set-lyric": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "index",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--index"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "text",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--text"
+     ],
+     "required": true,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "font",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--font"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "font_size",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--font-size"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "raw",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--raw"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "allow_style_reset",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--allow-style-reset"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "set-lyric-style": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "index",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--index"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "style",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--style"
+     ],
+     "required": true,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "set-note": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "index",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--index"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "old_pitch",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--old-pitch"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "new_pitch",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--new-pitch"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "set-score-info": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "title",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--title"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "composer",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--composer"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "lyricist",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--lyricist"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "set-staff-name": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "full",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--full"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "short",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--short"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "set-time": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": 1,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "top",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--top"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bottom",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bottom"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": [
+      "common",
+      "cut"
+     ],
+     "const": null,
+     "default": null,
+     "dest": "symbol",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--symbol"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "split-parts": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "score_file",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": "?",
+     "options": [],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "file_opt",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--file",
+      "-f"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": [
+      "16voices",
+      "satb"
+     ],
+     "const": null,
+     "default": "16voices",
+     "dest": "preset",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--preset"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "out",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--out",
+      "-o"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": true,
+     "dest": "validate",
+     "kind": "BooleanOptionalAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--validate",
+      "--no-validate"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "audit",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--audit"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "soprano_solo",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--soprano-solo"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "tenor_solo",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--tenor-solo"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bass_solo",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bass-solo"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "open",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--open"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "staves": {
+   "arguments": []
+  },
+  "text-styles": {
+   "arguments": []
+  },
+  "tie": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "index",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--index"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "remove",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--remove"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "transpose": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "from_note",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--from-note"
+     ],
+     "required": true,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "to_note",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--to-note"
+     ],
+     "required": true,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "up",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--up"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "down",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--down"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": 0,
+     "dest": "octaves",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--octaves"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "from_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--from-bar"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "to_bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--to-bar"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "top_staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--top-staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bottom_staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bottom-staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
+  "verify-render": {
+   "arguments": [
+    {
+     "choices": [
+      "midi",
+      "musicxml",
+      "mxl",
+      "pdf",
+      "png"
+     ],
+     "const": null,
+     "default": "png",
+     "dest": "format",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--format"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "out",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--out"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "sib_file",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--file"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "expect_pages",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--expect-pages"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": 1,
+     "dest": "min_bytes",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--min-bytes"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "sha256",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--sha256"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  }
+ }
+}
