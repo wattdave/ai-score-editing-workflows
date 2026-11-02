@@ -12,9 +12,7 @@ from typing import Any
 
 from ai_score_editing.sibelius import protocol
 
-EXIT_OK = 0
-EXIT_COMMAND_FAILED = 1
-EXIT_CONNECTION_FAILED = 2
+from ai_score_editing.cli_common import EXIT_COMMAND_FAILED, EXIT_CONNECTION_FAILED, EXIT_OK  # noqa: F401
 
 
 def emit(args: argparse.Namespace, response: dict[str, Any], human: str) -> int:

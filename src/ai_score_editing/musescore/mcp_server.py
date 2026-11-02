@@ -16,6 +16,7 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 
 from ai_score_editing.batch_ops import BatchError
+from ai_score_editing.cli_common import DEFAULT_LIMIT
 from ai_score_editing.mcp_common import EXPORT, READ_ONLY, WRITE, env_port, parse_bars
 from ai_score_editing.mcp_common import Session as CommonSession
 from ai_score_editing.query import QueryError
@@ -94,7 +95,7 @@ async def query_score(
     voice: int | None = None,
     where: list[str] | None = None,
     fields: list[str] | None = None,
-    limit: int = 200,
+    limit: int = DEFAULT_LIMIT,
 ) -> dict[str, Any]:
     """Find objects in the open score.
 
@@ -221,9 +222,10 @@ async def save_score(path: str | None = None) -> dict[str, Any]:
 
 
 @server.tool(annotations=EXPORT)
-async def export_score(path: str, format: str = "pdf") -> dict[str, Any]:
-    """Export the whole score to path as pdf, png, svg, musicxml, mxl, mid,
-    mp3, wav, flac or ogg (the path's extension must match). png and svg
+async def export_score(format: str = "pdf", path: str | None = None) -> dict[str, Any]:
+    """Export the whole score to path as pdf, png, svg, musicxml, mxl, midi
+    (or mid), mp3, wav, flac or ogg (the path's extension must match; without
+    path the score's own file name is used). png and svg
     write one file per page (name-1.png, name-2.png, ...) when there is more
     than one. Audio uses MuseScore's playback sounds and can take a while.
     Returns the files written."""

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ai_score_editing import mix_proof, rehearsal_mix
+from ai_score_editing.cli_common import canonical_format
 from ai_score_editing.sibelius.bridge import (
     AUDIO_EXPORT_BRIDGE_VERSION,
     BRIDGE_PLUGIN,
@@ -106,7 +107,7 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
         "verify-render",
         help="export a score and verify that the rendered files are present and non-empty",
     )
-    verify_render.add_argument("--format", choices=sorted(EXPORT_FORMATS), default="png")
+    verify_render.add_argument("--format", type=canonical_format, choices=sorted(EXPORT_FORMATS), default="png")
     verify_render.add_argument("--out", help="output path (default: next to the source file)")
     verify_render.add_argument("--file", dest="sib_file", help=".sib file to open first (default: active score)")
     verify_render.add_argument("--expect-pages", type=int, help="require exactly this many rendered files")

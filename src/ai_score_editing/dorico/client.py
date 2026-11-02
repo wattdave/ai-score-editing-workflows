@@ -39,6 +39,10 @@ class DoricoError(Exception):
     """Dorico refused a request or could not be reached."""
 
 
+class DoricoConnectionError(DoricoError):
+    """Dorico could not be reached or refused the connection (the CLI exits 2)."""
+
+
 def token_store() -> TokenStore:
     return TokenStore(default_path().with_name("dorico-token.json"))
 
@@ -89,7 +93,7 @@ class DoricoClient:
         try:
             self._ws = await websockets.connect(self.uri, max_size=None, open_timeout=5, ping_interval=None)
         except (OSError, asyncio.TimeoutError) as exc:
-            raise DoricoError(f"cannot reach Dorico at {self.uri}: is Dorico running? ({exc})") from exc
+            raise DoricoConnectionError(f"cannot reach Dorico at {self.uri}: is Dorico running? ({exc})") from exc
         entry = self.store.load(self._store_host, self.port)
         # Approvals made under the pre-rename client name are tried once for
         # the default name; Dorico may still ask for a new approval.
@@ -105,7 +109,7 @@ class DoricoClient:
             hello["sessionToken"] = entry.token
         elif not self.allow_approval:
             await self.close()
-            raise DoricoError(
+            raise DoricoConnectionError(
                 f"no approved Dorico session for client {self.client_name!r}; connect once "
                 "interactively and accept the prompt in Dorico"
             )
@@ -131,7 +135,7 @@ class DoricoClient:
                     return await self.connect()
                 if entry:
                     self.store.forget(self._store_host, self.port)
-                raise DoricoError(f"Dorico refused the connection: {reply}")
+                raise DoricoConnectionError(f"Dorico refused the connection: {reply}")
 
     async def _initial_status(self) -> None:
         """Take the full status Dorico pushes after connecting, so a later

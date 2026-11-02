@@ -55,7 +55,7 @@ Accessibility permission for the terminal.
 | `delete-voice` | ✅ | |
 | `undo` | ✅ | by steps |
 | `save_score` | ⚠️ | saves in place (File > Save) and copies the file; a never-saved score is refused |
-| `export_score` | ✅ | pdf, png, svg, musicxml, mxl, mid, mp3, wav, flac, ogg |
+| `export_score` | ✅ | pdf, png, svg, musicxml, mxl, midi (`mid` is an alias), mp3, wav, flac, ogg; without `path` the score's own file name (read from its window) with the format's extension |
 | `project_info`, `set_project_info` (Dorico) | ⚠️ | not undoable in MuseScore; the old values are returned |
 | `read_lyrics`, `edit_lyrics` (Dorico) | ✅ | edit is one undo step, same syllable count |
 | `add_instrument` (MuseScore) | ✅ | by id, MusicXML sound id or name; unknown ids refused |
@@ -77,7 +77,7 @@ uv run musescore-cli apply --file batch.json
 uv run musescore-cli undo --steps 1
 uv run musescore-cli structure --bars 1-40
 uv run musescore-cli save [--path copy.mscz]
-uv run musescore-cli export --format pdf --path score.pdf
+uv run musescore-cli export --format pdf [--path score.pdf]   # default: beside the score
 uv run musescore-cli info
 uv run musescore-cli set-info --field composer=Traditional
 uv run musescore-cli lyrics --staff 1 --verse 1
@@ -233,7 +233,8 @@ Milestone 5 (bridge version 5) adds the file, metadata and lyric tools:
   there. A score that has never been saved is refused, since MuseScore
   would ask where to save it.
 - **export_score** writes the whole score with `writeScore`: pdf, png, svg,
-  musicxml (`.musicxml` or `.xml`), mxl, mid, mp3, wav, flac and ogg.
+  musicxml (`.musicxml` or `.xml`), mxl, midi (`mid` too; `.mid`), mp3, wav, flac and ogg. With no
+  `path` the file lands beside the score, named like it.
   `writeScore` adds its own extension unless the path already ends in it
   (a `.xml` path sent as `musicxml` became `s.xml.musicxml`), so the
   path's suffix is sent as the format. PNG and SVG write one file per page,

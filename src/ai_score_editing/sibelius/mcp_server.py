@@ -16,6 +16,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from ai_score_editing import batch_ops
+from ai_score_editing.cli_common import DEFAULT_LIMIT, canonical_format
 from ai_score_editing.mcp_common import EXPORT, READ_ONLY, WRITE, env_port, parse_bars
 from ai_score_editing.mcp_common import Session as CommonSession
 from ai_score_editing.query import QueryError
@@ -123,7 +124,7 @@ async def query_score(
     voice: int | None = None,
     where: list[str] | None = None,
     fields: list[str] | None = None,
-    limit: int = 200,
+    limit: int = DEFAULT_LIMIT,
 ) -> dict[str, Any]:
     """Find bar objects in the open score.
 
@@ -274,19 +275,23 @@ async def undo(steps: int = 1) -> dict[str, Any]:
 
 
 @server.tool(annotations=WRITE)
-async def save_score() -> dict[str, Any]:
-    """Save the open score to its file. Fails if it has never been saved."""
+async def save_score(path: str | None = None) -> dict[str, Any]:
+    """Save the open score to its file. Fails if it has never been saved.
 
-    return await _run(service.save, retry=False)
+    A path (a copy under another name) is refused in Sibelius: saving as .sib
+    would switch the open score to the new file."""
+
+    return await _run(lambda b: service.save(b, path), retry=False)
 
 
 @server.tool(annotations=EXPORT)
-async def export_score(format: str, path: str | None = None) -> dict[str, Any]:
-    """Export the open score as musicxml, mxl, pdf, midi or png.
+async def export_score(format: str = "pdf", path: str | None = None) -> dict[str, Any]:
+    """Export the open score as musicxml, mxl, pdf, midi (or mid) or png.
 
     path defaults to the score's own file name with the format's extension.
     Image formats may produce one file per page (name_0001.png, ...).
     """
+    format = canonical_format(format)
     if format not in EXPORT_FORMATS:
         raise ToolError(f"format must be one of: {', '.join(EXPORT_FORMATS)}")
 

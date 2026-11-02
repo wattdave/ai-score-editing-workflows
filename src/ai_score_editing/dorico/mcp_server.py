@@ -14,6 +14,7 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
+from ai_score_editing.cli_common import DEFAULT_LIMIT
 from ai_score_editing.core.errors import BatchError
 from ai_score_editing.mcp_common import EXPORT, READ_ONLY, WRITE, env_port, parse_bars
 from ai_score_editing.mcp_common import Session as CommonSession
@@ -88,7 +89,7 @@ async def query_score(
     voice: int | None = None,
     where: list[str] | None = None,
     flow: int = 1,
-    limit: int = 200,
+    limit: int = DEFAULT_LIMIT,
     lyrics: bool = False,
 ) -> dict[str, Any]:
     """Find events in a flow of the open Dorico project.
@@ -250,23 +251,33 @@ async def apply_batch(
 
 
 @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-async def read_lyrics(player: str, verse: int = 1) -> dict[str, Any]:
+async def read_lyrics(staff: str | None = None, verse: int = 1, player: str | None = None) -> dict[str, Any]:
     """A player's line of lyrics as text, read from Dorico's Edit Lyrics dialog.
 
-    player is a part layout name (as score_overview's players list them);
-    verse 1-5. The text is hyphenated as Dorico shows it ("ma-king"). For a
+    staff is a staff number (as score_overview lists them) or the player's
+    part layout name; player is the old, deprecated name for the same (pass
+    one of the two). verse 1-5. The text is hyphenated as Dorico shows it ("ma-king"). For a
     two-staff player it is the first staff's line. The window briefly shows
     the part layout and Dorico comes to the front; it is switched back.
     The selections it makes are undone again, so the undo history is left as
     it was (a "note" in the result says when that could not be done).
     Syllables are not tied to notes here: use query_score for that.
     """
-    return await session.run(lambda b: lyrics_dialog.read_lyrics(b, player, verse), retry=True)
+
+    async def action(b: DoricoBridge) -> dict[str, Any]:
+        return await lyrics_dialog.read_lyrics(b, await service.resolve_player(b, staff, player), verse)
+
+    return await session.run(action, retry=True)
 
 
 @server.tool(annotations=WRITE)
-async def edit_lyrics(player: str, text: str, verse: int = 1) -> dict[str, Any]:
+async def edit_lyrics(
+    staff: str | None = None, text: str = "", verse: int = 1, player: str | None = None
+) -> dict[str, Any]:
     """Replace a player's line of lyrics with text (read it first with read_lyrics).
+
+    staff is a staff number or the player's name; player is the old,
+    deprecated name for the same (pass one of the two).
 
     The new text must have the same number of syllables (words split by
     spaces and hyphens): Dorico ignores edits that change the count, so they
@@ -275,7 +286,11 @@ async def edit_lyrics(player: str, text: str, verse: int = 1) -> dict[str, Any]:
     this to correct words or hyphenation; add-lyrics (apply_batch) adds new
     lyrics, including a further verse.
     """
-    return await session.run(lambda b: lyrics_dialog.edit_lyrics(b, player, text, verse), retry=False)
+
+    async def action(b: DoricoBridge) -> dict[str, Any]:
+        return await lyrics_dialog.edit_lyrics(b, await service.resolve_player(b, staff, player), text, verse)
+
+    return await session.run(action, retry=False)
 
 
 @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
@@ -307,15 +322,18 @@ async def undo(steps: int = 1) -> dict[str, Any]:
 
 
 @server.tool(annotations=WRITE)
-async def save_score(path: str) -> dict[str, Any]:
-    """Save a copy of the open project to a .dorico file at path. The open
-    project keeps its own file, so this does not change where Cmd-S saves."""
+async def save_score(path: str | None = None) -> dict[str, Any]:
+    """Save the open project to its own file (Dorico's Save command; refused
+    when the project has no file yet). With path, save a copy to that .dorico
+    file instead: the open project keeps its own file, so this does not
+    change where Cmd-S saves."""
     return await session.run(lambda b: service.save(b, path), retry=False)
 
 
 @server.tool(annotations=EXPORT)
-async def export_score(path: str, format: str = "pdf") -> dict[str, Any]:
+async def export_score(format: str = "pdf", path: str | None = None) -> dict[str, Any]:
     """Export the open project to path as pdf, musicxml, preview-pdf or preview-png.
+    path is required: Dorico does not report the project's file name.
 
     pdf: the layout in Dorico's active window, every page, with Print mode's
     settings; Dorico also keeps its own copy next to the project and

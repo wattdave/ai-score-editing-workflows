@@ -150,7 +150,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `set` (Dx, Dy, Hidden, ...), `tie`, `bracket`, `flip-stem`, `nudge`, `beam` | ❌ | not in the Lua model |
 | `add-line` | ⚠️ | crescendo/diminuendo hairpins, 8va/8vb, trills, pedal lines and glissandos at any position and length (multiples of 32), by command then resize (see gaps); hairpin lengths cannot be read back; octave lines keep the sounding pitch and rewrite the notes, unlike Sibelius; other Sibelius line styles are not mapped. Slurs: `add-slur`, note to next note |
 | (Dorico only) `add-dynamic`, `set-articulation`, `add-slur`, `add-tempo`, `add-rehearsal-mark` | ✅ | by command at a note; slurs cannot be read back |
-| (Dorico only) `read_lyrics`, `edit_lyrics` | ⚠️ | a player's verse as text through the Edit Lyrics dialog; edits must keep the syllable count |
+| `read_lyrics`, `edit_lyrics` | ⚠️ | `staff` is a staff number (mapped to its player; a two-staff player gives its first staff) or a player name; `player=` is the deprecated alias (give exactly one). A player's verse as text through the Edit Lyrics dialog; edits must keep the syllable count |
 | `add-lyric` → `add-lyrics` | ⚠️ | verses 1-10, typed through the lyric popover by command (see gaps); refuses to type over a lyric already in that verse |
 | `copy-passage` | ✅ | by selection + `Edit.Copy` / `Edit.Paste` (see gaps); destPosition 0 only |
 | `move-passage` | ✅ | `copy-passage` with `Edit.Cut`: the source bars stay (rests, nothing moves), the notes keep their ids at the destination; checked by what vanished, undone if the cut reached further than planned; one more undo step |
@@ -165,8 +165,8 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `set-bar-number` | ❌ | the number only exists inside a dialog: no command carries it and nothing reads it back (see gaps) |
 | `undo` | ✅ | stops when Dorico has nothing to undo |
 | (Dorico only) `project_info`, `set_project_info` | ✅ | project-level Project Info fields through the Project Info dialog (typed); not per-flow |
-| `save_score` | ⚠️ | saves a copy to a given `.dorico` path; the project keeps its own file |
-| `export_score` | ✅ | `pdf` (all pages, via Print mode), `musicxml` (full score, via the export window), first-page previews |
+| `save_score` | ⚠️ | no `path`: Dorico's `File.Save`, when the front window shows a `.dorico` file (read through Accessibility), else refused; with `path`: a copy at that `.dorico` path, the project keeps its own file |
+| `export_score` | ✅ | `path` is required (Dorico does not report the project's file name; `export_score(format="pdf", path=None)` raises "pass path"); no MIDI export; `pdf` (all pages, via Print mode), `musicxml` (full score, via the export window), first-page previews |
 
 ## Gaps and workarounds
 
