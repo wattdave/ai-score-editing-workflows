@@ -1,11 +1,13 @@
 ---
 name: vector-pdf-score
 description: >
-  Turn a vector sheet-music PDF (exported from Sibelius, so the music is text in the Opus or
-  Helsinki font and not a scanned image) into MusicXML without OMR: exact pitches, rhythms, ties
-  and lyrics read from the glyph positions. Use first for any clean PDF whose Creator is Sibelius;
-  fall back to halbestunde-omr for scans and for PDFs from other programs. Shenandoah (Opus, SATB,
-  21 bars), three short Opus pieces and a Helsinki one-page choir piece were read correctly.
+  Turn a vector sheet-music PDF (music is text in a music font, not a scanned image) into MusicXML
+  without OMR: exact pitches, rhythms, ties and lyrics read from the glyph positions. Covers PDFs
+  exported by Sibelius (Opus or Helsinki font) and by Dorico (Bravura font, 2-staff choral layout,
+  with repeats, key and time changes, jumps); fall back to halbestunde-omr for scans, for PDFs from
+  MuseScore and for Dorico PDFs printed through "Microsoft Print To PDF" (the glyphs are outlines
+  there). Shenandoah (Opus, SATB, 21 bars), three short Opus pieces and a Helsinki one-page choir
+  piece were read correctly.
 ---
 
 # Vector PDF to MusicXML
@@ -14,18 +16,22 @@ A PDF exported by Sibelius keeps every note as a glyph at an exact position, so 
 recognised. Halbestunde (OMR) was wrong on these files (staves swapped, clefs read wrongly,
 bars moved between parts); reading the glyphs was exact for pitches.
 
-## 1. Check the PDF is a vector PDF from Sibelius
+## 1. Check which kind of PDF it is
 
 ```bash
-pdfinfo score.pdf | grep Creator            # "Sibelius version ..." is what this skill has been tested on
+pdfinfo score.pdf | grep -E "Creator|Producer"
 uv run --with pymupdf python -I -c "import pymupdf,sys; p=pymupdf.open(sys.argv[1])[0]; print({s['font'] for b in p.get_text('rawdict')['blocks'] for l in b.get('lines',[]) for s in l['spans']})" score.pdf
 ```
 
-The font set must contain `OpusStd` or `HelsinkiStd` (Sibelius's two music fonts; the reader takes any
-font whose name starts with `Opus` or `Helsinki`). Both use the same legacy glyph codes (noteheads
-`œ ˙`, rests `Ó Œ ‰`, clefs `& ?`, flags `j J`, dot `™`), and neither is SMuFL (no private-use
-codepoints), so one table serves both. Scans, photos and PDFs from Dorico or MuseScore (Bravura,
-Leland, Petaluma use SMuFL codepoints) are **not covered**: use `halbestunde-omr`.
+- Font set contains `OpusStd` or `HelsinkiStd` (Sibelius's two music fonts; the reader takes any font
+  whose name starts with `Opus` or `Helsinki`): a Sibelius PDF. Both use the same legacy glyph codes
+  (noteheads `œ ˙`, rests `Ó Œ ‰`, clefs `& ?`, flags `j J`, dot `™`) and neither is SMuFL (no
+  private-use codepoints), so one table serves both. Follow sections 2 and 3 below.
+- Font set contains `Bravura` (plus a text font for lyrics): a Dorico PDF. Follow "Dorico PDFs" below.
+- Producer is "Microsoft: Print To PDF": the music glyphs were turned into filled outlines (Carol of the Bells
+  had 4 music characters on a page of 282 noteheads), so the glyph readers find nothing. Ask for a PDF
+  exported from the program itself (File > Export, not Print), or use `halbestunde-omr`.
+- Scans, photos and MuseScore PDFs (Leland, Petaluma use SMuFL codepoints) are not covered (MuseScore has not been tried): use `halbestunde-omr`.
 
 Then look at the pages (render at 100 dpi and read the picture) and note: staves per system and
 which voice each is, clefs (a treble clef with a small 8 below is a tenor: `G8`), key, time, tempo,
@@ -100,6 +106,51 @@ systems with different numbers of staves (parse with `--staves 1` and assemble t
 hand), and stem-sharing chords in two-voice passages, which can come out as a single note: check
 every chord bar against the print. Dorico and MuseScore PDFs (different
 fonts). The tie rule treats any curve between two same-pitch notes as a tie.
+
+## Dorico PDFs
+
+Tested on one score, Carol of the Bells (145 bars: multi-bar rests, repeats at bars 35-36 and 37-44, a segno,
+To Coda, D.S. al Coda, key changes at bars 79 and 113, 3/4 and 2/4 meter changes), in two layouts:
+
+- **Choral score** (`02 - Choral score`): systems of separate S. / A. / T. / B. staves (the tenor staff is a treble
+  staff with a small 8 below), systems with a condensed pair of staves (Ch.: treble = soprano and alto, bass = tenor
+  and bass, with cue labels such as "(alto only)" and "(S+A)"), and systems with both. **Use this layout.**
+- **Choir SATB** (`01 - Choir SATB`): only the condensed pair. It hides the separate S/A/T/B players, so bars 81-116
+  (where the choir sings in C major) print as multi-bar rests and the reader gets nothing there. Whenever a
+  Dorico score has several layouts, export the one that shows every part, and check the bar numbers against
+  another layout's.
+
+```bash
+S="${CLAUDE_SKILL_DIR}/scripts"
+uv run --with pymupdf python -I $S/dorico_pdf.py score.pdf                    # bars, key, time, repeats found
+uv run --with pymupdf python -I $S/dorico_pdf_musicxml.py score.pdf out.musicxml \
+  --tempo 144 --tempo-map 35:126          # title, composer and arranger come from the first page
+python3 $S/compare_musicxml.py reference.musicxml out.musicxml --map P1=P1,P2=P2,P3=P3,P4=P4   # when a reference exists
+```
+
+How well it did, with Dorico's own MusicXML (the For Playback file) as the answer key and nothing copied from it:
+
+| PDF | Notes in both | Only in reference | Pitch, onset, duration, ties differ | Lyrics differ |
+|---|---|---|---|---|
+| Choral score | 1,285 | 0 | 0 | 8 (extra "oo" vowels the print has, and a misspelled word in the print) |
+| Choir SATB | 1,004 | 281 (bars 81-116, not printed) | 0 | 14 |
+
+- **Parts:** soprano, alto, tenor and bass come from the staff labels (S. A. T. B.), or for the condensed pair from
+  chords (top and bottom note), stem direction for two rhythms on one staff, and the cue labels for single lines.
+- **Key, time and repeats:** key changes, meter changes, repeat barlines, multi-bar rests (the number above the rest
+  becomes that many bars), segno, To Coda, D.S. al Coda, the coda, rehearsal marks, text directions (swing and
+  straight phrasing, rallentando) and fermatas are written as MusicXML. Sibelius's `play-order` read
+  "1-36, 35-44, 37-133, 17-34, 134-145", the right route through the jumps.
+- **Scale:** every measurement is relative to the staff space, so the 20 pt Choir SATB and the 13.5 pt Choral score
+  exports both read. Text sizes (lyrics, cue labels) are measured from the PDF.
+- **Tempo and swing:** the PDF has no metronome mark. Give `--tempo` and `--tempo-map bar:bpm`; the swing feel is
+  only a text direction, so use the `swing-playback-copy` skill for a swung recording.
+
+Not covered: layouts other than these (other staff counts, a single staff, cue-size notes), tuplets, grace notes,
+whole notes, dynamics, slurs, voltas (1st and 2nd endings), more than one verse. The notehead glyphs (U+F4BE black,
+U+F4BD half), staff and stem line widths relative to the staff space (0.125, 0.12), and barlines (0.2, thick 0.5)
+are the ones this Dorico version uses; check them first on a different Dorico version.
+Dorico PDFs printed through "Microsoft Print To PDF" have outlined glyphs and cannot be read.
 
 ## After the MusicXML
 
