@@ -21,13 +21,14 @@ from typing import Any
 
 import websockets
 
+from ai_score_editing.paths import LEGACY_WIRE_CLIENT_NAME, WIRE_CLIENT_NAME
 from ai_score_editing.token_store import TokenStore, default_path
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 4560
-DEFAULT_CLIENT_NAME = "sibelius-websocket-cli"
+DEFAULT_CLIENT_NAME = WIRE_CLIENT_NAME
 HANDSHAKE_VERSION = "1.0"
 RECV_TIMEOUT = 30.0
 APPROVAL_TIMEOUT = 120.0
@@ -73,6 +74,10 @@ class DoricoClient:
     def _store_host(self) -> str:
         return f"{self.host}#{self.client_name}"
 
+    @property
+    def _legacy_host(self) -> str:
+        return f"{self.host}#{LEGACY_WIRE_CLIENT_NAME}"
+
     async def __aenter__(self) -> "DoricoClient":
         await self.connect()
         return self
@@ -86,6 +91,11 @@ class DoricoClient:
         except (OSError, asyncio.TimeoutError) as exc:
             raise DoricoError(f"cannot reach Dorico at {self.uri}: is Dorico running? ({exc})") from exc
         entry = self.store.load(self._store_host, self.port)
+        # Approvals made under the pre-rename client name are tried once for
+        # the default name; Dorico may still ask for a new approval.
+        legacy = entry is None and self.client_name == DEFAULT_CLIENT_NAME and self._legacy_host != self._store_host
+        if legacy:
+            entry = self.store.load(self._legacy_host, self.port)
         hello: dict[str, Any] = {
             "message": "connect",
             "clientName": self.client_name,
@@ -104,6 +114,8 @@ class DoricoClient:
         while True:
             reply = await self._recv(timeout)
             if reply.get("code") == "kConnected":
+                if legacy and entry:
+                    self.store.save(self._store_host, self.port, entry.token)
                 await self._initial_status()
                 return
             if reply.get("message") == "sessiontoken":
@@ -112,6 +124,11 @@ class DoricoClient:
                 await self._send({"message": "acceptsessiontoken", "sessionToken": token})
                 continue
             if reply.get("code") == "kError" or reply.get("message") == "disconnect":
+                if legacy:
+                    # The old approval does not carry over: drop it and ask afresh.
+                    self.store.forget(self._legacy_host, self.port)
+                    await self.close()
+                    return await self.connect()
                 if entry:
                     self.store.forget(self._store_host, self.port)
                 raise DoricoError(f"Dorico refused the connection: {reply}")

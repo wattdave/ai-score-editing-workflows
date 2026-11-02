@@ -7,10 +7,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from ai_score_editing.paths import WIRE_CLIENT_NAME
+
 HANDSHAKE_VERSION = "1.0"
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 1898
-DEFAULT_CLIENT_NAME = "sibelius-websocket-cli"
+DEFAULT_CLIENT_NAME = WIRE_CLIENT_NAME
 
 MSG_CONNECT = "connect"
 MSG_CONNECT_RESPONSE = "connectResponse"

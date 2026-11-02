@@ -88,7 +88,7 @@ uv run musescore-mcp                  # the Sibelius tools plus project_info, se
 After installing, enable "ScoreBridge" once in Plugins → Manage
 plugins, then choose Plugins → ScoreBridge in the window of the score
 to work on, every session. It listens on port 8766 and refuses requests
-without the token stored in `~/.config/sibelius-websocket-cli/musescore-token`.
+without the token stored in `~/.config/ai-score-editing/musescore-token`.
 Checked live on 4.7.5 (2026-10-03): `overview` read the score, its metadata
 and staves; `undo` reverted a note added by hand.
 
@@ -97,7 +97,7 @@ tie, bracket, flip-stem, nudge, delete and beam. Objects are addressed by
 staff/bar/index, with `ticks` (480 per quarter) beside `position` because
 tuplet positions don't convert exactly. A dry run makes the edits and rolls
 them back, reporting each object before and after. A real run first writes a
-MusicXML copy to `~/.cache/sibelius-websocket-cli/musescore/backups/`.
+MusicXML copy to `~/.cache/ai-score-editing/musescore/backups/`.
 Differences from Sibelius: `Beam` takes MuseScore's beam modes (0 auto,
 1 none, 2 begin, 5 middle); a lyric's melisma is set with `Duration`, not
 `NumNotes`; a tie needs a next note of the same pitch. The opening clef is

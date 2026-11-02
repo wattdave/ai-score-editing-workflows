@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ai_score_editing import paths
 from ai_score_editing.query import build_selector
 
 from . import score
@@ -52,8 +53,7 @@ async def snapshot(bridge: MuseScoreBridge) -> Snapshot:
 
 
 def backup_dir() -> Path:
-    base = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache")))
-    return base / "sibelius-websocket-cli" / "musescore" / "backups"
+    return paths.cache_dir("musescore", "backups")
 
 
 async def overview(bridge: MuseScoreBridge) -> dict[str, Any]:

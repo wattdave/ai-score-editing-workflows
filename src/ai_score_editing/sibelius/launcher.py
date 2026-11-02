@@ -9,6 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from ai_score_editing import macos
+
 logger = logging.getLogger(__name__)
 
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
@@ -48,18 +50,9 @@ def _is_sibelius_running_macos() -> bool:
         pass
 
     try:
-        res = subprocess.run(
-            ["osascript", "-e", 'application id "com.avid.sibelius" is running'],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if res.returncode == 0 and res.stdout.strip().lower() == "true":
-            return True
+        return macos.is_running("com.avid.sibelius")
     except (FileNotFoundError, PermissionError):
-        pass
-
-    return False
+        return False
 
 
 def _is_sibelius_running_windows() -> bool:

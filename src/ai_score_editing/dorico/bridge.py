@@ -23,6 +23,8 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from ai_score_editing import paths
+
 from .client import DoricoClient, DoricoError
 
 UNITS = 256
@@ -71,8 +73,7 @@ def lua_literal(value: Any) -> str:
 
 
 def default_workdir() -> Path:
-    cache = os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))
-    return Path(cache) / "sibelius-websocket-cli" / "dorico"
+    return paths.cache_dir("dorico")
 
 
 def bridge_script() -> Path:

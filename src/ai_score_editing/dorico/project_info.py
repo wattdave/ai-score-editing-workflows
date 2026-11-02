@@ -22,7 +22,7 @@ from typing import Any
 
 from .bridge import DoricoBridge
 from .client import DoricoError
-from .export import _osascript, bring_to_front
+from .export import osascript, bring_to_front
 
 FIELDS = [
     "Title", "Subtitle", "Dedication", "Composer", "Composer dates", "Composition year",
@@ -121,7 +121,7 @@ end run
 
 
 async def _is_open() -> bool:
-    return await _osascript(_OPEN) == "yes"
+    return await osascript(_OPEN) == "yes"
 
 
 async def _open(bridge: DoricoBridge) -> None:
@@ -139,13 +139,13 @@ async def _open(bridge: DoricoBridge) -> None:
 
 async def _close() -> None:
     if await _is_open():
-        await _osascript(_PRESS, "Close")
+        await osascript(_PRESS, "Close")
         await asyncio.sleep(0.5)
 
 
 async def _read_fields() -> dict[str, str]:
     fields: dict[str, str] = {}
-    for line in (await _osascript(_READ)).splitlines():
+    for line in (await osascript(_READ)).splitlines():
         name, _, value = line.partition("\t")
         if name in FIELDS:
             fields[name] = value
@@ -175,8 +175,8 @@ async def set_project_info(bridge: DoricoBridge, fields: dict[str, str]) -> dict
     try:
         before = await _read_fields()
         for name, value in fields.items():
-            await _osascript(_TYPE, name, value)
-        if await _osascript(_PRESS, "Apply") != "clicked":
+            await osascript(_TYPE, name, value)
+        if await osascript(_PRESS, "Apply") != "clicked":
             raise DoricoError("could not press Apply in the Project Info dialog")
         await asyncio.sleep(0.5)
     finally:

@@ -228,14 +228,14 @@ sibelius-cli forget-token              # delete cached session token
 ```
 
 Global options: `--host` (default `localhost`), `--port` (default `1898`),
-`--client-name` (default `sibelius-websocket-cli`), `--timeout`,
+`--client-name` (default `ai-score-editing`), `--timeout`,
 `--launch` / `--no-launch` (default: auto-launch if not running),
 `--launch-timeout` (default `30.0`), `--sibelius-path`,
 `--json` (machine-readable output).
 
 ### 2.3 Session-token handling
 
-- Persist the token at `~/.config/sibelius-websocket-cli/token.json`, keyed by
+- Persist the token at `~/.config/ai-score-editing/token.json`, keyed by
   `host:port` (mode 0600).
 - Connect flow: token present → send connect with token, do **not** await a
   reply, verify liveness with an empty `invokeCommands`. No token / liveness

@@ -1,7 +1,7 @@
 """Command line for the Dorico back end: `uv run dorico-cli <command>`.
 
 Prints JSON. The first connection shows an approval prompt in Dorico; the
-session token is then stored in ~/.config/sibelius-websocket-cli/dorico-token.json.
+session token is then stored in ~/.config/ai-score-editing/dorico-token.json.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from .score import DoricoBatchError
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dorico-cli", description="Drive the project open in Dorico.")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
-    parser.add_argument("--client-name", help="name Dorico approves (default sibelius-websocket-cli)")
+    parser.add_argument("--client-name", help="name Dorico approves (default ai-score-editing)")
     parser.add_argument("--no-approval", action="store_true", help="fail rather than show an approval prompt")
     parser.add_argument("--flow", type=int, default=1)
     sub = parser.add_subparsers(dest="command", required=True)
