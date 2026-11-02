@@ -31,7 +31,7 @@
   {
    "choices": null,
    "const": null,
-   "default": "sibelius-websocket-cli",
+   "default": "ai-score-editing",
    "dest": "client_name",
    "kind": "_StoreAction",
    "metavar": null,
@@ -746,7 +746,7 @@
     {
      "choices": null,
      "const": null,
-     "default": "sibelius-websocket-cli backup",
+     "default": "ai-score-editing backup",
      "dest": "name",
      "kind": "_StoreAction",
      "metavar": null,
