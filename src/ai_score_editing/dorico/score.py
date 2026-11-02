@@ -13,9 +13,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from ai_score_editing import intervals, lyrics
-from ai_score_editing.units import UNITS_PER_QUARTER
-from ai_score_editing.batch_ops import LAYOUT_NUMBERS, ORIENTATIONS, PAGE_SIZES
+from ai_score_editing.core import lyrics
+from ai_score_editing.core.batch_schema import LAYOUT_NUMBERS, ORIENTATIONS, PAGE_SIZES
+from ai_score_editing.core.errors import BatchError
+from ai_score_editing.core.intervals import interval_of, spelling_letter, transpose_spelled
+from ai_score_editing.core.units import UNITS_PER_QUARTER
 
 from .bridge import BarMap
 
@@ -128,35 +130,8 @@ MAX_ADD_BARS = 1000
 BREAK_TYPES = {"system", "none"}
 
 
-class DoricoBatchError(ValueError):
+class DoricoBatchError(BatchError):
     """A query or batch cannot be run against this score."""
-
-
-# ------------------------------------------------------------------ spelling
-# The shared helpers raise ValueError; batches report DoricoBatchError.
-
-def spelling_letter(pitch: int, spelling: str | None = None) -> str:
-    """The letter name to spell `pitch` with, checking an explicit spelling fits."""
-    try:
-        return intervals.spelling_letter(pitch, spelling)
-    except ValueError as exc:
-        raise DoricoBatchError(str(exc)) from exc
-
-
-def transpose_spelled(name: str | None, pitch: int, steps: int, semitones: int) -> tuple[int, str]:
-    """(new pitch, new letter) for a note moved by diatonic steps and semitones."""
-    try:
-        return intervals.transpose_spelled(name, pitch, steps, semitones)
-    except ValueError as exc:
-        raise DoricoBatchError(str(exc)) from exc
-
-
-def interval_of(operation: dict[str, Any], label: str) -> tuple[int, int]:
-    """(signed diatonic steps, signed semitones) for a transpose operation."""
-    try:
-        return intervals.interval_of(operation, label)
-    except ValueError as exc:
-        raise DoricoBatchError(str(exc)) from exc
 
 
 # ------------------------------------------------------------------ reading

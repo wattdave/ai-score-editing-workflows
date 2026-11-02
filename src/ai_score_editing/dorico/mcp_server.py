@@ -14,6 +14,7 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
+from ai_score_editing.core.errors import BatchError
 from ai_score_editing.mcp_common import EXPORT, READ_ONLY, WRITE, env_port, parse_bars
 from ai_score_editing.mcp_common import Session as CommonSession
 
@@ -21,7 +22,6 @@ from . import lyrics_dialog, service
 from . import project_info as project_info_mod
 from .bridge import DoricoBridge
 from .client import DEFAULT_PORT, DoricoClient, DoricoError
-from .score import DoricoBatchError
 
 INSTRUCTIONS = """\
 Controls the score open in Dorico (the active project, one flow at a time).
@@ -51,7 +51,7 @@ class Session(CommonSession[DoricoBridge]):
     """One lazily opened Dorico connection, used by one call at a time."""
 
     def __init__(self, factory: Callable[[], DoricoClient]) -> None:
-        super().__init__("Dorico", factory, DoricoBridge, DoricoError, (DoricoError, DoricoBatchError))
+        super().__init__("Dorico", factory, DoricoBridge, DoricoError, (DoricoError, BatchError))
 
 
 def _default_client() -> DoricoClient:

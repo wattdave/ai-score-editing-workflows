@@ -14,6 +14,7 @@ import websockets
 
 from ai_score_editing.dorico import bridge as bridge_mod
 from ai_score_editing.dorico import score, service
+from ai_score_editing.core.errors import BatchError
 from ai_score_editing.dorico.bridge import BarMap, DoricoBridge, fingerprint, lua_literal
 from ai_score_editing.dorico.client import DoricoClient, DoricoError
 from ai_score_editing.dorico.score import (
@@ -85,7 +86,7 @@ def test_locate_events_indexes_per_staff_and_bar() -> None:
 def test_spelling_letters() -> None:
     assert spelling_letter(70) == "B"          # Bb by default
     assert spelling_letter(70, "A#") == "A"
-    with pytest.raises(DoricoBatchError):
+    with pytest.raises(BatchError):
         spelling_letter(70, "B")
 
 
@@ -96,7 +97,7 @@ def test_transpose_spelled_keeps_letters_moving_diatonically() -> None:
     assert transpose_spelled("Eb4", 63, steps, semis) == (65, "F")
     steps, semis = interval_of({"fromNote": "C", "toNote": "A", "direction": "down", "octaves": 1}, "op")
     assert (steps, semis) == (-9, -15)
-    with pytest.raises(DoricoBatchError):
+    with pytest.raises(BatchError):
         transpose_spelled("Bx4", 73, 0, 2)  # would need a triple sharp
 
 
