@@ -21,6 +21,7 @@ from ai_score_editing.query import build_selector
 from . import score
 from .bridge import MuseScoreBridge
 from . import instruments, window
+from ai_score_editing.cli_common import canonical_format
 from .client import MuseScoreError
 
 
@@ -186,7 +187,7 @@ async def undo(bridge: MuseScoreBridge, steps: int = 1) -> dict[str, Any]:
 #: export_score formats: writeScore's extension and the suffixes a path may have.
 EXPORT_FORMATS: dict[str, tuple[str, ...]] = {
     "pdf": (".pdf",), "png": (".png",), "svg": (".svg",), "musicxml": (".musicxml", ".xml"),
-    "mxl": (".mxl",), "mid": (".mid",), "mp3": (".mp3",), "wav": (".wav",),
+    "mxl": (".mxl",), "midi": (".mid",), "mp3": (".mp3",), "wav": (".wav",),
     "flac": (".flac",), "ogg": (".ogg",),
 }
 AUDIO_FORMATS = {"mp3", "wav", "flac", "ogg"}
@@ -228,11 +229,24 @@ async def save(bridge: MuseScoreBridge, path: str | None = None) -> dict[str, An
     return result
 
 
-async def export(bridge: MuseScoreBridge, format: str, path: str) -> dict[str, Any]:
-    """Export the whole score to path; PNG and SVG write one file per page (name-1.png, ...)."""
+async def export(bridge: MuseScoreBridge, format: str, path: str | None = None) -> dict[str, Any]:
+    """Export the whole score to path; PNG and SVG write one file per page (name-1.png, ...).
+
+    Without path the score's own file name is used, with the format's extension.
+    """
+    format = canonical_format(format)
     if format not in EXPORT_FORMATS:
         raise MuseScoreError(f"format must be one of: {', '.join(EXPORT_FORMATS)}")
-    target = Path(path).expanduser().resolve()
+    if path:
+        target = Path(path).expanduser().resolve()
+    else:
+        info = await bridge.call("GetScoreInfo")
+        source = window.score_file(info["name"])
+        if source is None:
+            raise MuseScoreError(
+                f"cannot find the file of '{info['name']}' (never saved, or no Accessibility permission): pass path"
+            )
+        target = source.with_suffix(EXPORT_FORMATS[format][0])
     if target.suffix.lower() not in EXPORT_FORMATS[format]:
         raise MuseScoreError(f"a {format} path must end in {' or '.join(EXPORT_FORMATS[format])}")
     target.parent.mkdir(parents=True, exist_ok=True)

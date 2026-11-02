@@ -15,14 +15,16 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
-from ai_score_editing import backups
+from ai_score_editing import backups, macos
+from ai_score_editing.cli_common import canonical_format
 from ai_score_editing.intervals import LETTERS
 
 from . import layout, musicxml_read, score
 from .bridge import BarMap, DoricoBridge, fingerprint
 from .client import DoricoError
-from .export import bring_to_front, export_musicxml, export_pdf
+from .export import PROCESS, bring_to_front, export_musicxml, export_pdf
 
 #: Formats export_score takes: pdf through Print mode, previews from a saved copy.
 PREVIEWS = {"preview-pdf": "preview.pdf", "preview-png": "preview.png"}
@@ -1045,7 +1047,41 @@ async def undo(bridge: DoricoBridge, steps: int = 1) -> dict[str, Any]:
     return {"undone": done, "requested": steps}
 
 
-async def save(bridge: DoricoBridge, path: str) -> dict[str, Any]:
+_DOCUMENT_SCRIPT = """
+tell application "System Events"
+  tell process "%s"
+    return value of attribute "AXDocument" of window 1
+  end tell
+end tell
+"""
+
+
+async def project_file() -> Path | None:
+    """The .dorico file of Dorico's front window (macOS AXDocument), or None
+    when the project has never been saved or the window cannot be read."""
+    try:
+        url = await macos.osascript(_DOCUMENT_SCRIPT % PROCESS)
+    except (OSError, macos.OsascriptError):
+        return None
+    parsed = urlparse(url)
+    if parsed.scheme != "file":
+        return None
+    file = Path(unquote(parsed.path))
+    return file if file.suffix == ".dorico" else None
+
+
+async def save(bridge: DoricoBridge, path: str | None = None) -> dict[str, Any]:
+    """Without path, run Dorico's Save command (the project must have a file);
+    with path, save a copy to that .dorico file, leaving the open project's own file alone."""
+    if path is None:
+        file = await project_file()
+        if file is None:
+            raise DoricoError(
+                "the project has no file yet (or Dorico's window cannot be read): pass path to save a copy, "
+                "or save it once in Dorico with File > Save"
+            )
+        await bridge.client.command("File.Save")
+        return {"saved": str(file)}
     target = Path(path).expanduser().resolve()
     if target.suffix != ".dorico":
         raise DoricoError("path must end in .dorico")
@@ -1053,15 +1089,18 @@ async def save(bridge: DoricoBridge, path: str) -> dict[str, Any]:
     return await bridge.save(target)
 
 
-async def export(bridge: DoricoBridge, format: str, path: str) -> dict[str, Any]:
+async def export(bridge: DoricoBridge, format: str, path: str | None = None) -> dict[str, Any]:
     """Export the open project and copy the result to path.
 
     pdf: the current layout, all pages, with Print mode's settings.
     musicxml: the full score of flow 1 through the Export MusicXML window.
     preview-pdf / preview-png: the first page Dorico embeds in a saved copy.
     """
+    format = canonical_format(format)
     if format not in EXPORT_FORMATS:
         raise DoricoError(f"format must be one of: {', '.join(EXPORT_FORMATS)}")
+    if not path:
+        raise DoricoError("Dorico does not report the project's file name; pass path")
     target = Path(path).expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
     if format in ("pdf", "musicxml"):
@@ -1077,3 +1116,28 @@ async def export(bridge: DoricoBridge, format: str, path: str) -> dict[str, Any]
             with archive.open(member) as source, target.open("wb") as sink:
                 shutil.copyfileobj(source, sink)
     return {"files": [str(target)], "note": "first page of the full score only"}
+
+
+async def resolve_player(
+    bridge: DoricoBridge, staff: str | int | None = None, player: str | None = None, flow: int = 1
+) -> str:
+    """The player name the lyric tools need, from a staff number or a name.
+
+    staff is a staff number (as score_overview lists them; a two-staff player
+    gives its first staff, as before) or a player name; player is the old,
+    deprecated spelling of a name. Exactly one must be given.
+    """
+    if (staff is None or staff == "") == (player is None or player == ""):
+        raise DoricoError("pass exactly one of staff (a staff number or player name) and player (deprecated)")
+    if player:
+        return player
+    text = str(staff).strip()
+    if not text.isdigit():
+        return text
+    number = int(text)
+    for item in (await snapshot(bridge, flow)).staves:
+        if item["staff"] == number:
+            if not item.get("name"):
+                raise DoricoError(f"staff {number} has no player name; pass the player's name")
+            return str(item["name"])
+    raise DoricoError(f"no staff {number} in flow {flow}")

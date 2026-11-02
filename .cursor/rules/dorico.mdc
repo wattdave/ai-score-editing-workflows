@@ -48,7 +48,11 @@ transpose are done by commands (the note keeps its id and lyric).
 `query_score(lyrics=true)` adds lyric text from a MusicXML export.
 `add-lyrics` adds lyrics in any verse (`"verse": 2`), keeping the others,
 and refuses to type over existing lyrics in that verse; `read_lyrics` /
-`edit_lyrics` read and correct a player's verse (same syllable count).
+`edit_lyrics` read and correct a player's verse (same syllable count); pass `staff` (a number or a
+player name; `player` is the deprecated alias). `save_score` without `path` runs Dorico's Save
+(refused for a project with no file); with `path` it saves a copy. `export_score` needs `path`.
+CLI: `dorico-cli lyrics --staff 1`, `edit-lyrics --staff 1 --text "..."`, `save [--path P]`,
+`export [--format F] [P | --path P]`, `set-info --field Composer=X`.
 
 ## Limits
 

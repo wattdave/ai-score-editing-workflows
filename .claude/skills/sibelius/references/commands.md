@@ -253,7 +253,7 @@ Single-object writes:
   `transpose --octaves` at most 2.
 - Persistence: `save` and `backup`. Prefer `--save` on the final write over a
   separate `save`.
-- Export: `export --format musicxml|mxl|pdf|midi|png [--out PATH] [--file SCORE]`.
+- Export: `export --format musicxml|mxl|pdf|midi|png [--path PATH] [--file SCORE]` (`--out` and `mid` still work). `save --path COPY` is refused: SaveAs to .sib would switch the open score to the copy. `query --limit` defaults to 200.
 - Rehearsal audio: `rehearsal-mixes --out DIR [--file SCORE] [--name 1=Soprano]
   [--bitrate 192k] [--keep-stems]` (bridge v54, needs ffmpeg). Exports one
   audio stem per staff and writes `<score> - All voices.mp3`, then

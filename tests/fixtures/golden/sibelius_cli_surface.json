@@ -1797,7 +1797,7 @@
       "--format"
      ],
      "required": false,
-     "type": null
+     "type": "canonical_format"
     },
     {
      "choices": null,
@@ -1808,6 +1808,7 @@
      "metavar": null,
      "nargs": null,
      "options": [
+      "--path",
       "--out"
      ],
      "required": false,
@@ -2542,7 +2543,7 @@
     {
      "choices": null,
      "const": null,
-     "default": 500,
+     "default": 200,
      "dest": "limit",
      "kind": "_StoreAction",
      "metavar": null,
@@ -3204,7 +3205,22 @@
    ]
   },
   "save": {
-   "arguments": []
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "path",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--path"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
   },
   "score-info": {
    "arguments": []
@@ -4370,7 +4386,7 @@
       "--format"
      ],
      "required": false,
-     "type": null
+     "type": "canonical_format"
     },
     {
      "choices": null,

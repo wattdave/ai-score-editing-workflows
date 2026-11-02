@@ -16,11 +16,18 @@ from typing import Any
 
 from ai_score_editing.batch_ops import BatchError
 from ai_score_editing.barrange import parse_bar_range
+from ai_score_editing.cli_common import (
+    DEFAULT_LIMIT,
+    EXIT_COMMAND_FAILED,
+    EXIT_CONNECTION_FAILED,
+    EXIT_OK,
+    canonical_format,
+)
 from ai_score_editing.query import QueryError
 
 from . import install, service
 from .bridge import MuseScoreBridge
-from .client import MuseScoreClient, MuseScoreError
+from .client import MuseScoreClient, MuseScoreConnectionError, MuseScoreError
 from .score import MuseScoreBatchError
 
 
@@ -39,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     query.add_argument("--voice", type=int)
     query.add_argument("--where", action="append", help="e.g. 'Pitch>=72'")
     query.add_argument("--field", action="append", dest="fields")
-    query.add_argument("--limit", type=int, default=200)
+    query.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
     apply = sub.add_parser("apply", help="apply a JSON batch as one undo step")
     source = apply.add_mutually_exclusive_group(required=True)
     source.add_argument("--file")
@@ -50,8 +57,8 @@ def build_parser() -> argparse.ArgumentParser:
     save = sub.add_parser("save", help="save the score to its own file (File > Save)")
     save.add_argument("--path", help="also copy the saved file here")
     export = sub.add_parser("export", help="export the score as pdf, png, svg, musicxml, mxl, mid or audio")
-    export.add_argument("--format", required=True, choices=list(service.EXPORT_FORMATS))
-    export.add_argument("--path", required=True)
+    export.add_argument("--format", type=canonical_format, choices=list(service.EXPORT_FORMATS), default="pdf")
+    export.add_argument("--path", help="default: the score's own file name with the format's extension")
     sub.add_parser("info", help="the score's metadata (title, composer, lyricist, ...)")
     set_info = sub.add_parser("set-info", help="set metadata fields (not undoable)")
     set_info.add_argument("--field", action="append", required=True, metavar="NAME=VALUE")
@@ -127,15 +134,18 @@ def main(argv: list[str] | None = None) -> int:
                 f"Plugins > {install.PLUGIN_TITLE}, in the window of the score to work on.",
             ],
         }, indent=2))
-        return 0
+        return EXIT_OK
     try:
         result = asyncio.run(run(args))
+    except MuseScoreConnectionError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_CONNECTION_FAILED
     except (MuseScoreError, MuseScoreBatchError, BatchError, QueryError, json.JSONDecodeError,
             OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return 1
+        return EXIT_COMMAND_FAILED
     print(json.dumps(result, indent=2))
-    return 0
+    return EXIT_OK
 
 
 if __name__ == "__main__":

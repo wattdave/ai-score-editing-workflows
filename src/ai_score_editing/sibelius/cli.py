@@ -23,6 +23,13 @@ from ai_score_editing import (
     music,
 )
 from ai_score_editing.barrange import parse_bar_range
+from ai_score_editing.cli_common import (  # noqa: F401  (re-exported)
+    DEFAULT_LIMIT,
+    EXIT_COMMAND_FAILED,
+    EXIT_CONNECTION_FAILED,
+    EXIT_OK,
+    canonical_format,
+)
 from ai_score_editing.sibelius import bridge, launcher, protocol, service
 from ai_score_editing.sibelius.bridge import (  # noqa: F401  (re-exported for skill scripts and tests)
     BRIDGE_PLUGIN,
@@ -108,10 +115,6 @@ from ai_score_editing.sibelius.commands.lyrics import (  # noqa: F401  (re-expor
 from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient, run_sync
 from ai_score_editing.token_store import TokenStore
 
-EXIT_OK = _common.EXIT_OK
-EXIT_COMMAND_FAILED = _common.EXIT_COMMAND_FAILED
-EXIT_CONNECTION_FAILED = _common.EXIT_CONNECTION_FAILED
-
 # Handlers of the areas already moved into ``sibelius/commands/``; filled by build_parser().
 _MIGRATED: dict[str, Callable[..., Any]] = {}
 
@@ -161,7 +164,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="subcommand", required=True)
     _MIGRATED.clear()
     _MIGRATED.update(commands.register_all(sub))
-    sub.add_parser("save", help="save the active score in Sibelius")
+    save = sub.add_parser("save", help="save the active score in Sibelius")
+    save.add_argument("--path", help="save a copy here (not supported in Sibelius: refused)")
     sub.add_parser(
         "score-info",
         help="read info about the open score (requires the bundled ScoreBridge plug-in)",
@@ -223,7 +227,9 @@ def build_parser() -> argparse.ArgumentParser:
     query.add_argument("--voice", type=int, help="voice 1-4")
     query.add_argument("--where", action="append", default=[], help="property filter, e.g. 'Pitch>=72' or 'Hidden=true'; repeatable, all must match")
     query.add_argument("--field", action="append", default=[], help="extra properties to return, e.g. Dx,Dy; repeatable or comma-separated")
-    query.add_argument("--limit", type=int, default=500, help="maximum objects to return (default: 500)")
+    query.add_argument(
+        "--limit", type=int, default=DEFAULT_LIMIT, help=f"maximum objects to return (default: {DEFAULT_LIMIT})"
+    )
     read_abc = sub.add_parser("read-abc", help="format bar contents as standard ABC notation")
     read_abc.add_argument("--staff", type=int, default=1, help="staff number, from 1")
     read_abc.add_argument("--from", dest="from_bar", type=int, help="first bar, from 1")
@@ -296,8 +302,10 @@ def build_parser() -> argparse.ArgumentParser:
     set_score_info.add_argument("--lyricist", help="lyricist name")
     set_score_info.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     export = sub.add_parser("export", help="export the active (or a given) score to another format")
-    export.add_argument("--format", choices=sorted(EXPORT_FORMATS), default="musicxml")
-    export.add_argument("--out", help="output path (default: next to the source file)")
+    export.add_argument("--format", type=canonical_format, choices=sorted(EXPORT_FORMATS), default="musicxml")
+    export.add_argument(
+        "--path", "--out", dest="out", help="output path (default: next to the source file); --out is the old name"
+    )
     export.add_argument("--file", dest="sib_file", help=".sib file to open first (default: active score)")
     backup = sub.add_parser("backup", help="in-file version + save + timestamped file copy")
     backup.add_argument("--name", default="ai-score-editing backup")
@@ -475,7 +483,7 @@ async def _run_write(
         print(f"backed up: {backup['copy']}", file=sys.stderr)
         result = await _bridge(client, method, call_args)
         if getattr(args, "save", False):
-            saved = await service.save(_CliBridge(client))
+            saved = await service.save(_CliBridge(client), args.path)
             print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
     print(json.dumps(result, indent=2))
     return EXIT_OK
