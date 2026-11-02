@@ -32,8 +32,14 @@ import copy
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
+from pathlib import Path
 
-STEPS = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+# The skill remains runnable with plain ``python3`` from a source checkout.
+SOURCE_ROOT = Path(__file__).resolve().parents[4] / "src"
+if str(SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SOURCE_ROOT))
+
+from ai_score_editing.musicxml_split.routing import midi  # noqa: E402
 
 
 @dataclass
@@ -46,12 +52,6 @@ class Event:
 
     def __post_init__(self) -> None:
         self.rest = self.notes[0].find("rest") is not None
-
-
-def midi(note: ET.Element) -> int:
-    pitch = note.find("pitch")
-    return (12 * (int(pitch.findtext("octave")) + 1) + STEPS[pitch.findtext("step")]
-            + round(float(pitch.findtext("alter") or 0)))
 
 
 def name(note: ET.Element) -> str:

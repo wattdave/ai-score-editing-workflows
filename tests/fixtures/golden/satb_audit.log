@@ -1,0 +1,12 @@
+rc=0
+--stdout--
+File: satb_two_staff.musicxml
+Parts found: 1
+
+--- Part P1 (4 measures) ---
+  Staff 1 Voices: ['1', '2']
+  Staff 1 Chord Note Elements: 3
+  Staff 2 Voices: ['3', '4']
+  Staff 2 Chord Note Elements: 3
+  Total Lyrics Found: 5
+--stderr--

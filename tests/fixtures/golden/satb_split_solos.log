@@ -1,0 +1,5 @@
+rc=0
+--stdout--
+Successfully split into 4-staff score: <TMP>/satb.musicxml
+--stderr--
+[error] target-overlap: Target P4 has overlapping events at onset 0
