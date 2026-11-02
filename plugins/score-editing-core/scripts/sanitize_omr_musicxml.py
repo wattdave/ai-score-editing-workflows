@@ -1,0 +1,1 @@
+../../../scripts/sanitize_omr_musicxml.py

@@ -33,7 +33,7 @@ Batch reads (one session, compact output):
   `TimeSignature`, `Tuplet`, `BarRest`, `Comment`, `SymbolItem`,
   `SystemSymbolItem`, `InstrumentChange`, `RehearsalMark` and `GuitarFrame`
   (chord symbols), plus common fields on all (`Color*`, `DrawOrder`, `Time`,
-  `Voices`, ...). After editing the JSON run `python3 scripts/gen_query_props.py`
+  `Voices`, ...). After editing the JSON run `python3 scripts/dev/gen_query_props.py`
   to regenerate the plug-in table (a test runs it with `--check`); new names
   need a bridge version bump. Objects lacking a
   filtered property never match. Use instead of reading bar ranges to hunt

@@ -21,7 +21,7 @@ score. Record failures, then fix, re-baseline and update `docs/dorico.md`
 Open any project in Dorico, then:
 
 ```bash
-uv run python scripts/dorico_upgrade_check.py --baseline 6.2.30
+uv run python scripts/dev/dorico_upgrade_check.py --baseline 6.2.30
 ```
 
 It changes nothing. It reports the Dorico, Qt and Lua versions and checks:
@@ -245,7 +245,7 @@ Open a copy of the Fugue 16 example (`/Users/Shared/Dorico Example Projects`),
 never a real score, and run
 
 ```bash
-uv run python scripts/dorico_selection_probe.py
+uv run python scripts/dev/dorico_selection_probe.py
 ```
 
 It re-measures the rules in `docs/dorico.md` "Selecting bars" (32 delete-bars
@@ -255,7 +255,7 @@ each trial. Exit status 1 means a rule changed; `delete-bars` and
 
 ## 7. Afterwards
 
-- Save new baselines: `uv run python scripts/dorico_upgrade_check.py
+- Save new baselines: `uv run python scripts/dev/dorico_upgrade_check.py
   --write-baseline` writes `docs/dorico-baseline/commands-<version>.txt` and
   `lua-classes-<version>.txt`; use `--baseline <version>` from then on.
 - Record the Dorico version, what changed and what was fixed in

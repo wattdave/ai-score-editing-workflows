@@ -12,10 +12,11 @@ is stored alongside the token: {"token": "...", "plugins": [...]}.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from ai_score_editing.paths import config_dir
 
 
 @dataclass
@@ -29,8 +30,7 @@ class TokenEntry:
 
 
 def default_path() -> Path:
-    config_home = os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))
-    return Path(config_home) / "sibelius-websocket-cli" / "token.json"
+    return config_dir() / "token.json"
 
 
 class TokenStore:

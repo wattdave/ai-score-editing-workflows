@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from ai_score_editing import macos
+
 SCRIPT = """
 set out to ""
 tell application "System Events"
@@ -32,11 +34,11 @@ def windows() -> list[tuple[str, str]]:
     if sys.platform != "darwin":
         return []
     try:
-        done = subprocess.run(["osascript", "-"], input=SCRIPT, capture_output=True, text=True, timeout=15)
-    except (OSError, subprocess.TimeoutExpired):
+        stdout = macos.osascript_sync(SCRIPT)
+    except (OSError, subprocess.TimeoutExpired, macos.OsascriptError):
         return []
     out = []
-    for line in done.stdout.splitlines():
+    for line in stdout.splitlines():
         title, _, document = line.partition("\t")
         if document and document != "missing value":
             out.append((title, document))

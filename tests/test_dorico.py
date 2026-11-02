@@ -507,7 +507,7 @@ async def test_export_pdf_answers_overwrite_and_reads_path_from_log(tmp_path: Pa
         async def command(self, command: str) -> None:
             self.commands.append(command)
 
-    monkeypatch.setattr(export, "_osascript", fake_osascript)
+    monkeypatch.setattr(export, "osascript", fake_osascript)
     client = Client()
     assert await export.export_pdf(client, log) == pdf  # type: ignore[arg-type]
     assert client.commands == ["Print.ExportCurrentLayoutAsPDF"]
@@ -543,7 +543,7 @@ class _FakeOsascript:
 
 
 def _spawn(monkeypatch: pytest.MonkeyPatch, process: _FakeOsascript) -> list[tuple[Any, ...]]:
-    from ai_score_editing.dorico import export
+    from ai_score_editing import macos
 
     calls: list[tuple[Any, ...]] = []
 
@@ -552,7 +552,7 @@ def _spawn(monkeypatch: pytest.MonkeyPatch, process: _FakeOsascript) -> list[tup
         assert kwargs["stdin"] == kwargs["stdout"] == kwargs["stderr"] == asyncio.subprocess.PIPE
         return process
 
-    monkeypatch.setattr(export.asyncio, "create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(macos.asyncio, "create_subprocess_exec", fake_exec)
     return calls
 
 
@@ -561,7 +561,7 @@ async def test_osascript_runs_without_blocking_and_decodes_like_text_mode(monkey
 
     process = _FakeOsascript(stdout="Titre\tSérénade\rsecond line\r\n".encode())
     calls = _spawn(monkeypatch, process)
-    out = await export._osascript('tell process "%(process)s" to item 1 of argv', "a b", "c")
+    out = await export.osascript('tell process "%(process)s" to item 1 of argv', "a b", "c")
     assert calls == [("osascript", "-", "a b", "c")]
     assert process.input == 'tell process "Dorico 6" to item 1 of argv'.encode()
     assert out == "Titre\tSérénade\nsecond line"
@@ -579,7 +579,7 @@ async def test_osascript_failure_messages(monkeypatch: pytest.MonkeyPatch, stder
 
     _spawn(monkeypatch, _FakeOsascript(stderr=stderr, returncode=1))
     with pytest.raises(DoricoError, match=message):
-        await export._osascript("script")
+        await export.osascript("script")
 
 
 async def test_osascript_timeout_kills_the_child(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -591,7 +591,7 @@ async def test_osascript_timeout_kills_the_child(monkeypatch: pytest.MonkeyPatch
     _spawn(monkeypatch, process)
     monkeypatch.setattr(export, "OSASCRIPT_TIMEOUT", 0.01)
     with pytest.raises(subprocess.TimeoutExpired):  # as subprocess.run raised, not an OSError
-        await export._osascript("script", "x")
+        await export.osascript("script", "x")
     assert process.killed and process.waited
 
 
@@ -600,7 +600,7 @@ async def test_osascript_cancellation_kills_the_child(monkeypatch: pytest.Monkey
 
     process = _FakeOsascript(hang=True)
     _spawn(monkeypatch, process)
-    task = asyncio.create_task(export._osascript("script"))
+    task = asyncio.create_task(export.osascript("script"))
     await asyncio.sleep(0.01)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -651,7 +651,7 @@ async def test_read_project_info_drives_the_dialog(monkeypatch: pytest.MonkeyPat
     class Bridge:
         client = Client()
 
-    monkeypatch.setattr(project_info, "_osascript", fake_osascript)
+    monkeypatch.setattr(project_info, "osascript", fake_osascript)
     monkeypatch.setattr(project_info, "bring_to_front", front)
     assert await project_info.read_project_info(Bridge()) == {"Title": "Song", "Composer": "Me"}  # type: ignore[arg-type]
     assert ("front",) in scripts and ("Close",) in scripts and not state["open"]
@@ -1186,7 +1186,7 @@ async def test_read_undoes_only_its_own_selections(
     async def menu_title(script: str, *args: str) -> str:
         return client.title()
 
-    monkeypatch.setattr(lyrics_dialog, "_osascript", menu_title)
+    monkeypatch.setattr(lyrics_dialog, "osascript", menu_title)
     monkeypatch.setattr(lyrics_dialog, "MENU_POLL", 0)
     result = await lyrics_dialog._undo_read_steps(bridge, ["Undo Filter Lyrics", "Undo Select All"])  # type: ignore[arg-type]
     assert result is kept and client.commands.count("Edit.Undo") == undone
@@ -1558,7 +1558,7 @@ def test_private_export_folder_is_emptied_and_guarded(tmp_path: Path, monkeypatc
     from ai_score_editing.dorico import export
 
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
-    work = tmp_path / "cache" / "sibelius-websocket-cli" / "dorico"
+    work = tmp_path / "cache" / "ai-score-editing" / "dorico"
     monkeypatch.setattr(export, "EXPORT_DIR", work / "musicxml")
     old = work / "musicxml" / "Flows from Old"
     old.mkdir(parents=True)

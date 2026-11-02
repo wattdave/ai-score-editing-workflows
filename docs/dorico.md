@@ -51,7 +51,7 @@ export, so it takes several seconds and needs Accessibility permission.
 
 The client sends `connect` with a client name. Dorico shows an approval
 prompt the first time; the token it then sends is stored in
-`~/.config/sibelius-websocket-cli/dorico-token.json` (keyed by client name,
+`~/.config/ai-score-editing/dorico-token.json` (keyed by client name,
 since that is what Dorico approves). With a stored token Dorico answers
 `kConnected` at once, then pushes a full `status`; later status messages
 carry only changed fields, so the client merges them.
@@ -284,7 +284,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   so reads used to write `Flows from <title>` into the user's folders, and
   a second read raised an overwrite prompt per file (the back end answered
   them, so an export of the user's own there would have been replaced).
-  Now every export goes to `~/.cache/sibelius-websocket-cli/dorico/musicxml`,
+  Now every export goes to `~/.cache/ai-score-editing/dorico/musicxml`,
   emptied first, so no prompts come. The button after the folder path opens
   a macOS **Open** panel; shift-command-G, the path, Return, Return chooses
   the folder. Dorico then remembers it for the project; a **Cancel** keeps
@@ -396,7 +396,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
   sources are compiled into the main binary as readable text. The build has
   no QML debugging enabler and ships no `qmltooling` plugins, so Qt's QML
   inspector/debugger is not available; GammaRay-style injection would
-  fight the hardened runtime. `scripts/extract_dorico_qml.py OUT_DIR`
+  fight the hardened runtime. `scripts/dev/extract_dorico_qml.py OUT_DIR`
   recovers them (324 unique files in 6.2.30, named by content hash, with an
   INDEX.txt of root type, titles and controller calls). They are layout
   bound to C++ `controller` objects (`controller.onLyricsPopoverButtonClicked()`),

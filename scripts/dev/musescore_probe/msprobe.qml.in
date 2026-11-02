@@ -4,7 +4,7 @@
 // It runs JavaScript sent over a WebSocket and returns the result as JSON.
 // MuseScore's WebSocket server listens on every network interface and the
 // plug-in API can start processes, so every request must carry the token
-// that scripts/musescore_probe.py writes in at install time. Stop the probe
+// that scripts/dev/musescore_probe.py writes in at install time. Stop the probe
 // (quit MuseScore) when you are done with it.
 
 import QtQuick

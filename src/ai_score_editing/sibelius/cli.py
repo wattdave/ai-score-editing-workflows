@@ -620,7 +620,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify_render.add_argument("--min-bytes", type=int, default=1, help="minimum size for each rendered file")
     verify_render.add_argument("--sha256", action="store_true", help="include SHA-256 hashes in the report")
     backup = sub.add_parser("backup", help="in-file version + save + timestamped file copy")
-    backup.add_argument("--name", default="sibelius-websocket-cli backup")
+    backup.add_argument("--name", default="ai-score-editing backup")
     do = sub.add_parser("do", help="run a named operation (curated command IDs)")
     do.add_argument(
         "operation",

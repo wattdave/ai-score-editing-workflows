@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Install and talk to the MuseScore probe plug-in (scripts/musescore_probe/).
+"""Install and talk to the MuseScore probe plug-in (scripts/dev/musescore_probe/).
 
-    uv run python scripts/musescore_probe.py install
-    uv run python scripts/musescore_probe.py eval 'return curScore.nmeasures;'
-    uv run python scripts/musescore_probe.py run probe.js
+    uv run python scripts/dev/musescore_probe.py install
+    uv run python scripts/dev/musescore_probe.py eval 'return curScore.nmeasures;'
+    uv run python scripts/dev/musescore_probe.py run probe.js
 
 `install` generates a token (or reuses the stored one), stores it in
-~/.config/sibelius-websocket-cli/musescore-probe-token (mode 600) and writes
+~/.config/ai-score-editing/musescore-probe-token (mode 600) and writes
 the plug-in, with the token, to ~/Documents/MuseScore4/Plugins/ScoreBridge-probe/.
 In MuseScore, enable "ScoreBridge probe" in Plugins > Plugin Manager once, then
 run it from the Plugins menu in each session. Snippets are JavaScript

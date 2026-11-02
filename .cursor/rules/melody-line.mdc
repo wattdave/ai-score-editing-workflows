@@ -81,6 +81,6 @@ then the `rehearsal-mixes` skill exports one mp3 per song.
 
 ## Gotchas
 
-- Sibelius may show a "sibelius-websocket-cli wants to connect" dialog. Only the user can approve it.
+- Sibelius may show a "ai-score-editing wants to connect" dialog. Only the user can approve it.
 - `OpenScore` of an already-open file creates another window; several windows of one score pile up.
 - `timeout` is not installed on macOS; use `until` loops or run long commands in the background.

@@ -44,7 +44,7 @@ def test_python_allow_list_matches_plugin() -> None:
 
 
 def test_generated_plugin_table_is_current() -> None:
-    script = Path(__file__).resolve().parent.parent / "scripts" / "gen_query_props.py"
+    script = Path(__file__).resolve().parent.parent / "scripts" / "dev" / "gen_query_props.py"
     result = subprocess.run([sys.executable, str(script), "--check"], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
 

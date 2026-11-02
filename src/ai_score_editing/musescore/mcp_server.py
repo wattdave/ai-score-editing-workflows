@@ -10,26 +10,20 @@ connection is kept and calls are serialized.
 
 from __future__ import annotations
 
-import asyncio
-import os
-from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar
+from collections.abc import Callable
+from typing import Any
 
-import websockets
 from mcp.server.mcpserver import MCPServer
-from mcp.server.mcpserver.exceptions import ToolError
-from mcp.types import ToolAnnotations
 
 from ai_score_editing.batch_ops import BatchError
-from ai_score_editing.barrange import parse_bar_range
+from ai_score_editing.mcp_common import EXPORT, READ_ONLY, WRITE, env_port, parse_bars
+from ai_score_editing.mcp_common import Session as CommonSession
 from ai_score_editing.query import QueryError
 
 from . import install, service
 from .bridge import MuseScoreBridge
 from .client import MuseScoreClient, MuseScoreError
 from .score import MuseScoreBatchError
-
-T = TypeVar("T")
 
 INSTRUCTIONS = f"""\
 Controls the score open in MuseScore 4, in the window where the
@@ -55,61 +49,21 @@ there and a person must dismiss it.
 server = MCPServer("musescore", instructions=INSTRUCTIONS)
 
 
-class Session:
-    """One lazily opened bridge connection, used by one call at a time."""
+class Session(CommonSession[MuseScoreBridge]):
+    """One lazily opened MuseScore connection, used by one call at a time."""
 
     def __init__(self, factory: Callable[[], MuseScoreClient]) -> None:
-        self._factory = factory
-        self._bridge: MuseScoreBridge | None = None
-        self._lock = asyncio.Lock()
-
-    async def run(self, action: Callable[[MuseScoreBridge], Awaitable[T]], *, retry: bool) -> T:
-        async with self._lock:
-            try:
-                return await self._guard(action(await self._connected()))
-            except (websockets.exceptions.ConnectionClosed, OSError):
-                await self._reset()
-                if not retry:
-                    raise ToolError(
-                        "the connection to MuseScore dropped during a change; it may or may not "
-                        "have been applied. Check with query_score before trying again."
-                    ) from None
-                return await self._guard(action(await self._connected()))
-
-    @staticmethod
-    async def _guard(awaitable: Awaitable[T]) -> T:
-        try:
-            return await awaitable
-        except (MuseScoreError, MuseScoreBatchError, BatchError, QueryError) as exc:
-            raise ToolError(str(exc)) from exc
-
-    async def _connected(self) -> MuseScoreBridge:
-        if self._bridge is None:
-            client = self._factory()
-            try:
-                await client.connect()
-            except MuseScoreError as exc:
-                raise ToolError(f"cannot connect to MuseScore: {exc}") from exc
-            self._bridge = MuseScoreBridge(client)
-        return self._bridge
-
-    async def _reset(self) -> None:
-        if self._bridge is not None:
-            try:
-                await self._bridge.client.close()
-            except Exception:
-                pass
-            self._bridge = None
+        super().__init__(
+            "MuseScore", factory, MuseScoreBridge, MuseScoreError,
+            (MuseScoreError, MuseScoreBatchError, BatchError, QueryError),
+        )
 
 
 def _default_client() -> MuseScoreClient:
-    return MuseScoreClient(port=int(os.environ.get("MUSESCORE_PORT", install.DEFAULT_PORT)))
+    return MuseScoreClient(port=env_port("MUSESCORE_PORT", install.DEFAULT_PORT))
 
 
 session = Session(_default_client)
-
-READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
-WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False)
 
 
 @server.tool(annotations=READ_ONLY)
@@ -128,10 +82,7 @@ async def score_structure(bars: str | None = None) -> dict[str, Any]:
     at bar B is at the end of bar B; a start repeat at bar B starts bar B.
     Keys are concert keys; writtenKeys lists staves written in another key.
     """
-    try:
-        first, last = parse_bar_range(bars=bars) if bars else (None, None)
-    except ValueError as exc:
-        raise ToolError(str(exc)) from exc
+    first, last = parse_bars(bars)
     return await session.run(lambda bridge: service.structure(bridge, first, last), retry=True)
 
 
@@ -159,10 +110,7 @@ async def query_score(
     Returns {objects, count, truncated}. Each object has staff, bar, index,
     type and position (its address for apply_batch), ticks, and msType.
     """
-    try:
-        first, last = parse_bar_range(bars=bars) if bars else (None, None)
-    except ValueError as exc:
-        raise ToolError(str(exc)) from exc
+    first, last = parse_bars(bars)
     return await session.run(
         lambda bridge: service.query(bridge, staves=staves, from_bar=first, to_bar=last, types=types,
                                      voice=voice, where=where, fields=fields, limit=limit),
@@ -272,7 +220,7 @@ async def save_score(path: str | None = None) -> dict[str, Any]:
     return await session.run(lambda bridge: service.save(bridge, path), retry=False)
 
 
-@server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+@server.tool(annotations=EXPORT)
 async def export_score(path: str, format: str = "pdf") -> dict[str, Any]:
     """Export the whole score to path as pdf, png, svg, musicxml, mxl, mid,
     mp3, wav, flac or ogg (the path's extension must match). png and svg

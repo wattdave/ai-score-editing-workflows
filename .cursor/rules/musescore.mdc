@@ -85,7 +85,7 @@ description lists every op's fields.
 - copy-passage overwrites the clipboard, even in a dry run.
 - If a call says MuseScore did not answer, a dialog is open in MuseScore:
   ask the user to dismiss it; do not retry.
-- `scripts/musescore_live_check.py` checks the whole back end on a scratch
+- `scripts/dev/musescore_live_check.py` checks the whole back end on a scratch
   score; never run it on the user's own score.
 
 The third-party server this replaced, ghchen99/mcp-musescore, is described
