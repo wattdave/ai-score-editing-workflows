@@ -435,7 +435,7 @@ async def _run_save(args: argparse.Namespace) -> int:
     async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
         await _check_bridge_version(client)
         await _assert_expected_score(client, args)
-        saved = await service.save(_CliBridge(client))
+        saved = await service.save(_CliBridge(client), getattr(args, "path", None))
     print(json.dumps(saved) if args.json else f"saved: {saved.get('fileName', '')}")
     return EXIT_OK
 
