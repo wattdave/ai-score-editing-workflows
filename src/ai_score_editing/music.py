@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ai_score_editing.units import UNITS_PER_WHOLE
+
 # Standard semitone mappings
 _LETTER_SEMITONES: dict[str, int] = {
     "C": 0,
@@ -204,7 +206,7 @@ def parse_duration(val: str | int) -> int:
             denom = int(parts[1].strip())
             if denom > 0:
                 # 1/1 = 1024 ticks -> (num / denom) * 1024
-                ticks = int((num / denom) * 1024)
+                ticks = int((num / denom) * UNITS_PER_WHOLE)
                 if ticks > 0:
                     return ticks
 
