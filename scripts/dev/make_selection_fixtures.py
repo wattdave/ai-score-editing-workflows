@@ -2,13 +2,13 @@
 """Write a MusicXML score with one musical figure per region, for the Dorico
 selection research (docs/dorico-selection-research-plan.md).
 
-    python3 scripts/make_selection_fixtures.py OUTPUT.musicxml
+    python3 scripts/dev/make_selection_fixtures.py OUTPUT.musicxml
 
 A two-staff piano in 4/4 (divisions 12 per quarter, a bar is 48). Plain bars
 hold one whole note per staff, with pitches that change every bar so that
 no two notes could be taken for a tie. Each figure is alone on its staff in
 its bars, separated from the next by control bars. Import the file in Dorico
-and run scripts/dorico_selection_probe.py on it. FIGURES lists what is where.
+and run scripts/dev/dorico_selection_probe.py on it. FIGURES lists what is where.
 """
 
 from __future__ import annotations

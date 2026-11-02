@@ -320,7 +320,7 @@ Addresses, units and batches follow the Sibelius tools, and a dry run
 really runs the batch and rolls it back. Hairpins can't be added (they
 crashed MuseScore). [docs/musescore.md](docs/musescore.md) has the parity
 table, the probe results and a live check
-(`scripts/musescore_live_check.py`); the `musescore` skill (`/musescore`)
+(`scripts/dev/musescore_live_check.py`); the `musescore` skill (`/musescore`)
 covers using it.
 
 This replaced the third-party [ghchen99/mcp-musescore](https://github.com/ghchen99/mcp-musescore)
@@ -343,6 +343,13 @@ automatically loading them. Keep the harness files in sync:
 python scripts/sync_skills.py          # sync .claude/skills, .agents/skills, and .cursor/rules
 python scripts/sync_skills.py --check  # check for drift without modifying files
 ```
+
+`plugins/skills.json` maps each skill to the plugin that ships it (`null` for
+repo-only skills such as `git-workflow`); the sync script also creates the
+`plugins/<owner>/skills/<name>` links and the per-file links in
+`plugins/score-editing-core/scripts/`. User-facing scripts stay in `scripts/`;
+developer probes (Dorico and MuseScore probes, fixture and generator scripts)
+live in `scripts/dev/` and are not shipped with the plug-ins.
 
 ## Documentation
 

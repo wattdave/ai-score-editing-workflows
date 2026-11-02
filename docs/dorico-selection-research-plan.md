@@ -51,7 +51,7 @@ Ground rules:
 
 ## Phase 0: make the harness a script in the repo
 
-Goal: `scripts/dorico_selection_probe.py`, so every later phase is
+Goal: `scripts/dev/dorico_selection_probe.py`, so every later phase is
 repeatable and a Dorico upgrade can re-run it.
 
 - Takes a project, a recipe (a list of commands with placeholders for an
@@ -60,13 +60,13 @@ repeatable and a Dorico upgrade can re-run it.
 - Reads event blocks from `bridge.overview(flow)["layout"]["blocks"]`.
 - Maps voice streams to staves with the existing placement probe, not a
   hard-coded table.
-- Adds the rules to `scripts/dorico_upgrade_check.py`, or a sibling, so a
+- Adds the rules to `scripts/dev/dorico_upgrade_check.py`, or a sibling, so a
   Dorico update that changes selection behaviour is noticed.
 
 Done when: the five PR #88 ranges and 24 delete trials reproduce from the
 script on the Fugue 16 copy.
 
-Done: `scripts/dorico_selection_probe.py` has `bars` (model against measured
+Done: `scripts/dev/dorico_selection_probe.py` has `bars` (model against measured
 `Edit.DeleteBars`), `copy` (planned and, with `--old`, the old recipe) and
 `run` (any command after a planned selection; measures removed, added or
 changed events and the undo steps). On the Fugue 16 copy: 32 of 32 delete
@@ -164,7 +164,7 @@ Liszt Liebestraume (pickup bar, then 6/8, 1536 per bar; two Piano staves),
   export dialog showed `01_Piano 1` and `02_Piano 1`, and the bridge two
   instruments named "Piano 1". So any join on player name must refuse a
   name that appears twice; NN stays unique.
-- **One-figure test scores** (`scripts/make_selection_fixtures.py`, a
+- **One-figure test scores** (`scripts/dev/make_selection_fixtures.py`, a
   two-staff piano in 4/4 imported from MusicXML; each figure sits alone in
   its bars between control bars): a tie over one barline, a whole note held
   over three bars, a grace note before the downbeat, eighth triplets, a

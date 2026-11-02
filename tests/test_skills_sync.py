@@ -197,3 +197,113 @@ def test_repo_skill_entrypoint_stays_within_token_budget() -> None:
 
     assert len(skill_text.encode("utf-8")) <= 5_120
     assert len(skill_text.split()) <= 700
+
+
+def _plugin_tree(tmp_path: Path) -> None:
+    """A minimal repo with one owned skill, one repo-only skill and two plugins."""
+    import json
+
+    for name in ("owned", "local"):
+        skill_dir = tmp_path / ".claude" / "skills" / name
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            f"---\nname: {name}\ndescription: {name}\n---\n\n# {name}\n",
+            encoding="utf-8",
+        )
+    (tmp_path / "CLAUDE.md").write_text("# Instructions\n", encoding="utf-8")
+    (tmp_path / "scripts").mkdir()
+    import sync_skills
+
+    for script in sync_skills.USER_SCRIPTS:
+        (tmp_path / "scripts" / script).write_text("", encoding="utf-8")
+    plugins = tmp_path / "plugins"
+    (plugins / "score-editing-core").mkdir(parents=True)
+    (plugins / "other").mkdir()
+    (plugins / "skills.json").write_text(
+        json.dumps({"owned": "other", "local": None}), encoding="utf-8"
+    )
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "marketplace.json").write_text(
+        json.dumps(
+            {
+                "plugins": [
+                    {"name": "score-editing-core", "source": "./plugins/score-editing-core"},
+                    {"name": "other", "source": "./plugins/other"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_sync_creates_plugin_skill_and_script_links(tmp_path: Path) -> None:
+    import os
+
+    _plugin_tree(tmp_path)
+    sync_all(tmp_path)
+
+    link = tmp_path / "plugins" / "other" / "skills" / "owned"
+    assert os.readlink(link) == "../../../.claude/skills/owned"
+    assert not (tmp_path / "plugins" / "other" / "skills" / "local").exists()
+    scripts = tmp_path / "plugins" / "score-editing-core" / "scripts"
+    assert scripts.is_dir() and not scripts.is_symlink()
+    assert (scripts / "attach_lyrics.py").is_symlink()
+    assert check_sync(tmp_path) == (True, [])
+
+
+def test_check_reports_manifest_and_plugin_link_drift(tmp_path: Path) -> None:
+    import json
+
+    _plugin_tree(tmp_path)
+    sync_all(tmp_path)
+
+    manifest = tmp_path / "plugins" / "skills.json"
+    manifest.write_text(json.dumps({"owned": "other"}), encoding="utf-8")
+    assert any(
+        "local is missing from plugins/skills.json" in i for i in check_sync(tmp_path)[1]
+    )
+    manifest.write_text(json.dumps({"owned": "other", "local": None}), encoding="utf-8")
+
+    skills = tmp_path / "plugins" / "other" / "skills"
+    link = skills / "owned"
+    link.unlink()
+    link.symlink_to("../../../wrong")
+    (skills / "stray").symlink_to("../../../.claude/skills/local")
+    issues = check_sync(tmp_path)[1]
+    assert any("points to" in i and "owned" in i for i in issues)
+    assert any("Extra plugin skill link" in i and "stray" in i for i in issues)
+    link.unlink()
+    assert any("owned" in i and "is missing" in i for i in check_sync(tmp_path)[1])
+
+    sync_all(tmp_path)
+    assert check_sync(tmp_path) == (True, [])
+
+
+def test_check_reports_marketplace_and_script_drift(tmp_path: Path) -> None:
+    import json
+
+    _plugin_tree(tmp_path)
+    sync_all(tmp_path)
+
+    (tmp_path / "plugins" / "third").mkdir()
+    assert any("plugins/third is not listed" in i for i in check_sync(tmp_path)[1])
+    (tmp_path / "plugins" / "third").rmdir()
+
+    market = tmp_path / ".claude-plugin" / "marketplace.json"
+    market.write_text(
+        json.dumps({"plugins": [{"source": "./plugins/other"}]}), encoding="utf-8"
+    )
+    assert any("score-editing-core is not listed" in i for i in check_sync(tmp_path)[1])
+
+    scripts = tmp_path / "plugins" / "score-editing-core" / "scripts"
+    (scripts / "dev_probe.py").symlink_to("../../../scripts/attach_lyrics.py")
+    assert any("Extra plugin script" in i for i in check_sync(tmp_path)[1])
+    (scripts / "attach_lyrics.py").unlink()
+    assert any("attach_lyrics.py is missing" in i for i in check_sync(tmp_path)[1])
+
+
+def test_repo_dev_probes_are_not_exposed_to_plugin() -> None:
+    scripts = ROOT_DIR / "plugins" / "score-editing-core" / "scripts"
+    assert scripts.is_dir() and not scripts.is_symlink()
+    assert not (scripts / "musescore_probe.py").exists()
+    assert (ROOT_DIR / "scripts" / "dev" / "musescore_probe.py").is_file()

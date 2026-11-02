@@ -3,7 +3,7 @@
 
 Run with a project open in Dorico (any project; nothing is changed):
 
-    uv run python scripts/dorico_upgrade_check.py [--baseline 6.2.30]
+    uv run python scripts/dev/dorico_upgrade_check.py [--baseline 6.2.30]
 
 It records the Dorico, Qt and Lua versions, checks the Remote Control
 connection, the Lua bridge (read, dump() fallback, layout, blocks, current
@@ -28,7 +28,7 @@ from ai_score_editing.dorico.bridge import DoricoBridge
 from ai_score_editing.dorico.client import DoricoClient, DoricoError
 from ai_score_editing.dorico.export import APPLICATION_LOG
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 BASELINES = ROOT / "docs" / "dorico-baseline"
 APP = Path("/Applications/Dorico 6.app")
 

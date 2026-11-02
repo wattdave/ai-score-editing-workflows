@@ -1,0 +1,22 @@
+{
+  "dorico": "dorico",
+  "git-workflow": null,
+  "halbestunde-omr": "score-editing-core",
+  "hanging-playback-note-repair": "sibelius",
+  "lilypond-to-score": "score-editing-core",
+  "lyric-hyphenation": "score-editing-core",
+  "melody-line": "sibelius",
+  "musescore": "musescore",
+  "musescore-pdf-convert": "musescore",
+  "omr-score-repair": "score-editing-core",
+  "playback-divisi-split": "sibelius",
+  "proof-listen-mixes": "sibelius",
+  "rehearsal-mixes": "sibelius",
+  "satb-part-splitting": "sibelius",
+  "score-editing": "score-editing-core",
+  "setup": "score-editing-core",
+  "sibelius": "sibelius",
+  "swing-playback-copy": "sibelius",
+  "tenor-playback-repair": "sibelius",
+  "vector-pdf-score": "score-editing-core"
+}

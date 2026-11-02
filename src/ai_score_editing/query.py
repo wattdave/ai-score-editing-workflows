@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 # Properties the bridge may read through obj.@name, per object kind. The
-# source of truth is query_props.json, which scripts/gen_query_props.py turns
+# source of truth is query_props.json, which scripts/dev/gen_query_props.py turns
 # into QueryPropTable in ScoreBridge.plg (a test runs it with --check). The
 # plug-in enforces its own copy; this one turns typos into errors before
 # connecting, since an unknown name there would silently match nothing.

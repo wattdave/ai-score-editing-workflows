@@ -426,7 +426,7 @@ the undo count with a marker edit.
 6. **Switch-over** (done 2026-10-04; see
    [musescore.md](musescore.md#live-check)): add_instrument and
    set_staff_playback (through each note's `play`, since audio ignores the
-   staff's voice flags); `scripts/musescore_live_check.py`, 28/28; the
+   staff's voice flags); `scripts/dev/musescore_live_check.py`, 28/28; the
    `musescore` skill rewritten (the upstream notes kept as history); README,
    setup skill, `docs/musescore.md` parity table; `.mcp.json` points
    `musescore` at `musescore-mcp`, and the upstream server is no longer
@@ -444,7 +444,7 @@ the undo count with a marker edit.
   `syntax_check.js`), a test that `title:` sits on its own line, and a test
   that the `cmd()` allow-list and the methods match what Python calls, like
   the test that keeps `BatchWritableTable` in step with `batch_ops`.
-- **Live check:** `scripts/musescore_live_check.py` runs a fixed scenario on a scratch
+- **Live check:** `scripts/dev/musescore_live_check.py` runs a fixed scenario on a scratch
   score (read, a batch of every op, dry run, rollback, undo by the reported
   steps, a marker edit left untouched) and prints a report. Its results go
   into `docs/musescore.md` the way `dorico.md`'s live verification section
