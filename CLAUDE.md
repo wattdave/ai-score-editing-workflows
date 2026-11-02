@@ -12,7 +12,9 @@ Many people using this repository are new to Claude Code and to the
 terminal. At the start of a session, if the user seems new, asks how to get
 started, or a command fails because a tool is missing, use the `setup` skill
 (also `/setup`). It checks and installs Homebrew, git, uv, Python 3.13,
-ffmpeg, the project packages, and the Sibelius bridge plug-in.
+ffmpeg, the project packages, and the Sibelius bridge plug-in. Optional:
+poppler (PDF page images), pandoc (Markdown to Word) and LibreOffice
+(`soffice --headless --convert-to pdf` to render and check Word files).
 
 ## Commands
 

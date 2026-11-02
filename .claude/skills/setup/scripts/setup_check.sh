@@ -77,6 +77,19 @@ else
     report optional poppler "brew install poppler (pdfinfo and pdftoppm, for PDF scores)"
 fi
 
+# Optional: pandoc turns Markdown (lyric sheets, notes) into Word; LibreOffice
+# (soffice) renders Word files to PDF so they can be checked page by page.
+if command -v pandoc >/dev/null 2>&1; then
+    report ok pandoc "$(pandoc --version 2>/dev/null | head -1)"
+else
+    report optional pandoc "brew install pandoc (Markdown to Word, for lyric sheets and handouts)"
+fi
+if command -v soffice >/dev/null 2>&1 || [ -x /Applications/LibreOffice.app/Contents/MacOS/soffice ]; then
+    report ok libreoffice "$(command -v soffice || echo /Applications/LibreOffice.app)"
+else
+    report optional libreoffice "brew install --cask libreoffice (render Word files to PDF to check them)"
+fi
+
 # Optional: only needed to convert LilyPond sources (lilypond-to-score skill).
 if command -v lilypond >/dev/null 2>&1; then
     report ok lilypond "$(lilypond --version 2>/dev/null | head -1)"
