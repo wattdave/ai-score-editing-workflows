@@ -1,5 +1,5 @@
 ---
-description: Guide a new user through installing everything this repository needs on a Mac: Homebrew, git, uv, Python 3.13, ffmpeg, the project's Python packages, and the score editors it drives (Sibelius Ultimate 2026.6+ with Sibelius Connect, Dorico, MuseScore 4) with their ScoreBridge plug-ins. Use on /setup or $setup, when the user asks to set up, install or get started, when a command fails because a tool is missing, or when a user seems new to the project.
+description: Guide a new user through installing everything this repository needs on a Mac: Homebrew, git, uv, Python 3.13, ffmpeg (plus optional pandoc and LibreOffice for Word documents), the project's Python packages, and the score editors it drives (Sibelius Ultimate 2026.6+ with Sibelius Connect, Dorico, MuseScore 4) with their ScoreBridge plug-ins. Use on /setup or $setup, when the user asks to set up, install or get started, when a command fails because a tool is missing, or when a user seems new to the project.
 globs: *
 alwaysApply: false
 ---
@@ -19,7 +19,8 @@ ${CLAUDE_SKILL_DIR}/scripts/setup_check.sh
 
 It changes nothing. Each line is `ok`, `missing`, `warn` or `optional` plus
 a detail. Only offer to install what is `missing`. Mention `optional` items
-only if the user wants that workflow (LilyPond sources). If everything is
+only if the user wants that workflow (LilyPond sources, or Word documents
+such as lyric sheets). If everything is
 `ok`, go straight to step 4.
 
 If `macos` is missing, stop: this project only runs on a Mac.
@@ -39,6 +40,8 @@ roughly how long it takes:
 | Project packages | This project's own Python libraries (`uv sync`). |
 | Bridge plug-in | A small Sibelius plug-in that lets the tool read the score. |
 | poppler (optional) | `pdfinfo` and `pdftoppm`: page counts and page images for PDF scores in the OMR and melody-search workflows. |
+| pandoc (optional) | Turns Markdown into Word documents in one command, for lyric sheets and handouts. |
+| LibreOffice (optional) | Renders Word files to PDF so Claude can look at the pages and check them before you send them. Large download (about 350 MB). |
 | LilyPond (optional) | Converts LilyPond score sources from CPDL/IMSLP; only needed for that workflow. |
 
 Then ask whether to install **everything missing at once** (recommended)
@@ -78,6 +81,10 @@ continue past something the later steps depend on.
    ffmpeg takes a few minutes.
    If the user will work from PDF scores (OMR, melody search), also
    `brew install poppler` for `pdfinfo` and `pdftoppm`.
+   If the user will make lyric sheets or other Word documents from Markdown,
+   also `brew install pandoc`, and `brew install --cask libreoffice` so Word
+   files can be rendered to PDF and checked (`soffice --headless
+   --convert-to pdf file.docx`).
    If the user will convert LilyPond sources, also `brew install lilypond`;
    python-ly needs no install (it runs through `uvx`).
 3. **Python 3.13:** `uv python install 3.13`.

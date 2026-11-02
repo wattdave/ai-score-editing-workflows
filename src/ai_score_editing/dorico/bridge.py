@@ -25,7 +25,9 @@ from typing import Any
 
 from .client import DoricoClient, DoricoError
 
-UNITS = 256
+from ai_score_editing.units import UNITS_PER_QUARTER
+
+UNITS = UNITS_PER_QUARTER
 RESPONSE_TIMEOUT = 30.0
 _SAFE_PATH = re.compile(r"^[A-Za-z0-9_./ ~+-]+$")
 

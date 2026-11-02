@@ -51,3 +51,15 @@ def _no_real_sibelius(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(SibeliusClient, "connect", _guarded_connect)
     monkeypatch.setattr(dorico_client.DoricoClient, "connect", _guarded_dorico_connect)
     monkeypatch.setattr(musescore_client.MuseScoreClient, "connect", _guarded_musescore_connect)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_home(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    """Point HOME and the XDG folders at tmp_path so no test touches the real
+    config, token or cache folders. Tests that need other locations set their
+    own values with monkeypatch afterwards."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg-cache"))

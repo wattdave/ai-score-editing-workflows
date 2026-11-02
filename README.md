@@ -41,8 +41,9 @@ Claude plan does not include Claude Code; see
    asks whether to trust this folder and approve its `sibelius` tool server;
    say yes to both.
 4. Type `/setup`. Claude explains what is missing (Homebrew, git, uv,
-   Python 3.13, ffmpeg, the ScoreBridge plug-in for your editor), asks whether to install it
-   all at once or one item at a time, and does the work.
+   Python 3.13, ffmpeg, the ScoreBridge plug-in for your editor, and the
+   optional pandoc and LibreOffice for Word documents), asks whether to
+   install it all at once or one item at a time, and does the work.
 
 `.claude/skills/setup/scripts/setup_check.sh` shows what is installed at any time.
 
@@ -60,7 +61,7 @@ folder, add the marketplace and install the plugins for your editor:
 ```
 
 `score-editing-core` holds the editor-independent skills (`setup`, OMR repair,
-LilyPond import, lyric hyphenation). Install it plus the plugin for each editor
+LilyPond import, lyric hyphenation, lyric sheets). Install it plus the plugin for each editor
 you use. Each editor plugin starts only its own tool server. Run `/setup`
 afterwards to install `uv`, Python and the ScoreBridge plug-ins.
 
@@ -107,6 +108,15 @@ The same steps by hand, in Terminal, from this folder:
    brew install git uv ffmpeg
    uv python install 3.13
    uv sync
+   ```
+
+   Optional, for making Word documents such as lyric sheets from Markdown
+   (`pandoc`) and checking them by rendering to PDF (`libreoffice`, about
+   350 MB). Also useful: `poppler` for page images of PDF scores.
+
+   ```bash
+   brew install pandoc poppler
+   brew install --cask libreoffice
    ```
 
 4. Open Sibelius once and quit it, then install the bridge plug-in:
