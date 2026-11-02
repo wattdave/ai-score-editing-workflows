@@ -10,12 +10,14 @@ position and pitch again before it changes anything.
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
+from ai_score_editing.cli_common import DEFAULT_LIMIT
 from ai_score_editing.core import lyrics
+from ai_score_editing.core import query as core_query
 from ai_score_editing.core.batch_schema import LAYOUT_NUMBERS, ORIENTATIONS, PAGE_SIZES
 from ai_score_editing.core.errors import BatchError
+from ai_score_editing.core.query import Vocabulary
 from ai_score_editing.core.intervals import interval_of, spelling_letter, transpose_spelled
 from ai_score_editing.core.units import UNITS_PER_QUARTER
 
@@ -38,7 +40,6 @@ WHERE_FIELDS = {
     "Pitch": "pitch", "Position": "position", "FlowPosition": "flowPosition", "Duration": "duration",
     "Voice": "voice", "Type": "type", "Text": "text", "Name": "name", "Id": "id", "Bar": "bar", "Staff": "staff",
 }
-_WHERE = re.compile(r"^\s*(\w+)\s*(>=|<=|!=|=|>|<)\s*(.+?)\s*$")
 ADDRESSED = {"set-pitch", "delete"}
 ADDING = {"add-note", "add-rest", "add-text", "add-clef"}
 #: Clef library entities in a new Dorico project (score.libraries.clefs).
@@ -134,6 +135,21 @@ class DoricoBatchError(BatchError):
     """A query or batch cannot be run against this score."""
 
 
+#: Value types of the where fields; text fields keep "true" and "12" as strings.
+WHERE_TYPES: dict[str, type] = {
+    "Pitch": int, "Position": int, "FlowPosition": int, "Duration": int, "Voice": int, "Bar": int, "Staff": int,
+    "Type": str, "Text": str, "Name": str, "Id": int,
+}
+WHERE_VOCABULARY = Vocabulary(
+    properties={field: WHERE_TYPES[field] for field in WHERE_FIELDS},
+    error=DoricoBatchError,
+    sort_names=False,
+    unparsable="bad condition {expression!r}; use Field op value with fields {names}",
+    unknown="bad condition {expression!r}; use Field op value with fields {names}",
+    missing="bad condition {expression!r}; use Field op value with fields {names}",
+)
+
+
 # ------------------------------------------------------------------ reading
 
 def locate_events(events: list[dict[str, Any]], bars: BarMap) -> list[dict[str, Any]]:
@@ -154,23 +170,9 @@ def locate_events(events: list[dict[str, Any]], bars: BarMap) -> list[dict[str, 
 
 
 def resolve_staves(requested: list[str], staves: list[dict[str, Any]]) -> set[int]:
-    numbers: set[int] = set()
-    for name in requested:
-        text = str(name).strip()
-        if text.isdigit():
-            number = int(text)
-            if number != 0 and not any(s["staff"] == number for s in staves):
-                raise DoricoBatchError(f"no staff {number}; staves are 1-{len(staves)}")
-            numbers.add(number)
-        elif text.lower() == "system":
-            numbers.add(0)
-        else:
-            matches = {s["staff"] for s in staves if (s.get("name") or "").lower() == text.lower()}
-            if not matches:
-                names = sorted({s.get("name") or "?" for s in staves})
-                raise DoricoBatchError(f"no staff named {text!r}; names: {', '.join(names)}")
-            numbers |= matches
-    return numbers
+    return set(core_query.resolve_staves(
+        requested, staves, number_key="staff", name_keys=("name",), error=DoricoBatchError,
+    ))
 
 
 def _types(requested: list[str]) -> set[str]:
@@ -180,31 +182,14 @@ def _types(requested: list[str]) -> set[str]:
     return out
 
 
-def _condition(text: str) -> tuple[str, str, Any]:
-    match = _WHERE.match(text)
-    if not match or match.group(1) not in WHERE_FIELDS:
-        raise DoricoBatchError(f"bad condition {text!r}; use Field op value with fields {', '.join(WHERE_FIELDS)}")
-    field, op, raw = match.groups()
-    value: Any = raw.strip("'\"")
-    if re.fullmatch(r"-?\d+", value):
-        value = int(value)
-    return WHERE_FIELDS[field], op, value
-
-
-def _holds(item: dict[str, Any], key: str, op: str, value: Any) -> bool:
-    actual = item.get(key)
-    if key == "type" and isinstance(value, str):
-        actual_set = actual in _types([value])
-        return actual_set if op == "=" else not actual_set if op == "!=" else False
-    if actual is None:
-        return op == "!="
-    try:
-        return {
-            "=": actual == value, "!=": actual != value, ">": actual > value,
-            "<": actual < value, ">=": actual >= value, "<=": actual <= value,
-        }[op]
-    except TypeError:
-        return False
+def _holds(item: dict[str, Any], condition: dict[str, Any]) -> bool:
+    prop, op, value = condition["prop"], condition["op"], condition["value"]
+    actual = item.get(WHERE_FIELDS[prop])
+    # Hook: a type condition also matches Sibelius-style names (NoteRest, Text, ...).
+    if prop == "Type" and isinstance(value, str):
+        matched = actual in _types([value])
+        return matched if op == "=" else not matched if op == "!=" else False
+    return core_query.holds({prop: actual}, condition)
 
 
 def query(
@@ -216,10 +201,10 @@ def query(
     types: list[str] | None = None,
     voice: int | None = None,
     where: list[str] | None = None,
-    limit: int = 200,
+    limit: int = DEFAULT_LIMIT,
 ) -> dict[str, Any]:
     wanted_types = _types(types) if types else None
-    conditions = [_condition(w) for w in where or []]
+    conditions = [core_query.parse_where(w, WHERE_VOCABULARY) for w in where or []]
     objects = []
     for item in located:
         if staves is not None and item["staff"] not in staves:
@@ -236,7 +221,7 @@ def query(
             continue
         if voice is not None and item.get("voice") != voice:
             continue
-        if not all(_holds(item, *c) for c in conditions):
+        if not all(_holds(item, c) for c in conditions):
             continue
         objects.append({k: v for k, v in item.items() if v is not None})
     return {"objects": objects[:limit], "count": len(objects), "truncated": len(objects) > limit}

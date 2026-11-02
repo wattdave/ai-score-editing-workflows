@@ -16,12 +16,11 @@ from pathlib import Path
 from typing import Any
 
 from ai_score_editing import backups
-from ai_score_editing.query import build_selector
 
 from . import score
 from .bridge import MuseScoreBridge
 from . import instruments, window
-from ai_score_editing.cli_common import canonical_format
+from ai_score_editing.cli_common import DEFAULT_LIMIT, canonical_format
 from .client import MuseScoreError
 
 
@@ -70,27 +69,6 @@ async def overview(bridge: MuseScoreBridge) -> dict[str, Any]:
     return result
 
 
-def resolve_staves(requested: list[str], staves: list[dict[str, Any]]) -> list[int]:
-    """Staff numbers or part names (case-insensitive) as staff numbers; 0 or "system" is the system staff."""
-    out: list[int] = []
-    for item in requested:
-        text = str(item).strip()
-        if text == "0" or text.lower() == "system":
-            out.append(score.SYSTEM_STAFF)
-        elif text.isdigit():
-            if not any(s["staff"] == int(text) for s in staves):
-                raise score.MuseScoreBatchError(f"no staff {text}; staves are 1-{len(staves)}")
-            out.append(int(text))
-        else:
-            matches = [s["staff"] for s in staves
-                       if text.lower() in {str(s.get("partName", "")).lower(), str(s.get("shortName", "")).lower()}]
-            if not matches:
-                names = sorted({s.get("partName") or "?" for s in staves})
-                raise score.MuseScoreBatchError(f"no staff named {text!r}; parts: {', '.join(names)}")
-            out.extend(matches)
-    return out
-
-
 async def query(
     bridge: MuseScoreBridge,
     *,
@@ -101,12 +79,12 @@ async def query(
     voice: int | None = None,
     where: list[str] | None = None,
     fields: list[str] | None = None,
-    limit: int = 200,
+    limit: int = DEFAULT_LIMIT,
 ) -> dict[str, Any]:
-    selector = build_selector(staves=[], from_bar=from_bar, to_bar=to_bar, types=types or [], voice=voice,
+    selector = score.build_selector(staves=[], from_bar=from_bar, to_bar=to_bar, types=types or [], voice=voice,
                               where=where or [], fields=fields or [], limit=limit)
     if staves:
-        selector["staves"] = resolve_staves(staves, await bridge.call("GetStaves"))
+        selector["staves"] = score.resolve_staves(staves, await bridge.call("GetStaves"))
     read = await bridge.read(from_bar, to_bar, selector["staves"] or None)
     return score.query(score.locate(read), selector)
 
@@ -305,7 +283,7 @@ async def set_project_info(bridge: MuseScoreBridge, fields: dict[str, str]) -> d
 # ------------------------------------------------------------------ lyrics
 
 def _one_staff(requested: str, staves: list[dict[str, Any]]) -> int:
-    found = [s for s in resolve_staves([requested], staves) if s != score.SYSTEM_STAFF]
+    found = [s for s in score.resolve_staves([requested], staves) if s != score.SYSTEM_STAFF]
     if not found:
         raise score.MuseScoreBatchError("the system staff has no lyrics")
     return found[0]
@@ -368,7 +346,7 @@ async def set_staff_playback(bridge: MuseScoreBridge, staves: list[str], play: b
     wanted = voices or [1, 2, 3, 4]
     if not wanted or any(v not in {1, 2, 3, 4} for v in wanted):
         raise MuseScoreError("voices are 1-4")
-    numbers = [s for s in resolve_staves(staves, await bridge.call("GetStaves")) if s != score.SYSTEM_STAFF]
+    numbers = [s for s in score.resolve_staves(staves, await bridge.call("GetStaves")) if s != score.SYSTEM_STAFF]
     if not numbers:
         raise MuseScoreError("no staves given (the system staff has no notes)")
     results = []

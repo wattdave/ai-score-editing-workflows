@@ -23,9 +23,16 @@ from ai_score_editing.core import batch_schema, intervals
 from ai_score_editing.core.errors import BatchError
 from ai_score_editing.core.units import UNITS_PER_QUARTER  # noqa: F401
 
-# Phase 7: MuseScore still validates `set` against Sibelius's writable table.
-from ai_score_editing.sibelius.batch_ops import WRITABLE
+from ai_score_editing.core import query as core_query
+from ai_score_editing.core.query import Vocabulary
+
 SYSTEM_STAFF = 0
+
+#: Properties `set` may write, with the JSON type each takes (see _set below).
+WRITABLE: dict[str, type] = {
+    "Dx": int, "Dy": int, "Hidden": bool, "CueSize": bool,
+    "Beam": int, "RestPosition": int, "Text": str, "Duration": int, "NumNotes": int,
+}
 
 # Order of objects at one tick (docs/musescore-backend-plan.md, Addresses):
 # clefs, key and time signatures, annotations, tuplets before the chords
@@ -271,6 +278,32 @@ def props(item: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+#: The properties props() reports, which where clauses and `fields` may name, with their value types.
+VOCABULARY = Vocabulary(
+    properties={
+        "Type": str, "Position": int, "Hidden": bool, "Dx": int, "Dy": int, "VoiceNumber": int,
+        "Duration": int, "Text": str, "CueSize": bool, "Beam": int, "NoteCount": int, "StemFlipped": bool,
+        "Numerator": int, "Denominator": int, "Pitch": int, "Bracketed": bool,
+    },
+    fields=frozenset({
+        "Type", "Position", "Hidden", "Dx", "Dy", "VoiceNumber", "Duration", "Text", "CueSize", "Beam",
+        "NoteCount", "StemFlipped", "Numerator", "Denominator",
+    }),
+)
+
+
+def build_selector(**kwargs: Any) -> dict[str, Any]:
+    """core.query.build_selector with MuseScore's vocabulary (same keyword arguments)."""
+    return core_query.build_selector(vocabulary=VOCABULARY, **kwargs)
+
+
+def resolve_staves(requested: list[str], staves: list[dict[str, Any]]) -> list[int]:
+    """Staff numbers or part names (case-insensitive) as staff numbers; 0 or "system" is the system staff."""
+    return core_query.resolve_staves(
+        requested, staves, number_key="staff", name_keys=("partName", "shortName"), error=MuseScoreBatchError,
+    )
+
+
 def _matches_type(item: dict[str, Any], wanted: str) -> bool:
     if wanted in {item["type"], item["msType"], item.get("lineType")}:
         return True
@@ -280,23 +313,10 @@ def _matches_type(item: dict[str, Any], wanted: str) -> bool:
 
 
 def _holds(item: dict[str, Any], values: dict[str, Any], condition: dict[str, Any]) -> bool:
-    prop, op, value = condition["prop"], condition["op"], condition["value"]
-    if prop in {"Pitch", "Bracketed"}:
-        key = "pitch" if prop == "Pitch" else "bracketed"
-        return any(_compare(n[key], op, value) for n in item.get("notes", []))
-    if prop not in values:
-        return op == "!="
-    return _compare(values[prop], op, value)
-
-
-def _compare(actual: Any, op: str, value: Any) -> bool:
-    try:
-        return {
-            "=": actual == value, "!=": actual != value, ">": actual > value,
-            "<": actual < value, ">=": actual >= value, "<=": actual <= value,
-        }[op]
-    except TypeError:
-        return False
+    # Pitch and Bracketed match if any note of the chord does.
+    notes = item.get("notes", [])
+    multi = {"Pitch": [n["pitch"] for n in notes], "Bracketed": [n["bracketed"] for n in notes]}
+    return core_query.holds(values, condition, multi)
 
 
 def query(objects: list[dict[str, Any]], selector: dict[str, Any]) -> dict[str, Any]:

@@ -9,3 +9,7 @@ class ScoreEditingError(ValueError):
 
 class BatchError(ScoreEditingError):
     """A batch is malformed, unsupported, or cannot be run against the score."""
+
+
+class QueryError(ScoreEditingError):
+    """A query selector is malformed, names an unreadable property or an unknown staff."""
