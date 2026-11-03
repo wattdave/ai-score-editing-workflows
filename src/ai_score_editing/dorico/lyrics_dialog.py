@@ -152,7 +152,7 @@ async def _part_layout(bridge: DoricoBridge, player: str) -> dict[str, Any]:
     match = [l for l in parts if l["layoutName"].strip().lower() == player.strip().lower()]
     if not match:
         names = ", ".join(l["layoutName"] for l in parts)
-        raise DoricoError(f"no part layout named {player!r}; parts: {names}")
+        raise DoricoError(f"no part layout named {player!r}; Dorico keeps lyrics per part layout, one of: {names}")
     return match[0]
 
 

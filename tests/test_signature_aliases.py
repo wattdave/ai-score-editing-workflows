@@ -49,10 +49,20 @@ async def test_dorico_staff_number_maps_to_its_player(monkeypatch: pytest.Monkey
     async def snapshot(bridge: Any, flow: int = 1) -> Snap:
         return Snap()
 
+    class Client:
+        async def layouts(self) -> list[dict[str, Any]]:
+            return [{"layoutName": "Piano", "layoutType": "kPartLayout"}, {"layoutName": "Full score", "layoutType": "kFullScoreLayout"}]
+
+    class Bridge:
+        client = Client()
+
     monkeypatch.setattr(dorico_service, "snapshot", snapshot)
-    assert await dorico_service.resolve_player(object(), "2") == "Piano"  # type: ignore[arg-type]
+    assert await dorico_service.resolve_player(Bridge(), "2") == "Piano"  # type: ignore[arg-type]
     with pytest.raises(DoricoError, match="no staff 9"):
-        await dorico_service.resolve_player(object(), "9")  # type: ignore[arg-type]
+        await dorico_service.resolve_player(Bridge(), "9")  # type: ignore[arg-type]
+    # Soprano is a staff but not a part layout: say so and name what works.
+    with pytest.raises(DoricoError, match=r"not a part layout.*Piano \(staves 2, 3\)"):
+        await dorico_service.resolve_player(Bridge(), "1")  # type: ignore[arg-type]
 
 
 async def test_mid_is_accepted_as_midi(tmp_path: Path) -> None:

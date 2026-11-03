@@ -1206,7 +1206,7 @@ async def test_part_layout_is_found_by_player_name() -> None:
         client = Client()
 
     assert (await _part_layout(Bridge(), "alto i"))["layoutID"] == 3  # type: ignore[arg-type]
-    with pytest.raises(DoricoError, match="parts: Alto I"):
+    with pytest.raises(DoricoError, match="one of: Alto I"):
         await _part_layout(Bridge(), "Bass")  # type: ignore[arg-type]
 
 
