@@ -15,7 +15,7 @@ from typing import Any, TypeVar
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from ai_score_editing import batch_ops
+from ai_score_editing.sibelius import batch_ops
 from ai_score_editing.cli_common import DEFAULT_LIMIT, canonical_format
 from ai_score_editing.mcp_common import EXPORT, READ_ONLY, WRITE, env_port, parse_bars
 from ai_score_editing.mcp_common import Session as CommonSession

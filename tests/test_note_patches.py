@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from ai_score_editing.batch_ops import validate_batch
+from ai_score_editing.sibelius.batch_ops import validate_batch
 from ai_score_editing.note_patches import (
     NotePatchError,
     batch_operations,

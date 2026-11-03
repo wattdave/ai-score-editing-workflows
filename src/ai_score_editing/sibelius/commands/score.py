@@ -9,7 +9,8 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from ai_score_editing import batch_ops, layout
+from ai_score_editing import layout
+from ai_score_editing.sibelius import batch_ops
 from ai_score_editing.core import music
 from ai_score_editing.sibelius import service
 from ai_score_editing.sibelius.bridge import BRIDGE_PLUGIN, BridgeError
