@@ -11,7 +11,8 @@ from typing import Any
 
 import pytest
 
-from ai_score_editing import query as sibelius_query
+from ai_score_editing.core.errors import QueryError
+from ai_score_editing.sibelius import query_props as sibelius_query
 from ai_score_editing.dorico import score as dorico
 from ai_score_editing.dorico.bridge import BarMap
 from ai_score_editing.musescore import score as musescore
@@ -50,7 +51,7 @@ def test_sibelius_where_values(expression, expected) -> None:
     ],
 )
 def test_sibelius_where_errors(expression, message) -> None:
-    with pytest.raises(sibelius_query.QueryError, match=message):
+    with pytest.raises(QueryError, match=message):
         sibelius_query.parse_where(expression)
 
 
@@ -58,17 +59,17 @@ def test_sibelius_staff_resolution() -> None:
     resolve = sibelius_query.resolve_staves
     assert resolve(["2", "soprano", "T."], SIBELIUS_STAVES) == [2, 1, 2]
     assert resolve(["0", "System"], SIBELIUS_STAVES) == [0, 0]
-    with pytest.raises(sibelius_query.QueryError, match="^no staff 3; staves are 1-2$"):
+    with pytest.raises(QueryError, match="^no staff 3; staves are 1-2$"):
         resolve(["3"], SIBELIUS_STAVES)
-    with pytest.raises(sibelius_query.QueryError, match="^no staff named 'Alto'; names: S\\., Soprano, T\\., Tenor$"):
+    with pytest.raises(QueryError, match="^no staff named 'Alto'; names: S\\., Soprano, T\\., Tenor$"):
         resolve(["Alto"], SIBELIUS_STAVES)
 
 
 def test_sibelius_fields() -> None:
     assert sibelius_query.parse_fields(["Dx,Dy", "Text"]) == ["Dx", "Dy", "Text"]
-    with pytest.raises(sibelius_query.QueryError, match="^unknown field.s. Aa, Zed$"):
+    with pytest.raises(QueryError, match="^unknown field.s. Aa, Zed$"):
         sibelius_query.parse_fields(["Dx,Zed,Aa"])
-    with pytest.raises(sibelius_query.QueryError, match="^unknown field.s. Pitch$"):
+    with pytest.raises(QueryError, match="^unknown field.s. Pitch$"):
         sibelius_query.parse_fields(["Pitch"])
 
 
@@ -167,9 +168,9 @@ def test_musescore_where_names_come_from_its_own_vocabulary() -> None:
     assert _selector("VoiceNumber=1")["where"] == [{"prop": "VoiceNumber", "op": "=", "value": 1}]
     # INTENTIONAL CHANGE: Sibelius-only names used to be accepted (and matched nothing).
     for name in ("InitialFontName", "Nope"):
-        with pytest.raises(sibelius_query.QueryError, match=f"unknown property '{name}'.*readable: Beam,"):
+        with pytest.raises(QueryError, match=f"unknown property '{name}'.*readable: Beam,"):
             _selector(f"{name}=1")
-    with pytest.raises(sibelius_query.QueryError, match=r"unknown field\(s\) InitialFontName"):
+    with pytest.raises(QueryError, match=r"unknown field\(s\) InitialFontName"):
         _selector(fields=["InitialFontName"])
 
 

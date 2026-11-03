@@ -19,13 +19,8 @@ from ai_score_editing.core import batch_schema
 from ai_score_editing.sibelius import batch_ops
 from ai_score_editing.core.errors import BatchError
 from ai_score_editing.cli_common import DEFAULT_LIMIT, canonical_format
-from ai_score_editing.query import (
-    CONTAINER_KINDS,
-    FONT_FIELDS,
-    QueryError,
-    build_selector,
-    resolve_staves,
-)
+from ai_score_editing.core.errors import QueryError
+from ai_score_editing.sibelius.query_props import CONTAINER_KINDS, FONT_FIELDS, build_selector, resolve_staves
 from ai_score_editing.sibelius.bridge import (
     EXPORT_FORMATS,
     QUERY_BRIDGE_VERSION,

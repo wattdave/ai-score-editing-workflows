@@ -271,7 +271,7 @@ async def _run_proofread(args: argparse.Namespace) -> int:
 
 
 async def _run_query(args: argparse.Namespace) -> int:
-    from ai_score_editing.query import QueryError
+    from ai_score_editing.core.errors import QueryError
 
     from_b, to_b = (None, None)
     if args.bars:

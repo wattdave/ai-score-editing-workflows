@@ -127,12 +127,10 @@ must not import an editor package.
 
 ## Backward compatibility
 
-- `ai_score_editing.query` still exports the Sibelius-bound query names
-  (`parse_where`, `build_selector`, `QueryError` and others) for existing
-  importers. New code imports `core.query`, `sibelius.query_props` and
-  `core.errors`. The other old top-level modules (`batch_ops`, `lyrics`,
-  `units`, `intervals`, `music`, `barrange`, the MusicXML tools) are gone;
-  import them from `core/`, `workflows/` or `sibelius/`.
+- The old top-level modules are gone (`query`, `batch_ops`, `lyrics`,
+  `units`, `intervals`, `music`, `barrange`, the MusicXML tools); the Sibelius
+  query names live in `sibelius.query_props`, `QueryError` in `core.errors`, and
+  the rest in `core/`, `workflows/` or `sibelius/`. Import them from there.
 - `sibelius-websocket-cli` is a deprecated alias of `sibelius-cli`
   (`ai_score_editing.deprecated_main`).
 - The config and cache folders were once `sibelius-websocket-cli`. The first

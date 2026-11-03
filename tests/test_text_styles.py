@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from ai_score_editing.query import QueryError, build_selector
+from ai_score_editing.core.errors import QueryError
+
+from ai_score_editing.sibelius.query_props import build_selector
 from ai_score_editing.sibelius import bridge
 from ai_score_editing.sibelius.text_styles import (
     LYRIC_STYLE_IDS,
