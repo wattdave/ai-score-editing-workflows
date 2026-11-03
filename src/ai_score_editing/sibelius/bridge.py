@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any
 
 from ai_score_editing.core import batch_schema
-from ai_score_editing.sibelius import batch_ops
 from ai_score_editing.sibelius import protocol
 from ai_score_editing.sibelius.client import SibeliusClient
 
