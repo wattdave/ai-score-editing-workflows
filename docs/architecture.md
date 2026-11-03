@@ -131,11 +131,4 @@ must not import an editor package.
   `units`, `intervals`, `music`, `barrange`, the MusicXML tools); the Sibelius
   query names live in `sibelius.query_props`, `QueryError` in `core.errors`, and
   the rest in `core/`, `workflows/` or `sibelius/`. Import them from there.
-- `sibelius-websocket-cli` is a deprecated alias of `sibelius-cli`
-  (`ai_score_editing.deprecated_main`).
-- The config and cache folders were once `sibelius-websocket-cli`. The first
-  call to `paths.config_dir()` or `paths.cache_dir()` moves the old folder to
-  `ai-score-editing` and leaves a symlink, so older checkouts keep working.
-  Approvals stored under the old wire client name are still reused
-  (`paths.LEGACY_WIRE_CLIENT_NAME`).
 - The export format `mid` is accepted as `midi` (`cli_common.canonical_format`).

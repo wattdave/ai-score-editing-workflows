@@ -6,10 +6,3 @@ def main() -> None:
 
     sys.exit(cli_main())
 
-
-def deprecated_main() -> None:
-    print(
-        "sibelius-websocket-cli is deprecated and will be removed; use sibelius-cli.",
-        file=sys.stderr,
-    )
-    main()
