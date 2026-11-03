@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from ai_score_editing import lyrics
+from ai_score_editing.core import lyrics
 
 
 class BatchLyricsError(ValueError):

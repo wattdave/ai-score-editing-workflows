@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ai_score_editing.units import UNITS_PER_QUARTER
+from ai_score_editing.core.units import UNITS_PER_QUARTER
 
 QUARTER = UNITS_PER_QUARTER
 WHOLE = 4 * QUARTER

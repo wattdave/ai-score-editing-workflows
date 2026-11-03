@@ -8,8 +8,9 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from ai_score_editing import agent_output, batch_lyrics, batch_ops, lyrics
-from ai_score_editing.barrange import parse_bar_range
+from ai_score_editing import agent_output, batch_lyrics, batch_ops
+from ai_score_editing.core import lyrics
+from ai_score_editing.core.barrange import parse_bar_range
 from ai_score_editing.sibelius.bridge import BATCH_BRIDGE_VERSION, BRIDGE_PLUGIN
 from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK
 from ai_score_editing.sibelius.commands._common import client as _client

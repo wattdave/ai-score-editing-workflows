@@ -2,14 +2,14 @@
 
 import pytest
 
-from ai_score_editing.intervals import (
+from ai_score_editing.core.intervals import (
     alteration,
     compute_transposition,
     interval_of,
     spelling_letter,
     transpose_spelled,
 )
-from ai_score_editing.lyrics import split_syllables
+from ai_score_editing.core.lyrics import split_syllables
 
 
 def test_compute_transposition_major_second_up() -> None:

@@ -9,7 +9,8 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from ai_score_editing import batch_ops, layout, music
+from ai_score_editing import batch_ops, layout
+from ai_score_editing.core import music
 from ai_score_editing.sibelius import service
 from ai_score_editing.sibelius.bridge import BRIDGE_PLUGIN, BridgeError
 from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK

@@ -220,7 +220,7 @@ def test_token_store_migrates_plain_string_entries(tmp_path: Path) -> None:
 
 
 def test_interval_math() -> None:
-    from ai_score_editing.intervals import compute_transposition
+    from ai_score_editing.core.intervals import compute_transposition
 
     assert compute_transposition("C", "D", up=True) == (1, 5)      # major 2nd up
     assert compute_transposition("C", "G", up=True) == (4, 5)      # perfect 5th up
@@ -305,7 +305,7 @@ async def test_client_launch_bypassed_for_remote_host(store: TokenStore) -> None
 
 
 def test_parse_bar_range():
-    from ai_score_editing.barrange import parse_bar_range
+    from ai_score_editing.core.barrange import parse_bar_range
 
     assert parse_bar_range(bars="1-4") == (1, 4)
     assert parse_bar_range(bars="3..6") == (3, 6)

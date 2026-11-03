@@ -12,11 +12,9 @@ from inspect import isawaitable
 from pathlib import Path
 from typing import Any
 
-from ai_score_editing import (
-    batch_ops,
-    lyrics,  # noqa: F401  (tests patch cli.lyrics.*)
-)
-from ai_score_editing.barrange import parse_bar_range  # noqa: F401  (re-exported)
+from ai_score_editing import batch_ops
+from ai_score_editing.core import lyrics  # noqa: F401  (tests patch cli.lyrics.*)
+from ai_score_editing.core.barrange import parse_bar_range  # noqa: F401  (re-exported)
 from ai_score_editing.cli_common import (  # noqa: F401  (re-exported)
     DEFAULT_LIMIT,
     EXIT_COMMAND_FAILED,
