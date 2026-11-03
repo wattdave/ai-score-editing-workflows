@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-# Add scripts directory to sys.path to import sync_skills
-ROOT_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT_DIR / "scripts"))
+from helpers import load_script
 
-from sync_skills import check_sync, sync_all  # noqa: E402
+ROOT_DIR = Path(__file__).resolve().parent.parent
+_sync_skills = load_script(ROOT_DIR / "scripts" / "sync_skills.py")
+check_sync = _sync_skills.check_sync
+sync_all = _sync_skills.sync_all
 
 
 def test_repo_skills_are_in_sync() -> None:

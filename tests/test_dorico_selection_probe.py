@@ -1,15 +1,14 @@
 """The selection probe's model and argument parsing (no Dorico needed)."""
 
-import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
+
+from helpers import load_script
 
 from ai_score_editing.dorico.bridge import BarMap
 
 ROOT = Path(__file__).parent.parent
-spec = importlib.util.spec_from_file_location("dorico_selection_probe", ROOT / "scripts" / "dev" / "dorico_selection_probe.py")
-probe = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(probe)
+probe = load_script(ROOT / "scripts" / "dev" / "dorico_selection_probe.py")
 
 BAR = 1024
 

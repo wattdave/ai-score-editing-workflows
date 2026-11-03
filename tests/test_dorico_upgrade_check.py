@@ -1,13 +1,12 @@
 """Keep the upgrade check's command list in step with the Dorico back end."""
 
-import importlib.util
 import re
 from pathlib import Path
 
+from helpers import load_script
+
 ROOT = Path(__file__).parent.parent
-spec = importlib.util.spec_from_file_location("dorico_upgrade_check", ROOT / "scripts" / "dev" / "dorico_upgrade_check.py")
-check = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(check)
+check = load_script(ROOT / "scripts" / "dev" / "dorico_upgrade_check.py")
 
 COMMAND = re.compile(r'"((?:Edit|EventEdit|NoteInput|NoteEdit|File|Print|Window|Filter|Script|Project)\.[A-Za-z.]*[A-Za-z])')
 
