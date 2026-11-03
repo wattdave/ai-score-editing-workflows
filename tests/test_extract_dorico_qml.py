@@ -1,15 +1,12 @@
 """Tests for scripts/dev/extract_dorico_qml.py on a synthetic rcc-style blob."""
 
-import importlib.util
 import struct
 import zlib
 from pathlib import Path
 
-spec = importlib.util.spec_from_file_location(
-    "extract_dorico_qml", Path(__file__).parent.parent / "scripts" / "dev" / "extract_dorico_qml.py"
-)
-extract_dorico_qml = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(extract_dorico_qml)
+from helpers import load_script
+
+extract_dorico_qml = load_script(Path(__file__).parent.parent / "scripts" / "dev" / "extract_dorico_qml.py")
 
 PLAIN = "// header\nimport QtQuick 2.15\nDoricoDialog {\n    title: qsTr(\"Project Statistics\")\n}\n"
 PACKED = "import QtQuick 2.15\nItem {\n    onClicked: controller.doThing()\n}\n"

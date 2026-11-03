@@ -2,20 +2,15 @@
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
-import sys
 import xml.etree.ElementTree as ET
 
 import pytest
+from helpers import load_script
 
 SCRIPT_PATH = (Path(__file__).resolve().parent.parent
                / ".claude" / "skills" / "playback-divisi-split" / "scripts" / "playback_split.py")
-spec = importlib.util.spec_from_file_location("playback_split", SCRIPT_PATH)
-assert spec and spec.loader
-playback_split = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = playback_split  # dataclasses resolve annotations via sys.modules
-spec.loader.exec_module(playback_split)
+playback_split = load_script(SCRIPT_PATH)
 
 
 def _note(pitch: str | None, duration: int, chord: bool = False) -> str:

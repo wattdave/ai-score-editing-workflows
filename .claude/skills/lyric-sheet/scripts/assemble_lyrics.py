@@ -80,4 +80,5 @@ def main():
         print("sections not in the order file:", "; ".join(sorted(extra)))
 
 
-main()
+if __name__ == "__main__":
+    main()

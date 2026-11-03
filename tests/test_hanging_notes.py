@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
+
+from helpers import load_script
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCRIPT_PATH = ROOT_DIR / ".claude" / "skills" / "hanging-playback-note-repair" / "scripts" / "hanging_notes.py"
 
-spec = importlib.util.spec_from_file_location("hanging_notes", SCRIPT_PATH)
-assert spec and spec.loader
-hanging_notes = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(hanging_notes)
+hanging_notes = load_script(SCRIPT_PATH)
 
 
 def test_pitch_to_name() -> None:

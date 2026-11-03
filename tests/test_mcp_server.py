@@ -7,27 +7,13 @@ import pytest
 import websockets
 from mcp.server.mcpserver.exceptions import ToolError
 
+from fakes import FakeSibeliusClient
+
 from ai_score_editing.sibelius import mcp_server
 from ai_score_editing.sibelius.mcp_server import Session
 
 
-class FakeClient:
-    def __init__(self, replies: dict[str, Any] | None = None) -> None:
-        self.replies = replies or {}
-        self.calls: list[tuple[str, Any]] = []
-        self.connect = AsyncMock()
-        self.close = AsyncMock()
-
-    async def invoke_plugin(self, name: str, method: str, args: Any = None) -> dict[str, Any]:
-        self.calls.append((method, args))
-        reply = self.replies.get(method, {})
-        if isinstance(reply, dict) and reply.get("message") == "busyError":
-            return reply
-        return {"message": "invokePluginResponse", "result": True, "returnValue": reply}
-
-    async def invoke_commands(self, commands: list[str]) -> dict[str, Any]:
-        self.calls.append(("invokeCommands", commands))
-        return {"message": "invokeCommandsResponse", "result": True}
+FakeClient = FakeSibeliusClient
 
 
 def _use(client: FakeClient) -> Any:

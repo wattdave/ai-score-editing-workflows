@@ -2,24 +2,18 @@
 
 from __future__ import annotations
 
-import importlib.util
 import struct
-import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
+from helpers import load_script
 
 SCRIPTS = Path(__file__).resolve().parent.parent / ".claude" / "skills" / "lilypond-to-score" / "scripts"
 
 
 def load(name: str):
-    spec = importlib.util.spec_from_file_location(name, SCRIPTS / f"{name}.py")
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module  # dataclasses look their module up here
-    spec.loader.exec_module(module)
-    return module
+    return load_script(SCRIPTS / f"{name}.py", name)
 
 
 prepare = load("lilypond_prepare")
