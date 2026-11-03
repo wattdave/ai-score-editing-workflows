@@ -5,11 +5,6 @@ import importlib
 import pytest
 
 SHIMS = {
-    "ai_score_editing.units": "ai_score_editing.core.units",
-    "ai_score_editing.intervals": "ai_score_editing.core.intervals",
-    "ai_score_editing.barrange": "ai_score_editing.core.barrange",
-    "ai_score_editing.lyrics": "ai_score_editing.core.lyrics",
-    "ai_score_editing.music": "ai_score_editing.core.music",
     "ai_score_editing.layout": "ai_score_editing.sibelius.layout",
     "ai_score_editing.note_patches": "ai_score_editing.sibelius.note_patches",
     "ai_score_editing.text_styles": "ai_score_editing.sibelius.text_styles",
