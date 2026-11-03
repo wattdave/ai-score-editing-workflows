@@ -111,14 +111,28 @@ def parse_fields(values: list[str], vocabulary: Vocabulary) -> list[str]:
 
 
 def compare(actual: Any, op: str, value: Any) -> bool:
-    """actual OP value; values that cannot be ordered against each other never match."""
+    """actual OP value, evaluating only the requested operator.
+
+    Values of incompatible types (a pitch number and a note name) are not equal:
+    "=" is False and "!=" is True. The ordering operators never match them and
+    never raise.
+    """
+    if op == "=":
+        return bool(actual == value)
+    if op == "!=":
+        return bool(actual != value)
     try:
-        return {
-            "=": actual == value, "!=": actual != value, ">": actual > value,
-            "<": actual < value, ">=": actual >= value, "<=": actual <= value,
-        }[op]
+        if op == ">":
+            return bool(actual > value)
+        if op == "<":
+            return bool(actual < value)
+        if op == ">=":
+            return bool(actual >= value)
+        if op == "<=":
+            return bool(actual <= value)
     except TypeError:
         return False
+    raise ValueError(f"unknown operator {op!r}")
 
 
 def holds(
@@ -129,7 +143,8 @@ def holds(
     """Whether an object satisfies one condition.
 
     `values` maps property names to the object's value. A property in `multi`
-    has several values (a chord's notes) and matches if any one does; an
+    has several values (a chord's notes) and matches if any one does, so
+    "Pitch!=60" means some note differs from 60 (not: no note equals 60); an
     object without a value for a property matches only "!=".
     """
     prop, op, value = condition["prop"], condition["op"], condition["value"]

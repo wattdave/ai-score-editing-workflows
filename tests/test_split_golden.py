@@ -71,7 +71,7 @@ def test_audit_validate_reconnect(tmp_path: Path) -> None:
 
 
 def test_demix_16voices(tmp_path: Path) -> None:
-    from ai_score_editing.polychoral import demix_16voices, validate_16voices
+    from ai_score_editing.workflows.polychoral import demix_16voices, validate_16voices
 
     out = tmp_path / "poly16.musicxml"
     result = demix_16voices(POLY_FIXTURE, out)

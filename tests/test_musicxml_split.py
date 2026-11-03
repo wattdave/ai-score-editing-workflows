@@ -5,11 +5,11 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from ai_score_editing.musicxml_split.io import parse_musicxml
-from ai_score_editing.musicxml_split.model import TargetPart
-from ai_score_editing.musicxml_split.profiles.satb import split_satb
-from ai_score_editing.musicxml_split.routing import attributes_with_clef
-from ai_score_editing.musicxml_split.timeline import timeline_for_measure
+from ai_score_editing.workflows.musicxml_split.io import parse_musicxml
+from ai_score_editing.workflows.musicxml_split.model import TargetPart
+from ai_score_editing.workflows.musicxml_split.profiles.satb import split_satb
+from ai_score_editing.workflows.musicxml_split.routing import attributes_with_clef
+from ai_score_editing.workflows.musicxml_split.timeline import timeline_for_measure
 
 
 def _note(step: str, duration: int, *, chord: bool = False, staff: str = "1", voice: str = "1", grace: bool = False) -> ET.Element:

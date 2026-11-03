@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from ai_score_editing.dorico import client as dc
-from ai_score_editing.token_store import TokenStore
+from ai_score_editing.core.token_store import TokenStore
 
 
 async def test_reuses_a_token_stored_under_the_old_client_name(

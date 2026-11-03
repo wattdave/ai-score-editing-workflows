@@ -17,7 +17,7 @@ from ai_score_editing.sibelius.cli import (
     build_parser,
     main,
 )
-from ai_score_editing.polychoral import make_rest, save_musicxml
+from ai_score_editing.workflows.polychoral import make_rest, save_musicxml
 import xml.etree.ElementTree as ET
 
 

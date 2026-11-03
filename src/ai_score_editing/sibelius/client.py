@@ -18,7 +18,7 @@ from typing import Any
 import websockets
 
 from ai_score_editing.sibelius import launcher, protocol
-from ai_score_editing.token_store import TokenStore
+from ai_score_editing.core.token_store import TokenStore
 
 logger = logging.getLogger(__name__)
 

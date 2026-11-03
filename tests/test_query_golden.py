@@ -110,7 +110,9 @@ def _dorico_ids(*where: str, **kw: Any) -> list[int]:
         (["Text=true"], [5]),  # Dorico text stays a string even when it reads "true"
         (["Text=1"], []),
         (["Text!=x"], [3, 4, 5]),
-        (["Pitch=C5"], []),
+        (["Pitch=C5"], []),  # a Pitch is a number; a note name is another type, never equal
+        (["Pitch!=C5"], [3, 4, 5]),  # ... so != matches all (was nothing: eager TypeError)
+        (["Pitch>C5"], []),  # ordering across types never matches
     ],
 )
 def test_dorico_where(where, ids) -> None:
@@ -192,6 +194,8 @@ def _chord(pitches: list[int], position: int = 0) -> dict[str, Any]:
         ({"prop": "Text", "op": "=", "value": "x"}, 0),      # no such value: matches nothing
         ({"prop": "Text", "op": "!=", "value": "x"}, 2),     # ... except "not equal"
         ({"prop": "Position", "op": "<", "value": "a"}, 0),  # incomparable types never match
+        ({"prop": "Pitch", "op": "!=", "value": "C5"}, 2),   # a number is not equal to a note name
+        ({"prop": "Pitch", "op": "=", "value": "C5"}, 0),
     ],
 )
 def test_musescore_where_conditions(where, count) -> None:
