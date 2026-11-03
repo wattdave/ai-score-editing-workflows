@@ -16,24 +16,8 @@ from ai_score_editing.core.barrange import parse_bar_range
 from ai_score_editing.cli_common import DEFAULT_LIMIT
 from ai_score_editing.sibelius import protocol, service
 from ai_score_editing.sibelius.bridge import BRIDGE_PLUGIN, TEXT_FONTS_BRIDGE_VERSION, BridgeError
+from ai_score_editing.sibelius import bridge, runner
 from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK
-from ai_score_editing.sibelius.commands._common import client as _client
-
-
-class _Cli:
-    """Late lookup of ``sibelius.cli`` attributes.
-
-    Tests and skill scripts patch ``cli._bridge``, ``cli._require_bridge``,
-    ``cli._check_bridge_version`` and friends, so handlers resolve them at call time.
-    """
-
-    def __getattr__(self, name: str) -> Any:
-        from ai_score_editing.sibelius import cli
-
-        return getattr(cli, name)
-
-
-_cli = _Cli()
 
 
 def register(sub: Any) -> dict[str, Callable[..., Any]]:
@@ -110,13 +94,13 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
 
 
 async def _run_score_info(args: argparse.Namespace) -> int:
-    return await _cli._run_bridge_call(args, "GetScoreInfo")
+    return await _run_bridge_call(args, "GetScoreInfo")
 
 
 async def _run_bridge_call(
     args: argparse.Namespace, method: str, call_args: list[Any] | None = None
 ) -> int:
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
         response = await client.invoke_plugin(BRIDGE_PLUGIN, method, call_args)
     if not protocol.is_success(response):
         print(
@@ -145,15 +129,15 @@ async def _run_text_styles(args: argparse.Namespace) -> int:
         "limit": 100000,
     }
     try:
-        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-            await _cli._require_bridge(client, TEXT_FONTS_BRIDGE_VERSION, "text-styles")
-            info = await _cli._bridge(client, "GetScoreInfo")
+        async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            await bridge.require_bridge(client, TEXT_FONTS_BRIDGE_VERSION, "text-styles")
+            info = await bridge.call(client, "GetScoreInfo")
             found = []
             for system, staves in ((True, [0]), (False, [])):
                 selector["staves"] = staves
-                result = await _cli._bridge(client, "Query", [selector])
+                result = await bridge.call(client, "Query", [selector])
                 found += [(obj.get("styleId", ""), system) for obj in result["objects"]]
-            probed = await _cli._bridge(client, "GetTextStyleFonts", [text_styles.style_requests(found)])
+            probed = await bridge.call(client, "GetTextStyleFonts", [text_styles.style_requests(found)])
     except BridgeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_COMMAND_FAILED
@@ -162,19 +146,19 @@ async def _run_text_styles(args: argparse.Namespace) -> int:
 
 
 async def _run_staves(args: argparse.Namespace) -> int:
-    return await _cli._run_bridge_call(args, "GetStaves")
+    return await _run_bridge_call(args, "GetStaves")
 
 
 async def _run_selection(args: argparse.Namespace) -> int:
-    return await _cli._run_bridge_call(args, "GetSelectionInfo")
+    return await _run_bridge_call(args, "GetSelectionInfo")
 
 
 async def _run_inspect(args: argparse.Namespace) -> int:
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _cli._check_bridge_version(client)
-        info = await _cli._bridge(client, "GetScoreInfo")
-        staves = await _cli._bridge(client, "GetStaves")
-        selection = await _cli._bridge(client, "GetSelectionInfo")
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await bridge.check_bridge_version(client)
+        info = await bridge.call(client, "GetScoreInfo")
+        staves = await bridge.call(client, "GetStaves")
+        selection = await bridge.call(client, "GetSelectionInfo")
     projected = agent_output.project_inspect(info, staves, selection)
     if args.json:
         print(json.dumps(projected, ensure_ascii=False, separators=(",", ":")))
@@ -185,21 +169,21 @@ async def _run_inspect(args: argparse.Namespace) -> int:
 
 async def _run_score_snapshot(args: argparse.Namespace) -> int:
     from_b, to_b = parse_bar_range(bars=getattr(args, "bars", None))
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _cli._check_bridge_version(client)
-        info = await _cli._bridge(client, "GetScoreInfo")
-        staves = await _cli._bridge(client, "GetStaves")
-        selection = await _cli._bridge(client, "GetSelectionInfo")
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await bridge.check_bridge_version(client)
+        info = await bridge.call(client, "GetScoreInfo")
+        staves = await bridge.call(client, "GetStaves")
+        selection = await bridge.call(client, "GetSelectionInfo")
 
         barlines: list[dict[str, Any]] = []
         if args.barlines:
             bar_start = from_b or 1
             bar_end = to_b or int(info.get("barCount", bar_start))
-            barlines = await _cli._bridge(client, "GetSpecialBarlines", [bar_start, bar_end])
+            barlines = await bridge.call(client, "GetSpecialBarlines", [bar_start, bar_end])
 
         lyric_data: list[dict[str, Any]] | None = None
         if args.lyrics:
-            lyric_data = await _cli._bridge(
+            lyric_data = await bridge.call(
                 client,
                 "ReadLyrics",
                 [args.staff, from_b or 0, to_b or 0],
@@ -219,11 +203,11 @@ async def _run_score_snapshot(args: argparse.Namespace) -> int:
 async def _run_proofread(args: argparse.Namespace) -> int:
     from_b, to_b = parse_bar_range(bars=getattr(args, "bars", None))
     verse = None
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _cli._check_bridge_version(client)
-        info = await _cli._bridge(client, "GetScoreInfo")
-        staves_info = await _cli._bridge(client, "GetStaves")
-        selection = await _cli._bridge(client, "GetSelectionInfo")
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await bridge.check_bridge_version(client)
+        info = await bridge.call(client, "GetScoreInfo")
+        staves_info = await bridge.call(client, "GetStaves")
+        selection = await bridge.call(client, "GetSelectionInfo")
         names = {
             s.get("staffNum", s.get("staffNumber", i + 1)): (
                 s.get("fullInstrumentName")
@@ -233,7 +217,7 @@ async def _run_proofread(args: argparse.Namespace) -> int:
             )
             for i, s in enumerate(staves_info)
         }
-        raw_lyrics = await _cli._bridge(client, "ReadLyrics", [args.staff, from_b or 0, to_b or 0])
+        raw_lyrics = await bridge.call(client, "ReadLyrics", [args.staff, from_b or 0, to_b or 0])
         filtered_lyrics = lyrics.filter_lyrics(raw_lyrics, from_bar=from_b, to_bar=to_b, verse=verse)
 
         bar_count = int(info.get("barCount", 0))
@@ -243,11 +227,11 @@ async def _run_proofread(args: argparse.Namespace) -> int:
         staff_bars: dict[int, list[dict[str, Any]]] = {}
         for staff_num in target_staves:
             if end_b >= start_b:
-                staff_bars[staff_num] = await _cli._bridge(client, "ReadBars", [staff_num, start_b, end_b])
+                staff_bars[staff_num] = await bridge.call(client, "ReadBars", [staff_num, start_b, end_b])
 
         barlines: list[dict[str, Any]] = []
         if args.barlines:
-            barlines = await _cli._bridge(client, "GetSpecialBarlines", [start_b, end_b])
+            barlines = await bridge.call(client, "GetSpecialBarlines", [start_b, end_b])
 
     score_default_font = info.get("mainTextFontName")
     typography = lyrics.analyze_lyric_typography(
@@ -298,8 +282,8 @@ async def _run_query(args: argparse.Namespace) -> int:
     }
     try:
         service.query_selector(**params)  # validate everything but staff names before connecting
-        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-            result = await service.query(_cli._CliBridge(client), staves=args.staff, **params)
+        async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            result = await service.query(bridge.for_client(client), staves=args.staff, **params)
     except (QueryError, BridgeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_COMMAND_FAILED
@@ -320,16 +304,16 @@ async def _run_read(args: argparse.Namespace) -> int:
     end_bar = to_b if to_b is not None else start_bar
 
     if getattr(args, "abc", False) or getattr(args, "subcommand", "") == "read-abc":
-        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-            await _cli._check_bridge_version(client)
-            info = await _cli._bridge(client, "GetScoreInfo")
-            staves_info = await _cli._bridge(client, "GetStaves")
+        async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            await bridge.check_bridge_version(client)
+            info = await bridge.call(client, "GetScoreInfo")
+            staves_info = await bridge.call(client, "GetStaves")
             # An unaddressed ABC export is expected to represent the whole
             # staff.  Ordinary `read` retains its one-bar default.
             if from_b is None and to_b is None:
                 end_bar = info.get("barCount", end_bar)
-            bars = await _cli._bridge(client, "ReadBars", [args.staff, start_bar, end_bar])
-            raw_lyrics = await _cli._bridge(
+            bars = await bridge.call(client, "ReadBars", [args.staff, start_bar, end_bar])
+            raw_lyrics = await bridge.call(
                 client, "ReadLyrics", [args.staff, start_bar, end_bar]
             )
             filtered_lyrics = lyrics.filter_lyrics(raw_lyrics, from_bar=start_bar, to_bar=end_bar)
@@ -360,8 +344,8 @@ async def _run_read(args: argparse.Namespace) -> int:
             print(abc_str)
             return EXIT_OK
 
-    return await _cli._run_bridge_call(args, "ReadBars", [args.staff, start_bar, end_bar])
+    return await _run_bridge_call(args, "ReadBars", [args.staff, start_bar, end_bar])
 
 
 async def _run_bridge_version(args: argparse.Namespace) -> int:
-    return await _cli._run_bridge_call(args, "GetBridgeVersion")
+    return await _run_bridge_call(args, "GetBridgeVersion")

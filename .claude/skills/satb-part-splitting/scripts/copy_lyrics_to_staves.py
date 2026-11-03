@@ -25,7 +25,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from ai_score_editing.sibelius.cli import BRIDGE_PLUGIN, _apply_batch, _backup, _bridge
+from ai_score_editing.sibelius.bridge import BRIDGE_PLUGIN, apply_batch as _apply_batch, call as _bridge
+from ai_score_editing.sibelius.runner import backup as _backup
 from ai_score_editing.sibelius.client import SibeliusClient
 
 STYLE = "text.staff.space.hypen.lyrics.verse%d"

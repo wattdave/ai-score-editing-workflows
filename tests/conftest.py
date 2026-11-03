@@ -69,22 +69,28 @@ def _isolated_home(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
 
 @pytest.fixture
 def cli_session(monkeypatch: pytest.MonkeyPatch) -> CliSession:
-    """Single seam for CLI handler tests: ``cli._client`` returns a fake client.
+    """Single seam for CLI handler tests: ``runner.client`` returns a fake client.
 
-    Only the client factory and the three pre-flight guards are replaced, so
-    handlers can move between modules without the tests noticing, as long as
-    they obtain the client through ``cli._client``.
+    Only the client factory and the pre-flight guards are replaced, so handlers
+    can move between modules without the tests noticing, as long as they obtain
+    the client through ``runner.client``.
     """
     from unittest.mock import AsyncMock, MagicMock
 
-    from ai_score_editing.sibelius import cli
+    from ai_score_editing.sibelius import bridge, runner
 
     client = FakeSibeliusClient()
     context = MagicMock()
     context.__aenter__ = AsyncMock(return_value=client)
     context.__aexit__ = AsyncMock(return_value=False)
-    monkeypatch.setattr(cli, "_client", MagicMock(return_value=context))
-    monkeypatch.setattr(cli, "_check_bridge_version", AsyncMock())
-    monkeypatch.setattr(cli, "_require_bridge", AsyncMock())
-    monkeypatch.setattr(cli, "_assert_expected_score", AsyncMock())
+    require = AsyncMock()
+
+    async def bridge_require(self: bridge.SibeliusBridge, version: int, feature: str) -> None:
+        await require(self.client, version, feature)
+
+    monkeypatch.setattr(runner, "client", MagicMock(return_value=context))
+    monkeypatch.setattr(bridge, "check_bridge_version", AsyncMock())
+    monkeypatch.setattr(bridge, "require_bridge", require)
+    monkeypatch.setattr(bridge.SibeliusBridge, "require", bridge_require)
+    monkeypatch.setattr(runner, "assert_expected_score", AsyncMock())
     return CliSession(client=client, context=context)

@@ -1,8 +1,4 @@
-"""Helpers shared by the command modules.
-
-Command modules import from here, never from ``sibelius.cli`` at module level,
-so ``cli`` can import them without a cycle.
-"""
+"""Helpers shared by the command modules."""
 
 from __future__ import annotations
 
@@ -10,39 +6,10 @@ import argparse
 import json
 from typing import Any
 
-from ai_score_editing.sibelius import protocol
-
 from ai_score_editing.cli_common import EXIT_COMMAND_FAILED, EXIT_CONNECTION_FAILED, EXIT_OK  # noqa: F401
+from ai_score_editing.sibelius import protocol
 
 
 def emit(args: argparse.Namespace, response: dict[str, Any], human: str) -> int:
     print(json.dumps(response) if args.json else human)
     return EXIT_OK if protocol.is_success(response) else EXIT_COMMAND_FAILED
-
-
-def client(args: argparse.Namespace, plugins: list[str] | None = None) -> Any:
-    """Build the Sibelius client through ``cli._client``.
-
-    The lookup is late on purpose: tests and skill scripts patch
-    ``ai_score_editing.sibelius.cli._client`` as the one seam for every handler.
-    """
-    from ai_score_editing.sibelius import cli
-
-    return cli._client(args, plugins)
-
-
-class _LateCli:
-    """Proxy that resolves attributes on ``sibelius.cli`` at call time.
-
-    Tests and skill scripts patch ``cli._bridge``, ``cli._backup``,
-    ``cli._apply_batch`` and friends, so handlers must look them up on every
-    call. ``cli`` is imported lazily to avoid a circular import.
-    """
-
-    def __getattr__(self, name: str) -> Any:
-        from ai_score_editing.sibelius import cli as _cli_module
-
-        return getattr(_cli_module, name)
-
-
-cli = _LateCli()

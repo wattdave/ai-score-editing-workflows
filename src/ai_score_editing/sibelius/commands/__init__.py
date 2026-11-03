@@ -7,17 +7,14 @@ To add or move an area:
    of subcommand name (aliases included) to handler. Handlers take ``args`` and
    return an exit code; async handlers are run by ``cli.main``.
 2. Move the area's ``_run_*`` handlers into the module. Import helpers from
-   ``.bridge``, ``.service`` and ``commands._common`` (``emit``, ``client``,
-   ``EXIT_*``), not from ``cli``: ``cli`` imports this package.
-3. In ``cli.py`` re-export each moved name that tests or skill scripts import or
-   patch (for example ``_run_set_note = <area>._run_set_note``), and delete the
-   old parser lines and ``runner`` entries.
+   ``sibelius.bridge``, ``sibelius.service``, ``sibelius.runner`` (client factory,
+   guards, ``run_op``/``run_write``, backup) and ``commands._common`` (``emit``,
+   ``EXIT_*``), not from ``cli``: ``cli`` imports this package. Call bridge and
+   runner helpers through their module (``bridge.call(...)``) so tests can patch
+   them there.
 
 There is no list to edit: ``register_all`` discovers every public module in this
-package (names not starting with ``_``) in alphabetical order, so each area PR
-touches only its own module plus the deletions in ``cli.py``.
-``cli._client`` is the single seam tests patch; ``_common.client`` looks it up
-at call time.
+package (names not starting with ``_``) in alphabetical order.
 """
 
 from __future__ import annotations

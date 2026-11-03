@@ -14,24 +14,9 @@ from ai_score_editing.sibelius import layout
 from ai_score_editing.cli_common import canonical_format
 from ai_score_editing.sibelius import launcher, service
 from ai_score_editing.sibelius.bridge import BRIDGE_PLUGIN, EXPORT_FORMATS, BridgeError
+from ai_score_editing.sibelius import bridge, runner
+from ai_score_editing.sibelius.commands.inspect import _run_read
 from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK
-from ai_score_editing.sibelius.commands._common import client as _client
-
-
-class _Cli:
-    """Late lookup of ``sibelius.cli`` attributes.
-
-    Tests and skill scripts patch ``cli._bridge``, ``cli._backup``,
-    ``cli._apply_batch`` and friends, so handlers resolve them at call time.
-    """
-
-    def __getattr__(self, name: str) -> Any:
-        from ai_score_editing.sibelius import cli
-
-        return getattr(cli, name)
-
-
-_cli = _Cli()
 
 
 def register(sub: Any) -> dict[str, Callable[..., Any]]:
@@ -123,20 +108,20 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
 
 async def _run_read_abc(args: argparse.Namespace) -> int:
     setattr(args, "abc", True)
-    return await _cli._run_read(args)
+    return await _run_read(args)
 
 async def _run_export(args: argparse.Namespace) -> int:
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _cli._check_bridge_version(client)
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await bridge.check_bridge_version(client)
         if args.sib_file:
             source = Path(args.sib_file).expanduser().resolve()
             if not source.exists():
                 print(f"error: {source} does not exist", file=sys.stderr)
                 return EXIT_COMMAND_FAILED
-            opened = await _cli._bridge(client, "OpenScore", [str(source)])
+            opened = await bridge.call(client, "OpenScore", [str(source)])
             print(f"opened: {opened['fileName']}", file=sys.stderr)
         try:
-            result = await service.export(_cli._CliBridge(client), args.format, args.out)
+            result = await service.export(bridge.for_client(client), args.format, args.out)
         except BridgeError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return EXIT_COMMAND_FAILED
@@ -158,14 +143,14 @@ async def _run_split_parts(args: argparse.Namespace) -> int:
     if source_path is None or source_path.suffix.lower() == ".sib":
         temp_dir = tempfile.TemporaryDirectory(prefix="sib_split_parts_")
         exported_xml = Path(temp_dir.name) / "source_export.musicxml"
-        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-            await _cli._check_bridge_version(client)
+        async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            await bridge.check_bridge_version(client)
             if source_path is not None:
-                opened = await _cli._bridge(client, "OpenScore", [str(source_path)])
+                opened = await bridge.call(client, "OpenScore", [str(source_path)])
                 print(f"opened: {opened.get('fileName', str(source_path))}", file=sys.stderr)
-            info = await _cli._bridge(client, "GetScoreInfo")
+            info = await bridge.call(client, "GetScoreInfo")
             saveas_type, _ = EXPORT_FORMATS["musicxml"]
-            await _cli._bridge(client, "ExportScore", [str(exported_xml), saveas_type])
+            await bridge.call(client, "ExportScore", [str(exported_xml), saveas_type])
 
         xml_input_path = exported_xml
         file_name = info.get("fileName")
