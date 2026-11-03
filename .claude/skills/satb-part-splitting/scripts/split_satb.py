@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Audit, split, and validate 2-staff choral/piano scores into 4-staff SATB scores.
 
-Thin argparse wrapper over ``ai_score_editing.musicxml_split`` (the single MusicXML
+Thin argparse wrapper over ``ai_score_editing.workflows.musicxml_split`` (the single MusicXML
 splitting engine).  Supports both uncompressed .xml and compressed .mxl MusicXML files.
 """
 
@@ -17,12 +17,12 @@ SOURCE_ROOT = REPOSITORY_ROOT / "src"
 if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
-from ai_score_editing.musicxml_split.io import parse_musicxml, save_musicxml  # noqa: E402
-from ai_score_editing.musicxml_split.lyrics import (  # noqa: E402
+from ai_score_editing.workflows.musicxml_split.io import parse_musicxml, save_musicxml  # noqa: E402
+from ai_score_editing.workflows.musicxml_split.lyrics import (  # noqa: E402
     copy_soprano_lyrics_to_tb,
     reconnect_lyrics_in_root,
 )
-from ai_score_editing.musicxml_split.profiles.satb import SATBOptions, split_satb  # noqa: E402
+from ai_score_editing.workflows.musicxml_split.profiles.satb import SATBOptions, split_satb  # noqa: E402
 
 
 def parse_bar_ranges(range_str: str) -> set[int]:

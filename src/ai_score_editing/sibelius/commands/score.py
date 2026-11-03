@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from ai_score_editing import layout
+from ai_score_editing.sibelius import layout
 from ai_score_editing.sibelius import batch_ops
 from ai_score_editing.core import music
 from ai_score_editing.sibelius import service

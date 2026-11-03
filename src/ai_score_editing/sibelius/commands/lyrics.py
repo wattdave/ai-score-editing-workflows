@@ -8,7 +8,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from ai_score_editing import agent_output, batch_lyrics
+from ai_score_editing.sibelius import agent_output, batch_lyrics
 from ai_score_editing.sibelius import batch_ops
 from ai_score_editing.core import lyrics
 from ai_score_editing.core.barrange import parse_bar_range

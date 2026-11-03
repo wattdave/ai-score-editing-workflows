@@ -12,7 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from ai_score_editing import mix_proof, rehearsal_mix
+from ai_score_editing.workflows import mix_proof, rehearsal_mix
 from ai_score_editing.cli_common import canonical_format
 from ai_score_editing.sibelius.bridge import (
     AUDIO_EXPORT_BRIDGE_VERSION,

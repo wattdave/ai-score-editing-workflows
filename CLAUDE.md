@@ -5,8 +5,7 @@ score editors: Sibelius (through Sibelius Connect and the bundled `ScoreBridge`
 ManuScript plug-in), Dorico and MuseScore. Code lives in `src/ai_score_editing/`,
 with one subpackage per editor (`sibelius/`, `dorico/`, `musescore/`), editor-neutral
 pipelines in `workflows/` (MusicXML splitting and rounding, ABC, rehearsal mixes),
-and shared modules at the top level. Old top-level import paths of moved modules
-are aliases (see `_compat.py`) that resolve to the same module objects.
+pure helpers in `core/`, and shared modules at the top level.
 
 ## New users
 

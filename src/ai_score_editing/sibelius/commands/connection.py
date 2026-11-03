@@ -14,7 +14,7 @@ from ai_score_editing.sibelius import protocol
 from ai_score_editing.sibelius.bridge import BRIDGE_PLUGIN
 from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK, emit as _emit
 from ai_score_editing.sibelius.commands._common import client as _client
-from ai_score_editing.token_store import TokenStore
+from ai_score_editing.core.token_store import TokenStore
 
 
 def register(sub: Any) -> dict[str, Callable[..., Any]]:
