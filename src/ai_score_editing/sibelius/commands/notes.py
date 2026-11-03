@@ -23,9 +23,8 @@ from ai_score_editing.sibelius.bridge import (
     BridgeError,
 )
 from ai_score_editing.sibelius.client import SibeliusClient
+from ai_score_editing.sibelius import bridge, runner
 from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK
-from ai_score_editing.sibelius.commands._common import client as _client
-from ai_score_editing.sibelius.commands._common import cli as _cli
 
 
 def register(sub: Any) -> dict[str, Callable[..., Any]]:
@@ -187,12 +186,12 @@ async def _run_patch_notes(args: argparse.Namespace) -> int:
 
     results: list[dict[str, Any]] = []
     batch = batch_ops.validate_batch(note_patches.batch_operations(ordered))
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _cli._require_bridge(client, _cli._batch_bridge_version(batch), "patch-notes")
-        await _cli._assert_expected_score(client, args)
-        backup = await _cli._backup(client, "before patch-notes")
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await bridge.require_bridge(client, bridge.batch_bridge_version(batch), "patch-notes")
+        await runner.assert_expected_score(client, args)
+        backup = await runner.backup(client, "before patch-notes")
         # One round trip and one undo step for the whole file.
-        outcome = await _cli._apply_batch(client, batch, False)
+        outcome = await bridge.apply_batch(client, batch, False)
         if "error" in outcome:
             raise BridgeError(
                 f"patch-notes batch stopped: {outcome['error']} after "
@@ -204,7 +203,7 @@ async def _run_patch_notes(args: argparse.Namespace) -> int:
 
         saved = None
         if args.save:
-            saved = await _cli._bridge(client, "Save")
+            saved = await bridge.call(client, "Save")
 
     summary = {
         "operations": len(operations),
@@ -225,7 +224,7 @@ async def _run_transpose(args: argparse.Namespace) -> int:
     built: dict[str, Any] = {}
 
     async def build(client: SibeliusClient) -> dict[str, Any]:
-        info = await _cli._bridge(client, "GetScoreInfo")
+        info = await bridge.call(client, "GetScoreInfo")
         built.update(
             op="transpose",
             fromBar=args.from_bar or 1, toBar=args.to_bar or info["barCount"],
@@ -239,7 +238,7 @@ async def _run_transpose(args: argparse.Namespace) -> int:
             "degree", "intervalType", "fromBar", "toBar", "topStaff", "bottomStaff",
         )}
 
-    return await _cli._run_op(args, build, legacy)
+    return await runner.run_op(args, build, legacy)
 
 
 async def _run_copy_passage(args: argparse.Namespace) -> int:
@@ -257,9 +256,9 @@ async def _run_copy_passage(args: argparse.Namespace) -> int:
         rows = []
         for offset in range(operation["bottomStaff"] - operation["topStaff"] + 1):
             for bar_offset in range(operation["toBar"] - operation["fromBar"] + 1):
-                source = await _cli._read_rows(client, operation["topStaff"] + offset, operation["fromBar"] + bar_offset,
+                source = await runner.read_rows(client, operation["topStaff"] + offset, operation["fromBar"] + bar_offset,
                                           operation["fromBar"] + bar_offset)
-                dest = await _cli._read_rows(client, operation["destStaff"] + offset, operation["destBar"] + bar_offset,
+                dest = await runner.read_rows(client, operation["destStaff"] + offset, operation["destBar"] + bar_offset,
                                         operation["destBar"] + bar_offset)
                 start = dest_pos if bar_offset == 0 else 0
                 rows.append({
@@ -269,7 +268,7 @@ async def _run_copy_passage(args: argparse.Namespace) -> int:
                 })
         return rows
 
-    return await _cli._run_op(
+    return await runner.run_op(
         args, operation, lambda result: {k: v for k, v in operation.items() if k != "op"}, before_write=replacing,
     )
 
@@ -283,11 +282,11 @@ async def _run_copy_range(args: argparse.Namespace) -> int:
     top = args.top_staff
     bottom = args.bottom_staff or top
     try:
-        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-            await _cli._require_bridge(client, LYRIC_VERSE_BRIDGE_VERSION, "copy-passage with a range")
-            await _cli._assert_expected_score(client, args)
-            info = await _cli._bridge(client, "GetScoreInfo")
-            numerator, denominator = _cli._time_signature_at(info, args.from_bar)
+        async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            await bridge.require_bridge(client, LYRIC_VERSE_BRIDGE_VERSION, "copy-passage with a range")
+            await runner.assert_expected_score(client, args)
+            info = await bridge.call(client, "GetScoreInfo")
+            numerator, denominator = runner.time_signature_at(info, args.from_bar)
             note = None
             if args.beats:
                 first, last = copy_range.parse_beats(args.beats)
@@ -306,8 +305,8 @@ async def _run_copy_range(args: argparse.Namespace) -> int:
 
             plans, sources = [], []
             for offset in range(bottom - top + 1):
-                source = await _cli._read_rows(client, top + offset, args.from_bar, args.from_bar)
-                dest_bars = await _cli._read_rows(client, args.dest_staff + offset, max(1, args.dest_bar - 1), args.dest_bar)
+                source = await runner.read_rows(client, top + offset, args.from_bar, args.from_bar)
+                dest_bars = await runner.read_rows(client, args.dest_staff + offset, max(1, args.dest_bar - 1), args.dest_bar)
                 dest = [r for r in dest_bars if r["bar"] == args.dest_bar]
                 prior = [r for r in dest_bars if r["bar"] < args.dest_bar or (r["bar"] == args.dest_bar and r["position"] < dest_start)]
                 sources.append(source)
@@ -316,8 +315,8 @@ async def _run_copy_range(args: argparse.Namespace) -> int:
                     source, dest, start, end, dest_start, prior,
                 ))
             batch = batch_ops.validate_batch([op for plan in plans for op in plan.ops])
-            await _cli._require_bridge(client, _cli._batch_bridge_version(batch), "copy-passage with a range")
-            checked = await _cli._apply_batch(client, batch, True)
+            await bridge.require_bridge(client, bridge.batch_bridge_version(batch), "copy-passage with a range")
+            checked = await bridge.apply_batch(client, batch, True)
             if "error" in checked:
                 raise BridgeError(checked["error"])
             report: dict[str, Any] = {
@@ -329,18 +328,18 @@ async def _run_copy_range(args: argparse.Namespace) -> int:
             if args.dry_run:
                 print(json.dumps({"dryRun": True, "checked": len(batch), **report}, indent=2))
                 return EXIT_OK
-            backup = await _cli._backup(client, f"before {args.subcommand}")
+            backup = await runner.backup(client, f"before {args.subcommand}")
             print(f"backed up: {backup['copy']}", file=sys.stderr)
-            result = await _cli._apply_batch(client, batch, False)
+            result = await bridge.apply_batch(client, batch, False)
             if "error" in result:
                 raise BridgeError(f"{result['error']}; restore from {backup.get('copy')}")
             verified = True
             for offset, source in enumerate(sources):
-                after = [r for r in await _cli._read_rows(client, args.dest_staff + offset, args.dest_bar, args.dest_bar)]
+                after = [r for r in await runner.read_rows(client, args.dest_staff + offset, args.dest_bar, args.dest_bar)]
                 verified = verified and copy_range.verify(source, after, start, end, dest_start)
             report["verified"] = verified
             if getattr(args, "save", False):
-                saved = await _cli._bridge(client, "Save")
+                saved = await bridge.call(client, "Save")
                 print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
     except (copy_range.CopyRangeError, batch_ops.BatchError, BridgeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -355,38 +354,38 @@ async def _run_copy_range(args: argparse.Namespace) -> int:
 async def _run_set_note(args: argparse.Namespace) -> int:
     def legacy(result: dict[str, Any]) -> dict[str, Any]:
         missing = {"name": "", "tied": False, "pitch": args.new_pitch}
-        old = next((n for n in _cli._notes(result["before"]) if n["pitch"] == args.old_pitch), missing)
-        new = next((n for n in _cli._notes(result["after"]) if n["pitch"] == args.new_pitch), missing)
+        old = next((n for n in runner.notes(result["before"]) if n["pitch"] == args.old_pitch), missing)
+        new = next((n for n in runner.notes(result["after"]) if n["pitch"] == args.new_pitch), missing)
         return {
             "oldPitch": args.old_pitch, "oldName": old["name"],
             "newPitch": new["pitch"], "newName": new["name"], "tied": old["tied"],
         }
 
-    return await _cli._run_op(
+    return await runner.run_op(
         args,
-        {"op": "set-pitch", **_cli._address(args), "oldPitch": args.old_pitch, "newPitch": args.new_pitch},
+        {"op": "set-pitch", **runner.address(args), "oldPitch": args.old_pitch, "newPitch": args.new_pitch},
         legacy,
     )
 
 
 async def _run_tie(args: argparse.Namespace) -> int:
-    return await _cli._run_op(
+    return await runner.run_op(
         args,
-        {"op": "tie", **_cli._address(args), "remove": args.remove},
+        {"op": "tie", **runner.address(args), "remove": args.remove},
         lambda result: {
-            **_cli._address(args), "tied": not args.remove, "notes": len(_cli._notes(result["after"])),
+            **runner.address(args), "tied": not args.remove, "notes": len(runner.notes(result["after"])),
         },
     )
 
 
 async def _run_delete_object(args: argparse.Namespace) -> int:
-    return await _cli._run_op(
-        args, {"op": "delete", **_cli._address(args)}, lambda result: {"deleted": result["before"]}
+    return await runner.run_op(
+        args, {"op": "delete", **runner.address(args)}, lambda result: {"deleted": result["before"]}
     )
 
 
 async def _run_delete_voice(args: argparse.Namespace) -> int:
-    return await _cli._run_op(
+    return await runner.run_op(
         args,
         {"op": "delete-voice", "fromBar": args.from_bar, "toBar": args.to_bar,
          "staff": args.staff, "voice": args.voice},
@@ -403,29 +402,29 @@ async def _run_clear_bars(args: argparse.Namespace) -> int:
     }
     if args.voice is not None:
         op["voice"] = args.voice
-    return await _cli._run_op(args, op, lambda result: result["after"])
+    return await runner.run_op(args, op, lambda result: result["after"])
 
 
 async def _run_flip_stem(args: argparse.Namespace) -> int:
-    return await _cli._run_op(
+    return await runner.run_op(
         args,
-        {"op": "flip-stem", **_cli._address(args)},
-        lambda result: {"flipped": True, **_cli._address(args)},
+        {"op": "flip-stem", **runner.address(args)},
+        lambda result: {"flipped": True, **runner.address(args)},
     )
 
 
 async def _run_bracket(args: argparse.Namespace) -> int:
-    return await _cli._run_op(
+    return await runner.run_op(
         args,
-        {"op": "bracket", **_cli._address(args), "remove": args.remove},
+        {"op": "bracket", **runner.address(args), "remove": args.remove},
         lambda result: {
-            **_cli._address(args), "bracketed": not args.remove, "notes": len(_cli._notes(result["after"])),
+            **runner.address(args), "bracketed": not args.remove, "notes": len(runner.notes(result["after"])),
         },
     )
 
 
 async def _run_beam(args: argparse.Namespace) -> int:
-    return await _cli._run_op(
+    return await runner.run_op(
         args,
         {"op": "beam", "staff": args.staff, "bar": args.bar,
          "firstIndex": args.from_index, "lastIndex": args.to_index},
@@ -435,9 +434,9 @@ async def _run_beam(args: argparse.Namespace) -> int:
 
 
 async def _run_nudge(args: argparse.Namespace) -> int:
-    return await _cli._run_op(
+    return await runner.run_op(
         args,
-        {"op": "nudge", **_cli._address(args), "dx": args.dx, "dy": args.dy},
+        {"op": "nudge", **runner.address(args), "dx": args.dx, "dy": args.dy},
         lambda result: result["after"],
         NUDGE_BRIDGE_VERSION,
     )
@@ -446,7 +445,7 @@ async def _run_nudge(args: argparse.Namespace) -> int:
 async def _run_add_notes(args: argparse.Namespace) -> int:
     if getattr(args, "notes", None):
         seq = music.parse_note_sequence(args.notes)
-        return await _cli._run_write(
+        return await runner.run_write(
             args,
             "AddNoteSequence",
             [args.staff, args.bar, getattr(args, "pos", 0), seq, args.voice],
@@ -458,7 +457,7 @@ async def _run_add_notes(args: argparse.Namespace) -> int:
     duration = music.parse_duration(args.duration)
     position = getattr(args, "pos", 0)
     voice = args.voice or 1
-    return await _cli._run_op(
+    return await runner.run_op(
         args,
         {
             "op": "add-note", "staff": args.staff, "bar": args.bar, "position": position,
@@ -470,7 +469,7 @@ async def _run_add_notes(args: argparse.Namespace) -> int:
             "duration": duration, "voice": voice,
             "notes": [
                 {"pitch": n["pitch"], "name": n["name"], "tied": n["tied"]}
-                for n in _cli._notes(result["after"])
+                for n in runner.notes(result["after"])
                 if n["pitch"] in pitches
             ],
         },
@@ -483,10 +482,10 @@ async def _run_add_abc(args: argparse.Namespace) -> int:
         print("error: ABC notation string is required (positional or --abc)", file=sys.stderr)
         return EXIT_COMMAND_FAILED
 
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _cli._check_bridge_version(client)
-        info = await _cli._bridge(client, "GetScoreInfo")
-        await _cli._assert_expected_score(client, args, info)
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await bridge.check_bridge_version(client)
+        info = await bridge.call(client, "GetScoreInfo")
+        await runner.assert_expected_score(client, args, info)
         default_key = "C"
         for ks in info.get("keySignatures", []):
             if ks.get("bar", 1) <= args.bar:
@@ -508,10 +507,10 @@ async def _run_add_abc(args: argparse.Namespace) -> int:
                 "tied": n["tied"],
             })
 
-        backup = await _cli._backup(client, f"before {args.subcommand}")
+        backup = await runner.backup(client, f"before {args.subcommand}")
         print(f"backed up: {backup['copy']}", file=sys.stderr)
 
-        note_result = await _cli._bridge(
+        note_result = await bridge.call(
             client,
             "AddNoteSequence",
             [args.staff, args.bar, getattr(args, "pos", 0), sequence, args.voice],
@@ -523,7 +522,7 @@ async def _run_add_abc(args: argparse.Namespace) -> int:
             actual_pos = lyr["position"]
             if lyr["bar"] == 1:
                 actual_pos += getattr(args, "pos", 0)
-            lyr_res = await _cli._bridge(
+            lyr_res = await bridge.call(
                 client,
                 "AddLyric",
                 [args.staff, actual_bar, actual_pos, lyr["duration"], lyr["text"], lyr["syllableType"]],
@@ -531,7 +530,7 @@ async def _run_add_abc(args: argparse.Namespace) -> int:
             added_lyrics.append(lyr_res)
 
         if getattr(args, "save", False):
-            saved = await _cli._bridge(client, "Save")
+            saved = await bridge.call(client, "Save")
             print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
 
     result = {

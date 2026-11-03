@@ -10,39 +10,29 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from fakes import CliSession
+from fakes import CliSession, bridge_apply_batch, bridge_call
 
-from ai_score_editing.sibelius.cli import (
-    EXIT_COMMAND_FAILED,
-    EXIT_OK,
-    BridgeError,
-    _assert_expected_score,
-    _run_inspect,
-    _run_score_snapshot,
-    _run_patch_lyrics,
-    _run_patch_layout,
-    _run_apply,
-    _run_patch_notes,
-    _run_proofread,
-    _run_verify_render,
-    _run_read_lyrics,
-    _run_reset_design,
-    _run_set_lyric,
-    _backup,
-    _run_add_bars,
+from ai_score_editing.sibelius import bridge, runner
+from ai_score_editing.sibelius.bridge import BridgeError
+from ai_score_editing.sibelius.cli import build_parser
+from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK
+from ai_score_editing.sibelius.commands.audio import _run_verify_render
+from ai_score_editing.sibelius.commands.inspect import _run_inspect, _run_proofread, _run_score_snapshot
+from ai_score_editing.sibelius.commands.layout import _run_patch_layout, _run_reset_design, _run_set_time
+from ai_score_editing.sibelius.commands.lyrics import _run_patch_lyrics, _run_read_lyrics, _run_set_lyric
+from ai_score_editing.sibelius.commands.notes import (
     _run_add_notes,
     _run_beam,
     _run_bracket,
     _run_copy_passage,
     _run_delete_voice,
-    _run_transpose,
     _run_flip_stem,
+    _run_patch_notes,
     _run_set_note,
-    _run_set_time,
     _run_tie,
-    _run_write,
-    build_parser,
+    _run_transpose,
 )
+from ai_score_editing.sibelius.commands.score import _run_add_bars, _run_apply
 
 
 def _client_context() -> tuple[MagicMock, AsyncMock]:
@@ -118,7 +108,7 @@ async def test_inspect_combines_three_reads_in_one_context(cli_session: CliSessi
         }[method]
 
     with (
-        patch("ai_score_editing.sibelius.cli._bridge", side_effect=bridge_side_effect) as bridge,
+        bridge_call(side_effect=bridge_side_effect) as bridge,
     ):
         assert await _run_inspect(args) == EXIT_OK
 
@@ -163,7 +153,7 @@ async def test_score_snapshot_combines_structural_reads_in_one_context(cli_sessi
         raise AssertionError(method)
 
     with (
-        patch("ai_score_editing.sibelius.cli._bridge", side_effect=bridge_side_effect) as bridge,
+        bridge_call(side_effect=bridge_side_effect) as bridge,
     ):
         assert await _run_score_snapshot(args) == EXIT_OK
 
@@ -201,15 +191,13 @@ async def test_patch_layout_uses_one_context_and_one_backup(cli_session: CliSess
         return {"changed": True}
 
     with (
-        patch("ai_score_editing.sibelius.cli._backup", new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"})) as backup,
-        patch(
-            "ai_score_editing.sibelius.cli._apply_batch",
-            new=AsyncMock(return_value={"applied": 2, "results": [
+        patch("ai_score_editing.sibelius.runner.backup", new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"})) as backup,
+        bridge_apply_batch(new=AsyncMock(return_value={"applied": 2, "results": [
                 {"i": 0, "after": {"newDx": 8}},
                 {"i": 1, "after": {"bar": 20, "removed": 0, "barlineType": "1"}},
             ]}),
         ) as apply_batch,
-        patch("ai_score_editing.sibelius.cli._bridge", side_effect=bridge_side_effect) as bridge,
+        bridge_call(side_effect=bridge_side_effect) as bridge,
     ):
         assert await _run_patch_layout(args) == EXIT_OK
 
@@ -256,7 +244,7 @@ async def test_patch_layout_removes_redundant_clefs_from_installed_package(cli_s
         return {"applied": len(batch), "results": []}
 
     with (
-        patch("ai_score_editing.sibelius.cli._backup", new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"})),
+        patch("ai_score_editing.sibelius.runner.backup", new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"})),
         patch("ai_score_editing.sibelius.bridge.call", side_effect=bridge_side_effect),
         patch("ai_score_editing.sibelius.bridge.apply_batch", side_effect=apply_batch),
     ):
@@ -290,9 +278,9 @@ async def test_patch_notes_sends_one_batch_with_voice_deletes_last(cli_session: 
 
     batch_result = {"applied": 4, "results": [{"i": 0}, {"i": 1}, {"i": 2}, {"i": 3}]}
     with (
-        patch("ai_score_editing.sibelius.cli._backup", new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"})) as backup,
-        patch("ai_score_editing.sibelius.cli._apply_batch", new=AsyncMock(return_value=batch_result)) as apply_batch,
-        patch("ai_score_editing.sibelius.cli._bridge", side_effect=bridge_side_effect) as bridge,
+        patch("ai_score_editing.sibelius.runner.backup", new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"})) as backup,
+        bridge_apply_batch(new=AsyncMock(return_value=batch_result)) as apply_batch,
+        bridge_call(side_effect=bridge_side_effect) as bridge,
     ):
         assert await _run_patch_notes(args) == EXIT_OK
 
@@ -320,9 +308,9 @@ async def test_apply_dry_run_skips_backup_and_save(cli_session: CliSession,
     context, _client = cli_session.context, cli_session.client
     result = {"applied": 0, "dryRun": True, "results": [{"i": 0, "op": "set"}]}
     with (
-        patch("ai_score_editing.sibelius.cli._backup", new=AsyncMock()) as backup,
-        patch("ai_score_editing.sibelius.cli._apply_batch", new=AsyncMock(return_value=result)) as apply_batch,
-        patch("ai_score_editing.sibelius.cli._bridge", new=AsyncMock()) as bridge,
+        patch("ai_score_editing.sibelius.runner.backup", new=AsyncMock()) as backup,
+        bridge_apply_batch(new=AsyncMock(return_value=result)) as apply_batch,
+        bridge_call(new=AsyncMock()) as bridge,
     ):
         assert await _run_apply(args) == EXIT_OK
 
@@ -344,12 +332,10 @@ async def test_apply_reports_partial_failure_with_undo_hint(cli_session: CliSess
     context, _client = cli_session.context, cli_session.client
     result = {"error": "op 1: Sibelius refused add-note", "applied": 1, "failedOp": 1}
     with (
-        patch("ai_score_editing.sibelius.cli._backup", new=AsyncMock(return_value={"copy": "/b.sib"})),
-        patch(
-            "ai_score_editing.sibelius.cli._apply_batch",
-            new=AsyncMock(side_effect=[{"applied": 0, "dryRun": True}, result]),
+        patch("ai_score_editing.sibelius.runner.backup", new=AsyncMock(return_value={"copy": "/b.sib"})),
+        bridge_apply_batch(new=AsyncMock(side_effect=[{"applied": 0, "dryRun": True}, result]),
         ),
-        patch("ai_score_editing.sibelius.cli._bridge", new=AsyncMock()) as bridge,
+        bridge_call(new=AsyncMock()) as bridge,
     ):
         assert await _run_apply(args) == EXIT_COMMAND_FAILED
 
@@ -366,8 +352,8 @@ async def test_apply_refused_batch_skips_backup(cli_session: CliSession,
     context, _client = cli_session.context, cli_session.client
     refused = {"error": "op 0: no object at staff 1 bar 1 index 99", "applied": 0, "failedOp": 0}
     with (
-        patch("ai_score_editing.sibelius.cli._backup", new=AsyncMock()) as backup,
-        patch("ai_score_editing.sibelius.cli._apply_batch", new=AsyncMock(return_value=refused)) as apply_batch,
+        patch("ai_score_editing.sibelius.runner.backup", new=AsyncMock()) as backup,
+        bridge_apply_batch(new=AsyncMock(return_value=refused)) as apply_batch,
     ):
         assert await _run_apply(args) == EXIT_COMMAND_FAILED
 
@@ -412,8 +398,8 @@ async def test_proofread_combines_reads_and_returns_compact_report(cli_session: 
         raise AssertionError(method)
 
     with (
-        patch("ai_score_editing.sibelius.cli._bridge", side_effect=bridge_side_effect),
-        patch("ai_score_editing.sibelius.cli.lyrics.lint_lyrics", return_value=[]),
+        bridge_call(side_effect=bridge_side_effect),
+        patch("ai_score_editing.core.lyrics.lint_lyrics", return_value=[]),
     ):
         assert await _run_proofread(args) == EXIT_OK
 
@@ -444,7 +430,7 @@ async def test_verify_render_exports_and_verifies_files(cli_session: CliSession,
         raise AssertionError(method)
 
     with (
-        patch("ai_score_editing.sibelius.cli._bridge", side_effect=bridge_side_effect) as bridge,
+        bridge_call(side_effect=bridge_side_effect) as bridge,
     ):
         assert await _run_verify_render(args) == EXIT_OK
 
@@ -482,7 +468,7 @@ async def test_verify_render_finds_files_when_out_has_no_extension(cli_session: 
         raise AssertionError(method)
 
     with (
-        patch("ai_score_editing.sibelius.cli._bridge", side_effect=bridge_side_effect),
+        bridge_call(side_effect=bridge_side_effect),
     ):
         assert await _run_verify_render(args) == EXIT_OK
 
@@ -507,7 +493,7 @@ async def test_compact_read_lyrics_keeps_edit_address(cli_session: CliSession, c
         }
     ]
     with (
-        patch("ai_score_editing.sibelius.cli._bridge", new=AsyncMock(return_value=payload)),
+        bridge_call(new=AsyncMock(return_value=payload)),
     ):
         assert await _run_read_lyrics(args) == EXIT_OK
 
@@ -517,7 +503,7 @@ async def test_compact_read_lyrics_keeps_edit_address(cli_session: CliSession, c
 async def test_expected_score_mismatch_fails() -> None:
     args = Namespace(expect_file="/scores/expected.sib")
     with pytest.raises(BridgeError, match="active score mismatch"):
-        await _assert_expected_score(
+        await runner.assert_expected_score(
             AsyncMock(), args, {"fileName": "/scores/other.sib"}
         )
 
@@ -529,14 +515,14 @@ async def test_expected_score_failure_prevents_backup_and_write(cli_session: Cli
     context, _client = cli_session.context, cli_session.client
     with (
         patch(
-            "ai_score_editing.sibelius.cli._assert_expected_score",
+            "ai_score_editing.sibelius.runner.assert_expected_score",
             new=AsyncMock(side_effect=BridgeError("active score mismatch")),
         ),
-        patch("ai_score_editing.sibelius.cli._backup", new=AsyncMock()) as backup,
-        patch("ai_score_editing.sibelius.cli._bridge", new=AsyncMock()) as bridge,
+        patch("ai_score_editing.sibelius.runner.backup", new=AsyncMock()) as backup,
+        bridge_call(new=AsyncMock()) as bridge,
     ):
         with pytest.raises(BridgeError, match="active score mismatch"):
-            await _run_write(args, "SetStaffName", [1, "Flute", "Fl."])
+            await runner.run_write(args, "SetStaffName", [1, "Flute", "Fl."])
 
     backup.assert_not_awaited()
     bridge.assert_not_awaited()
@@ -559,7 +545,7 @@ async def test_raw_lyric_requires_style_reset_acknowledgement(
             "--raw",
         ]
     )
-    with patch("ai_score_editing.sibelius.cli._run_write", new=AsyncMock()) as write:
+    with patch("ai_score_editing.sibelius.runner.run_write", new=AsyncMock()) as write:
         assert await _run_set_lyric(args) == EXIT_COMMAND_FAILED
     write.assert_not_awaited()
     assert "--allow-style-reset" in capsys.readouterr().err
@@ -582,7 +568,7 @@ async def test_reset_design_backs_up_before_mutation(cli_session: CliSession) ->
 
     client.invoke_commands.side_effect = invoke_side_effect
     with (
-        patch("ai_score_editing.sibelius.cli._backup", side_effect=backup_side_effect),
+        patch("ai_score_editing.sibelius.runner.backup", side_effect=backup_side_effect),
     ):
         assert await _run_reset_design(args) == EXIT_OK
 
@@ -632,11 +618,11 @@ async def test_patch_lyrics_uses_one_connection_backup_and_verification(cli_sess
 
     with (
         patch(
-            "ai_score_editing.sibelius.cli._backup",
+            "ai_score_editing.sibelius.runner.backup",
             new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"}),
         ) as backup,
-        patch("ai_score_editing.sibelius.cli._apply_batch", new=AsyncMock(side_effect=batch_replies)) as apply_batch,
-        patch("ai_score_editing.sibelius.cli._bridge", side_effect=bridge_side_effect),
+        bridge_apply_batch(new=AsyncMock(side_effect=batch_replies)) as apply_batch,
+        bridge_call(side_effect=bridge_side_effect),
     ):
         assert await _run_patch_lyrics(args) == EXIT_OK
 
@@ -658,7 +644,7 @@ async def test_tie_sends_one_batch_operation() -> None:
     parser = build_parser()
     for argv, remove in ((["tie"], False), (["tie", "--remove"], True)):
         args = parser.parse_args([*argv, "--staff", "1", "--bar", "2", "--index", "3"])
-        with patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=EXIT_OK)) as run_op:
+        with patch("ai_score_editing.sibelius.runner.run_op", new=AsyncMock(return_value=EXIT_OK)) as run_op:
             assert await _run_tie(args) == EXIT_OK
         assert run_op.await_args.args[1] == {"op": "tie", "staff": 1, "bar": 2, "index": 3, "remove": remove}
 
@@ -667,12 +653,12 @@ async def test_bracket_and_set_time_run_as_batch_ops() -> None:
     parser = build_parser()
 
     bracket_args = parser.parse_args(["bracket", "--staff", "1", "--bar", "8", "--index", "1"])
-    with patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=EXIT_OK)) as run_op:
+    with patch("ai_score_editing.sibelius.runner.run_op", new=AsyncMock(return_value=EXIT_OK)) as run_op:
         assert await _run_bracket(bracket_args) == EXIT_OK
     assert run_op.await_args.args[1] == {"op": "bracket", "staff": 1, "bar": 8, "index": 1, "remove": False}
 
     cut_args = parser.parse_args(["set-time", "--top", "2", "--bottom", "2", "--symbol", "cut"])
-    with patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=EXIT_OK)) as run_op:
+    with patch("ai_score_editing.sibelius.runner.run_op", new=AsyncMock(return_value=EXIT_OK)) as run_op:
         assert await _run_set_time(cut_args) == EXIT_OK
     assert run_op.await_args.args[1] == {
         "op": "set-time", "bar": 1, "numerator": 2, "denominator": 2, "symbol": "cut",
@@ -684,30 +670,26 @@ async def test_bracket_and_set_time_run_as_batch_ops() -> None:
 
 async def test_set_time_rejects_symbol_contradicting_meter() -> None:
     args = build_parser().parse_args(["set-time", "--top", "3", "--bottom", "4", "--symbol", "cut"])
-    with patch("ai_score_editing.sibelius.cli._run_write", new=AsyncMock()) as run_write:
+    with patch("ai_score_editing.sibelius.runner.run_write", new=AsyncMock()) as run_write:
         assert await _run_set_time(args) == EXIT_COMMAND_FAILED
         run_write.assert_not_awaited()
 
 
 async def test_backup_refuses_imported_score_without_a_path() -> None:
     responses = {"AddVersion": {"ok": True}, "Save": {"fileName": "peace round"}}
-    with patch(
-        "ai_score_editing.sibelius.cli._bridge",
-        new=AsyncMock(side_effect=lambda _client, method, *_: responses[method]),
+    with bridge_call(new=AsyncMock(side_effect=lambda _client, method, *_: responses[method]),
     ):
         with pytest.raises(BridgeError, match="never been saved as a .sib"):
-            await _backup(MagicMock(), "before set-time")
+            await runner.backup(MagicMock(), "before set-time")
 
 
 async def test_backup_goes_beside_the_score_by_default(tmp_path: Path) -> None:
     score = tmp_path / "song.sib"
     score.write_bytes(b"sib")
     responses = {"AddVersion": {"ok": True}, "Save": {"fileName": str(score)}}
-    with patch(
-        "ai_score_editing.sibelius.cli._bridge",
-        new=AsyncMock(side_effect=lambda _client, method, *_: responses[method]),
+    with bridge_call(new=AsyncMock(side_effect=lambda _client, method, *_: responses[method]),
     ):
-        result = await _backup(MagicMock(), "before set-time")
+        result = await runner.backup(MagicMock(), "before set-time")
     assert Path(result["copy"]).parent == tmp_path
     assert Path(result["copy"]).read_bytes() == b"sib"
 
@@ -717,11 +699,9 @@ async def test_backup_dir_collects_backups_in_one_folder(tmp_path: Path) -> None
     score.write_bytes(b"sib")
     folder = tmp_path / "backups" / "nested"
     responses = {"AddVersion": {"ok": True}, "Save": {"fileName": str(score)}}
-    with patch.dict("os.environ", {"SIBELIUS_BACKUP_DIR": str(folder)}), patch(
-        "ai_score_editing.sibelius.cli._bridge",
-        new=AsyncMock(side_effect=lambda _client, method, *_: responses[method]),
+    with patch.dict("os.environ", {"SIBELIUS_BACKUP_DIR": str(folder)}), bridge_call(new=AsyncMock(side_effect=lambda _client, method, *_: responses[method]),
     ):
-        result = await _backup(MagicMock(), "before set-time")
+        result = await runner.backup(MagicMock(), "before set-time")
     assert Path(result["copy"]).parent == folder
     assert Path(result["copy"]).name.startswith("song.backup-")
     assert not list(tmp_path.glob("*.backup-*"))
@@ -729,8 +709,9 @@ async def test_backup_dir_collects_backups_in_one_folder(tmp_path: Path) -> None
 
 def test_backup_dir_option_and_environment_set_the_folder(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     from ai_score_editing.sibelius import cli, service
+    from ai_score_editing.sibelius.commands import connection
 
-    monkeypatch.setattr(cli, "_run_ping", AsyncMock(return_value=EXIT_OK), raising=True)
+    monkeypatch.setattr(connection, "_run_ping", AsyncMock(return_value=EXIT_OK), raising=True)
     monkeypatch.setenv("SIBELIUS_BACKUP_DIR", str(tmp_path / "env"))
     cli.main(["ping"])
     assert service.backup_folder() == tmp_path / "env"
@@ -754,8 +735,8 @@ async def test_run_op_checks_before_backup_and_prints_legacy_output(cli_session:
     ]
     context, _client = cli_session.context, cli_session.client
     with (
-        patch("ai_score_editing.sibelius.cli._backup", new=AsyncMock(return_value={"copy": "/b.sib"})) as backup,
-        patch("ai_score_editing.sibelius.cli._apply_batch", new=AsyncMock(side_effect=replies)) as apply_batch,
+        patch("ai_score_editing.sibelius.runner.backup", new=AsyncMock(return_value={"copy": "/b.sib"})) as backup,
+        bridge_apply_batch(new=AsyncMock(side_effect=replies)) as apply_batch,
     ):
         assert await _run_set_note(args) == EXIT_OK
 
@@ -771,8 +752,8 @@ async def test_run_op_refused_edit_skips_backup(cli_session: CliSession) -> None
     context, _client = cli_session.context, cli_session.client
     refused = {"error": "op 0: no object at staff 1 bar 1 index 9", "applied": 0}
     with (
-        patch("ai_score_editing.sibelius.cli._backup", new=AsyncMock()) as backup,
-        patch("ai_score_editing.sibelius.cli._apply_batch", new=AsyncMock(return_value=refused)),
+        patch("ai_score_editing.sibelius.runner.backup", new=AsyncMock()) as backup,
+        bridge_apply_batch(new=AsyncMock(return_value=refused)),
         pytest.raises(BridgeError, match="index 9"),
     ):
         await _run_flip_stem(args)
@@ -785,7 +766,7 @@ async def test_add_note_pitches_reports_only_added_notes(capsys: pytest.CaptureF
     )
     after = {"notes": [{"pitch": 50, "name": "D", "tied": False}, {"pitch": 55, "name": "G", "tied": False}]}
     with patch(
-        "ai_score_editing.sibelius.cli._run_op",
+        "ai_score_editing.sibelius.runner.run_op",
         new=AsyncMock(side_effect=lambda a, op, legacy: print(json.dumps(legacy({"after": after}))) or EXIT_OK),
     ) as run_op:
         assert await _run_add_notes(args) == EXIT_OK
@@ -820,9 +801,9 @@ async def test_patch_layout_batches_runs_split_by_ordering_rules(cli_session: Cl
         return {"ok": True}
 
     with (
-        patch("ai_score_editing.sibelius.cli._backup", new=AsyncMock(return_value={"copy": "/b.sib"})),
-        patch("ai_score_editing.sibelius.cli._apply_batch", side_effect=apply_batch),
-        patch("ai_score_editing.sibelius.cli._bridge", side_effect=bridge),
+        patch("ai_score_editing.sibelius.runner.backup", new=AsyncMock(return_value={"copy": "/b.sib"})),
+        bridge_apply_batch(side_effect=apply_batch),
+        bridge_call(side_effect=bridge),
     ):
         assert await _run_patch_layout(args) == EXIT_OK
 
@@ -833,7 +814,7 @@ async def test_patch_layout_batches_runs_split_by_ordering_rules(cli_session: Cl
 async def _captured_op(runner: Any, argv: list[str]) -> tuple[Any, Any]:
     """Run a command with _run_op mocked; return its operation and legacy mapper."""
     args = build_parser().parse_args(argv)
-    with patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=EXIT_OK)) as run_op:
+    with patch("ai_score_editing.sibelius.runner.run_op", new=AsyncMock(return_value=EXIT_OK)) as run_op:
         assert await runner(args) == EXIT_OK
     return run_op.await_args.args[1], run_op.await_args.args[2]
 
@@ -842,7 +823,7 @@ async def test_transpose_defaults_to_whole_score_and_keeps_output() -> None:
     build, legacy = await _captured_op(
         _run_transpose, ["transpose", "--from-note", "C", "--to-note", "D", "--up", "--octaves", "1"]
     )
-    with patch("ai_score_editing.sibelius.cli._bridge", new=AsyncMock(return_value={"barCount": 12, "staffCount": 4})):
+    with bridge_call(new=AsyncMock(return_value={"barCount": 12, "staffCount": 4})):
         operation = await build(AsyncMock())
     assert operation == {"op": "transpose", "fromBar": 1, "toBar": 12, "topStaff": 1, "bottomStaff": 4,
                          "degree": 8, "intervalType": 5}
@@ -884,7 +865,7 @@ async def test_patch_layout_rejects_an_unbatchable_value_before_backup(
     patch_file = tmp_path / "layout.json"
     patch_file.write_text('[{"op":"set-time","bar":1,"top":65,"bottom":4}]')
     args = build_parser().parse_args(["patch-layout", "--file", str(patch_file)])
-    with patch("ai_score_editing.sibelius.cli._client") as client:
+    with patch("ai_score_editing.sibelius.runner.client") as client:
         assert await _run_patch_layout(args) == EXIT_COMMAND_FAILED
     client.assert_not_called()
     assert "numerator must be" in capsys.readouterr().err

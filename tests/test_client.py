@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import websockets
 
-from fakes import CliSession
+from fakes import CliSession, bridge_call
 from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient
 from ai_score_editing.core.token_store import TokenStore
 
@@ -487,7 +487,8 @@ def test_parser_new_subcommands_and_flags():
 
 async def test_run_set_lyric_adopts_predominant_font(cli_session: CliSession) -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
-    from ai_score_editing.sibelius.cli import _run_set_lyric, build_parser
+    from ai_score_editing.sibelius.cli import build_parser
+    from ai_score_editing.sibelius.commands.lyrics import _run_set_lyric
 
     parser = build_parser()
     args = parser.parse_args(["set-lyric", "--staff", "1", "--bar", "2", "--index", "0", "--text", "hermosa"])
@@ -502,8 +503,8 @@ async def test_run_set_lyric_adopts_predominant_font(cli_session: CliSession) ->
     mock_client = AsyncMock()
     mock_client_ctx.__aenter__.return_value = mock_client
 
-    with patch("ai_score_editing.sibelius.cli._bridge", new=AsyncMock(return_value=staff_lyrics)), \
-         patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
+    with bridge_call(new=AsyncMock(return_value=staff_lyrics)), \
+         patch("ai_score_editing.sibelius.runner.run_op", new=AsyncMock(return_value=0)) as mock_write:
 
         res = await _run_set_lyric(args)
         assert res == 0
@@ -516,7 +517,8 @@ async def test_run_set_lyric_adopts_predominant_font(cli_session: CliSession) ->
 
 async def test_run_set_lyric_adopts_predominant_font_when_existing_is_outlier(cli_session: CliSession) -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
-    from ai_score_editing.sibelius.cli import _run_set_lyric, build_parser
+    from ai_score_editing.sibelius.cli import build_parser
+    from ai_score_editing.sibelius.commands.lyrics import _run_set_lyric
 
     parser = build_parser()
     args = parser.parse_args(["set-lyric", "--staff", "1", "--bar", "2", "--index", "0", "--text", "hermosa"])
@@ -532,8 +534,8 @@ async def test_run_set_lyric_adopts_predominant_font_when_existing_is_outlier(cl
     mock_client = AsyncMock()
     mock_client_ctx.__aenter__.return_value = mock_client
 
-    with patch("ai_score_editing.sibelius.cli._bridge", new=AsyncMock(return_value=staff_lyrics)), \
-         patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
+    with bridge_call(new=AsyncMock(return_value=staff_lyrics)), \
+         patch("ai_score_editing.sibelius.runner.run_op", new=AsyncMock(return_value=0)) as mock_write:
 
         res = await _run_set_lyric(args)
         assert res == 0
@@ -546,7 +548,8 @@ async def test_run_set_lyric_adopts_predominant_font_when_existing_is_outlier(cl
 
 async def test_run_set_lyric_explicit_font_overrides_predominant() -> None:
     from unittest.mock import AsyncMock, patch
-    from ai_score_editing.sibelius.cli import _run_set_lyric, build_parser
+    from ai_score_editing.sibelius.cli import build_parser
+    from ai_score_editing.sibelius.commands.lyrics import _run_set_lyric
 
     parser = build_parser()
     args = parser.parse_args([
@@ -554,7 +557,7 @@ async def test_run_set_lyric_explicit_font_overrides_predominant() -> None:
         "--font", "Garamond", "--font-size", "96",
     ])
 
-    with patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
+    with patch("ai_score_editing.sibelius.runner.run_op", new=AsyncMock(return_value=0)) as mock_write:
         res = await _run_set_lyric(args)
         assert res == 0
         mock_write.assert_awaited_once()
@@ -566,7 +569,8 @@ async def test_run_set_lyric_explicit_font_overrides_predominant() -> None:
 
 async def test_run_set_lyric_adopts_score_default_font_and_size_when_unstyled(cli_session: CliSession) -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
-    from ai_score_editing.sibelius.cli import _run_set_lyric, build_parser
+    from ai_score_editing.sibelius.cli import build_parser
+    from ai_score_editing.sibelius.commands.lyrics import _run_set_lyric
 
     parser = build_parser()
     args = parser.parse_args(["set-lyric", "--staff", "1", "--bar", "2", "--index", "0", "--text", "hermosa"])
@@ -589,8 +593,8 @@ async def test_run_set_lyric_adopts_score_default_font_and_size_when_unstyled(cl
             return staff_lyrics
         return None
 
-    with patch("ai_score_editing.sibelius.cli._bridge", side_effect=bridge_side_effect), \
-         patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=0)) as mock_write:
+    with bridge_call(side_effect=bridge_side_effect), \
+         patch("ai_score_editing.sibelius.runner.run_op", new=AsyncMock(return_value=0)) as mock_write:
 
         res = await _run_set_lyric(args)
         assert res == 0
@@ -604,12 +608,13 @@ async def test_run_set_lyric_adopts_score_default_font_and_size_when_unstyled(cl
 
 async def test_run_set_barline() -> None:
     from unittest.mock import AsyncMock, patch
-    from ai_score_editing.sibelius.cli import _run_set_barline, build_parser
+    from ai_score_editing.sibelius.cli import build_parser
+    from ai_score_editing.sibelius.commands.layout import _run_set_barline
 
     parser = build_parser()
     args = parser.parse_args(["set-barline", "--bar", "71", "--type", "double"])
 
-    with patch("ai_score_editing.sibelius.cli._run_op", new=AsyncMock(return_value=0)) as run_op:
+    with patch("ai_score_editing.sibelius.runner.run_op", new=AsyncMock(return_value=0)) as run_op:
         res = await _run_set_barline(args)
         assert res == 0
     assert run_op.await_args.args[1] == {"op": "set-barline", "bar": 71, "type": "double"}
@@ -621,12 +626,13 @@ async def test_run_set_barline() -> None:
 
 async def test_run_read_barlines() -> None:
     from unittest.mock import AsyncMock, patch
-    from ai_score_editing.sibelius.cli import _run_read_barlines, build_parser
+    from ai_score_editing.sibelius.cli import build_parser
+    from ai_score_editing.sibelius.commands.layout import _run_read_barlines
 
     parser = build_parser()
     args = parser.parse_args(["read-barlines", "--bars", "70-75"])
 
-    with patch("ai_score_editing.sibelius.cli._run_bridge_call", new=AsyncMock(return_value=0)) as mock_call:
+    with patch("ai_score_editing.sibelius.commands.layout._run_bridge_call", new=AsyncMock(return_value=0)) as mock_call:
         res = await _run_read_barlines(args)
         assert res == 0
         mock_call.assert_called_once_with(args, "GetSpecialBarlines", [70, 75])

@@ -20,9 +20,9 @@ from ai_score_editing.sibelius.bridge import (
     BridgeError,
 )
 from ai_score_editing.sibelius.clefs import delete_redundant_clefs, find_redundant_clefs
+from ai_score_editing.sibelius import bridge, runner
+from ai_score_editing.sibelius.commands.inspect import _run_bridge_call
 from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK
-from ai_score_editing.sibelius.commands._common import client as _client
-from ai_score_editing.sibelius.commands._common import cli as _cli
 from ai_score_editing.sibelius.commands._common import emit as _emit
 
 
@@ -136,17 +136,17 @@ async def _run_reset_design(args: argparse.Namespace) -> int:
     commands.append("reset_design")
     commands.append("select_none")
 
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _cli._check_bridge_version(client)
-        await _cli._assert_expected_score(client, args)
-        backup = await _cli._backup(client, f"before {args.subcommand}")
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await bridge.check_bridge_version(client)
+        await runner.assert_expected_score(client, args)
+        backup = await runner.backup(client, f"before {args.subcommand}")
         print(f"backed up: {backup['copy']}", file=sys.stderr)
         response = await client.invoke_commands(commands)
         if not protocol.is_success(response):
             print(f"error resetting design: {json.dumps(response)}", file=sys.stderr)
             return EXIT_COMMAND_FAILED
         if getattr(args, "save", False):
-            saved = await _cli._bridge(client, "Save")
+            saved = await bridge.call(client, "Save")
             print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
     return _emit(
         args,
@@ -209,14 +209,14 @@ async def _run_patch_layout(args: argparse.Namespace) -> int:
     except batch_ops.BatchError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_COMMAND_FAILED
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _cli._check_bridge_version(client)
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await bridge.check_bridge_version(client)
         if batchable:
-            await _cli._require_bridge(client, _cli._batch_bridge_version(batchable), "patch-layout")
+            await bridge.require_bridge(client, bridge.batch_bridge_version(batchable), "patch-layout")
         elif any(operation["op"] == "remove-redundant-clefs" for operation in operations):
-            await _cli._require_bridge(client, BATCH_BRIDGE_VERSION, "patch-layout remove-redundant-clefs")
-        await _cli._assert_expected_score(client, args)
-        backup = await _cli._backup(client, "before patch-layout")
+            await bridge.require_bridge(client, BATCH_BRIDGE_VERSION, "patch-layout remove-redundant-clefs")
+        await runner.assert_expected_score(client, args)
+        backup = await runner.backup(client, "before patch-layout")
         pending: list[dict[str, Any]] = []
 
         async def flush() -> None:
@@ -225,7 +225,7 @@ async def _run_patch_layout(args: argparse.Namespace) -> int:
             if not pending:
                 return
             batch = batch_ops.validate_batch(pending)
-            outcome = await _cli._apply_batch(client, batch, False)
+            outcome = await bridge.apply_batch(client, batch, False)
             if "error" in outcome:
                 raise BridgeError(
                     f"patch-layout batch failed: {outcome['error']}; restore from {backup.get('copy')}"
@@ -278,7 +278,7 @@ async def _run_patch_layout(args: argparse.Namespace) -> int:
 
         saved = None
         if args.save:
-            saved = await _cli._bridge(client, "Save")
+            saved = await bridge.call(client, "Save")
 
     summary = {
         "operations": len(operations),
@@ -294,7 +294,7 @@ async def _run_patch_layout(args: argparse.Namespace) -> int:
 
 async def _run_set_key(args: argparse.Namespace) -> int:
     key = args.key[:1].upper() + args.key[1:]
-    return await _cli._run_op(
+    return await runner.run_op(
         args,
         {"op": "set-key", "bar": args.bar, "key": key, "minor": args.minor},
         lambda result: result["after"],
@@ -305,19 +305,19 @@ async def _run_set_time(args: argparse.Namespace) -> int:
     operation = {"op": "set-time", "bar": args.bar, "numerator": args.top, "denominator": args.bottom}
     if args.symbol:
         operation["symbol"] = args.symbol
-    return await _cli._run_op(
+    return await runner.run_op(
         args, operation, lambda result: _legacy_layout({"op": "set-time", "symbol": args.symbol}, result["after"])
     )
 
 
 async def _run_set_break(args: argparse.Namespace) -> int:
-    return await _cli._run_op(
+    return await runner.run_op(
         args, {"op": "set-break", "bar": args.bar, "type": args.type}, lambda result: result["after"]
     )
 
 
 async def _run_set_barline(args: argparse.Namespace) -> int:
-    return await _cli._run_op(
+    return await runner.run_op(
         args,
         {"op": "set-barline", "bar": args.bar, "type": args.type},
         lambda result: _legacy_layout({"op": "set-barline"}, result["after"]),
@@ -335,7 +335,7 @@ async def _run_read_barlines(args: argparse.Namespace) -> int:
         from_b = 1
     if to_b is None:
         to_b = from_b
-    return await _cli._run_bridge_call(args, "GetSpecialBarlines", [from_b, to_b])
+    return await _run_bridge_call(args, "GetSpecialBarlines", [from_b, to_b])
 
 
 def _read_order(result: dict[str, Any]) -> list[int] | None:
@@ -347,9 +347,9 @@ def _read_order(result: dict[str, Any]) -> list[int] | None:
 
 async def _run_play_order(args: argparse.Namespace) -> int:
     if args.order is None:
-        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-            await _cli._require_bridge(client, REPEATS_BRIDGE_VERSION, "play-order")
-            result = await _cli._bridge(client, "GetPlayOrder")
+        async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            await bridge.require_bridge(client, REPEATS_BRIDGE_VERSION, "play-order")
+            result = await bridge.call(client, "GetPlayOrder")
         print(json.dumps(result, indent=2))
         return EXIT_OK
     try:
@@ -357,25 +357,25 @@ async def _run_play_order(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_COMMAND_FAILED
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _cli._require_bridge(client, REPEATS_BRIDGE_VERSION, "play-order")
-        await _cli._assert_expected_score(client, args)
-        before = await _cli._bridge(client, "GetPlayOrder")
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await bridge.require_bridge(client, REPEATS_BRIDGE_VERSION, "play-order")
+        await runner.assert_expected_score(client, args)
+        before = await bridge.call(client, "GetPlayOrder")
         if bars is not None and (bad := [n for n in bars if n > before["barCount"]]):
             print(f"error: bar {bad[0]} is outside the score ({before['barCount']} bars)", file=sys.stderr)
             return EXIT_COMMAND_FAILED
-        backup = await _cli._backup(client, f"before {args.subcommand}")
+        backup = await runner.backup(client, f"before {args.subcommand}")
         print(f"backed up: {backup['copy']}", file=sys.stderr)
-        result = await _cli._bridge(client, "SetPlayOrder", [bars])
+        result = await bridge.call(client, "SetPlayOrder", [bars])
         if bars is not None and _read_order(result) != bars:
             # Assigning the array did not take; try the dialog's own text form.
-            result = await _cli._bridge(client, "SetPlayOrderText", [repeats.format_bar_order(bars)])
+            result = await bridge.call(client, "SetPlayOrderText", [repeats.format_bar_order(bars)])
             if _read_order(result) != bars:
                 print(f"error: Sibelius reports the order {result.get('order')!r}, not the requested one",
                       file=sys.stderr)
                 return EXIT_COMMAND_FAILED
         if getattr(args, "save", False):
-            saved = await _cli._bridge(client, "Save")
+            saved = await bridge.call(client, "Save")
             print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
     print(json.dumps({"before": before, "after": result}, indent=2))
     return EXIT_OK
@@ -383,7 +383,7 @@ async def _run_play_order(args: argparse.Namespace) -> int:
 
 async def _run_play_on_pass(args: argparse.Namespace) -> int:
     if args.passes is None:
-        return await _cli._run_bridge_call(args, "GetPlayOnPass", [args.bar])
+        return await _run_bridge_call(args, "GetPlayOnPass", [args.bar])
     try:
         if args.passes.strip().lower() == "all":
             passes = list(range(1, repeats.MAX_PASS + 1))
@@ -392,14 +392,14 @@ async def _run_play_on_pass(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_COMMAND_FAILED
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _cli._require_bridge(client, REPEATS_BRIDGE_VERSION, "play-on-pass")
-        await _cli._assert_expected_score(client, args)
-        backup = await _cli._backup(client, f"before {args.subcommand}")
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await bridge.require_bridge(client, REPEATS_BRIDGE_VERSION, "play-on-pass")
+        await runner.assert_expected_score(client, args)
+        backup = await runner.backup(client, f"before {args.subcommand}")
         print(f"backed up: {backup['copy']}", file=sys.stderr)
-        result = await _cli._bridge(client, "SetPlayOnPass", [args.bar, args.type, passes, args.position])
+        result = await bridge.call(client, "SetPlayOnPass", [args.bar, args.type, passes, args.position])
         if getattr(args, "save", False):
-            saved = await _cli._bridge(client, "Save")
+            saved = await bridge.call(client, "Save")
             print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
     print(json.dumps(result, indent=2))
     return EXIT_OK

@@ -14,9 +14,8 @@ from ai_score_editing.sibelius import batch_ops
 from ai_score_editing.core import music
 from ai_score_editing.sibelius import service
 from ai_score_editing.sibelius.bridge import BRIDGE_PLUGIN, BridgeError
+from ai_score_editing.sibelius import bridge, runner
 from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK
-from ai_score_editing.sibelius.commands._common import client as _client
-from ai_score_editing.sibelius.commands._common import cli as _cli
 from ai_score_editing.sibelius.commands._common import emit as _emit
 
 # Curated friendly names -> ManuScript command IDs (see docs/avid-reference.md).
@@ -135,10 +134,10 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
 
 
 async def _run_save(args: argparse.Namespace) -> int:
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _cli._check_bridge_version(client)
-        await _cli._assert_expected_score(client, args)
-        saved = await service.save(_cli._CliBridge(client), getattr(args, "path", None))
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await bridge.check_bridge_version(client)
+        await runner.assert_expected_score(client, args)
+        saved = await service.save(bridge.for_client(client), getattr(args, "path", None))
     print(json.dumps(saved) if args.json else f"saved: {saved.get('fileName', '')}")
     return EXIT_OK
 
@@ -154,17 +153,17 @@ async def _run_apply(args: argparse.Namespace) -> int:
     saved = None
     failure: service.BatchFailed | None = None
     try:
-        async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-            sb = _cli._CliBridge(client)
-            await _cli._require_bridge(client, _cli._batch_bridge_version(operations), "apply")
-            await _cli._assert_expected_score(client, args)
+        async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            sb = bridge.for_client(client)
+            await bridge.require_bridge(client, bridge.batch_bridge_version(operations), "apply")
+            await runner.assert_expected_score(client, args)
             try:
                 # Check first so a refused batch neither saves nor backs up.
                 result = await service.check(sb, operations)
                 if not args.dry_run:
                     result = await service.commit(
                         sb, operations, backup_name="before apply",
-                        backup_fn=lambda b, name: _cli._backup(b.client, name),
+                        backup_fn=lambda b, name: runner.backup(b.client, name),
                     )
                     backup = result.get("backup")
             except service.BatchFailed as exc:
@@ -196,24 +195,24 @@ async def _run_apply(args: argparse.Namespace) -> int:
 
 async def _run_do(args: argparse.Namespace) -> int:
     command_id = NAMED_OPERATIONS[args.operation]
-    async with _client(args) as client:
+    async with runner.client(args) as client:
         response = await client.invoke_commands([command_id])
     return _emit(args, response, f"sent {args.operation} ({command_id})")
 
 
 async def _run_set_staff_name(args: argparse.Namespace) -> int:
-    return await _cli._run_write(
+    return await runner.run_write(
         args, "SetStaffName", [args.staff, args.full or "", args.short or ""]
     )
 
 
 async def _run_set_initial_instrument(args: argparse.Namespace) -> int:
     style_id = music.resolve_instrument_style(args.instrument)
-    return await _cli._run_write(args, "SetInitialInstrument", [args.staff, style_id])
+    return await runner.run_write(args, "SetInitialInstrument", [args.staff, style_id])
 
 
 async def _run_duplicate_octave_down_to_voice2(args: argparse.Namespace) -> int:
-    return await _cli._run_write(
+    return await runner.run_write(
         args,
         "DuplicateOctaveDownToVoice2",
         [args.staff, args.from_bar, args.to_bar],
@@ -221,7 +220,7 @@ async def _run_duplicate_octave_down_to_voice2(args: argparse.Namespace) -> int:
 
 
 async def _run_set_score_info(args: argparse.Namespace) -> int:
-    return await _cli._run_write(
+    return await runner.run_write(
         args,
         "SetScoreInfo",
         [args.title or "", args.composer or "", args.lyricist or ""],
@@ -230,13 +229,13 @@ async def _run_set_score_info(args: argparse.Namespace) -> int:
 
 async def _run_add_staff(args: argparse.Namespace) -> int:
     if getattr(args, "above_staff", None):
-        return await _cli._run_write(
+        return await runner.run_write(
             args,
             "AddStaffToInstrument",
             [args.above_staff, True, bool(getattr(args, "ossia", False))],
         )
     if getattr(args, "below_staff", None):
-        return await _cli._run_write(
+        return await runner.run_write(
             args,
             "AddStaffToInstrument",
             [args.below_staff, False, bool(getattr(args, "ossia", False))],
@@ -248,7 +247,7 @@ async def _run_add_staff(args: argparse.Namespace) -> int:
         )
         return EXIT_COMMAND_FAILED
     style_id = music.resolve_instrument_style(args.instrument)
-    return await _cli._run_write(
+    return await runner.run_write(
         args,
         "CreateStaff",
         [style_id, args.position, args.full_name or "", args.short_name or ""],
@@ -257,7 +256,7 @@ async def _run_add_staff(args: argparse.Namespace) -> int:
 
 async def _run_add_bars(args: argparse.Namespace) -> int:
     count = getattr(args, "count", 1)
-    return await _cli._run_op(
+    return await runner.run_op(
         args,
         {"op": "add-bars", "count": count},
         lambda result: {"addedBars": result["after"]["addedBars"], "totalBars": result["after"]["barCount"]},
@@ -265,9 +264,9 @@ async def _run_add_bars(args: argparse.Namespace) -> int:
 
 
 async def _run_backup(args: argparse.Namespace) -> int:
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _cli._check_bridge_version(client)
-        await _cli._assert_expected_score(client, args)
-        result = await _cli._backup(client, args.name)
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await bridge.check_bridge_version(client)
+        await runner.assert_expected_score(client, args)
+        result = await runner.backup(client, args.name)
     print(json.dumps(result, indent=2))
     return EXIT_OK

@@ -22,7 +22,7 @@ from ai_score_editing.mcp_common import Session as CommonSession
 from ai_score_editing.query import QueryError
 from ai_score_editing.sibelius import bridge, protocol, service
 from ai_score_editing.sibelius.bridge import BRIDGE_PLUGIN, BUSY_MESSAGE, EXPORT_FORMATS, BridgeBusy, BridgeError
-from ai_score_editing.sibelius.cli import parse_bar_range
+from ai_score_editing.core.barrange import parse_bar_range
 from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient
 
 T = TypeVar("T")

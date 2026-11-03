@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from ai_score_editing.query import QueryError, build_selector
-from ai_score_editing.sibelius import cli
+from ai_score_editing.sibelius import bridge
 from ai_score_editing.sibelius.text_styles import (
     LYRIC_STYLE_IDS,
     build_report,
@@ -13,7 +13,7 @@ from ai_score_editing.sibelius.text_styles import (
     style_requests,
 )
 
-PLUGIN = Path(cli.__file__).parent / "manuscript" / "ScoreBridge.plg"
+PLUGIN = Path(bridge.__file__).parent / "manuscript" / "ScoreBridge.plg"
 
 
 @pytest.mark.parametrize("name", ["Opus Text Std", "Opus Std", "Reprise", "reprise text", "Helsinki Std"])
@@ -70,7 +70,7 @@ def test_font_fields_accepted_for_text_only() -> None:
 
 def test_plugin_probe_and_version() -> None:
     source = PLUGIN.read_text()
-    assert cli.TEXT_FONTS_BRIDGE_VERSION == 61 <= cli.CURRENT_BRIDGE_VERSION
+    assert bridge.TEXT_FONTS_BRIDGE_VERSION == 61 <= bridge.CURRENT_BRIDGE_VERSION
     start = source.index('GetTextStyleFonts "(')
     body = source[start:source.index('}"\n', start)]
     # LyricItem has no font properties; the probe reads a Text object only

@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 from fakes import CliSession
 
-from ai_score_editing.sibelius.cli import EXIT_COMMAND_FAILED, EXIT_OK, main
+from ai_score_editing.sibelius.cli import main
+from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK
 
 
 def test_save_with_a_path_is_refused_and_saves_nothing(

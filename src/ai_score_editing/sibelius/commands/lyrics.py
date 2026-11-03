@@ -13,9 +13,8 @@ from ai_score_editing.sibelius import batch_ops
 from ai_score_editing.core import lyrics
 from ai_score_editing.core.barrange import parse_bar_range
 from ai_score_editing.sibelius.bridge import BATCH_BRIDGE_VERSION, BRIDGE_PLUGIN
+from ai_score_editing.sibelius import bridge, runner
 from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK
-from ai_score_editing.sibelius.commands._common import client as _client
-from ai_score_editing.sibelius.commands._common import cli as _cli
 
 
 
@@ -131,8 +130,8 @@ async def _run_read_lyrics(args: argparse.Namespace) -> int:
         print("error: --compact and --words cannot be combined", file=sys.stderr)
         return EXIT_COMMAND_FAILED
 
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        raw_lyrics = await _cli._bridge(
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        raw_lyrics = await bridge.call(
             client, "ReadLyrics", [args.staff, from_b or 0, to_b or 0]
         )
         filtered = lyrics.filter_lyrics(raw_lyrics, from_bar=from_b, to_bar=to_b, verse=verse)
@@ -146,7 +145,7 @@ async def _run_read_lyrics(args: argparse.Namespace) -> int:
             if args.json:
                 print(json.dumps(filtered))
                 return EXIT_OK
-            staves_info = await _cli._bridge(client, "GetStaves")
+            staves_info = await bridge.call(client, "GetStaves")
             names = {
                 s.get("staffNum", s.get("staffNumber", i + 1)): (
                     s.get("fullInstrumentName")
@@ -174,9 +173,9 @@ async def _run_check_lyrics(args: argparse.Namespace) -> int:
     if verse == 0:
         verse = None
 
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        info = await _cli._bridge(client, "GetScoreInfo")
-        staves_info = await _cli._bridge(client, "GetStaves")
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        info = await bridge.call(client, "GetScoreInfo")
+        staves_info = await bridge.call(client, "GetStaves")
         names = {
             s.get("staffNum", s.get("staffNumber", i + 1)): (
                 s.get("fullInstrumentName")
@@ -186,7 +185,7 @@ async def _run_check_lyrics(args: argparse.Namespace) -> int:
             )
             for i, s in enumerate(staves_info)
         }
-        raw_lyrics = await _cli._bridge(
+        raw_lyrics = await bridge.call(
             client, "ReadLyrics", [args.staff, from_b or 0, to_b or 0]
         )
         filtered_lyrics = lyrics.filter_lyrics(
@@ -205,7 +204,7 @@ async def _run_check_lyrics(args: argparse.Namespace) -> int:
         )
         for s_num in target_staves:
             if bar_count > 0 and end_b >= start_b:
-                bars = await _cli._bridge(client, "ReadBars", [s_num, start_b, end_b])
+                bars = await bridge.call(client, "ReadBars", [s_num, start_b, end_b])
                 staff_bars[s_num] = bars
 
         score_default_font = info.get("mainTextFontName")
@@ -240,13 +239,13 @@ async def _run_set_lyric(args: argparse.Namespace) -> int:
         text = f"\\s{args.font_size}\\{text}"
     elif not getattr(args, "raw", False) and not text.startswith("\\f"):
         try:
-            async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-                await _cli._check_bridge_version(client)
-                score_info = await _cli._bridge(client, "GetScoreInfo")
+            async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+                await bridge.check_bridge_version(client)
+                score_info = await bridge.call(client, "GetScoreInfo")
                 score_default_font = score_info.get("mainTextFontName") if isinstance(score_info, dict) else None
 
                 # Read lyrics on this staff to find the predominant font across the part
-                staff_lyrics = await _cli._bridge(client, "ReadLyrics", [args.staff, 0, 0])
+                staff_lyrics = await bridge.call(client, "ReadLyrics", [args.staff, 0, 0])
                 typography = lyrics.analyze_lyric_typography(
                     staff_lyrics, score_default_font=score_default_font
                 )
@@ -281,9 +280,9 @@ async def _run_set_lyric(args: argparse.Namespace) -> int:
         except Exception:
             pass
 
-    return await _cli._run_op(
+    return await runner.run_op(
         args,
-        {"op": "set", **_cli._address(args), "type": "LyricItem", "prop": "Text", "value": text},
+        {"op": "set", **runner.address(args), "type": "LyricItem", "prop": "Text", "value": text},
         lambda result: {"oldText": result["before"]["text"], "newText": result["after"]["text"]},
     )
 
@@ -309,17 +308,17 @@ async def _run_patch_lyrics(args: argparse.Namespace) -> int:
         for patch in patches
     )
 
-    async with _client(args, plugins=[BRIDGE_PLUGIN]) as client:
-        await _cli._check_bridge_version(client)
+    async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+        await bridge.check_bridge_version(client)
         info: dict[str, Any] | None = None
         if getattr(args, "expect_file", None) or needs_inference:
-            info = await _cli._bridge(client, "GetScoreInfo")
-        await _cli._assert_expected_score(client, args, info)
+            info = await bridge.call(client, "GetScoreInfo")
+        await runner.assert_expected_score(client, args, info)
 
         before: list[dict[str, Any]] = []
         for affected in ranges:
             before.extend(
-                await _cli._bridge(
+                await bridge.call(
                     client,
                     "ReadLyrics",
                     [affected.staff, affected.from_bar, affected.to_bar],
@@ -334,7 +333,7 @@ async def _run_patch_lyrics(args: argparse.Namespace) -> int:
         staff_lyrics: dict[int, list[dict[str, Any]]] = {}
         if needs_inference:
             for staff in sorted({patch.staff for patch in patches}):
-                staff_lyrics[staff] = await _cli._bridge(client, "ReadLyrics", [staff, 0, 0])
+                staff_lyrics[staff] = await bridge.call(client, "ReadLyrics", [staff, 0, 0])
 
         score_default_font = info.get("mainTextFontName") if info else None
         try:
@@ -359,13 +358,13 @@ async def _run_patch_lyrics(args: argparse.Namespace) -> int:
              "type": "LyricItem", "prop": "Text", "value": text}
             for patch, text in zip(patches, rendered)
         ])
-        await _cli._require_bridge(client, BATCH_BRIDGE_VERSION, args.subcommand)
-        checked = await _cli._apply_batch(client, batch, True)
+        await bridge.require_bridge(client, BATCH_BRIDGE_VERSION, args.subcommand)
+        checked = await bridge.apply_batch(client, batch, True)
         if "error" in checked:
             print(f"error: {checked['error']}; nothing was changed", file=sys.stderr)
             return EXIT_COMMAND_FAILED
-        backup = await _cli._backup(client, f"before {args.subcommand}")
-        outcome = await _cli._apply_batch(client, batch, False)
+        backup = await runner.backup(client, f"before {args.subcommand}")
+        outcome = await bridge.apply_batch(client, batch, False)
         if "error" in outcome:
             print(
                 f"error: lyric batch stopped after {outcome.get('applied', 0)}/{len(patches)} writes "
@@ -378,7 +377,7 @@ async def _run_patch_lyrics(args: argparse.Namespace) -> int:
         after: list[dict[str, Any]] = []
         for affected in ranges:
             after.extend(
-                await _cli._bridge(
+                await bridge.call(
                     client,
                     "ReadLyrics",
                     [affected.staff, affected.from_bar, affected.to_bar],
@@ -388,7 +387,7 @@ async def _run_patch_lyrics(args: argparse.Namespace) -> int:
 
         saved = None
         if all(item.verified for item in verification) and getattr(args, "save", False):
-            saved = await _cli._bridge(client, "Save")
+            saved = await bridge.call(client, "Save")
 
     summary = batch_lyrics.build_batch_summary(
         patches, write_results, verification, backup=backup, saved=saved
@@ -405,6 +404,6 @@ async def _run_patch_lyrics(args: argparse.Namespace) -> int:
 
 
 async def _run_set_lyric_style(args: argparse.Namespace) -> int:
-    return await _cli._run_write(
+    return await runner.run_write(
         args, "SetLyricStyle", [args.staff, args.bar, args.index, args.style]
     )

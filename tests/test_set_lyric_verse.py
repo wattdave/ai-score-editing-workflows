@@ -7,10 +7,10 @@ import pytest
 
 from ai_score_editing.core.batch_schema import verse_dy
 from ai_score_editing.sibelius.batch_ops import BatchError, validate_batch
-from ai_score_editing.sibelius.cli import (
+from ai_score_editing.sibelius.bridge import (
     CURRENT_BRIDGE_VERSION,
     SET_LYRIC_VERSE_BRIDGE_VERSION,
-    _batch_bridge_version,
+    batch_bridge_version as _batch_bridge_version,
 )
 
 PLUGIN = Path(__file__).parent.parent / "src/ai_score_editing/sibelius/manuscript/ScoreBridge.plg"

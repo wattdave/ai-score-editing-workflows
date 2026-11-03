@@ -8,15 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from fakes import CliSession
+from fakes import CliSession, bridge_call
 
-from ai_score_editing.sibelius.cli import (
-    EXIT_COMMAND_FAILED,
-    EXIT_OK,
-    _run_split_parts,
-    build_parser,
-    main,
-)
+from ai_score_editing.sibelius.cli import build_parser, main
+from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK
+from ai_score_editing.sibelius.commands.musicxml import _run_split_parts
 from ai_score_editing.workflows.polychoral import make_rest, save_musicxml
 import xml.etree.ElementTree as ET
 
@@ -181,7 +177,7 @@ async def test_split_parts_active_score_roundtrip(cli_session: CliSession, tmp_p
     parser = build_parser()
     args = parser.parse_args(["split-parts", "-o", str(out_file)])
 
-    with patch("ai_score_editing.sibelius.cli._bridge", side_effect=fake_bridge):
+    with bridge_call(side_effect=fake_bridge):
         ret = await _run_split_parts(args)
         assert ret == EXIT_OK
         assert out_file.exists()

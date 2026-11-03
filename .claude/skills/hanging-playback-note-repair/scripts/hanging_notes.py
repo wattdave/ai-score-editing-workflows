@@ -15,7 +15,8 @@ from typing import Any
 
 try:
     from ai_score_editing.sibelius.client import SibeliusClient
-    from ai_score_editing.sibelius.cli import _bridge, BRIDGE_PLUGIN, _backup
+    from ai_score_editing.sibelius.bridge import BRIDGE_PLUGIN, call as _bridge
+    from ai_score_editing.sibelius.runner import backup as _backup
     HAVE_CLIENT = True
 except ImportError:
     HAVE_CLIENT = False

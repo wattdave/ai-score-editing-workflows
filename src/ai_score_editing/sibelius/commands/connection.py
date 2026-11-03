@@ -12,8 +12,8 @@ from typing import Any
 
 from ai_score_editing.sibelius import protocol
 from ai_score_editing.sibelius.bridge import BRIDGE_PLUGIN
+from ai_score_editing.sibelius import runner
 from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK, emit as _emit
-from ai_score_editing.sibelius.commands._common import client as _client
 from ai_score_editing.core.token_store import TokenStore
 
 
@@ -59,20 +59,20 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
 
 
 async def _run_ping(args: argparse.Namespace) -> int:
-    async with _client(args) as client:
+    async with runner.client(args) as client:
         response = await client.invoke_commands([])
     return _emit(args, response, f"Sibelius at {args.host}:{args.port} is responding")
 
 
 async def _run_command(args: argparse.Namespace) -> int:
-    async with _client(args) as client:
+    async with runner.client(args) as client:
         response = await client.send_command(args.command_name)
     ok = protocol.is_success(response)
     return _emit(args, response, f"{args.command_name}: {'ok' if ok else f'failed: {response}'}")
 
 
 async def _run_invoke(args: argparse.Namespace) -> int:
-    async with _client(args) as client:
+    async with runner.client(args) as client:
         response = await client.invoke_commands(args.command_ids)
     ok = protocol.is_success(response)
     return _emit(
@@ -91,14 +91,14 @@ async def _run_raw(args: argparse.Namespace) -> int:
     if not isinstance(message, dict):
         print("error: message must be a JSON object", file=sys.stderr)
         return EXIT_COMMAND_FAILED
-    async with _client(args) as client:
+    async with runner.client(args) as client:
         response = await client.send_raw(message)
     print(json.dumps(response, indent=None if args.json else 2))
     return EXIT_OK if protocol.is_success(response) else EXIT_COMMAND_FAILED
 
 
 async def _run_repl(args: argparse.Namespace) -> int:
-    async with _client(args) as client:
+    async with runner.client(args) as client:
         print("Connected. Enter a command name, or a JSON object for a raw message. Ctrl-D exits.")
         loop = asyncio.get_running_loop()
         while True:
@@ -137,7 +137,7 @@ async def _run_plugin(args: argparse.Namespace) -> int:
         if not isinstance(plugin_args, list):
             print("error: --args must be a JSON array", file=sys.stderr)
             return EXIT_COMMAND_FAILED
-    async with _client(args, plugins=[args.name]) as client:
+    async with runner.client(args, plugins=[args.name]) as client:
         response = await client.invoke_plugin(args.name, args.method, plugin_args)
     if not protocol.is_success(response):
         print(
