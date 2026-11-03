@@ -137,7 +137,7 @@ from ai_score_editing.sibelius.commands.lyrics import (  # noqa: F401  (re-expor
     _run_set_lyric_style,
 )
 from ai_score_editing.sibelius.client import ConnectionFailed, SibeliusClient, run_sync
-from ai_score_editing.token_store import TokenStore
+from ai_score_editing.core.token_store import TokenStore
 
 # Handlers of the areas already moved into ``sibelius/commands/``; filled by build_parser().
 _MIGRATED: dict[str, Callable[..., Any]] = {}

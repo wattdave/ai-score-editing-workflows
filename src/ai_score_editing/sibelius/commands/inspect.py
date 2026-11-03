@@ -9,7 +9,8 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from ai_score_editing import abc_notation, agent_output
+from ai_score_editing.sibelius import agent_output
+from ai_score_editing.workflows import abc_notation
 from ai_score_editing.core import lyrics
 from ai_score_editing.core.barrange import parse_bar_range
 from ai_score_editing.cli_common import DEFAULT_LIMIT
@@ -133,7 +134,7 @@ async def _run_bridge_call(
 
 
 async def _run_text_styles(args: argparse.Namespace) -> int:
-    from ai_score_editing import text_styles
+    from ai_score_editing.sibelius import text_styles
 
     selector = {
         "staves": [],

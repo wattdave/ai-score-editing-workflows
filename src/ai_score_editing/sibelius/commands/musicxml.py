@@ -10,7 +10,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from ai_score_editing import layout
+from ai_score_editing.sibelius import layout
 from ai_score_editing.cli_common import canonical_format
 from ai_score_editing.sibelius import launcher, service
 from ai_score_editing.sibelius.bridge import BRIDGE_PLUGIN, EXPORT_FORMATS, BridgeError
@@ -183,9 +183,9 @@ async def _run_split_parts(args: argparse.Namespace) -> int:
         out_path = default_parent / f"{default_stem}_{args.preset}.mxl"
 
     try:
-        from ai_score_editing.musicxml_split.profiles.polychoral_16 import split_16voices
-        from ai_score_editing.musicxml_split.profiles.satb import SATBOptions, split_satb
-        from ai_score_editing.musicxml_split.validation import validate_file
+        from ai_score_editing.workflows.musicxml_split.profiles.polychoral_16 import split_16voices
+        from ai_score_editing.workflows.musicxml_split.profiles.satb import SATBOptions, split_satb
+        from ai_score_editing.workflows.musicxml_split.validation import validate_file
 
         def parse_ranges(value: str | None) -> frozenset[int]:
             bars: set[int] = set()
@@ -252,8 +252,8 @@ async def _run_split_parts(args: argparse.Namespace) -> int:
 async def _run_round(args: argparse.Namespace) -> int:
     import xml.etree.ElementTree as ET
 
-    from ai_score_editing.musicxml_round import RoundOptions, build_round
-    from ai_score_editing.musicxml_split.io import parse_musicxml, save_musicxml
+    from ai_score_editing.workflows.musicxml_round import RoundOptions, build_round
+    from ai_score_editing.workflows.musicxml_split.io import parse_musicxml, save_musicxml
 
     source = Path(args.score_file).expanduser().resolve()
     if source.suffix.lower() not in {".xml", ".musicxml", ".mxl"}:

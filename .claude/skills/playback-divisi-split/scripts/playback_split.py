@@ -39,7 +39,7 @@ SOURCE_ROOT = Path(__file__).resolve().parents[4] / "src"
 if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
-from ai_score_editing.musicxml_split.routing import midi  # noqa: E402
+from ai_score_editing.workflows.musicxml_split.routing import midi  # noqa: E402
 
 
 @dataclass
