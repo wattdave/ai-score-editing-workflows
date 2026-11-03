@@ -164,14 +164,6 @@ The same steps by hand, in Terminal, from this folder:
 
    Then restart Sibelius so it loads the plug-in.
 
-   **Upgrading from `sibwscli`:** the bridge is now called ScoreBridge.
-   `install-plugin` removes the old `Websocket CLI/sibwscli.plg` and
-   installs `ScoreBridge/ScoreBridge.plg`. After restarting Sibelius, approve
-   the new plug-in when Sibelius Connect asks. For MuseScore, run
-   `musescore-cli install-plugin` again (it removes the old `sibwscli-bridge`
-   folder), restart MuseScore, then enable "ScoreBridge" in Plugins →
-   Manage plugins.
-
 4. **First connection**: any command will make Sibelius show an approval
    dialog naming the client — click OK. The session token is cached at
    `~/.config/ai-score-editing/token.json`, so subsequent invocations

@@ -62,9 +62,6 @@ def render(token: str, port: int = DEFAULT_PORT) -> str:
 
 
 def install(port: int = DEFAULT_PORT) -> Path:
-    legacy = plugin_dir().with_name("sibwscli-bridge")
-    if legacy.is_dir():
-        shutil.rmtree(legacy)  # the bridge's old name, now ScoreBridge
     target = plugin_dir() / "msbridge.qml"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(render(ensure_token(), port))

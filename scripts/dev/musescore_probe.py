@@ -28,7 +28,7 @@ import websockets
 
 PORT = int(os.environ.get("MUSESCORE_PROBE_PORT", "8767"))
 TEMPLATE = Path(__file__).with_name("musescore_probe") / "msprobe.qml.in"
-TOKEN_FILE = Path.home() / ".config" / "sibelius-websocket-cli" / "musescore-probe-token"
+TOKEN_FILE = Path.home() / ".config" / "ai-score-editing" / "musescore-probe-token"
 PLUGIN_DIR = Path(os.environ.get("MUSESCORE_PLUGIN_DIR", Path.home() / "Documents" / "MuseScore4" / "Plugins"))
 
 _ids = itertools.count(1)

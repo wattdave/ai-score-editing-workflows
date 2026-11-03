@@ -167,15 +167,6 @@ def _run_install_plugin(args: argparse.Namespace) -> int:
             )
             return EXIT_COMMAND_FAILED
         plugin_root = supports[-1] / "Plugins"
-    legacy_dir = plugin_root / "Websocket CLI"
-    legacy = legacy_dir / "sibwscli.plg"
-    if legacy.exists():
-        legacy.unlink()
-        print(f"Removed old bridge {legacy}")
-        try:
-            legacy_dir.rmdir()
-        except OSError:
-            pass  # holds other files; leave it
     dest_dir = plugin_root / "ScoreBridge"
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / source.name
