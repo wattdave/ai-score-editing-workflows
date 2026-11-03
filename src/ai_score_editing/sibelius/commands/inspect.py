@@ -9,8 +9,9 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from ai_score_editing import abc_notation, agent_output, lyrics
-from ai_score_editing.barrange import parse_bar_range
+from ai_score_editing import abc_notation, agent_output
+from ai_score_editing.core import lyrics
+from ai_score_editing.core.barrange import parse_bar_range
 from ai_score_editing.cli_common import DEFAULT_LIMIT
 from ai_score_editing.sibelius import protocol, service
 from ai_score_editing.sibelius.bridge import BRIDGE_PLUGIN, TEXT_FONTS_BRIDGE_VERSION, BridgeError

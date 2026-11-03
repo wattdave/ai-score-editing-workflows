@@ -19,7 +19,7 @@ from urllib.parse import unquote, urlparse
 
 from ai_score_editing import backups, macos
 from ai_score_editing.cli_common import canonical_format
-from ai_score_editing.intervals import LETTERS
+from ai_score_editing.core.intervals import LETTERS
 
 from . import layout, musicxml_read, score
 from .bridge import BarMap, DoricoBridge, fingerprint

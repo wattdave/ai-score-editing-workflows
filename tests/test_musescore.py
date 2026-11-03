@@ -167,7 +167,7 @@ def test_cli_install_plugin(config, capsys) -> None:
 
 # ------------------------------------------------------------------ milestone 2: reads and batches
 
-from ai_score_editing import intervals  # noqa: E402
+from ai_score_editing.core import intervals  # noqa: E402
 from ai_score_editing.musescore import score, service  # noqa: E402
 from ai_score_editing.musescore.score import MuseScoreBatchError  # noqa: E402
 

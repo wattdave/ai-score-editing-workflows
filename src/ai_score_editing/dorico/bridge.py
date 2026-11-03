@@ -27,7 +27,7 @@ from ai_score_editing import paths
 
 from .client import DoricoClient, DoricoError
 
-from ai_score_editing.units import UNITS_PER_QUARTER
+from ai_score_editing.core.units import UNITS_PER_QUARTER
 
 UNITS = UNITS_PER_QUARTER
 RESPONSE_TIMEOUT = 30.0

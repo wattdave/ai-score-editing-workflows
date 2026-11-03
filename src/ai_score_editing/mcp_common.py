@@ -11,7 +11,7 @@ import websockets.exceptions
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from ai_score_editing.barrange import parse_bar_range
+from ai_score_editing.core.barrange import parse_bar_range
 
 T = TypeVar("T")
 B = TypeVar("B")

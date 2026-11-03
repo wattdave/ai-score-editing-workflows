@@ -1,4 +1,4 @@
-from ai_score_editing import units
+from ai_score_editing.core import units
 from ai_score_editing.dorico import bridge, score as dorico_score
 from ai_score_editing.musescore import score as musescore_score
 from ai_score_editing.sibelius import clefs
