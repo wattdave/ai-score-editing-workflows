@@ -641,7 +641,7 @@ already do. The upstream plug-in just doesn't expose them.
 
 The most direct route is a MuseScore back end in this repository, built the
 way `dorico/` was: a `musescore-mcp` with the same seven tools, reusing
-`batch_ops` validation, `query` selectors and the result shapes. It would talk
+`core.batch_schema` validation, `core.query` selectors and the result shapes. It would talk
 to a QML bridge plug-in that this repository owns and installs, using the
 upstream plug-in's WebSocket setup as the starting point. Parts the MuseScore
 API seems to support, to confirm on MuseScore 4.7:

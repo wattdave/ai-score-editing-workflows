@@ -173,7 +173,7 @@ Probed on Sibelius 26.8 against a scratch score:
 - **Re-barring erases the barline before it and leaves a selection.** A
   special barline at the end of bar 2 disappeared when the same batch then
   added 3/4 at bar 3, and bars 3-5 were left selected. `ApplyBatch` clears the
-  selection after any structural op, and `batch_ops.py` puts every set-time
+  selection after any structural op, and batch validation (`core/batch_schema.py`) puts every set-time
   before set-key, set-break and set-barline (verified 2026-09-24, bridge v44).
 - **Key changes sit at the end of the previous bar.**
   `AddKeySignatureFromText(0, ...)` on bar 2 stored the KeySignature at bar 1,
@@ -200,12 +200,14 @@ is the only documented per-call failure signal.
 
 ```
 src/ai_score_editing/
-  __init__.py      # main() entry point (console script)
-  cli.py           # argparse/typer command definitions
-  client.py        # SibeliusClient: connect/handshake/send, sync wrapper over asyncio
-  launcher.py      # detection and launch of Sibelius application
-  protocol.py      # message constants, request builders, response parsing
-  core/token_store.py  # session-token persistence (moved from the package top level)
+  __init__.py          # main() entry point (console script)
+  sibelius/cli.py      # argparse parser and main(); handlers live in sibelius/commands/
+  sibelius/commands/   # one module per command area, register(sub) -> handlers
+  sibelius/runner.py   # client factory, guards, backup and write wrappers for handlers
+  sibelius/client.py   # SibeliusClient: connect/handshake/send, sync wrapper over asyncio
+  sibelius/launcher.py # detection and launch of Sibelius application
+  sibelius/protocol.py # message constants, request builders, response parsing
+  core/token_store.py  # session-token persistence
 ```
 
 Dependencies: `websockets` (runtime); `pytest` (dev). Prefer stdlib `argparse`
