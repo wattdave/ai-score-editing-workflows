@@ -22,7 +22,7 @@ from typing import Any
 import websockets
 
 from ai_score_editing.paths import LEGACY_WIRE_CLIENT_NAME, WIRE_CLIENT_NAME
-from ai_score_editing.token_store import TokenStore, default_path
+from ai_score_editing.core.token_store import TokenStore, default_path
 
 logger = logging.getLogger(__name__)
 

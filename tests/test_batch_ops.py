@@ -12,7 +12,7 @@ from ai_score_editing.sibelius.batch_ops import (
     BatchError,
     validate_batch,
 )
-from ai_score_editing.note_patches import batch_operations, execution_order
+from ai_score_editing.sibelius.note_patches import batch_operations, execution_order
 
 PLUGIN = Path(__file__).parent.parent / "src/ai_score_editing/sibelius/manuscript/ScoreBridge.plg"
 

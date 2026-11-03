@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from ai_score_editing.polychoral import (
+from ai_score_editing.workflows.polychoral import (
     build_16voice_part_list,
     clean_note,
     demix_16voices,
@@ -91,7 +91,7 @@ def test_get_midi() -> None:
 
 def test_midi_accepts_decimal_alter() -> None:
     """Some exports write <alter>-1.0</alter>; alter is a decimal in MusicXML."""
-    from ai_score_editing.musicxml_split.routing import midi
+    from ai_score_editing.workflows.musicxml_split.routing import midi
 
     for note, expected in ((_make_note("B", 4, alter=-1.0), 70), (_make_note("C", 4, alter=2.0), 62)):
         assert note.findtext("pitch/alter") in {"-1.0", "2.0"}
@@ -352,7 +352,7 @@ def test_real_12pp_export_if_available(tmp_path: Path) -> None:
     assert res["totalMeasures"] == len(source_part.findall("measure"))
     assert res["partsCount"] == 16
 
-    from ai_score_editing.musicxml_split.validation import validate_file
+    from ai_score_editing.workflows.musicxml_split.validation import validate_file
 
     issues = validate_file(out_p, expected_parts=16)
     # Real exports have overflowed source measures. The engine keeps their
@@ -462,8 +462,8 @@ def _raw_export_features(path: Path) -> None:
 
 
 def test_raw_export_features(tmp_path: Path) -> None:
-    from ai_score_editing.musicxml_split.profiles.polychoral_16 import split_16voices
-    from ai_score_editing.musicxml_split.validation import validate_file
+    from ai_score_editing.workflows.musicxml_split.profiles.polychoral_16 import split_16voices
+    from ai_score_editing.workflows.musicxml_split.validation import validate_file
 
     source = tmp_path / "raw.musicxml"
     out = tmp_path / "raw16.musicxml"
@@ -505,7 +505,7 @@ def test_raw_export_features(tmp_path: Path) -> None:
 
 
 def test_silent_choir_2_outside_unison_range_stays_silent(tmp_path: Path) -> None:
-    from ai_score_editing.musicxml_split.profiles.polychoral_16 import Polychoral16Options, split_16voices
+    from ai_score_editing.workflows.musicxml_split.profiles.polychoral_16 import Polychoral16Options, split_16voices
 
     source = tmp_path / "raw.musicxml"
     out = tmp_path / "raw16.musicxml"

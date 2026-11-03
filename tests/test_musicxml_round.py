@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from ai_score_editing.musicxml_round import RoundError, RoundOptions, build_round
+from ai_score_editing.workflows.musicxml_round import RoundError, RoundOptions, build_round
 
 
 def _note(step: str, duration: int, note_type: str, lyric: str | None = None) -> str:

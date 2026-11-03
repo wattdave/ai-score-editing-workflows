@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from ai_score_editing import mix_proof as mp
+from ai_score_editing.workflows import mix_proof as mp
 
 SR = mp.SAMPLE_RATE
 

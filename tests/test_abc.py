@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ai_score_editing.abc_notation import (
+from ai_score_editing.workflows.abc_notation import (
     abc_pitch_to_midi,
     midi_to_abc_pitch,
     parse_abc_duration,
