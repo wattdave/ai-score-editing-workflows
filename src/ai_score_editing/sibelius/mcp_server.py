@@ -19,7 +19,7 @@ from ai_score_editing.sibelius import batch_ops
 from ai_score_editing.cli_common import DEFAULT_LIMIT, canonical_format
 from ai_score_editing.mcp_common import EXPORT, READ_ONLY, WRITE, env_port, parse_bars
 from ai_score_editing.mcp_common import Session as CommonSession
-from ai_score_editing.query import QueryError
+from ai_score_editing.core.errors import QueryError
 from ai_score_editing.sibelius import bridge, protocol, service
 from ai_score_editing.sibelius.bridge import BRIDGE_PLUGIN, BUSY_MESSAGE, EXPORT_FORMATS, BridgeBusy, BridgeError
 from ai_score_editing.core.barrange import parse_bar_range

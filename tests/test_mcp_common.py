@@ -17,7 +17,7 @@ from ai_score_editing.dorico.score import DoricoBatchError
 from ai_score_editing.musescore import mcp_server as musescore_server
 from ai_score_editing.musescore.client import MuseScoreError
 from ai_score_editing.musescore.score import MuseScoreBatchError
-from ai_score_editing.query import QueryError
+from ai_score_editing.core.errors import QueryError
 from ai_score_editing.sibelius import mcp_server as sibelius_server
 from ai_score_editing.sibelius.bridge import BridgeBusy, BridgeError
 from ai_score_editing.sibelius.client import ConnectionFailed

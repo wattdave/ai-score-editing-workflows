@@ -19,7 +19,7 @@ from ai_score_editing.core.errors import BatchError
 from ai_score_editing.cli_common import DEFAULT_LIMIT
 from ai_score_editing.mcp_common import EXPORT, READ_ONLY, WRITE, env_port, parse_bars
 from ai_score_editing.mcp_common import Session as CommonSession
-from ai_score_editing.query import QueryError
+from ai_score_editing.core.errors import QueryError
 
 from . import install, service
 from .bridge import MuseScoreBridge

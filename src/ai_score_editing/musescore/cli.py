@@ -23,7 +23,7 @@ from ai_score_editing.cli_common import (
     EXIT_OK,
     canonical_format,
 )
-from ai_score_editing.query import QueryError
+from ai_score_editing.core.errors import QueryError
 
 from . import install, service
 from .bridge import MuseScoreBridge

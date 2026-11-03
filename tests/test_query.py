@@ -8,15 +8,8 @@ from pathlib import Path
 import pytest
 
 from ai_score_editing.cli_common import DEFAULT_LIMIT
-from ai_score_editing.query import (
-    COMMON_PROPS,
-    READABLE_PROPS,
-    QueryError,
-    build_selector,
-    parse_fields,
-    parse_where,
-    resolve_staves,
-)
+from ai_score_editing.core.errors import QueryError
+from ai_score_editing.sibelius.query_props import COMMON_PROPS, READABLE_PROPS, build_selector, parse_fields, parse_where, resolve_staves
 
 PLUGIN = Path(__file__).parent.parent / "src/ai_score_editing/sibelius/manuscript/ScoreBridge.plg"
 
@@ -122,7 +115,7 @@ def test_build_selector_rejects_bad_voice_or_limit(voice, limit) -> None:
 
 
 def test_container_kinds_take_only_their_own_props() -> None:
-    from ai_score_editing.query import CONTAINER_KINDS
+    from ai_score_editing.sibelius.query_props import CONTAINER_KINDS
 
     assert CONTAINER_KINDS == {"Bar", "Staff"}
     assert {"Length", "BreakType"} <= READABLE_PROPS["Bar"]

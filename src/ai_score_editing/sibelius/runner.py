@@ -149,7 +149,7 @@ def notes(description: dict[str, Any] | None) -> list[dict[str, Any]]:
 
 async def read_rows(client: SibeliusClient, staff: int, from_bar: int, to_bar: int) -> list[dict[str, Any]]:
     """Every object of one staff in the bars, as Query reports it."""
-    from ai_score_editing.query import build_selector
+    from ai_score_editing.sibelius.query_props import build_selector
 
     selector = build_selector(
         staves=[staff], from_bar=from_bar, to_bar=to_bar, types=[], voice=None, where=[], fields=[], limit=5000,
