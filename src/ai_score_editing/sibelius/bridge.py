@@ -12,7 +12,7 @@ import weakref
 from pathlib import Path
 from typing import Any
 
-from ai_score_editing import batch_ops
+from ai_score_editing.core import batch_schema
 from ai_score_editing.sibelius import protocol
 from ai_score_editing.sibelius.client import SibeliusClient
 
@@ -93,9 +93,9 @@ def batch_bridge_version(operations: list[dict[str, Any]]) -> int:
         for operation in operations
     ):
         return LAYOUT_BATCH_BRIDGE_VERSION
-    if "add-line" in names or any(operation.get("staff") == batch_ops.SYSTEM_STAFF for operation in operations):
+    if "add-line" in names or any(operation.get("staff") == batch_schema.SYSTEM_STAFF for operation in operations):
         return SYSTEM_STAFF_BRIDGE_VERSION
-    if names & (batch_ops.STRUCTURAL | {"beam"}):
+    if names & (batch_schema.STRUCTURAL | {"beam"}):
         return STRUCTURAL_BRIDGE_VERSION
     if "nudge" in names:
         return NUDGE_BRIDGE_VERSION

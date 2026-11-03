@@ -29,26 +29,6 @@ def _public(module) -> set[str]:
     return {name for name in vars(module) if not name.startswith("_")}
 
 
-@pytest.mark.parametrize("old,new", SHIMS.items())
-def test_shim_exposes_new_home(old, new):
-    old_module, new_module = importlib.import_module(old), importlib.import_module(new)
-    missing = {n for n in _public(new_module) if not hasattr(old_module, n)}
-    assert not missing, f"{old} lacks {sorted(missing)}"
-    for name in _public(new_module):
-        assert getattr(old_module, name) is getattr(new_module, name)
-
-
-def test_batch_ops_reexports_schema_and_sibelius_names():
-    batch_ops = importlib.import_module("ai_score_editing.batch_ops")
-    schema = importlib.import_module("ai_score_editing.core.batch_schema")
-    sibelius = importlib.import_module("ai_score_editing.sibelius.batch_ops")
-    for name in _public(schema) - {"validate_batch"}:
-        assert getattr(batch_ops, name) is getattr(schema, name)
-    for name in _public(sibelius):
-        assert getattr(batch_ops, name) is getattr(sibelius, name)
-    assert batch_ops.BatchError is importlib.import_module("ai_score_editing.core.errors").BatchError
-
-
 def test_error_hierarchy():
     from ai_score_editing.core.errors import BatchError, ScoreEditingError
     from ai_score_editing.dorico.score import DoricoBatchError

@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from ai_score_editing import batch_ops
+from ai_score_editing.sibelius import batch_ops
 from ai_score_editing.sibelius import copy_range
 from ai_score_editing.sibelius.cli import build_parser
 

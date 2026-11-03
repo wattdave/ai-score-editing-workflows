@@ -9,7 +9,8 @@ import pytest
 import websockets
 from mcp.server.mcpserver.exceptions import ToolError
 
-from ai_score_editing import batch_ops, mcp_common
+from ai_score_editing import mcp_common
+from ai_score_editing.sibelius import batch_ops
 from ai_score_editing.dorico import mcp_server as dorico_server
 from ai_score_editing.dorico.client import DoricoError
 from ai_score_editing.dorico.score import DoricoBatchError

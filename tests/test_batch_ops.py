@@ -5,12 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from ai_score_editing.batch_ops import (
+from ai_score_editing.core.batch_schema import DEFAULT_TEXT_STYLE, STRUCTURAL, name_structure
+from ai_score_editing.sibelius.batch_ops import (
     COMMON_WRITABLE,
-    DEFAULT_TEXT_STYLE,
-    STRUCTURAL,
     WRITABLE_PROPS,
-    name_structure,
     BatchError,
     validate_batch,
 )
@@ -278,7 +276,7 @@ def test_set_time_must_precede_key_break_and_barline() -> None:
 
 
 def test_barline_names_match_set_barline_types() -> None:
-    from ai_score_editing.batch_ops import BARLINE_NAMES, BARLINE_TYPES
+    from ai_score_editing.core.batch_schema import BARLINE_NAMES, BARLINE_TYPES
     assert set(BARLINE_NAMES) | {"none"} == BARLINE_TYPES
 
 

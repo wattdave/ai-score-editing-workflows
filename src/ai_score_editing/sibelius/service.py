@@ -14,8 +14,10 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from ai_score_editing import backups, batch_ops
-from ai_score_editing.batch_ops import BatchError
+from ai_score_editing import backups
+from ai_score_editing.core import batch_schema
+from ai_score_editing.sibelius import batch_ops
+from ai_score_editing.core.errors import BatchError
 from ai_score_editing.cli_common import DEFAULT_LIMIT, canonical_format
 from ai_score_editing.query import (
     CONTAINER_KINDS,
@@ -84,7 +86,7 @@ async def structure(b: SibeliusBridge, from_bar: int | None = None, to_bar: int 
     last = to_bar
     if last is None:
         last = (await b.call("GetScoreInfo"))["barCount"]
-    return batch_ops.name_structure(await b.call("GetScoreStructure", [from_bar or 1, last]))
+    return batch_schema.name_structure(await b.call("GetScoreStructure", [from_bar or 1, last]))
 
 
 def query_selector(

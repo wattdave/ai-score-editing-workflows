@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from ai_score_editing.batch_ops import BatchError
+from ai_score_editing.core.errors import BatchError
 from ai_score_editing.core.barrange import parse_bar_range
 from ai_score_editing.cli_common import (
     DEFAULT_LIMIT,

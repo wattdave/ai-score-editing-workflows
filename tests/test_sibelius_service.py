@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
-from ai_score_editing.batch_ops import BatchError
+from ai_score_editing.core.errors import BatchError
 from ai_score_editing.query import QueryError
 from ai_score_editing.sibelius import bridge, mcp_server, service
 from ai_score_editing.sibelius.bridge import BUSY_MESSAGE, BridgeBusy, BridgeError

@@ -15,7 +15,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from ai_score_editing.batch_ops import BatchError
+from ai_score_editing.core.errors import BatchError
 from ai_score_editing.cli_common import DEFAULT_LIMIT
 from ai_score_editing.mcp_common import EXPORT, READ_ONLY, WRITE, env_port, parse_bars
 from ai_score_editing.mcp_common import Session as CommonSession

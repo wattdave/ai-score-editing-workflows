@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from ai_score_editing.batch_ops import BatchError, validate_batch, verse_dy
+from ai_score_editing.core.batch_schema import verse_dy
+from ai_score_editing.sibelius.batch_ops import BatchError, validate_batch
 from ai_score_editing.sibelius.cli import (
     CURRENT_BRIDGE_VERSION,
     SET_LYRIC_VERSE_BRIDGE_VERSION,

@@ -9,7 +9,8 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from ai_score_editing import abc_notation, batch_ops, layout, note_patches
+from ai_score_editing import abc_notation, layout, note_patches
+from ai_score_editing.sibelius import batch_ops
 from ai_score_editing.core import music
 from ai_score_editing.core.intervals import compute_transposition
 from ai_score_editing.sibelius import copy_range

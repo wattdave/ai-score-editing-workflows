@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from ai_score_editing import batch_ops
+from ai_score_editing.sibelius import batch_ops
 from ai_score_editing.sibelius import bridge
 from ai_score_editing.core.units import UNITS_PER_WHOLE
 
