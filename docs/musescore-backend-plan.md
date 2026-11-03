@@ -115,9 +115,9 @@ New package `src/ai_score_editing/musescore/`, shaped like `dorico/`:
 | `mcp_server.py`, `cli.py` | Same tools and subcommands as Dorico |
 
 `pyproject.toml` gets `musescore-cli` and `musescore-mcp` entry points.
-Shared code is reused, not copied: `batch_ops.validate_batch` and its
-constants, `query.build_selector` / `parse_where`, `cli.parse_bar_range`,
-`intervals.compute_transposition`, and the Session pattern from both MCP
+Shared code is reused, not copied: `core.batch_schema.validate_batch` and its
+constants, `core.query.build_selector` / `parse_where`, `core.barrange.parse_bar_range`,
+`core.intervals.compute_transposition`, and the Session pattern from both MCP
 servers. Code that the Dorico back end keeps in `dorico/score.py` but isn't
 Dorico-specific (spelling, `transpose_spelled`, `interval_of`, lyric
 parsing) moves to a shared module first, in its own PR.
@@ -244,7 +244,7 @@ All of these properties exist and are writable [src].
 
 ## Batches
 
-1. `batch_ops.validate_batch`, then `score.prepare_batch` against a fresh
+1. `core.batch_schema.validate_batch`, then `score.prepare_batch` against a fresh
    snapshot. This resolves addresses, checks guards and bar order, refuses
    what MuseScore can't do (a `NOT_ON_MUSESCORE` table like Dorico's), and
    emits primitives that name elements by (staff index, track, tick, kind,
@@ -443,7 +443,7 @@ the undo count with a marker edit.
 - **QML checks:** a syntax check of `msbridge.qml` in CI (upstream ships
   `syntax_check.js`), a test that `title:` sits on its own line, and a test
   that the `cmd()` allow-list and the methods match what Python calls, like
-  the test that keeps `BatchWritableTable` in step with `batch_ops`.
+  the test that keeps `BatchWritableTable` in step with `sibelius/batch_ops.py`.
 - **Live check:** `scripts/dev/musescore_live_check.py` runs a fixed scenario on a scratch
   score (read, a batch of every op, dry run, rollback, undo by the reported
   steps, a marker edit left untouched) and prints a report. Its results go

@@ -174,7 +174,7 @@ The same steps by hand, in Terminal, from this folder:
 
 4. **First connection**: any command will make Sibelius show an approval
    dialog naming the client — click OK. The session token is cached at
-   `~/.config/sibelius-websocket-cli/token.json`, so subsequent invocations
+   `~/.config/ai-score-editing/token.json`, so subsequent invocations
    connect silently. Tokens die with the Sibelius process, so expect one
    dialog per Sibelius launch.
 
@@ -330,7 +330,7 @@ uv run musescore-cli undo
 After installing, enable "ScoreBridge" once in Plugins → Manage
 plugins, then run Plugins → ScoreBridge in the score's window each
 session. It listens on port 8766 and refuses requests without the token
-that `install-plugin` stores in `~/.config/sibelius-websocket-cli/`.
+that `install-plugin` stores in `~/.config/ai-score-editing/`.
 Addresses, units and batches follow the Sibelius tools, and a dry run
 really runs the batch and rolls it back. Hairpins can't be added (they
 crashed MuseScore). [docs/musescore.md](docs/musescore.md) has the parity
@@ -368,6 +368,8 @@ live in `scripts/dev/` and are not shipped with the plug-ins.
 
 ## Documentation
 
+- [`docs/architecture.md`](docs/architecture.md) — layering, package map, where
+  to add a CLI command, MCP tool or editor operation, and testing seams
 - [`docs/sibelius-protocol.md`](docs/sibelius-protocol.md) — the empirically verified Sibelius Connect wire
   protocol (one-step handshake, silent token reconnect, `invokePlugin`
   semantics and gotchas) and the CLI design
@@ -394,10 +396,17 @@ SIBWS_12PP_EXPORT=~/Downloads/export.xml uv run pytest tests/test_polychoral.py
 
 Sources: `src/ai_score_editing/`. Each editor has its own subpackage:
 `sibelius/` (`protocol.py` message builders, `client.py` async client with
-token/approval handling, `launcher.py` process detection and launch, `cli.py`,
-`mcp_server.py`, and the ScoreBridge plug-in under `manuscript/`), `dorico/` and
-`musescore/`. Modules at the top level (`batch_ops`, `query`, `lyrics`,
-`intervals`, the MusicXML tools) are shared; the token store lives in `core/token_store.py`.
+token/approval handling, `launcher.py` process detection and launch, `bridge.py`
+typed ScoreBridge calls, `service.py`, `cli.py` (parser and `main`),
+`commands/` (one module per CLI area), `mcp_server.py`, and the ScoreBridge
+plug-in under `manuscript/`), `dorico/` and `musescore/`. Editor-neutral code is
+shared: `core/` holds pure helpers (units, lyrics, intervals, bar ranges, batch
+schema, query engine, token store), `workflows/` holds the MusicXML pipelines
+(`musicxml_split`, `polychoral`, `rehearsal_mix`, `mix_proof`, `musicxml_round`,
+`abc_notation`), and `mcp_common.py`, `cli_common.py`, `backups.py`, `paths.py`
+and `macos.py` serve all three back ends. See
+[`docs/architecture.md`](docs/architecture.md) for the layering and where to add
+a command, tool or operation.
 
 ## Contributing
 

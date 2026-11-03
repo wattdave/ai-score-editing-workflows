@@ -30,6 +30,14 @@ python3 scripts/sync_skills.py
 python3 scripts/sync_skills.py --check
 ```
 
+## Architecture
+
+Layering, the package map, where to add a CLI command, MCP tool or editor
+operation, testing seams and backward-compat notes are in
+[docs/architecture.md](docs/architecture.md). Shared pure helpers live in
+`core/`, editor-neutral pipelines in `workflows/`, and each editor's CLI is a
+thin layer over its `service.py`.
+
 ## Agent skills
 
 `.claude/skills/` is the source of truth. Each skill directory, including its
