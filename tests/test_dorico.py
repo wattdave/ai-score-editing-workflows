@@ -27,7 +27,7 @@ from ai_score_editing.dorico.score import (
     spelling_letter,
     transpose_spelled,
 )
-from ai_score_editing.token_store import TokenStore
+from ai_score_editing.core.token_store import TokenStore
 
 STAVES = [
     {"staff": 1, "name": "Piano", "stream": 1, "voiceStreams": [2]},

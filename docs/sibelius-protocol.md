@@ -205,7 +205,7 @@ src/ai_score_editing/
   client.py        # SibeliusClient: connect/handshake/send, sync wrapper over asyncio
   launcher.py      # detection and launch of Sibelius application
   protocol.py      # message constants, request builders, response parsing
-  token_store.py   # session-token persistence
+  core/token_store.py  # session-token persistence (moved from the package top level)
 ```
 
 Dependencies: `websockets` (runtime); `pytest` (dev). Prefer stdlib `argparse`
