@@ -83,7 +83,7 @@ async def snapshot(bridge: DoricoBridge, flow: int = 1, lyrics: bool = False, pr
                 staves = layout.resolve(raw, events, placements=placements)
             except (layout.NeedsMusicXML, DoricoError):
                 staves = None
-    def from_lua(staves: list[dict[str, Any]]) -> Snapshot:
+    def from_lua(staves: list[dict[str, Any]], bars: BarMap = bars) -> Snapshot:  # type: ignore[assignment]
         placed = layout.assign(events, staves)
         placed_streams = {v for s in staves for v in s["voiceStreams"]}
         all_voices = {v for i in raw["instruments"] for v in i.get("voiceStreams") or []}
@@ -102,12 +102,19 @@ async def snapshot(bridge: DoricoBridge, flow: int = 1, lyrics: bool = False, pr
                 f"the MusicXML export has {len(xml['staves'])} staves but the flow has {len(staves)}; "
                 "cannot combine them"
             )
-    except DoricoError:
-        if not placements or bars is None:
-            raise
+    except DoricoError as mismatch:
         # The export's parts cannot be matched to Dorico's instruments (their order differs, as in
-        # an orchestral score), but the probe placed every voice: name staves from those.
-        return from_lua(layout.resolve(raw, events, placements=placements, loose=True))
+        # an orchestral score, or divisi staves sit apart from their instrument), but a probe can
+        # place every voice: name staves from those. Probe now if bars could not be measured
+        # earlier (so the probe never ran); the export's own bars stand in for the missing ones.
+        if not placements and probe and not unreadable and not lyrics:
+            try:
+                placements = await probe_placements(bridge, raw, events, flow)
+            except DoricoError:
+                placements = {}
+        if not placements:
+            raise DoricoError(f"{mismatch} ({_describe_mismatch(raw, xml)}); voices could not be probed either") from mismatch
+        return from_lua(layout.resolve(raw, events, placements=placements, loose=True), bars or xml["bars"])
     placed = layout.assign(events, staves)
     unreadable_streams = {u["stream"] for u in unreadable}
     bad = sorted(
@@ -130,6 +137,17 @@ async def snapshot(bridge: DoricoBridge, flow: int = 1, lyrics: bool = False, pr
         item["index"] = counters.get(key, 0)
         counters[key] = item["index"] + 1
     return Snapshot(staves, located, xml["bars"], xml, path, bad, sorted(all_voices - placed_streams), raw)
+
+
+def _describe_mismatch(raw: dict[str, Any], xml: dict[str, Any]) -> str:
+    """Dorico's instruments and staves against the export's parts, for an error message."""
+    parts: dict[str, int] = {}
+    for staff in xml["staves"]:
+        key = f"{staff['name'] or staff.get('part')}"
+        parts[key] = parts.get(key, 0) + 1
+    instruments = [str(i.get("name")) for i in raw["instruments"]]
+    return (f"Dorico has {len(instruments)} instruments ({', '.join(instruments)}) on {len(raw['staves'])} staves; "
+            f"the export has {len(xml['staves'])} staves in parts " + ", ".join(f"{k} x{v}" for k, v in parts.items()))
 
 
 async def probe_placements(

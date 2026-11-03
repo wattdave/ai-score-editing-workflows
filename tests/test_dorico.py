@@ -1709,3 +1709,76 @@ def test_delete_bars_cost_is_the_dearest_route() -> None:
     assert service._delete_bars_cost(op) == 5  # 2 + 3 extend steps, against 2 for the per-bar route
     assert service._delete_bars_cost({**op, "fallback": [{"bar": b, "tempRest": {}} for b in (3, 2, 1)]}) == 9
     assert service._delete_bars_cost({"plan": op["plan"]}) == 2
+
+
+DIVISI_MUSICXML = """<?xml version="1.0"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Violin</part-name></score-part>
+    <score-part id="P2"><part-name>Violin</part-name></score-part>
+    <score-part id="P3"><part-name>Viola</part-name></score-part>
+  </part-list>
+  <part id="P1"><measure number="1"><attributes><divisions>1</divisions>
+    <time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+    <note><rest measure="yes"/><duration>4</duration><voice>1</voice></note></measure></part>
+  <part id="P2"><measure number="1"><note><rest measure="yes"/><duration>4</duration><voice>1</voice></note></measure></part>
+  <part id="P3"><measure number="1"><note><rest measure="yes"/><duration>4</duration><voice>1</voice></note></measure></part>
+</score-partwise>
+"""
+
+
+class _DivisiBridge:
+    """Two instruments on three staves; the violin's divisi staff is listed last, as in Dorico Prelude."""
+
+    client = None
+
+    async def read_partial(self, flow: int) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        return [{**note(40, 0, 60, "C4", duration=1024, stream=10), "staff": None, "voice": None}], []
+
+    async def bars(self, flow: int, events: list[dict[str, Any]]) -> BarMap:
+        raise DoricoError("cannot measure bars")
+
+    async def overview(self, flow: int) -> dict[str, Any]:
+        return {"layout": {
+            "staves": [{"stream": 1}, {"stream": 3}, {"stream": 5}],
+            "instruments": [{"id": 0, "name": "Violin", "voiceStreams": [10, 11]},
+                            {"id": 1, "name": "Viola", "voiceStreams": [12]}],
+        }}
+
+
+async def test_snapshot_survives_divisi_staves_apart_from_their_instrument(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The export lists the divisi staff as an extra part, so its parts cannot be matched to the
+    # instruments; the probe places the voices instead, even though bars could not be measured.
+    path = tmp_path / "s.musicxml"
+    path.write_text(DIVISI_MUSICXML)
+
+    async def fake_export(client: Any, flow: int = 1) -> Path:
+        return path
+
+    async def fake_probe(bridge: Any, raw: dict[str, Any], events: list[dict[str, Any]], flow: int) -> dict[int, int]:
+        return {10: 1, 11: 3, 12: 2}
+
+    monkeypatch.setattr(service, "export_musicxml", fake_export)
+    monkeypatch.setattr(service, "probe_placements", fake_probe)
+    snap = await service.snapshot(_DivisiBridge(), 1)  # type: ignore[arg-type]
+    assert [(s["name"], s["voiceStreams"]) for s in snap.staves] == [
+        ("Violin", [10]), ("Viola", [12]), ("Violin", [11])]
+    assert [(e["staff"], e["bar"]) for e in snap.located] == [(1, 1)]
+
+
+async def test_snapshot_mismatch_error_says_what_differs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "s.musicxml"
+    path.write_text(DIVISI_MUSICXML)
+
+    async def fake_export(client: Any, flow: int = 1) -> Path:
+        return path
+
+    async def failing_probe(*args: Any) -> dict[int, int]:
+        raise DoricoError("no")
+
+    monkeypatch.setattr(service, "export_musicxml", fake_export)
+    monkeypatch.setattr(service, "probe_placements", failing_probe)
+    with pytest.raises(DoricoError, match=r"2 instruments \(Violin, Viola\) on 3 staves.*Violin x2, Viola x1"):
+        await service.snapshot(_DivisiBridge(), 1)  # type: ignore[arg-type]
