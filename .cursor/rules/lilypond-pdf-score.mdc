@@ -1,5 +1,5 @@
 ---
-description: Turn a PDF engraved by LilyPond (Emmentaler music font, as on CPDL and IMSLP) into MusicXML by reading the glyph positions, when the .ly source is not available and a scan would be poor. Covers the glyph table, Mensurstriche barlines, system timelines, decoding the scrambled lyric text layer, and proofreading the import in Sibelius. Built for a 4-voice Renaissance piece (Brumel, Du tout plongiet, 62 bars). Use for a LilyPond-made PDF with no source; use lilypond-to-score when the .ly exists and vector-pdf-score for Sibelius PDFs.
+description: Turn a PDF engraved by LilyPond (Emmentaler music font, as on Mutopia, CPDL and IMSLP) into MusicXML by reading glyph names and positions, when the .ly source is not available and a scan would be poor. One voice per staff (SATB on four staves). Reads notes, rests, dots, flags, beams, ties, accidentals, ficta, clefs, key, time-signature changes, pickups and lyrics, and checks the result against the piece's own MIDI. Use for a LilyPond-made PDF with no source; use lilypond-to-score when the .ly exists and vector-pdf-score for Sibelius PDFs.
 globs: *
 alwaysApply: false
 ---
@@ -7,98 +7,139 @@ alwaysApply: false
 # LilyPond PDF to MusicXML
 
 A LilyPond PDF keeps every notehead, rest, flag and accidental as a font glyph at an exact
-position, so nothing has to be recognised. On the Brumel test piece Halbestunde's scan was
-unusable; the glyph read matched the print in all 62 bars of four voices after a bar-by-bar
-proofread (two faults found, both fixed).
+position, so nothing has to be recognised. On a Renaissance piece (Brumel, 62 bars) Halbestunde's
+scan was unusable; the glyph read matched the print. Validation on three more LilyPond PDFs is at
+the end.
 
 ## 1. Check the PDF
 
 ```bash
-pdfinfo score.pdf | grep Creator      # "LilyPond 2.x"
-uv run --with pymupdf python -I -c "import pymupdf,sys; print({s['font'] for p in pymupdf.open(sys.argv[1]) for sp in p.get_texttrace() for s in [sp]})" score.pdf
+pdfinfo score.pdf | grep Creator      # "LilyPond 2.x" (a re-saved file says Preview or similar)
 ```
 
-Expect `Emmentaler-*` for the music and a text font (here `CenturySchL`). If the source `.ly`
-exists, use `lilypond-to-score` instead. The scripts assume **four staves per system, one
-voice per staff, no chords**: Cantus (treble) then three bass-clef voices. For other layouts
-adapt `pitch_of` in `build.py` and the staff count in `extract.py`.
+Fonts: `Emmentaler-NN` (music), `feta-alphabet` (digits), `CenturySchL` (text). If the source `.ly`
+exists, use `lilypond-to-score`. If the site also ships a **MIDI** (Mutopia and many CPDL pages do),
+download it: `check_midi.py` below uses it as ground truth.
 
-## 2. How the reading works
+**Limits.** One voice per staff, the same number of staves in every system, no chords, no
+tuplets. Two voices on one staff (tenor and bass sharing a bass staff) or a grand staff stops with
+"notes overlap ... one voice per staff". Pages that are not voice systems (a piano practice
+reduction, a translation) are skipped with `--pages 1`.
 
-`pymupdf` `page.get_texttrace()` gives each glyph's id, origin and box. Staff lines are the
-long horizontal drawn lines in groups of five. A glyph's **half-space index**
-`hs = (bottom_line_y - y) / (space / 2)` gives the pitch: treble `hs 0` = E4, bass `hs 0` = G2.
+Sources: Cloudflare blocks `curl` on cpdl.org and imslp.org (a "Just a moment" 403), so fetching
+from there needs a real browser. With Claude in Chrome the check clears by itself after about five
+seconds (wait, then read the page); list a page's files with `javascript_tool`
+(`[...document.querySelectorAll('a')].filter(a=>/\.(pdf|mid|zip)/i.test(a.href))`) and download by
+clicking a generated `<a download>`; the file lands in ~/Downloads. CPDL search for
+`lilypond SATB Renaissance` lists hundreds of editions, and a `-source.zip` usually holds the `.ly`
+and the score's MIDI. mutopiaproject.org downloads with plain `curl` and is always LilyPond.
 
-Glyph ids at 15.9 pt (the notation size; check `glyph_dump`-style output for your file, ids are
-per font subset but Emmentaler's low ids were stable here):
+## 2. How it reads
 
-| gid | meaning | gid | meaning |
-|---|---|---|---|
-| 2 | breve (8 beats) | 7 | flat |
-| 3 | whole note | 8 | quarter rest |
-| 4 | half note | 1 | half rest |
-| 5 | black head | 0 | whole rest |
-| 9 | dot | 6 | breve rest (8 beats) |
-| 13 | up flag (head x + 5.3) | 16 | down flag (head x + 0.6) |
-| 14, 15 | clefs | | |
+`reader.py` takes glyph ids from `page.get_texttrace()` and turns them into **names** (`noteheads.s2`,
+`rests.1`, `flags.u3`, `accidentals.flat`, `clefs.G`, `dots.dot`, `timesig.C22`) through the glyph order
+of the embedded CFF font. Names make the reader independent of LilyPond version (tested on 2.8.7
+and 2.12.2) and font size (every metric scales with the notation size).
 
-- Stems are 0.2 wide rects; beams are filled quadrilaterals. Count beams on a stem (loosen the
-  y tolerance for secondary beams) to get eighths and sixteenths.
-- **Small 12.5 pt glyphs above the staff** at head x + about 1.6 are editorial ficta: gid 1 =
-  natural, gid 2 = flat. They apply to that one note only. **gid 0 is the "L" editorial
-  bracket, not an accidental** (reading it as a sharp put a wrong F♯ in the first run).
-- **Mensurstriche**: barlines fall at multiples of 4 beats and long notes cross them. Build
-  regular cut-time bars and tie across the barlines; do not use the barline x positions to
-  assign bars.
-- **Timing**: sum durations per staff for onsets. Each system's start is snapped to the
-  barline residue mod 4. Invisible lead-in rests at a system start are anchored by columns
-  shared with voices that start on the margin. `onset2.py` run on its own prints per-system totals
-  and misaligned columns; **it must report 0 misaligned columns** before you go on.
+- **Offset.** For a file written by LilyPond, glyph id = index in the name list. A file re-saved by
+  macOS Preview drops `.notdef` from the numbering (id = index - 1) and loses the name of the last
+  glyph of each font subset. `calibrate_offset` picks the offset that turns most glyphs into
+  noteheads. In a Preview file the unnamed small glyph is the ficta flat (handled in `build.py`).
+- **Pitch.** Half-space index `hs = (bottom_line_y - y) / (space / 2)`. The clef glyph's own position
+  gives the reference line (G = G4, F = F3, C = C4), so G, F and C clefs on any line work. The "8"
+  under a treble-8 clef is a small italic text character, not a glyph; it moves the pitch down an
+  octave (MusicXML pitch is sounding pitch). Override with `--clefs G,G,G8,F`.
+- **Incipits** (the original-clef start of an edition) use mensural noteheads and are skipped:
+  only the exact modern notehead names count, and the clef in force is the one nearest the first
+  sung note.
+- **Durations.** Notehead kind, dots, flags (`flags.u3` one flag, `u4` two), and beams. Level beams
+  are plain filled rects (1.2 to 3 pt thick), slanted beams filled polygons; both are listed twice
+  (fill and stroke), so deduplicate before counting.
+- **Ties.** A filled curve from one head to the next head of the same pitch is a tie; a stub ending
+  at the first note of a system is a tie over the system break. Ties merge into one longer note.
+  Slurs are not read.
+- **Accidentals.** `accidentals.flat/sharp/natural` left of a note on the same line. The first
+  |fifths| accidentals after the clef are the key signature and are not note accidentals (an
+  explicit flat right after the key signature is: it was missed once, see below). Small (about 12.5
+  pt) accidentals above the staff are editorial **ficta**, valid for that note only. The small
+  "L" is an editorial bracket, not a sharp.
+- **Key, time, pickup.** Read from the first system: the run of accidentals before the first note,
+  `timesig.*` or two stacked digits. A half-bar start gives an implicit first measure. Every
+  time-signature change in the piece is found and written (4/2 to 2/2 to 6/2 worked).
+- **System timing.** Onsets are summed per staff; each system's start is snapped to the barline
+  grid on the shortest usual bar length (bars may change length); lead-in rests invisible at the start
+  of a system are anchored on columns shared with the other voices. `onset2.py` prints per-system
+  totals and misaligned columns; it must say **0 misaligned** before you go on (a few misaligned
+  columns pointed at a missed beam, a missed tie, or a missed 16th rest).
+- **Mensurstriche** (barlines between staves only, notes crossing them): the MusicXML uses regular
+  bars with ties across barlines; barline x positions are not used to assign bars.
 
 ## 3. Lyrics
 
-The text layer is a permuted cipher: the extracted characters are not the printed letters, so
-copying text gives nonsense. The real letters come from the glyph **shapes**. `lyr.py` carries
-a gid-to-letter table (`SH`) for the Brumel PDF only, since glyph ids are per embedded font
-subset. For a new PDF:
+For a file written by LilyPond the text layer is usable: characters are read as they are, words are
+split on gaps, hyphens are drawn rects (about 2.3 wide, 0.22 high), and each syllable goes to the
+nearest unused note.
 
-1. Pull the lyric font (`doc.extract_font(xref)`) and render its glyphs to a contact sheet
-   with their ids (fontTools pens to SVG, then look at the picture).
-2. Write the shape-to-letter string in gid order and replace `SH`.
-3. Hyphens are **drawn rects** (about 2.3 wide, 0.22 high), not characters; extenders are long
-   rects. `lyr.py` reads the hyphen rects; it does not reproduce extenders.
+A **re-saved** PDF can have a scrambled text layer (the Brumel PDF): copying text gives nonsense.
+Pass `--scrambled`; letters then come from a glyph-id to letter table in `lyr.py` (`SH`), which is
+for the Brumel PDF only. For another scrambled PDF, pull the lyric font (`doc.extract_font`),
+render its glyphs to a contact sheet with their ids, and write a new table.
 
-Syllables attach to the nearest note in order; a hyphen before or after sets `middle`/`end`.
+Known gaps: a syllable more than about 14 pt from its note is dropped (seen: "fraine" and a few words
+of a repeated phrase in a lute song), some hyphens are missing, and extender lines are not read.
+Check every word against the print.
 
 ## 4. Run it
 
 ```bash
 S=/Users/wattd/dev/ai-score-editing-workflows/.claude/skills/lilypond-pdf-score/scripts
-uv run --with pymupdf python -I $S/onset2.py score.pdf        # 0 misaligned in every system
-uv run --with pymupdf python -I $S/build.py score.pdf         # overlaps/gaps per voice must be 0
-uv run --with pymupdf python -I $S/mxl.py score.pdf out.musicxml \
-  --title "Title" --composer "Name" --names Cantus,Contra,Tenor,Bassus --fifths -2
+run() { uv run --with pymupdf --with fonttools --with mido python -I "$@"; }
+run $S/extract.py score.pdf 4 [pages]        # bar sums per staff per system: each should add up
+run $S/onset2.py  score.pdf 4 [pages]        # 0 misaligned columns
+run $S/mxl.py score.pdf out.musicxml --title "Title" --composer "Name" --names S,A,T,B \
+    [--pages 1] [--clefs G,G,G8,F] [--fifths -2] [--time 4/4] [--no-pickup] [--scrambled]
+run $S/check_midi.py out.musicxml score.mid     # exact pitches, accidentals, ties vs the MIDI
+run $S/check_midi.py score.pdf score.mid        # reader level, before writing XML
 ```
 
-`mxl.py` writes divisions 4, cut time (2/2 `symbol="cut"`), ties split at barlines, shown
-accidentals for printed flats, ficta and courtesy naturals, lyrics on the first tied piece.
-The top voice is written as treble clef with octave-change -1 and sounding pitch one octave
-below the printed note, which matches Sibelius "Treble down 8". Check the time signature and
-clef against the print yourself.
+`check_midi.py` matches each part to a MIDI track and reports the first differing note. Read it
+with care: (1) MIDI often unfolds repeats, so a read that stops where the print has a repeat sign
+is expected; (2) the MIDI can be an octave off the print for treble-8 voices (an alto an octave
+high and a tenor an octave low in one test file): the clef printed in the PDF decides the octave,
+not the MIDI.
 
 ## 5. Import and proofread (Sibelius)
 
-Import with `OpenScore` (the "Open MusicXML File" dialog needs a click on OK, see the
-`sibelius` skill), then `ExportScore ... SIBL`. Compare **every bar of every voice against the
-print**, page by page; Sibelius re-lays the systems, but bar numbers and notes should match.
-Fix in place with `apply`: `set-pitch` for a wrong note, `delete` (type LyricItem) plus
-`add-lyric` for words (syllableType only `middle` or `end`; use `middle` where a hyphen follows).
+Import with `OpenScore` (the "Open MusicXML File" dialog needs a click on OK, see the `sibelius`
+skill), then `ExportScore ... SIBL`. Compare **every bar of every voice against the print**,
+page by page, at 200 dpi, looking for explicit accidentals especially: the first run on the
+Brumel piece dropped a flat that sat right after the key signature at the start of a system
+(Cantus bar 44, A flat) and a proofread by eye did not catch it; the glyph list did.
 
-Known gaps after a run: some hyphens in the voices you did not check word by word may be
-missing; the print's lyric extender lines are not reproduced; system and page breaks differ
-from the print.
+Fix in place with `apply`: `set-pitch` for a note, `delete` (type LyricItem) plus `add-lyric` for
+words (syllableType only `middle` or `end`).
 
-## Verified on
+## Validation (Mutopia, LilyPond 2.12.2 unless noted)
 
-Brumel, "Du tout plongiet - Fors seulement", 3 pages, two flats, cut-C: 62 bars, four voices,
-all pitches, ties, accidentals, rests and lyrics checked against the print.
+All compared with the MIDI each piece ships; Brumel (LilyPond PDF re-saved by Preview) was
+compared with the earlier hand-proofread score.
+
+| Piece | Layout | Result |
+|---|---|---|
+| Il Est de Bonne Heure Ne (anon., c.1470) | SATB, 2/2, pickup, repeats, treble-8 tenor, beamed eighths and sixteenths, ties over system breaks; page 2 is a piano practice staff (skipped) | All 4 parts match the MIDI note for note (72, 67, 62, 68 notes), onsets and accidentals |
+| Unquiet Thoughts (Dowland) | SATB lute-song layout, two flats, 2/1 | 65 of 66, 79 of 80, 81 of 82, 61 of 62 notes; the last note is where the print has a repeat and the MIDI jumps |
+| Come Again (Dowland) | SATB, 4/2 to 2/2 to 6/2 | All 4 parts match the MIDI (43, 45, 49, 44 notes); time changes written |
+| Nuz my dzis krzescijani (2.8.7) | S, A, and T+B sharing one bass staff | Refused with a clear message (two voices on a staff) |
+| Obrecht, Missa Malheur me bat, Kyrie (CPDL, LilyPond 2.18.2) | SATB, 3/1 and cut-C, treble-8 voices, clef changes at the Christe | Kyrie I matches the MIDI: Superius 26 of 26 notes, Altus 75, Tenor 94, Bassus 80. The Christe and Kyrie II were not verified: the MIDI keeps them in separate tracks and the first notes of the Christe differ, which may be a clef read or a stale MIDI |
+| de la Rue, Secretz regretz (CPDL, 2.18.2) and Bianciardi, Ego dormivi (CPDL, 2.22.1) | Unbarred editions with ligature brackets, neomensural note shapes and incipits | Not readable yet: voices disagree on duration wherever a ligature is used (`noteheads.srM1neomensural` and similar). Their zips ship a MIDI, so they are good test cases for ligature support |
+| Brumel, Du tout plongiet (Preview-saved) | 4 staves, mensural incipit, cut-C | Identical to the proofread score except one explicit A flat (bar 44, Cantus) that the first reader dropped |
+
+Limits found on the CPDL files: ligature editions (neomensural heads inside `brackettips`) are not
+read; an edition without barlines still gets a system timeline, but there is nothing to check bar sums
+against; a clef change inside the piece is applied to the notes after it, but the MusicXML only carries
+the opening clefs (the pitches are right, the clef sign is not repeated); incipit clefs are
+`clefs.petrucci.*` and are ignored.
+
+What the validation changed in the code: glyph names instead of ids; sizes scaled; ties and beams
+(rect beams) read; pickup grid; bar-length changes; time-signature changes; incipit skipped;
+clef and key found from the print; key signature kept apart from note accidentals.
