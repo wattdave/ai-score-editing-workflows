@@ -14,7 +14,8 @@ NAT = {"accidentals.natural", "accidentals.0"}
 # Some editions draw their breves with the neomensural shape; incipits use it too (see extract)
 NEO = {"noteheads.sM1neomensural": "B", "noteheads.srM1neomensural": "B",
        "noteheads.uM2neomensural": "L", "noteheads.dM2neomensural": "L",
-       "noteheads.urM2neomensural": "L", "noteheads.drM2neomensural": "L"}   # B = breve (8 beats), L = longa (16)
+       "noteheads.urM2neomensural": "L", "noteheads.drM2neomensural": "L",
+       "noteheads.uM2": "L", "noteheads.dM2": "L"}   # B = breve (8 beats), L = longa (16)
 
 
 def head_kind(name):
@@ -22,16 +23,56 @@ def head_kind(name):
     return HEAD.get(name) or NEO.get(name)
 
 
-def group_systems(pg, nvoices):
+def group_systems(pg, nvoices, names=None):
+    """[(staff indexes, voice index of each)] per system.
+    Usually every system has all the voices in order. LilyPond can hide a resting staff (RemoveEmptyStaves), so a
+    system may have fewer staves: then systems are found from the vertical gaps and each staff is matched to a
+    voice by the name or abbreviation printed in the left margin (the first three letters)."""
     n = len(pg.staves)
-    if n % nvoices:
-        raise SystemExit(f"page {pg.pn+1}: {n} staves is not a multiple of {nvoices} voices; "
-                         "this reader needs one voice per staff (see SKILL.md)")
-    return [list(range(i, i + nvoices)) for i in range(0, n, nvoices)]
+    gaps = [pg.staves[i + 1]["top"] - pg.staves[i]["bot"] for i in range(n - 1)]
+    positional = [(list(range(i, i + nvoices)), list(range(nvoices))) for i in range(0, n, nvoices)] if n % nvoices == 0 else None
+    med = sorted(gaps)[len(gaps) // 2] if gaps else 0
+    systems, cur = [], [0]
+    for i, g in enumerate(gaps):
+        if g > 1.3 * med:
+            systems.append(cur)
+            cur = []
+        cur.append(i + 1)
+    systems.append(cur)
+    if all(len(sts) == nvoices for sts in systems):
+        return [(sts, list(range(nvoices))) for sts in systems]
+    if positional and not all(pg.label(st) for sts in systems for st in sts):
+        return positional      # no names printed to tell the staves apart: assume full systems, in order
+    out = []
+    for sts in systems:
+        if len(sts) == nvoices:
+            out.append((sts, list(range(nvoices))))
+            continue
+        if not names:
+            raise SystemExit(f"page {pg.pn+1}: a system has {len(sts)} staves, not {nvoices}, and the first system's "
+                             "names are not known to match them (see SKILL.md)")
+        vids = []
+        for st in sts:
+            lab = pg.label(st)
+            hit = [v for v, nm in enumerate(names) if lab[:3] and nm[:3] == lab[:3]]
+            if len(hit) != 1:
+                raise SystemExit(f"page {pg.pn+1}: cannot tell which voice staff {st} is (label {lab!r})")
+            vids.append(hit[0])
+        out.append((sts, vids))
+    return out
+
+
+def first_system_names(D, nvoices):
+    pg = D.pages[0]
+    if len(pg.staves) < nvoices:
+        return None
+    names = [pg.label(i) for i in range(nvoices)]
+    return names if all(names) else None
 
 
 def extract(D, nvoices=4, pages=None):
     out = []
+    names = first_system_names(D, nvoices)
     for pg in D.pages:
         if pages is not None and pg.pn not in pages:
             continue
@@ -119,17 +160,57 @@ def extract(D, nvoices=4, pages=None):
                        for (cx0, cy0, cx1, cy1) in pg.curves):
                     b["tie"] = True
             # a tie that runs over a system break shows as a stub ending at the first note of the next system
+            # a small "3" over or under a bracket: the three events nearest its centre are a triplet (2/3 length)
+            ev = events[si]
+            s_ = pg.staves[si]
+            for w in pg.words:
+                if w[4] != "3":
+                    continue
+                wy, wx = (w[1] + w[3]) / 2, (w[0] + w[2]) / 2
+                dist = max(s_["top"] - wy, wy - s_["bot"], 0)
+                if dist < sp or dist > 3 * sp or not (s_["x0"] <= wx <= s_["x1"]) or len(ev) < 3:
+                    continue
+                i = min(range(len(ev)), key=lambda j: abs(ev[j]["x"] + 2 * k - wx))
+                i = min(max(i, 1), len(ev) - 2)
+                # the digit belongs to the nearest staff only
+                if any(max(o["top"] - wy, wy - o["bot"], 0) < dist for o in pg.staves if o is not s_ and o["x0"] <= wx <= o["x1"]):
+                    continue
+                for x_ in ev[i - 1:i + 2]:
+                    x_["tup"] = True
             if nn:
                 a0 = nn[0]
                 ya = pg.staves[si]["bot"] - a0["hs"] * sp / 2
                 if any(abs(cx1 - a0["x"]) < 6 * k and cx0 < a0["x"] - 4 * k and abs((cy0 + cy1) / 2 - ya) < 3.2 * sp
                        and cx0 >= pg.staves[si]["x0"] for (cx0, cy0, cx1, cy1) in pg.curves):
                     a0["tie_in"] = True
-        for sts in group_systems(pg, nvoices):
+        for sts, vids in group_systems(pg, nvoices, names):
             ytop = pg.staves[sts[0]]["top"] - 15
             ybot = pg.staves[sts[-1]]["bot"] + 5
             bl = sorted({round(x, 1) for (x, y, h) in bar_rects if ytop <= y <= ybot})
-            systems.append(dict(staves=sts, bars=bl, x0=pg.staves[sts[0]]["x0"], x1=pg.staves[sts[0]]["x1"]))
+            # a whole rest centred between two barlines is a rest for the whole bar, which can be longer than a whole
+            # note (a bar of a breve and a half); take the bar length from the other staves' bars
+            if len(bl) >= 2:
+                full = []
+                for si in sts:
+                    for e in events[si]:
+                        if e["t"] == "R" and e["name"] == "rests.0":
+                            lo = [b for b in bl if b < e["x"]]
+                            hi = [b for b in bl if b > e["x"] + 2 * k]
+                            if lo and hi and abs(e["x"] + 2 * k - (lo[-1] + hi[0]) / 2) < 5 * k:
+                                full.append(e)
+                if full:
+                    sums = {}
+                    for si in sts:
+                        for e in events[si]:
+                            if e not in full and e["x"] > bl[0]:
+                                b = sum(1 for x in bl if x < e["x"] + 3)
+                                sums[(si, b)] = sums.get((si, b), 0) + dur(e)
+                    from collections import Counter
+                    c = Counter(round(v, 2) for v in sums.values() if v >= 4)
+                    if c:
+                        for e in full:
+                            e["dur"] = c.most_common(1)[0][0]
+            systems.append(dict(staves=sts, voices=vids, bars=bl, x0=pg.staves[sts[0]]["x0"], x1=pg.staves[sts[0]]["x1"]))
         out.append(dict(pn=pg.pn, events={si: events[si] for si in events}, systems=systems, staves=pg.staves))
     return out
 
@@ -146,7 +227,7 @@ def dur(e):
     for _ in range(e["dots"]):
         d += add
         add /= 2
-    return d
+    return d * 2 / 3 if e.get("tup") else d
 
 
 if __name__ == "__main__":
