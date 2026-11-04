@@ -93,8 +93,15 @@ and 2.12.2) and font size (every metric scales with the notation size).
 ## 3. Lyrics
 
 For a file written by LilyPond the text layer is usable: characters are read as they are, words are
-split on gaps, hyphens are drawn rects (about 2.3 wide, 0.22 high), and each syllable goes to the
-nearest unused note.
+split by text span (LilyPond writes each word as its own span; a gap rule alone glued "brief temps"),
+hyphens are drawn rects (about 2.3 wide, 0.22 high), and each syllable goes to the nearest unused
+note. Words may sit up to 14 pt plus 0.3 of their width from the note (long words such as "fraine,"
+were dropped at 14). Bar numbers share the text font and are skipped. An **elision** (`re~e` in the
+source, two syllables on one note) is marked by a `ties.lyric.default` glyph between the two
+words; they are joined as `re‿e` on that note. Words that find no note are collected in
+`build.DROPPED` (page, staff, text, x, y, distance): print it after a run, it should be empty.
+Checked against the `.ly` lyrics for Secretz regretz (Superius and Contra exact; Tenor and Bassus
+differ only by the `ij.` repeat text the print omits).
 
 A **re-saved** PDF can have a scrambled text layer (the Brumel PDF): copying text gives nonsense.
 Pass `--scrambled`; letters then come from a glyph-id to letter table in `lyr.py` (`SH`), which is
@@ -115,6 +122,8 @@ run $S/onset2.py  score.pdf 4 [pages]        # 0 misaligned columns
 run $S/mxl.py score.pdf out.musicxml --title "Title" --composer "Name" --names S,A,T,B \
     [--pages 1] [--clefs G,G,G8,F] [--fifths -2] [--time 4/4] [--no-pickup] [--scrambled]
 run $S/check_midi.py out.musicxml score.mid     # exact pitches, accidentals, ties vs the MIDI
+#   a MIDI that plays a repeat or volta the print writes once is longer: the checker accepts it when the
+#   notes after the first difference are exactly the MIDI's last notes (repeats are not written to the XML)
 run $S/check_midi.py score.pdf score.mid        # reader level, before writing XML
 ```
 
@@ -143,7 +152,7 @@ compared with the earlier hand-proofread score.
 | Piece | Layout | Result |
 |---|---|---|
 | Il Est de Bonne Heure Ne (anon., c.1470) | SATB, 2/2, pickup, repeats, treble-8 tenor, beamed eighths and sixteenths, ties over system breaks; page 2 is a piano practice staff (skipped) | All 4 parts match the MIDI note for note (72, 67, 62, 68 notes), onsets and accidentals |
-| Unquiet Thoughts (Dowland) | SATB lute-song layout, two flats, 2/1 | 65 of 66, 79 of 80, 81 of 82, 61 of 62 notes; the last note is where the print has a repeat and the MIDI jumps |
+| Unquiet Thoughts (Dowland) | SATB lute-song layout, two flats, 2/1 | All notes match; the MIDI (89, 104, 108, 83 notes) plays the repeat and the first-time ending, and the checker confirms the print's last notes equal the MIDI's ending. Repeat signs and voltas are not written to the MusicXML |
 | Come Again (Dowland) | SATB, 4/2 to 2/2 to 6/2 | All 4 parts match the MIDI (43, 45, 49, 44 notes); time changes written |
 | Nuz my dzis krzescijani (2.8.7) | S, A, and T+B sharing one bass staff | Refused with a clear message (two voices on a staff) |
 | Obrecht, Missa Malheur me bat, Kyrie (CPDL, LilyPond 2.18.2) | SATB, 3/2, 4/4 and cut-C, treble-8 voices, hidden resting staves, 3:2 triplets, longas, an unbarred Kyrie II | All 63, 236, 233 and 196 notes match the MIDI pitch for pitch (the MIDI splits Kyrie I and the rest into tracks i and i+4; join them), 0 misaligned columns. The 2021 Finale MusicXML on CPDL matches too except it drops one longa-plus-note in the bass and times some bars differently, so it is not a ground truth |

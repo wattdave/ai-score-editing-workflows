@@ -32,6 +32,13 @@ def midi_voices(path):
     return tracks
 
 
+def repeat_tail(mine, t, k):
+    """The MIDI plays repeats and voltas that the print writes once: when the notes of mine after the first
+    difference are exactly the MIDI's last notes (same pitches), the print is right and the MIDI is longer."""
+    rest = len(mine) - k
+    return 0 < rest <= len(t) - k and all((a[1] - b[1]) % 12 == 0 for a, b in zip(mine[k:], t[len(t) - rest:]))
+
+
 def xml_voices(path):
     """notes of a MusicXML file as (onset beats, midi pitch, duration) per part, ties merged"""
     import xml.etree.ElementTree as ET
@@ -82,6 +89,10 @@ def main_xml(xml, mid):
         octs = Counter(round((a_[1] - b_[1]) / 12) for a_, b_ in zip(mine[:k], t[:k]))
         octave = octs.most_common(1)[0][0] if octs else 0
         full = k >= len(mine)
+        if not full and repeat_tail(mine, t, k):
+            print(f"part {vi + 1} -> midi track {ti}: OK, every note matches (midi has {len(t)}: it plays a repeat the print writes once; "
+                  f"the last {len(mine) - k} notes match its ending)")
+            continue
         print(f"part {vi + 1} -> midi track {ti}: {'every note matches' if full else f'matches {k} of {len(mine)} notes'}"
               f" (midi has {len(t)}; extra = repeats)" + (f"; MIDI is {-octave} octave(s) off the print" if octave else ""))
         if not full:
@@ -132,11 +143,14 @@ def main():
         octs = Counter(round((a_[1] - b_[1]) / 12) for a_, b_ in zip(mine[:k], t[:k]))
         octave = octs.most_common(1)[0][0] if octs else 0
         status = "OK, every note matches" if k >= min(len(mine), len(t)) and len(mine) == len(t) else f"matches {k} notes of {len(mine)} (midi {len(t)})"
+        tail = k < min(len(mine), len(t)) and repeat_tail(mine, t, k)
+        if tail:
+            status = f"OK, every note matches (midi has {len(t)}: it plays a repeat the print writes once; the last {len(mine) - k} notes match its ending)"
         print(f"voice {vi} -> midi track {ti}: {status}" + (f"; MIDI is {-octave} octave(s) off the print here" if octave else ""))
-        if k < min(len(mine), len(t)):
+        if k < min(len(mine), len(t)) and not tail:
             print("   first difference: mine", [(round(x, 2), p) for x, p, _ in mine[k:k + 3]], " midi", [(round(x, 2), p) for x, p, _ in t[k:k + 3]])
         else:
-            print("   pitches off by a semitone (accidental?):", sum(1 for a_, b_ in zip(mine, t) if (a_[1] - b_[1]) % 12 != 0))
+            print("   pitches off by a semitone (accidental?):", sum(1 for a_, b_ in zip(mine[:k], t[:k]) if (a_[1] - b_[1]) % 12 != 0))
 
 
 if __name__ == "__main__":
