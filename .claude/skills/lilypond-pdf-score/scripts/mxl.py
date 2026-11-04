@@ -74,6 +74,8 @@ def build(pdf,out,title,composer,names=None,nvoices=4,pages=None,clefs=None,fift
     for v in voices:
         for e in v: e["onset"]+=shift/DIV
     total=max(round((v_["onset"]+v_["dur"])*DIV) for v in voices for v_ in v)
+    reps,vols=repeat_events(systems,starts)
+    marks=sorted({int(round(t*DIV))+shift for t,_ in reps}|{int(round(t*DIV))+shift for a,b_,_ in vols for t in (a,b_)})
     # bar edges in divisions, following the time-signature changes
     sigs=[x for x in sigs if x[0]>0]
     edges=[0]; cur=(beats,beattype,symbol); si_=0; changes={0:cur}
@@ -83,10 +85,41 @@ def build(pdf,out,title,composer,names=None,nvoices=4,pages=None,clefs=None,fift
         blen=int(round(cur[0]*4/cur[1]*DIV))
         nxt=edges[-1]+blen
         if si_<len(sigs) and edges[-1]<sigs[si_][0]<nxt: nxt=sigs[si_][0]   # the change falls inside a bar: cut it short
+        # a repeat sign or volta that falls inside a bar (the print's barline is not on this grid, as when an ending
+        # is a half bar): cut the measure there. Marks within half a beat of the grid are rounding, not cuts.
+        for c_ in marks:
+            if edges[-1]+DIV//2<c_<nxt-DIV//2: nxt=c_; break
         edges.append(nxt)
     nbars=len(edges)-1
     import bisect
     def bar_of(o): return bisect.bisect_right(edges,o)-1
+    # repeat signs and voltas: snap each beat to the nearest bar edge, then attach them to measures
+    def edge_of(t):
+        d=int(round(t*DIV))+shift
+        i=bisect.bisect_left(edges,d)
+        if i>=len(edges): return len(edges)-1
+        return i-1 if i>0 and d-edges[i-1]<edges[i]-d else i
+    left={}; right={}        # measure index -> list of barline children
+    for t,kind in reps:
+        i=edge_of(t)
+        if kind in ("fwd","both") and i<nbars: left.setdefault(i,{})["fwd"]=True
+        if kind in ("back","both") and i>0: right.setdefault(i-1,{})["back"]=True
+    for t0,t1,n in vols:
+        i0,i1=edge_of(t0),edge_of(t1)
+        if i1>i0 and i0<nbars:
+            left.setdefault(i0,{})["end_start"]=n
+            right.setdefault(i1-1,{})["end_stop"]=n
+    def barline(loc,d):
+        c=""
+        if loc=="left":
+            if d.get("fwd"): c+='<bar-style>heavy-light</bar-style>'
+            if d.get("end_start"): c+=f'<ending number="{d["end_start"]}" type="start"/>'
+            if d.get("fwd"): c+='<repeat direction="forward"/>'
+        else:
+            if d.get("back"): c+='<bar-style>light-heavy</bar-style>'
+            if d.get("end_stop"): c+=f'<ending number="{d["end_stop"]}" type="{"stop" if d.get("back") else "discontinue"}"/>'
+            if d.get("back"): c+='<repeat direction="backward"/>'
+        return f'<barline location="{loc}">{c}</barline>' if c else ""
     X=['<?xml version="1.0" encoding="UTF-8"?>','<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">','<score-partwise version="3.1">',f'<work><work-title>{escape(title)}</work-title></work>',f'<identification><creator type="composer">{escape(composer)}</creator></identification>','<part-list>']
     for i,n in enumerate(names): X.append(f'<score-part id="P{i+1}"><part-name>{n}</part-name></score-part>')
     X.append('</part-list>')
@@ -129,6 +162,7 @@ def build(pdf,out,title,composer,names=None,nvoices=4,pages=None,clefs=None,fift
                     X.append(f'<attributes><time{tsym}><beats>{bb}</beats><beat-type>{bt}</beat-type></time>')
                 X.append('</attributes>')
             state={}
+            if b in left: X.append(barline('left',left[b]))
             for o,d,e in bars.get(b,[]):
                 parts=[d] if e.get('tup') else pieces(d)
                 for pi,pn in enumerate(parts):
@@ -163,6 +197,7 @@ def build(pdf,out,title,composer,names=None,nvoices=4,pages=None,clefs=None,fift
                         nx+=f'<lyric number="1"><syllabic>{sy}</syllabic><text>{escape(tx)}</text></lyric>'
                     nx+='</note>'
                     X.append(nx)
+            if b in right: X.append(barline('right',right[b]))
             X.append('</measure>')
         X.append('</part>')
     X.append('</score-partwise>')

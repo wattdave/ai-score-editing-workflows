@@ -167,7 +167,7 @@ def extract(D, nvoices=4, pages=None):
                 if a["hs"] != b["hs"]:
                     continue
                 ya = pg.staves[si]["bot"] - a["hs"] * sp / 2
-                if any(cx0 >= a["x"] + 2 * k and cx1 <= b["x"] + 4 * k and cx1 - cx0 > 3 * k and abs((cy0 + cy1) / 2 - ya) < 3.2 * sp
+                if any(cx0 >= a["x"] + 2 * k and cx1 <= b["x"] + 4 * k and cx1 - cx0 > 3 * k and cy1 - cy0 <= 1.3 * sp and abs((cy0 + cy1) / 2 - ya) < 3.2 * sp
                        for (cx0, cy0, cx1, cy1) in pg.curves):
                     b["tie"] = True
             # a tie that runs over a system break shows as a stub ending at the first note of the next system
@@ -224,9 +224,40 @@ def extract(D, nvoices=4, pages=None):
                         for e in full:
                             e["dur"] = c.most_common(1)[0][0]
                             e["full"] = True        # centred in its bar: its x is not where the bar starts
-            systems.append(dict(staves=sts, voices=vids, bars=bl, x0=pg.staves[sts[0]]["x0"], x1=pg.staves[sts[0]]["x1"]))
+            rb, rv = repeat_marks(pg, sts[0])
+            systems.append(dict(staves=sts, voices=vids, bars=bl, rbars=rb, voltas=rv, x0=pg.staves[sts[0]]["x0"], x1=pg.staves[sts[0]]["x1"]))
         out.append(dict(pn=pg.pn, events={si: events[si] for si in events}, systems=systems, staves=pg.staves))
     return out
+
+
+def repeat_marks(pg, si):
+    """Repeat barlines and voltas of the system whose top staff is si.
+    bars: [(x, 'fwd' | 'back' | 'both')]: a thick bar (>2 pt wide, as tall as the staff) with a pair of dots
+    (spaces 2 and 3) just right of it (start repeat) or just left of it (end repeat).
+    voltas: [(x0, x1, number)]: a stroked horizontal line above the staff with its "1." or "2." beside the left end."""
+    s = pg.staves[si]
+    k = pg.k
+    h = s["bot"] - s["top"]
+    thick = sorted({round(x, 1) for (x, y, w, hh) in pg.rects if w > 2 * k * 0.9 and abs(y - s["top"]) < 1.5 and hh > 0.9 * h and hh < 1.5 * h})
+    dots = {}
+    for g in pg.glyphs:
+        if g["name"] == "dots.dot" and s["top"] - 1 < g["y"] < s["bot"] + 1:
+            dots.setdefault(round(g["x"], 0), set()).add(pg.hs(si, g["y"]))
+    pairs = [x for x, hs in dots.items() if {3, 5} <= hs]
+    bars = []
+    for x in thick:
+        right = any(3 * k <= px - x <= 11 * k for px in pairs)
+        left = any(3 * k <= x - px <= 11 * k for px in pairs)
+        if right or left:
+            bars.append((x, "both" if right and left else "fwd" if right else "back"))
+    voltas = []
+    for (x0, x1, y) in pg.hlines:
+        if s["top"] - 20 * k < y < s["top"] - k and x0 >= s["x0"] - 2:
+            lab = [w[4] for w in pg.words if x0 - 3 <= w[0] <= x0 + 14 * k and y - 9 * k < (w[1] + w[3]) / 2 < y + 3 * k
+                   and w[4].rstrip(".").isdigit()]
+            if lab:
+                voltas.append((x0, x1, int(lab[0].rstrip("."))))
+    return bars, sorted(voltas)
 
 
 def dur(e):

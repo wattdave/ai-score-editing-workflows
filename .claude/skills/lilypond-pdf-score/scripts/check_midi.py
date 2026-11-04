@@ -39,16 +39,79 @@ def repeat_tail(mine, t, k):
     return len(t) > len(mine) and 0 < rest <= len(t) - k and all((a[1] - b[1]) % 12 == 0 for a, b in zip(mine[k:], t[len(t) - rest:]))
 
 
-def xml_voices(path):
-    """notes of a MusicXML file as (onset beats, midi pitch, duration) per part, ties merged"""
+def play_order(measures):
+    """Measure indexes in playing order for a list of (forward, backward, ending number or None) flags: a repeat
+    plays its section twice, a numbered ending only on its own pass."""
+    order, i, start, passn = [], 0, 0, 1
+    ending = None            # the ending number in force, until a stop
+    n = len(measures)
+    done, seen = set(), set()
+    while i < n:
+        fwd, back, endn, endstop = measures[i]
+        if fwd:
+            start = i
+            if i not in seen:
+                passn = 1
+            seen.add(i)
+        if endn is not None:
+            ending = endn
+        if ending is not None and ending != passn:
+            # not this pass's ending: skip to after its stop
+            while i < n and not measures[i][3]:
+                i += 1
+            ending = None
+            i += 1
+            continue
+        order.append(i)
+        if back and i not in done:
+            done.add(i)
+            passn += 1
+            i = start
+            ending = None
+            continue
+        if endstop:
+            ending = None
+        if back:
+            passn = 1
+        i += 1
+    return order
+
+
+def xml_voices(path, expand=False):
+    """notes of a MusicXML file as (onset beats, midi pitch, duration) per part, ties merged. With expand, repeat
+    barlines and numbered endings are played out as a MIDI file would."""
     import xml.etree.ElementTree as ET
     root = ET.parse(path).getroot()
     out = []
     for part in root.findall("part"):
+        meas = part.findall("measure")
+        flags = []
+        for m in meas:
+            fwd = back = False
+            endn = None
+            endstop = False
+            for bl in m.findall("barline"):
+                rp = bl.find("repeat")
+                if rp is not None:
+                    fwd = fwd or rp.get("direction") == "forward"
+                    back = back or rp.get("direction") == "backward"
+                en = bl.find("ending")
+                if en is not None:
+                    if en.get("type") == "start":
+                        endn = int(en.get("number").split(",")[0])
+                    else:
+                        endstop = True
+            flags.append((fwd, back, endn, endstop))
+        order = play_order(flags) if expand else range(len(meas))
         t = 0.0
         div = 1
+        for m in meas:                      # divisions are set once, in the first measure
+            if m.find("attributes/divisions") is not None:
+                div = int(m.find("attributes/divisions").text)
+                break
         notes = []
-        for m in part.findall("measure"):
+        for mi in order:
+            m = meas[mi]
             for el in m:
                 if el.tag == "attributes" and el.find("divisions") is not None:
                     div = int(el.find("divisions").text)
@@ -56,9 +119,9 @@ def xml_voices(path):
                     d = int(el.find("duration").text) / div
                     p = el.find("pitch")
                     if p is not None:
-                        midi = 12 * (int(p.find("octave").text) + 1) + BASE["CDEFGAB".index(p.find("step").text)] \
-                            + int(float(p.find("alter").text)) if p.find("alter") is not None else \
-                            12 * (int(p.find("octave").text) + 1) + BASE["CDEFGAB".index(p.find("step").text)]
+                        midi = 12 * (int(p.find("octave").text) + 1) + BASE["CDEFGAB".index(p.find("step").text)]
+                        if p.find("alter") is not None:
+                            midi += int(float(p.find("alter").text))
                         stops = [x for x in el.findall("tie") if x.get("type") == "stop"]
                         if stops and notes and notes[-1][1] == midi:
                             notes[-1] = (notes[-1][0], midi, notes[-1][2] + d)
@@ -69,9 +132,29 @@ def xml_voices(path):
     return out
 
 
+def _score(xv, mv):
+    used, total = set(), 0
+    for mine in xv:
+        best = (-1, None)
+        for ti, t in enumerate(mv):
+            if ti in used:
+                continue
+            k = 0
+            while k < min(len(mine), len(t)) and abs(mine[k][0] - t[k][0]) < 0.02 and (mine[k][1] - t[k][1]) % 12 == 0:
+                k += 1
+            if k > best[0]:
+                best = (k, ti)
+        used.add(best[1])
+        total += best[0]
+    return total
+
+
 def main_xml(xml, mid):
     mv = midi_voices(mid)
-    xv = xml_voices(xml)
+    plain, played = xml_voices(xml), xml_voices(xml, expand=True)
+    xv = played if _score(played, mv) > _score(plain, mv) else plain
+    if xv is played and played != plain:
+        print("(repeats and endings in the MusicXML are played out, as the MIDI does)")
     used = set()
     for vi, mine in enumerate(xv):
         best = None

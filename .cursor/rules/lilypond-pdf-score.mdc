@@ -90,6 +90,10 @@ and 2.12.2) and font size (every metric scales with the notation size).
   of a system are anchored on columns shared with the other voices. `onset2.py` prints per-system
   totals and misaligned columns; it must say **0 misaligned** before you go on (a few misaligned
   columns pointed at a missed beam, a missed tie, or a missed 16th rest).
+- **Repeats and voltas.** A thick barline with a pair of dots (spaces 3 and 5) is a repeat: dots to its right
+  start one, dots to its left end one (both for a double sign). A horizontal line above the top staff with a
+  "1." or "2." beside its left end is a volta. They are written as `<repeat>` and `<ending>` barlines, with a
+  bar cut where a mark falls inside a bar. Only the top staff's marks are used.
 - **Mensurstriche** (barlines between staves only, notes crossing them): the MusicXML uses regular
   bars with ties across barlines; barline x positions are not used to assign bars.
 
@@ -125,8 +129,9 @@ run $S/onset2.py  score.pdf 4 [pages]        # 0 misaligned columns
 run $S/mxl.py score.pdf out.musicxml --title "Title" --composer "Name" --names S,A,T,B \
     [--pages 1] [--clefs G,G,G8,F] [--fifths -2] [--time 4/4] [--no-pickup] [--scrambled]
 run $S/check_midi.py out.musicxml score.mid     # exact pitches, accidentals, ties vs the MIDI
-#   a MIDI that plays a repeat or volta the print writes once is longer: the checker accepts it when the
-#   notes after the first difference are exactly the MIDI's last notes (repeats are not written to the XML)
+#   a MIDI that plays repeats and voltas: for a MusicXML the checker plays them out as well and uses
+#   whichever of the plain and played-out reading fits the MIDI; for a PDF it accepts a longer MIDI when the
+#   notes after the first difference are exactly the MIDI's last notes
 run $S/check_midi.py score.pdf score.mid        # reader level, before writing XML
 ```
 
@@ -135,6 +140,14 @@ with care: (1) MIDI often unfolds repeats, so a read that stops where the print 
 is expected; (2) the MIDI can be an octave off the print for treble-8 voices (an alto an octave
 high and a tenor an octave low in one test file): the clef printed in the PDF decides the octave,
 not the MIDI.
+
+### Ground truth when the zip has no MIDI (Hawthorne sources)
+
+The Hawthorne `.ly` files are old syntax. Run `convert-ly -e` on them, then compile in a sandbox
+(`lilypond -dsafe` is gone since 2.23.12; use `sandbox-exec -f profile.sb lilypond`, write access to the
+output folder only). The paper-layout includes fail on 2.26, so write a small `midi.ly` that defines the
+macros the parts use (`fourTwoCommonTime`, `ijLyrics`, `ficta` and similar) and includes only the parts file.
+Compile only sources the user has agreed you may run.
 
 ## 5. Import and proofread (Sibelius)
 
@@ -155,13 +168,13 @@ compared with the earlier hand-proofread score.
 | Piece | Layout | Result |
 |---|---|---|
 | Il Est de Bonne Heure Ne (anon., c.1470) | SATB, 2/2, pickup, repeats, treble-8 tenor, beamed eighths and sixteenths, ties over system breaks; page 2 is a piano practice staff (skipped) | All 4 parts match the MIDI note for note (72, 67, 62, 68 notes), onsets and accidentals |
-| Unquiet Thoughts (Dowland) | SATB lute-song layout, two flats, 2/1 | All notes match; the MIDI (89, 104, 108, 83 notes) plays the repeat and the first-time ending, and the checker confirms the print's last notes equal the MIDI's ending. Repeat signs and voltas are not written to the MusicXML |
+| Unquiet Thoughts (Dowland) | SATB lute-song layout, two flats, 2/1 | All notes match; the MIDI (89, 104, 108, 83 notes) plays the repeat and the first-time ending, and the checker confirms the print's last notes equal the MIDI's ending. The MusicXML carries the repeat signs and the volta, and played out it equals the MIDI |
 | Come Again (Dowland) | SATB, 4/2 to 2/2 to 6/2 | All 4 parts match the MIDI (43, 45, 49, 44 notes); time changes written |
 | Nuz my dzis krzescijani (2.8.7) | S, A, and T+B sharing one bass staff | Refused with a clear message (two voices on a staff) |
 | Obrecht, Missa Malheur me bat, Kyrie (CPDL, LilyPond 2.18.2) | SATB, 3/2, 4/4 and cut-C, treble-8 voices, hidden resting staves, 3:2 triplets, longas, an unbarred Kyrie II | All 63, 236, 233 and 196 notes match the MIDI pitch for pitch (the MIDI splits Kyrie I and the rest into tracks i and i+4; join them), 0 misaligned columns. The 2021 Finale MusicXML on CPDL matches too except it drops one longa-plus-note in the bass and times some bars differently, so it is not a ground truth |
 | Verdelot, Fuggi fuggi cor mio (IMSLP, Hawthorne edition) | SAAB, cut-C, treble-8 voices, tied breves, elisions, italic repeat text | All 138, 139, 159 and 132 notes match the MIDI with `--final-breve`; lyrics exact against the .ly for all four voices |
-| Gibbons, The Silver Swan (IMSLP, Hawthorne edition) | five voices | 0 misaligned columns; lyrics exact against the .ly for all five voices (no MIDI in the zip; the 2013 source does not compile on LilyPond 2.26) |
-| Byrd, Though Amaryllis Dance in Green (IMSLP, Hawthorne edition) | five voices, 3/2, one text line (Superius only), ledger-line notes | 0 misaligned columns after the ledger-line fix; Superius lyrics exact against the .ly |
+| Gibbons, The Silver Swan (IMSLP, Hawthorne edition) | five voices | all 5 voices match the MIDI compiled from the .ly; lyrics exact |
+| Byrd, Though Amaryllis Dance in Green (IMSLP, Hawthorne edition) | five voices, 3/2, one text line (Superius only), ledger-line notes | all 5 voices match the compiled MIDI (the bass MIDI is an octave low); Superius lyrics exact |
 | Pearsall, Lay a Garland (IMSLP, Lilysetter, LilyPond 2.25.6) | eight voices on eight staves, dense cresc. spanners, 3 pages | 0 misaligned columns; 58 bars, as the IMSLP page says; no MIDI in the zip |
 | de la Rue, Secretz regretz (CPDL, 2.18.2) | SATB, 4/2, no pickup, mensural incipits at the left, neomensural breves and longas in the music, unusual thin barlines through all four staves | All 4 parts match the MIDI from the source zip (147, 132, 101, 109 notes) exactly, including accidentals and ties |
 | Bianciardi, Ego dormivi (CPDL, 2.22.1) | Same editor and layout, one flat, ficta, breves | All 4 parts match the MIDI (147, 168, 174, 99 notes) exactly |
