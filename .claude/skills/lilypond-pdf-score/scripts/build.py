@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from collections import Counter
 from onset2 import *
 from lyr import page_lyrics
+DROPPED = []   # lyric words that found no note (page, staff, text, x, y, distance): check these after a run
 
 DIGITS = {n: i for i, n in enumerate("zero one two three four five six seven eight nine".split())}
 
@@ -253,24 +254,36 @@ def collect(D, res, nvoices, clefs, beats_per_bar, fifths, pickup_shift=None):
             row = [t for t in ptoks[pg["pn"]] if sb < t["y"] - 5 < nxt and t["x0"] >= pgo.staves[st]["x0"]]
             row.sort(key=lambda t: t["x0"])
             notes = [ev for ev in voices[vi] if ev["sys"] == n and not ev.get("rest")]
-            sy = [t for t in row if t["text"] != "-"]
-            last = -1
+            sy = [t for t in row if t["text"] != "-" and not t["text"].isdigit()]   # bar numbers share the text font
+            last = last_before = -1
             for ti, t in enumerate(sy):
                 xc = (t["x0"] + t["x1"]) / 2
                 best = None
-                for k, ev in enumerate(notes):
-                    if k <= last:
-                        continue
-                    dxx = abs(xc - (ev["x"] + 2.6 * pgo.k))
-                    if best is None or dxx < best[0]:
-                        best = (dxx, k)
-                if best is None or best[0] > 14:
+                # an elision ("re~e", two syllables on one note) is set 2 pt apart with no hyphen between
+                elide = (ti > 0 and last >= 0 and any(
+                    g["name"] == "ties.lyric.default" and sy[ti - 1]["x1"] - 2 <= g["x"] <= t["x0"] + 2 and abs(g["y"] - t["y"]) < 6
+                    for g in pgo.glyphs) and abs(xc - (notes[last]["x"] + 2.6 * pgo.k)) < 14)
+                if elide:
+                    best = (abs(xc - (notes[last]["x"] + 2.6 * pgo.k)), last)
+                else:
+                    for k, ev in enumerate(notes):
+                        if k <= last:
+                            continue
+                        dxx = abs(xc - (ev["x"] + 2.6 * pgo.k))
+                        if best is None or dxx < best[0]:
+                            best = (dxx, k)
+                if best is None or best[0] > 14 + 0.3 * (t["x1"] - t["x0"]):
+                    DROPPED.append((pg["pn"] + 1, st, t["text"], round(t["x0"]), round(t["y"]), best and round(best[0], 1)))
                     continue
-                last = best[1]
+                last_before, last = last, best[1]
                 prev_x1 = sy[ti - 1]["x1"] if ti > 0 else -1e9
                 next_x0 = sy[ti + 1]["x0"] if ti + 1 < len(sy) else 1e9
                 after = [h for h in row if h["text"] == "-" and t["x1"] - 1 <= h["x0"] <= next_x0]
                 before = [h for h in row if h["text"] == "-" and prev_x1 - 1 <= h["x0"] <= t["x0"] + 1]
                 syl = "middle" if (after and before) else "begin" if after else "end" if before else "single"
-                notes[best[1]]["lyric"] = (t["text"], syl)
+                if best[1] == last_before:       # elision: "re" and "e" share one note
+                    prev_tx, prev_syl = notes[best[1]]["lyric"]
+                    notes[best[1]]["lyric"] = (prev_tx + "\u203f" + t["text"], syl if syl != "single" else prev_syl)
+                else:
+                    notes[best[1]]["lyric"] = (t["text"], syl)
     return voices, starts, systems

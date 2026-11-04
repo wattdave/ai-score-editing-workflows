@@ -26,13 +26,13 @@ def page_lyrics(doc, pn, scrambled=None):
     scrambled = SCRAMBLED if scrambled is None else scrambled
     size = lyric_size(doc)
     chars = []
-    for tr in doc[pn].get_texttrace():
+    for sid, tr in enumerate(doc[pn].get_texttrace()):
         if "Roma" not in tr["font"] or abs(tr["size"] - size) > 0.4:
             continue
         for ch in tr["chars"]:
             x0, y0, x1, y1 = ch[3]
             u = GM.get(ch[1], "?") if scrambled else chr(ch[0])
-            chars.append(dict(u=u, x0=x0, x1=x1, y=round(ch[2][1], 1), ox=ch[2][0]))
+            chars.append(dict(u=u, x0=x0, x1=x1, y=round(ch[2][1], 1), ox=ch[2][0], sp=sid))
     rows = {}
     for c in chars:
         rows.setdefault(c["y"], []).append(c)
@@ -45,13 +45,13 @@ def page_lyrics(doc, pn, scrambled=None):
                 if cur:
                     toks.append(cur)
                 cur = None
-            elif cur and c["x0"] - cur["x1"] < 1.6 and c["u"] != "-":
+            elif cur and c["x0"] - cur["x1"] < 1.6 and c["u"] != "-" and (scrambled or c["sp"] == cur["sp"]):   # LilyPond writes each word as its own text span
                 cur["text"] += c["u"]
                 cur["x1"] = c["x1"]
             else:
                 if cur:
                     toks.append(cur)
-                cur = dict(text=c["u"], x0=c["x0"], x1=c["x1"], y=y)
+                cur = dict(text=c["u"], x0=c["x0"], x1=c["x1"], y=y, sp=c["sp"])
                 if c["u"] == "-":
                     toks.append(cur)
                     cur = None
