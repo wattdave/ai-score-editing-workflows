@@ -74,7 +74,8 @@ if __name__ == "__main__":
             cols = defaultdict(dict)
             for st, (L, t) in ons.items():
                 for e, tt in L:
-                    cols[round(e["x"] / 1.5)][st] = round(tt, 3)
+                    if not e.get("full"):
+                        cols[round(e["x"] / 1.5)][st] = round(tt, 3)
             mism = [(k * 1.5, v) for k, v in sorted(cols.items()) if len(set(v.values())) > 1]
             print(f"p{pg['pn']+1} sys{si_+1} totals {[round(t,2) for _,t in ons.values()]} misaligned {len(mism)}")
             for m in mism[:3]:

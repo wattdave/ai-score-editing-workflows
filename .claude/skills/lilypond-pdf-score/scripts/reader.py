@@ -77,11 +77,19 @@ class Page:
                         lines.append((round(a.y, 2), min(a.x, b.x), max(a.x, b.x)))
         ys = sorted({l[0] for l in lines})
         self.staves = []
-        for i in range(0, len(ys) - 4, 5):
+        # five equally spaced long lines make a staff; other long horizontal lines (cresc. and dim. spanners,
+        # lyric extenders) are skipped over
+        i = 0
+        while i + 4 < len(ys):
             g = ys[i:i + 5]
-            xs = [l for l in lines if l[0] in g]
-            self.staves.append(dict(top=g[0], bot=g[4], sp=(g[4] - g[0]) / 4,
-                                    x0=min(l[1] for l in xs), x1=max(l[2] for l in xs)))
+            d = [g[j + 1] - g[j] for j in range(4)]
+            if max(d) - min(d) < 0.06 and 2.0 < d[0] < 7.0:
+                xs = [l for l in lines if l[0] in g]
+                self.staves.append(dict(top=g[0], bot=g[4], sp=(g[4] - g[0]) / 4,
+                                        x0=min(l[1] for l in xs), x1=max(l[2] for l in xs)))
+                i += 5
+            else:
+                i += 1
         self.glyphs = []
         for sp in p.get_texttrace():
             fn = sp["font"].split("+")[-1]
@@ -95,14 +103,23 @@ class Page:
         self.main = max(set(sizes), key=sizes.count) if sizes else 17.9
         self.k = self.main / 15.9      # scale of every metric hard-wired from the first test piece
         self.words = [(w[0], w[1], w[2], w[3], w[4]) for w in p.get_text("words")]
+        # short stroked vertical ticks (2.4 to 3.3 pt): the hooks of a tuplet bracket
+        self.hooks = [((d["rect"].x0 + d["rect"].x1) / 2, (d["rect"].y0 + d["rect"].y1) / 2) for d in p.get_drawings()
+                      if d["type"] == "s" and d["rect"].width < 0.5 and 2.4 < d["rect"].height < 3.3]
         self.rects = []
+        self.ledgers = []
         self.polys = []
         self.curves = []
         for d in p.get_drawings():
+            rr = d["rect"]
+            if d["type"] == "s" and 4 < rr.width < 14 and rr.height < 0.3 and [it[0] for it in d["items"]] == ["l"]:
+                self.ledgers.append(((rr.x0 + rr.x1) / 2, (rr.y0 + rr.y1) / 2))      # a stroked ledger line
             for it in d["items"]:
                 if it[0] == "re":
                     r = it[1]
                     self.rects.append((r.x0, r.y0, r.width, r.height))
+                    if 4 < r.width < 14 and r.height < 1.6:
+                        self.ledgers.append(((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2))
             if d.get("fill") is not None and d["items"] and all(it[0] == "c" for it in d["items"]):
                 r = d["rect"]
                 self.curves.append((r.x0, r.y0, r.x1, r.y1))     # a filled tie or slur
@@ -121,10 +138,38 @@ class Page:
                 best = i
         return best
 
+    def staff_of_head(self, x, y):
+        """the staff a notehead at (x, y) belongs to. Far from the staff lines the nearest staff can be the
+        wrong one (a low note under one staff is as near to the next staff's top): the ledger lines drawn
+        between the head and its staff decide."""
+        order = sorted(range(len(self.staves)), key=lambda i: abs(y - (self.staves[i]["top"] + self.staves[i]["bot"]) / 2))
+        a = order[0]
+        if len(order) < 2:
+            return a
+        b = order[1]
+        da = abs(y - (self.staves[a]["top"] + self.staves[a]["bot"]) / 2)
+        db = abs(y - (self.staves[b]["top"] + self.staves[b]["bot"]) / 2)
+        if abs(da - db) > 3 * self.staves[a]["sp"]:
+            return a
+        near = [ly for lx, ly in self.ledgers if abs(lx - (x + 2.8)) < 5]
+
+        def votes(i):
+            s = self.staves[i]
+            sp = s["sp"]
+            n = 0
+            for ly in near:
+                if y < s["top"] and s["top"] - 7 * sp < ly < s["top"] and abs((s["top"] - ly) / sp - round((s["top"] - ly) / sp)) < 0.15 and ly >= y - 1:
+                    n += 1
+                elif y > s["bot"] and s["bot"] < ly < s["bot"] + 7 * sp and abs((ly - s["bot"]) / sp - round((ly - s["bot"]) / sp)) < 0.15 and ly <= y + 1:
+                    n += 1
+            return n
+        va, vb = votes(a), votes(b)
+        return b if vb > va else a
+
     def label(self, si):
         """the instrument name printed to the left of staff si (full name, abbreviation or empty)"""
         s = self.staves[si]
-        ws = [w for w in self.words if w[2] < s["x0"] - 1 and s["top"] - 10 < (w[1] + w[3]) / 2 < s["bot"] + 10]
+        ws = [w for w in self.words if w[2] < s["x0"] - 1 and s["top"] - 4 < (w[1] + w[3]) / 2 < s["bot"] + 4]
         return " ".join(w[4] for w in sorted(ws, key=lambda w: w[0])).strip().lower()
 
     def hs(self, si, y):

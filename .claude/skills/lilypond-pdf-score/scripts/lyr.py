@@ -4,7 +4,7 @@ A file written straight by LilyPond keeps a usable text layer, so the character 
 A file re-saved by another program (the Brumel PDF went through macOS Preview) can have a scrambled text
 layer: then letters come from glyph shapes via a gid -> letter table. SH below is that table for the Brumel
 PDF only; glyph ids differ per PDF, so rebuild it for another file (see SKILL.md)."""
-import os, sys
+import os, sys, unicodedata
 import pymupdf
 
 SH = "A y n c M B o d C p e D q f P E r g Q F s h t i u j T v J l a m b ] 8 - 9 . é 0 1 2 ’ 3 ( 4 ) 5 [ 6 _ 7 ,".split(" ")
@@ -12,26 +12,35 @@ GM = {i + 2: (" " if ch == "_" else "'" if ch == "’" else ch) for i, ch in enu
 SCRAMBLED = False
 
 
-def lyric_size(doc):
+def lyric_size(doc, pages=None):
+    """The lyric font size: the most common size among text lines that sit in the gaps under staves (when the
+    staves are known, pass the reader's pages). Counting every text line picked the title and the instrument
+    names in a piece with one text line."""
     from collections import Counter
     c = Counter()
     for pn in range(len(doc)):
+        st = pages[pn].staves if pages else None
         for tr in doc[pn].get_texttrace():
             if "Roma" in tr["font"] and 7 < tr["size"] < 13:
+                if st:
+                    y = tr["chars"][0][2][1]
+                    x = tr["chars"][0][2][0]
+                    if not any(s["bot"] < y < s["bot"] + 45 and x >= s["x0"] for s in st):
+                        continue
                 c[round(tr["size"], 1)] += len(tr["chars"])
     return c.most_common(1)[0][0] if c else 9.7
 
 
-def page_lyrics(doc, pn, scrambled=None):
+def page_lyrics(doc, pn, scrambled=None, pages=None):
     scrambled = SCRAMBLED if scrambled is None else scrambled
-    size = lyric_size(doc)
+    size = lyric_size(doc, pages)
     chars = []
     for sid, tr in enumerate(doc[pn].get_texttrace()):
-        if "Roma" not in tr["font"] or abs(tr["size"] - size) > 0.4:
+        if not ("Roma" in tr["font"] or "Ital" in tr["font"]) or abs(tr["size"] - size) > 0.4:
             continue
         for ch in tr["chars"]:
             x0, y0, x1, y1 = ch[3]
-            u = GM.get(ch[1], "?") if scrambled else chr(ch[0])
+            u = GM.get(ch[1], "?") if scrambled else unicodedata.normalize("NFKC", chr(ch[0]))   # fi and fl ligatures
             chars.append(dict(u=u, x0=x0, x1=x1, y=round(ch[2][1], 1), ox=ch[2][0], sp=sid))
     rows = {}
     for c in chars:

@@ -180,10 +180,11 @@ if __name__=="__main__":
     ap.add_argument("--clefs",help="per voice, e.g. G,G,G8,F (G8 = treble down an octave); default read from the print")
     ap.add_argument("--fifths",type=int,help="key signature: negative flats, positive sharps; default read from the print")
     ap.add_argument("--time",help="e.g. 4/4, 2/2, 3/2; default read from the print")
+    ap.add_argument("--final-breve",action="store_true",help="a longa ending its staff in a system sounds as a breve (Hawthorne editions engrave f\\longa*1/2)")
     ap.add_argument("--no-pickup",action="store_true",help="do not look for an anacrusis")
     ap.add_argument("--scrambled",action="store_true",help="lyric text layer is a cipher (re-saved PDF): decode with lyr.SH")
     a=ap.parse_args()
-    import lyr; lyr.SCRAMBLED=a.scrambled
+    import lyr, extract as _ex; lyr.SCRAMBLED=a.scrambled; _ex.FINAL_BREVE=a.final_breve
     tm=None
     if a.time:
         n,d=a.time.split("/"); tm=(int(n),int(d),"cut" if a.time=="2/2" else None)
