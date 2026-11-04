@@ -11,6 +11,8 @@ description: >
 
 # LilyPond to a score
 
+Only a LilyPond-made PDF, no `.ly`? Use `lilypond-pdf-score`.
+
 Many early-music editions on CPDL and IMSLP publish LilyPond source but no
 MusicXML. python-ly can convert LilyPond to MusicXML, but on real engraving
 files it drops or breaks things. This workflow simplifies the source,

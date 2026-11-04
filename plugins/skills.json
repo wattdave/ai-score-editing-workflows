@@ -3,6 +3,7 @@
   "git-workflow": null,
   "halbestunde-omr": "score-editing-core",
   "hanging-playback-note-repair": "sibelius",
+  "lilypond-pdf-score": "score-editing-core",
   "lilypond-to-score": "score-editing-core",
   "lyric-hyphenation": "score-editing-core",
   "lyric-sheet": "score-editing-core",

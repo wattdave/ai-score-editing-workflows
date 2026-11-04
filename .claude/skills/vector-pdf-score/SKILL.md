@@ -10,6 +10,8 @@ description: >
 
 # Vector PDF to MusicXML
 
+PDF made by LilyPond (Emmentaler font) with no `.ly` source? Use `lilypond-pdf-score`.
+
 A PDF exported by Sibelius keeps every note as a glyph at an exact position, so nothing has to be
 recognised. Halbestunde (OMR) was wrong on these files (staves swapped, clefs read wrongly,
 bars moved between parts); reading the glyphs was exact for pitches.
