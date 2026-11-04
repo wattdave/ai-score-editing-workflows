@@ -11,9 +11,15 @@ SHARP = {"accidentals.sharp", "accidentals.1"}
 NAT = {"accidentals.natural", "accidentals.0"}
 
 
+# Some editions draw their breves with the neomensural shape; incipits use it too (see extract)
+NEO = {"noteheads.sM1neomensural": "B", "noteheads.srM1neomensural": "B",
+       "noteheads.uM2neomensural": "L", "noteheads.dM2neomensural": "L",
+       "noteheads.urM2neomensural": "L", "noteheads.drM2neomensural": "L"}   # B = breve (8 beats), L = longa (16)
+
+
 def head_kind(name):
-    # exact names only: incipits are set in mensural heads (noteheads.sM1mensural...) and are not sung
-    return HEAD.get(name)
+    # incipits are set in mensural heads (noteheads.sM1mensural...) and are not sung
+    return HEAD.get(name) or NEO.get(name)
 
 
 def group_systems(pg, nvoices):
@@ -35,7 +41,10 @@ def extract(D, nvoices=4, pages=None):
         beams = [q for q in pg.polys if q[2] - q[0] > 3.0 * k and q[3] - q[1] < 8 * k]
         beams += [(x, y, x + w, y + h) for (x, y, w, h) in pg.rects if w > 3 * k and 1.2 * k < h < 3 * k]   # level beams are plain rects
         beams = sorted({tuple(round(v, 1) for v in b) for b in beams})   # a filled+stroked rect is listed twice
-        bar_rects = [(x, y, h) for (x, y, w, h) in pg.rects if 0.6 < w < 1.2 and h > 15 * k]
+        sp0 = pg.staves[0]["sp"] if pg.staves else 4.5
+        # a barline is a tall thin rect: 0.6-1.2 wide in older files, thinner in newer ones, then
+        # recognised by running through at least two staves (taller than 8 staff spaces)
+        bar_rects = [(x, y, h) for (x, y, w, h) in pg.rects if (0.6 < w < 1.2 and h > 15 * k) or (w < 1.2 and h > 8 * sp0)]
         systems = []
         events = defaultdict(list)
         main = [g for g in pg.glyphs if g["name"] and abs(g["size"] - pg.main) < 0.2]
@@ -53,6 +62,13 @@ def extract(D, nvoices=4, pages=None):
                     events[si].append(dict(t="N", kind=kind, x=g["x"], hs=h, dots=0, flags=0, beams=0, name=nm))
                 elif nm in REST:
                     events[si].append(dict(t="R", dur=REST[nm], x=g["x"], hs=h, dots=0, name=nm))
+            if si < nvoices and pg.pn == D.pages[0].pn:
+                # first system only: an incipit (original clef, mensural time sign, a note or two) sits left of the
+                # first modern clef; none of it is sung
+                clefx = [g["x"] for g in gs if g["name"] in ("clefs.G", "clefs.F", "clefs.C") and g["size"] >= pg.main * 0.85]
+                if clefx:
+                    cut = min(clefx)
+                    events[si] = [e for e in events[si] if not (e["t"] == "N" and e["x"] < cut - 1)]
             notes = [e for e in events[si] if e["t"] == "N"]
             rests = [e for e in events[si] if e["t"] == "R"]
             for g in gs:
@@ -122,7 +138,7 @@ def dur(e):
     if e["t"] == "R":
         base = e["dur"]
     else:
-        base = {"B": 8.0, "w": 4.0, "h": 2.0, "b": 1.0}[e["kind"]]
+        base = {"L": 16.0, "B": 8.0, "w": 4.0, "h": 2.0, "b": 1.0}[e["kind"]]
         if e["kind"] == "b":
             base = base / (2 ** max(e["flags"], e["beams"]))
     d = base

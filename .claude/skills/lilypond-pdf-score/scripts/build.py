@@ -83,7 +83,9 @@ def detect_time(D, res):
     s = pgo.staves[st]
     for g in pgo.glyphs:
         if g["name"] and g["name"].startswith("timesig.") and pgo.staff_of(g["y"]) == st:
-            return {"timesig.C22": (2, 2, "cut"), "timesig.C44": (4, 4, "common")}.get(g["name"], (4, 4, None))
+            if g["name"] in ("timesig.C22", "timesig.C44"):
+                return {"timesig.C22": (2, 2, "cut"), "timesig.C44": (4, 4, "common")}[g["name"]]
+            # mensural time signatures (timesig.mensural22) belong to incipits: look for the digits
     dg = [g for g in pgo.glyphs if g["name"] in DIGITS and pgo.staff_of(g["y"]) == st and g["x"] < s["x0"] + 80]
     if len(dg) >= 2:
         dg.sort(key=lambda g: g["y"])
@@ -116,7 +118,7 @@ def time_changes(D, res, systems, starts):
         pgo = D.pages[pg["pn"]]
         st = s["staves"][0]
         gl = [g for g in pgo.glyphs if pgo.staff_of(g["y"]) == st and g["name"]
-              and (g["name"].startswith("timesig.") or g["name"] in DIGITS) and g["size"] >= pgo.main * 0.85 * 0.5]
+              and (g["name"] in ("timesig.C22", "timesig.C44") or g["name"] in DIGITS) and g["size"] >= pgo.main * 0.85 * 0.5]
         L, tot = timeline(pg, s)[st]
         clusters = []
         for g in sorted(gl, key=lambda g: g["x"]):

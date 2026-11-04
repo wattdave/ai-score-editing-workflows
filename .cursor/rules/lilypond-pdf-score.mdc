@@ -131,14 +131,18 @@ compared with the earlier hand-proofread score.
 | Come Again (Dowland) | SATB, 4/2 to 2/2 to 6/2 | All 4 parts match the MIDI (43, 45, 49, 44 notes); time changes written |
 | Nuz my dzis krzescijani (2.8.7) | S, A, and T+B sharing one bass staff | Refused with a clear message (two voices on a staff) |
 | Obrecht, Missa Malheur me bat, Kyrie (CPDL, LilyPond 2.18.2) | SATB, 3/1 and cut-C, treble-8 voices, clef changes at the Christe | Kyrie I matches the MIDI: Superius 26 of 26 notes, Altus 75, Tenor 94, Bassus 80. The Christe and Kyrie II were not verified: the MIDI keeps them in separate tracks and the first notes of the Christe differ, which may be a clef read or a stale MIDI |
-| de la Rue, Secretz regretz (CPDL, 2.18.2) and Bianciardi, Ego dormivi (CPDL, 2.22.1) | Unbarred editions with ligature brackets, neomensural note shapes and incipits | Not readable yet: voices disagree on duration wherever a ligature is used (`noteheads.srM1neomensural` and similar). Their zips ship a MIDI, so they are good test cases for ligature support |
+| de la Rue, Secretz regretz (CPDL, 2.18.2) | SATB, 4/2, no pickup, mensural incipits at the left, neomensural breves and longas in the music, unusual thin barlines through all four staves | All 4 parts match the MIDI from the source zip (147, 132, 101, 109 notes) exactly, including accidentals and ties |
+| Bianciardi, Ego dormivi (CPDL, 2.22.1) | Same editor and layout, one flat, ficta, breves | All 4 parts match the MIDI (147, 168, 174, 99 notes) exactly |
 | Brumel, Du tout plongiet (Preview-saved) | 4 staves, mensural incipit, cut-C | Identical to the proofread score except one explicit A flat (bar 44, Cantus) that the first reader dropped |
 
-Limits found on the CPDL files: ligature editions (neomensural heads inside `brackettips`) are not
-read; an edition without barlines still gets a system timeline, but there is nothing to check bar sums
-against; a clef change inside the piece is applied to the notes after it, but the MusicXML only carries
-the opening clefs (the pitches are right, the clef sign is not repeated); incipit clefs are
-`clefs.petrucci.*` and are ignored.
+Found on the CPDL files (and now handled): some editions draw breves with the **neomensural** shape
+(`noteheads.sM1neomensural`, `srM1neomensural`; longas are `uM2/dM2/urM2/drM2neomensural`); the
+incipit left of the first modern clef holds mensural time signs, clefs (`clefs.petrucci.*`) and
+a couple of heads, all dropped; barlines can be very thin rects running through every staff of the
+system (recognised by height, not width); `brackettips.*` are the system bracket, not ligatures
+(I first misread them as ligature brackets, which sent me looking in the wrong place). A clef change
+inside the piece is applied to the notes after it, but the MusicXML only carries the opening clefs
+(pitches right, clef sign not repeated).
 
 What the validation changed in the code: glyph names instead of ids; sizes scaled; ties and beams
 (rect beams) read; pickup grid; bar-length changes; time-signature changes; incipit skipped;
