@@ -83,7 +83,9 @@ def detect_time(D, res):
     s = pgo.staves[st]
     for g in pgo.glyphs:
         if g["name"] and g["name"].startswith("timesig.") and pgo.staff_of(g["y"]) == st:
-            return {"timesig.C22": (2, 2, "cut"), "timesig.C44": (4, 4, "common")}.get(g["name"], (4, 4, None))
+            if g["name"] in ("timesig.C22", "timesig.C44"):
+                return {"timesig.C22": (2, 2, "cut"), "timesig.C44": (4, 4, "common")}[g["name"]]
+            # mensural time signatures (timesig.mensural22) belong to incipits: look for the digits
     dg = [g for g in pgo.glyphs if g["name"] in DIGITS and pgo.staff_of(g["y"]) == st and g["x"] < s["x0"] + 80]
     if len(dg) >= 2:
         dg.sort(key=lambda g: g["y"])
@@ -102,7 +104,7 @@ def bar_modes(res):
                 for e in pg["events"].get(st, []):
                     bars[sum(1 for b in s["bars"] if b < e["x"] + 3)] += dur(e)
                 sums += [round(v, 2) for v in bars.values()]
-            if sums:
+            if sums and len(s["bars"]) >= 3:
                 out.append(Counter(sums).most_common(1)[0][0])
     return out
 
@@ -116,7 +118,7 @@ def time_changes(D, res, systems, starts):
         pgo = D.pages[pg["pn"]]
         st = s["staves"][0]
         gl = [g for g in pgo.glyphs if pgo.staff_of(g["y"]) == st and g["name"]
-              and (g["name"].startswith("timesig.") or g["name"] in DIGITS) and g["size"] >= pgo.main * 0.85 * 0.5]
+              and (g["name"] in ("timesig.C22", "timesig.C44") or g["name"] in DIGITS) and g["size"] >= pgo.main * 0.85 * 0.5]
         L, tot = timeline(pg, s)[st]
         clusters = []
         for g in sorted(gl, key=lambda g: g["x"]):
@@ -169,6 +171,9 @@ def system_starts(res, beats_per_bar):
             pons = timeline(ppg, ps)
             tot = statistics.median([t for _, t in pons.values()])
             base = starts[-1] + tot
+            if not cands:      # no barlines to read a residue from (unbarred edition): trust the sums
+                starts.append(base)
+                continue
             want = (grid - mode) % beats_per_bar
             k = round((base - want) / beats_per_bar)
             S0 = want + beats_per_bar * k
@@ -194,7 +199,7 @@ def collect(D, res, nvoices, clefs, beats_per_bar, fifths, pickup_shift=None):
                 if g["name"] is None and g["size"] < pgo.main * 0.85 and "Emmentaler" in g["font"]:
                     g["name"] = "accidentals.flat"
                     small.append(g)
-        for vi, st in enumerate(s["staves"]):
+        for vi, st in zip(s["voices"], s["staves"]):
             L, _ = ons[st]
             # the first |fifths| accidentals after the clef are the key signature, not accidentals on a note
             first_x = min((e["x"] for e, _ in L if e["t"] == "N"), default=1e9)
@@ -221,6 +226,8 @@ def collect(D, res, nvoices, clefs, beats_per_bar, fifths, pickup_shift=None):
                 if e.get("acc_x") is not None and any(abs(e["acc_x"] - kx) < 0.3 for kx in keyx):
                     e.pop("acc", None)
                 ev = dict(onset=S + t, dur=dur(e), x=e["x"], page=pg["pn"], sys=n, voice=vi)
+                if e.get("tup"):
+                    ev["tup"] = True
                 if e["t"] == "R":
                     ev["rest"] = True
                 else:

@@ -94,6 +94,7 @@ class Page:
         sizes = [g["size"] for g in self.glyphs if (g["name"] or "").startswith("noteheads.")]
         self.main = max(set(sizes), key=sizes.count) if sizes else 17.9
         self.k = self.main / 15.9      # scale of every metric hard-wired from the first test piece
+        self.words = [(w[0], w[1], w[2], w[3], w[4]) for w in p.get_text("words")]
         self.rects = []
         self.polys = []
         self.curves = []
@@ -119,6 +120,12 @@ class Page:
                 bd = dd
                 best = i
         return best
+
+    def label(self, si):
+        """the instrument name printed to the left of staff si (full name, abbreviation or empty)"""
+        s = self.staves[si]
+        ws = [w for w in self.words if w[2] < s["x0"] - 1 and s["top"] - 10 < (w[1] + w[3]) / 2 < s["bot"] + 10]
+        return " ".join(w[4] for w in sorted(ws, key=lambda w: w[0])).strip().lower()
 
     def hs(self, si, y):
         s = self.staves[si]

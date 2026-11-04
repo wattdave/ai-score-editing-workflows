@@ -2,14 +2,14 @@ import os, sys, json
 sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 from build import *
 from xml.sax.saxutils import escape
-DIV=4  # per quarter
-BAR=16
+DIV=12  # per quarter (12 so that triplets are whole numbers)
+BAR=48
 NAMES=["Cantus","Contra","Tenor","Bassus"]
 FIFTHS=-2
 FLAT_ORDER=[6,2,5,1,4,0,3]   # B E A D G C F as indexes into LETTER
 SHARP_ORDER=[3,0,4,1,5,2,6]
 LETTER="CDEFGAB"
-TYPES=[(16,'whole',0),(12,'half',1),(8,'half',0),(6,'quarter',1),(4,'quarter',0),(3,'eighth',1),(2,'eighth',0),(1,'16th',0)]
+TYPES=[(48,'whole',0),(36,'half',1),(24,'half',0),(18,'quarter',1),(12,'quarter',0),(9,'eighth',1),(6,'eighth',0),(3,'16th',0)]
 
 def normalise(v):
     """sorted events -> list of (onset16,dur16,ev) covering [0,end) with rests; trims overlapping rests"""
@@ -130,12 +130,13 @@ def build(pdf,out,title,composer,names=None,nvoices=4,pages=None,clefs=None,fift
                 X.append('</attributes>')
             state={}
             for o,d,e in bars.get(b,[]):
-                parts=pieces(d)
+                parts=[d] if e.get('tup') else pieces(d)
                 for pi,pn in enumerate(parts):
-                    typ,dot=tinfo(pn)[1],tinfo(pn)[2]
+                    typ,dot=tinfo(round(pn*1.5) if e.get('tup') else pn)[1:]
+                    tm='<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification>' if e.get('tup') else ''
                     if e.get("rest"):
                         if d==edges[b+1]-edges[b] and len(parts)==1: X.append(f'<note><rest measure="yes"/><duration>{pn}</duration></note>')
-                        else: X.append(f'<note><rest/><duration>{pn}</duration><voice>1</voice><type>{typ}</type>'+'<dot/>'*dot+'</note>')
+                        else: X.append(f'<note><rest/><duration>{pn}</duration><voice>1</voice><type>{typ}</type>'+'<dot/>'*dot+tm+'</note>')
                         continue
                     n=e["step"]; letter=LETTER[n%7]; octv=n//7
                     key=KEY.get(n%7,0)
@@ -144,7 +145,7 @@ def build(pdf,out,title,composer,names=None,nvoices=4,pages=None,clefs=None,fift
                         if e.get("acc"): state[n]=alt
                     else: alt=state.get(n,key)
                     k=seen.get(id(e),0); seen[id(e)]=k+1
-                    tot=count[id(e)]*0+sum(len(pieces(dd)) for oo,dd,ee,_ in segs if ee is e)
+                    tot=count[id(e)]*0+sum(1 if ee.get('tup') else len(pieces(dd)) for oo,dd,ee,_ in segs if ee is e)
                     idx=k; 
                     # global piece index across segments
                     tie_prev= idx>0; tie_next= idx<tot-1
@@ -154,6 +155,7 @@ def build(pdf,out,title,composer,names=None,nvoices=4,pages=None,clefs=None,fift
                     nx+=f'<voice>1</voice><type>{typ}</type>'+'<dot/>'*dot
                     if alt==0 and (e.get("ficta") or key!=0) or alt!=0 and (e.get("acc") or e.get("ficta")):
                         if not tie_prev: nx+='<accidental>'+('natural' if alt==0 else 'flat' if alt==-1 else 'sharp')+'</accidental>'
+                    nx+=tm
                     if tie_prev or tie_next:
                         nx+='<notations>'+('<tied type="stop"/>' if tie_prev else '')+('<tied type="start"/>' if tie_next else '')+'</notations>'
                     if e.get("lyric") and not tie_prev:
