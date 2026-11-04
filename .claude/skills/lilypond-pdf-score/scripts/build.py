@@ -182,6 +182,27 @@ def system_starts(res, beats_per_bar):
     return systems, starts
 
 
+def repeat_events(systems, starts):
+    """Global beats of the repeat barlines and voltas: ([(beat, 'fwd'|'back'|'both')], [(start, end, number)]).
+    The beat of an x is the onset of the first note or rest right of it in any staff of the system (the end of the
+    system when none is); the caller snaps it to a bar edge."""
+    reps, vols = [], []
+    for (pg, s), S in zip(systems, starts):
+        if not s.get("rbars") and not s.get("voltas"):
+            continue
+        ons = timeline(pg, s)
+        end = max(t for _, t in ons.values())
+
+        def beat(x):
+            after = [tt for L, _ in ons.values() for e, tt in L if e["x"] > x + 1]
+            return S + (min(after) if after else end)
+        for x, kind in s["rbars"]:
+            reps.append((beat(x), kind))
+        for x0, x1, n in s["voltas"]:
+            vols.append((beat(x0 - 1), beat(x1 + 3), n))
+    return sorted(reps), sorted(vols)
+
+
 def collect(D, res, nvoices, clefs, beats_per_bar, fifths, pickup_shift=None):
     systems, starts = system_starts(res, beats_per_bar)
     detected = detect_clefs(D, res)
@@ -242,11 +263,19 @@ def collect(D, res, nvoices, clefs, beats_per_bar, fifths, pickup_shift=None):
                         alt = e["acc"]
                         ev["acc"] = True
                     ev["alt"] = alt
-                if (e.get("tie") or e.get("tie_in")) and not e["t"] == "R":
+                # a new syllable under the second note means the curve is a slur between equal notes, not a tie
+                new_syl = e["t"] != "R" and e.get("tie") and not e.get("tie_in") and any(
+                    t["text"] not in ("-",) and not t["text"].isdigit() and abs((t["x0"] + t["x1"]) / 2 - (e["x"] + 2.6 * pgo.k)) < 4.5
+                    and pgo.staves[st]["bot"] < t["y"] - 5 < (pgo.staves[st + 1]["top"] if st + 1 < len(pgo.staves) else pgo.staves[st]["bot"] + 60)
+                    for t in ptoks[pg["pn"]])
+                if (e.get("tie") or e.get("tie_in")) and not e["t"] == "R" and not new_syl:
                     prev = [p for p in voices[vi] if not p.get("rest")]
-                    if prev and (prev[-1]["sys"] == n or e.get("tie_in")) and prev[-1].get("step") == ev["step"] \
+                    if prev and (prev[-1]["sys"] == n or prev[-1].get("chain_sys") == n or e.get("tie_in")) \
+                            and prev[-1].get("step") == ev["step"] \
                             and abs(prev[-1]["onset"] + prev[-1]["dur"] - ev["onset"]) < 1e-6:
                         prev[-1]["dur"] += ev["dur"]      # tied note: one longer note
+                        if e.get("tie_in"):
+                            prev[-1]["chain_sys"] = n     # a tie that goes on from the stub at the start of this system
                         continue
                 voices[vi].append(ev)
             sb = pgo.staves[st]["bot"]

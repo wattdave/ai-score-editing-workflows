@@ -106,6 +106,8 @@ class Page:
         # short stroked vertical ticks (2.4 to 3.3 pt): the hooks of a tuplet bracket
         self.hooks = [((d["rect"].x0 + d["rect"].x1) / 2, (d["rect"].y0 + d["rect"].y1) / 2) for d in p.get_drawings()
                       if d["type"] == "s" and d["rect"].width < 0.5 and 2.4 < d["rect"].height < 3.3]
+        self.hlines = [(d["rect"].x0, d["rect"].x1, (d["rect"].y0 + d["rect"].y1) / 2) for d in p.get_drawings()
+                       if d["type"] == "s" and d["rect"].width > 10 and d["rect"].height < 0.3 and [it[0] for it in d["items"]] == ["l"]]
         self.rects = []
         self.ledgers = []
         self.polys = []
