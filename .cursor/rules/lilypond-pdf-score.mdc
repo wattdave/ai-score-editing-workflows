@@ -1,0 +1,104 @@
+---
+description: Turn a PDF engraved by LilyPond (Emmentaler music font, as on CPDL and IMSLP) into MusicXML by reading the glyph positions, when the .ly source is not available and a scan would be poor. Covers the glyph table, Mensurstriche barlines, system timelines, decoding the scrambled lyric text layer, and proofreading the import in Sibelius. Built for a 4-voice Renaissance piece (Brumel, Du tout plongiet, 62 bars). Use for a LilyPond-made PDF with no source; use lilypond-to-score when the .ly exists and vector-pdf-score for Sibelius PDFs.
+globs: *
+alwaysApply: false
+---
+
+# LilyPond PDF to MusicXML
+
+A LilyPond PDF keeps every notehead, rest, flag and accidental as a font glyph at an exact
+position, so nothing has to be recognised. On the Brumel test piece Halbestunde's scan was
+unusable; the glyph read matched the print in all 62 bars of four voices after a bar-by-bar
+proofread (two faults found, both fixed).
+
+## 1. Check the PDF
+
+```bash
+pdfinfo score.pdf | grep Creator      # "LilyPond 2.x"
+uv run --with pymupdf python -I -c "import pymupdf,sys; print({s['font'] for p in pymupdf.open(sys.argv[1]) for sp in p.get_texttrace() for s in [sp]})" score.pdf
+```
+
+Expect `Emmentaler-*` for the music and a text font (here `CenturySchL`). If the source `.ly`
+exists, use `lilypond-to-score` instead. The scripts assume **four staves per system, one
+voice per staff, no chords**: Cantus (treble) then three bass-clef voices. For other layouts
+adapt `pitch_of` in `build.py` and the staff count in `extract.py`.
+
+## 2. How the reading works
+
+`pymupdf` `page.get_texttrace()` gives each glyph's id, origin and box. Staff lines are the
+long horizontal drawn lines in groups of five. A glyph's **half-space index**
+`hs = (bottom_line_y - y) / (space / 2)` gives the pitch: treble `hs 0` = E4, bass `hs 0` = G2.
+
+Glyph ids at 15.9 pt (the notation size; check `glyph_dump`-style output for your file, ids are
+per font subset but Emmentaler's low ids were stable here):
+
+| gid | meaning | gid | meaning |
+|---|---|---|---|
+| 2 | breve (8 beats) | 7 | flat |
+| 3 | whole note | 8 | quarter rest |
+| 4 | half note | 1 | half rest |
+| 5 | black head | 0 | whole rest |
+| 9 | dot | 6 | breve rest (8 beats) |
+| 13 | up flag (head x + 5.3) | 16 | down flag (head x + 0.6) |
+| 14, 15 | clefs | | |
+
+- Stems are 0.2 wide rects; beams are filled quadrilaterals. Count beams on a stem (loosen the
+  y tolerance for secondary beams) to get eighths and sixteenths.
+- **Small 12.5 pt glyphs above the staff** at head x + about 1.6 are editorial ficta: gid 1 =
+  natural, gid 2 = flat. They apply to that one note only. **gid 0 is the "L" editorial
+  bracket, not an accidental** (reading it as a sharp put a wrong F♯ in the first run).
+- **Mensurstriche**: barlines fall at multiples of 4 beats and long notes cross them. Build
+  regular cut-time bars and tie across the barlines; do not use the barline x positions to
+  assign bars.
+- **Timing**: sum durations per staff for onsets. Each system's start is snapped to the
+  barline residue mod 4. Invisible lead-in rests at a system start are anchored by columns
+  shared with voices that start on the margin. `onset2.py` run on its own prints per-system totals
+  and misaligned columns; **it must report 0 misaligned columns** before you go on.
+
+## 3. Lyrics
+
+The text layer is a permuted cipher: the extracted characters are not the printed letters, so
+copying text gives nonsense. The real letters come from the glyph **shapes**. `lyr.py` carries
+a gid-to-letter table (`SH`) for the Brumel PDF only, since glyph ids are per embedded font
+subset. For a new PDF:
+
+1. Pull the lyric font (`doc.extract_font(xref)`) and render its glyphs to a contact sheet
+   with their ids (fontTools pens to SVG, then look at the picture).
+2. Write the shape-to-letter string in gid order and replace `SH`.
+3. Hyphens are **drawn rects** (about 2.3 wide, 0.22 high), not characters; extenders are long
+   rects. `lyr.py` reads the hyphen rects; it does not reproduce extenders.
+
+Syllables attach to the nearest note in order; a hyphen before or after sets `middle`/`end`.
+
+## 4. Run it
+
+```bash
+S=/Users/wattd/dev/ai-score-editing-workflows/.claude/skills/lilypond-pdf-score/scripts
+uv run --with pymupdf python -I $S/onset2.py score.pdf        # 0 misaligned in every system
+uv run --with pymupdf python -I $S/build.py score.pdf         # overlaps/gaps per voice must be 0
+uv run --with pymupdf python -I $S/mxl.py score.pdf out.musicxml \
+  --title "Title" --composer "Name" --names Cantus,Contra,Tenor,Bassus --fifths -2
+```
+
+`mxl.py` writes divisions 4, cut time (2/2 `symbol="cut"`), ties split at barlines, shown
+accidentals for printed flats, ficta and courtesy naturals, lyrics on the first tied piece.
+The top voice is written as treble clef with octave-change -1 and sounding pitch one octave
+below the printed note, which matches Sibelius "Treble down 8". Check the time signature and
+clef against the print yourself.
+
+## 5. Import and proofread (Sibelius)
+
+Import with `OpenScore` (the "Open MusicXML File" dialog needs a click on OK, see the
+`sibelius` skill), then `ExportScore ... SIBL`. Compare **every bar of every voice against the
+print**, page by page; Sibelius re-lays the systems, but bar numbers and notes should match.
+Fix in place with `apply`: `set-pitch` for a wrong note, `delete` (type LyricItem) plus
+`add-lyric` for words (syllableType only `middle` or `end`; use `middle` where a hyphen follows).
+
+Known gaps after a run: some hyphens in the voices you did not check word by word may be
+missing; the print's lyric extender lines are not reproduced; system and page breaks differ
+from the print.
+
+## Verified on
+
+Brumel, "Du tout plongiet - Fors seulement", 3 pages, two flats, cut-C: 62 bars, four voices,
+all pitches, ties, accidentals, rests and lyrics checked against the print.
