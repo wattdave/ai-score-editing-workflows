@@ -18,6 +18,9 @@ NEO = {"noteheads.sM1neomensural": "B", "noteheads.srM1neomensural": "B",
        "noteheads.uM2": "L", "noteheads.dM2": "L"}   # B = breve (8 beats), L = longa (16)
 
 
+FINAL_BREVE = False   # --final-breve: a longa that ends its staff in a system sounds as a breve (Hawthorne editions: f\\longa*1/2)
+
+
 def head_kind(name):
     # incipits are set in mensural heads (noteheads.sM1mensural...) and are not sung
     return HEAD.get(name) or NEO.get(name)
@@ -29,6 +32,8 @@ def group_systems(pg, nvoices, names=None):
     system may have fewer staves: then systems are found from the vertical gaps and each staff is matched to a
     voice by the name or abbreviation printed in the left margin (the first three letters)."""
     n = len(pg.staves)
+    if n == 0:
+        return []
     gaps = [pg.staves[i + 1]["top"] - pg.staves[i]["bot"] for i in range(n - 1)]
     positional = [(list(range(i, i + nvoices)), list(range(nvoices))) for i in range(0, n, nvoices)] if n % nvoices == 0 else None
     med = sorted(gaps)[len(gaps) // 2] if gaps else 0
@@ -41,6 +46,8 @@ def group_systems(pg, nvoices, names=None):
     systems.append(cur)
     if all(len(sts) == nvoices for sts in systems):
         return [(sts, list(range(nvoices))) for sts in systems]
+    if positional and names and all(pg.label(st)[:3] == names[v][:3] for sts, vids in positional for st, v in zip(sts, vids)):
+        return positional      # the margin names run through the voices in order in every system
     if positional and not all(pg.label(st) for sts in systems for st in sts):
         return positional      # no names printed to tell the staves apart: assume full systems, in order
     out = []
@@ -48,15 +55,15 @@ def group_systems(pg, nvoices, names=None):
         if len(sts) == nvoices:
             out.append((sts, list(range(nvoices))))
             continue
-        if not names:
-            raise SystemExit(f"page {pg.pn+1}: a system has {len(sts)} staves, not {nvoices}, and the first system's "
-                             "names are not known to match them (see SKILL.md)")
         vids = []
         for st in sts:
             lab = pg.label(st)
-            hit = [v for v, nm in enumerate(names) if lab[:3] and nm[:3] == lab[:3]]
+            hit = [v for v, nm in enumerate(names or []) if lab[:3] and nm[:3] == lab[:3]]
             if len(hit) != 1:
-                raise SystemExit(f"page {pg.pn+1}: cannot tell which voice staff {st} is (label {lab!r})")
+                if positional:
+                    return positional      # labels cannot decide: assume full systems, in order
+                raise SystemExit(f"page {pg.pn+1}: a system has {len(sts)} staves, not {nvoices}, and staff {st} "
+                                 f"(label {lab!r}) cannot be matched to a voice (see SKILL.md)")
             vids.append(hit[0])
         out.append((sts, vids))
     return out
@@ -91,7 +98,7 @@ def extract(D, nvoices=4, pages=None):
         main = [g for g in pg.glyphs if g["name"] and abs(g["size"] - pg.main) < 0.2]
         by_staff = defaultdict(list)
         for g in main:
-            by_staff[pg.staff_of(g["y"])].append(g)
+            by_staff[pg.staff_of_head(g["x"], g["y"]) if (g["name"] or "").startswith("noteheads.") else pg.staff_of(g["y"])].append(g)
         for si, gs in by_staff.items():
             s = pg.staves[si]
             gs.sort(key=lambda g: g["x"])
@@ -149,6 +156,10 @@ def extract(D, nvoices=4, pages=None):
                                  if bx0 - 0.8 <= st[0] <= bx1 + 0.8 and by0 - 3 <= tip <= by1 + 3)
         for si in events:
             events[si].sort(key=lambda e: e["x"])
+            if FINAL_BREVE:
+                nn_ = [e for e in events[si] if e["t"] == "N"]
+                if nn_ and nn_[-1]["kind"] == "L":
+                    nn_[-1]["kind"] = "B"
             # a curve from one head to the next head of the same pitch is a tie (a slur between equal notes is too)
             sp = pg.staves[si]["sp"]
             nn = [e for e in events[si] if e["t"] == "N"]
@@ -168,6 +179,8 @@ def extract(D, nvoices=4, pages=None):
                     continue
                 wy, wx = (w[1] + w[3]) / 2, (w[0] + w[2]) / 2
                 dist = max(s_["top"] - wy, wy - s_["bot"], 0)
+                if not any(abs(hx - wx) < 30 and abs(hy - wy) < 8 for hx, hy in pg.hooks):
+                    continue      # no bracket hooks near it: a bar number, not a tuplet
                 if dist < sp or dist > 3 * sp or not (s_["x0"] <= wx <= s_["x1"]) or len(ev) < 3:
                     continue
                 i = min(range(len(ev)), key=lambda j: abs(ev[j]["x"] + 2 * k - wx))
@@ -210,6 +223,7 @@ def extract(D, nvoices=4, pages=None):
                     if c:
                         for e in full:
                             e["dur"] = c.most_common(1)[0][0]
+                            e["full"] = True        # centred in its bar: its x is not where the bar starts
             systems.append(dict(staves=sts, voices=vids, bars=bl, x0=pg.staves[sts[0]]["x0"], x1=pg.staves[sts[0]]["x1"]))
         out.append(dict(pn=pg.pn, events={si: events[si] for si in events}, systems=systems, staves=pg.staves))
     return out

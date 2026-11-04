@@ -13,7 +13,7 @@ description: >
 
 A LilyPond PDF keeps every notehead, rest, flag and accidental as a font glyph at an exact
 position, so nothing has to be recognised. On a Renaissance piece (Brumel, 62 bars) Halbestunde's
-scan was unusable; the glyph read matched the print. Validation on three more LilyPond PDFs is at
+scan was unusable; the glyph read matched the print. Validation on more LilyPond PDFs (Mutopia, CPDL and IMSLP) is at
 the end.
 
 ## 1. Check the PDF
@@ -72,10 +72,18 @@ and 2.12.2) and font size (every metric scales with the notation size).
 - **Key, time, pickup.** Read from the first system: the run of accidentals before the first note,
   `timesig.*` or two stacked digits. A half-bar start gives an implicit first measure. Every
   time-signature change in the piece is found and written (4/2 to 2/2 to 6/2 worked).
-- **Triplets.** A small "3" just outside the staff (1 to 3 staff spaces; one inside the staff is a
-  proportion sign) makes the three events nearest its centre 2/3 length. The MusicXML uses 12
+- **Triplets.** A small "3" just outside the staff (1 to 3 staff spaces) with the short stroked
+  hooks of a bracket beside it (a bar number or proportion sign has none) makes the three events nearest its centre 2/3 length. The MusicXML uses 12
   divisions per quarter and a 3:2 time-modification. Only the 3:2 case is read (no 6 or 5, no
   bracket check).
+- **Staves.** Five equally spaced long lines make a staff; other long horizontal lines (cresc. and
+  dim. spanners, lyric extenders) are skipped. A head far under one staff and as near to the next is
+  given to the staff whose ledger lines (stroked short lines) lead to it. When a page's margin names
+  run through the voices in order, systems are taken in chunks of that many staves.
+- **Final longa (`--final-breve`).** Hawthorne Early Music editions (Allen Garvin: Verdelot, Byrd,
+  Gibbons, Gabrieli on IMSLP) end sections with `f\\longa*1/2`: engraved as a longa, sounding a breve.
+  A printed longa cannot tell you this, so it is a flag: with it, a longa that ends its staff in a
+  system is a breve. Use it when check_midi shows every voice 8 beats late after a section end.
 - **Whole-bar rests.** A whole rest centred between two barlines is a rest for the whole bar, which can
   be longer than a whole note (a bar of 6 or 8 beats); its length is the usual bar sum of the other
   staves.
@@ -156,6 +164,10 @@ compared with the earlier hand-proofread score.
 | Come Again (Dowland) | SATB, 4/2 to 2/2 to 6/2 | All 4 parts match the MIDI (43, 45, 49, 44 notes); time changes written |
 | Nuz my dzis krzescijani (2.8.7) | S, A, and T+B sharing one bass staff | Refused with a clear message (two voices on a staff) |
 | Obrecht, Missa Malheur me bat, Kyrie (CPDL, LilyPond 2.18.2) | SATB, 3/2, 4/4 and cut-C, treble-8 voices, hidden resting staves, 3:2 triplets, longas, an unbarred Kyrie II | All 63, 236, 233 and 196 notes match the MIDI pitch for pitch (the MIDI splits Kyrie I and the rest into tracks i and i+4; join them), 0 misaligned columns. The 2021 Finale MusicXML on CPDL matches too except it drops one longa-plus-note in the bass and times some bars differently, so it is not a ground truth |
+| Verdelot, Fuggi fuggi cor mio (IMSLP, Hawthorne edition) | SAAB, cut-C, treble-8 voices, tied breves, elisions, italic repeat text | All 138, 139, 159 and 132 notes match the MIDI with `--final-breve`; lyrics exact against the .ly for all four voices |
+| Gibbons, The Silver Swan (IMSLP, Hawthorne edition) | five voices | 0 misaligned columns; lyrics exact against the .ly for all five voices (no MIDI in the zip; the 2013 source does not compile on LilyPond 2.26) |
+| Byrd, Though Amaryllis Dance in Green (IMSLP, Hawthorne edition) | five voices, 3/2, one text line (Superius only), ledger-line notes | 0 misaligned columns after the ledger-line fix; Superius lyrics exact against the .ly |
+| Pearsall, Lay a Garland (IMSLP, Lilysetter, LilyPond 2.25.6) | eight voices on eight staves, dense cresc. spanners, 3 pages | 0 misaligned columns; 58 bars, as the IMSLP page says; no MIDI in the zip |
 | de la Rue, Secretz regretz (CPDL, 2.18.2) | SATB, 4/2, no pickup, mensural incipits at the left, neomensural breves and longas in the music, unusual thin barlines through all four staves | All 4 parts match the MIDI from the source zip (147, 132, 101, 109 notes) exactly, including accidentals and ties |
 | Bianciardi, Ego dormivi (CPDL, 2.22.1) | Same editor and layout, one flat, ficta, breves | All 4 parts match the MIDI (147, 168, 174, 99 notes) exactly |
 | Brumel, Du tout plongiet (Preview-saved) | 4 staves, mensural incipit, cut-C | Identical to the proofread score except one explicit A flat (bar 44, Cantus) that the first reader dropped |

@@ -36,7 +36,7 @@ def repeat_tail(mine, t, k):
     """The MIDI plays repeats and voltas that the print writes once: when the notes of mine after the first
     difference are exactly the MIDI's last notes (same pitches), the print is right and the MIDI is longer."""
     rest = len(mine) - k
-    return 0 < rest <= len(t) - k and all((a[1] - b[1]) % 12 == 0 for a, b in zip(mine[k:], t[len(t) - rest:]))
+    return len(t) > len(mine) and 0 < rest <= len(t) - k and all((a[1] - b[1]) % 12 == 0 for a, b in zip(mine[k:], t[len(t) - rest:]))
 
 
 def xml_voices(path):
@@ -104,7 +104,10 @@ def main():
     ap.add_argument("pdf", help="the PDF, or the MusicXML to check (exact pitches, accidentals and ties included)"); ap.add_argument("mid")
     ap.add_argument("--voices", type=int, default=4); ap.add_argument("--pages")
     ap.add_argument("--clefs"); ap.add_argument("--fifths", type=int)
+    ap.add_argument("--final-breve", action="store_true", help="a longa ending its staff in a system sounds as a breve")
     a = ap.parse_args()
+    import extract as _ex
+    _ex.FINAL_BREVE = a.final_breve
     if a.pdf.endswith((".musicxml", ".xml")):
         return main_xml(a.pdf, a.mid)
     D = Doc(a.pdf)

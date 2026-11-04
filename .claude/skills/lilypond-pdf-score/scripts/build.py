@@ -188,7 +188,7 @@ def collect(D, res, nvoices, clefs, beats_per_bar, fifths, pickup_shift=None):
     # an explicit --clefs with an 8 where the print shows none (Brumel's Cantus) shifts that whole voice
     extra8 = [1 if c.endswith("8") and not d.endswith("8") else 0 for c, d in zip(clefs, detected)]
     voices = [[] for _ in range(nvoices)]
-    ptoks = {pn: page_lyrics(D.doc, pn) for pn in {pg["pn"] for pg, _ in systems}}
+    ptoks = {pn: page_lyrics(D.doc, pn, pages=D.pages) for pn in {pg["pn"] for pg, _ in systems}}
     for n, ((pg, s), S) in enumerate(zip(systems, starts)):
         pgo = D.pages[pg["pn"]]
         ons = timeline(pg, s)
@@ -262,7 +262,7 @@ def collect(D, res, nvoices, clefs, beats_per_bar, fifths, pickup_shift=None):
                 # an elision ("re~e", two syllables on one note) is set 2 pt apart with no hyphen between
                 elide = (ti > 0 and last >= 0 and any(
                     g["name"] == "ties.lyric.default" and sy[ti - 1]["x1"] - 2 <= g["x"] <= t["x0"] + 2 and abs(g["y"] - t["y"]) < 6
-                    for g in pgo.glyphs) and abs(xc - (notes[last]["x"] + 2.6 * pgo.k)) < 14)
+                    for g in pgo.glyphs) and abs(xc - (notes[last]["x"] + 2.6 * pgo.k)) < 22)
                 if elide:
                     best = (abs(xc - (notes[last]["x"] + 2.6 * pgo.k)), last)
                 else:
