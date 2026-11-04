@@ -139,4 +139,5 @@ def main():
             print("   pitches off by a semitone (accidental?):", sum(1 for a_, b_ in zip(mine, t) if (a_[1] - b_[1]) % 12 != 0))
 
 
-main()
+if __name__ == "__main__":
+    main()

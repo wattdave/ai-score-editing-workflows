@@ -8,7 +8,8 @@ from lyr import page_lyrics
 DIGITS = {n: i for i, n in enumerate("zero one two three four five six seven eight nine".split())}
 
 # written pitch of the bottom staff line, as diatonic steps from C0 (E4 = 30), by clef glyph and its y
-REF = {"clefs.G": 32, "clefs.F": 24, "clefs.C": 28}   # pitch the clef's reference line stands for
+REF = {"clefs.G": 32, "clefs.F": 24, "clefs.C": 28}
+CLEFS = set(REF)       # the plain modern clefs; clefs.petrucci.* belong to incipits   # pitch the clef's reference line stands for
 
 
 def staff_clef(D, res, i):
@@ -19,7 +20,7 @@ def staff_clef(D, res, i):
     st = pg["systems"][0]["staves"][i]
     notes = [e["x"] for e in pg["events"].get(st, []) if e["t"] == "N"]
     x1 = min(notes) if notes else 1e9
-    cl = [g for g in pgo.glyphs if g["name"] and g["name"].startswith("clefs.") and pgo.staff_of(g["y"]) == st
+    cl = [g for g in pgo.glyphs if g["name"] in CLEFS and pgo.staff_of(g["y"]) == st
           and g["x"] < x1 and g["size"] >= pgo.main * 0.85]
     return (max(cl, key=lambda g: g["x"]) if cl else None), st, pgo
 
@@ -177,7 +178,9 @@ def system_starts(res, beats_per_bar):
 
 def collect(D, res, nvoices, clefs, beats_per_bar, fifths, pickup_shift=None):
     systems, starts = system_starts(res, beats_per_bar)
-    hs0 = [clef_hs0(D, res, c, i) for i, c in enumerate(clefs)]
+    detected = detect_clefs(D, res)
+    # an explicit --clefs with an 8 where the print shows none (Brumel's Cantus) shifts that whole voice
+    extra8 = [1 if c.endswith("8") and not d.endswith("8") else 0 for c, d in zip(clefs, detected)]
     voices = [[] for _ in range(nvoices)]
     ptoks = {pn: page_lyrics(D.doc, pn) for pn in {pg["pn"] for pg, _ in systems}}
     for n, ((pg, s), S) in enumerate(zip(systems, starts)):
@@ -200,6 +203,20 @@ def collect(D, res, nvoices, clefs, beats_per_bar, fifths, pickup_shift=None):
             cx = max(clefs_x) if clefs_x else -1e9
             keyx = sorted(g["x"] for g in pgo.glyphs if g["name"] in FLAT | SHARP and pgo.staff_of(g["y"]) == st
                           and cx < g["x"] < first_x and g["size"] >= pgo.main * 0.85)[:abs(fifths)]
+            clef_marks = sorted((g["x"], g, any(abs(h[0] - g["x"]) < 12 * pgo.k and pgo.staff_of(h[1]) == st
+                                                  and h[1] > pgo.staves[st]["bot"] - 6 for h in pgo.eights))
+                                for g in pgo.glyphs if g["name"] in CLEFS and pgo.staff_of(g["y"]) == st
+                                and g["size"] >= pgo.main * 0.6)
+            clef_marks = [(x, g, e8) for x, g, e8 in clef_marks]
+
+            def hs0_at(x):
+                """bottom-line step for the clef in force at x (a clef can change mid-piece)"""
+                cur = [m for m in clef_marks if m[0] < x]
+                if not cur:
+                    return clef_hs0(D, res, clefs[vi], vi)
+                _, g, e8 = cur[-1]
+                n = REF[g["name"]] - pgo.hs(st, g["y"]) - (7 if e8 else 0)
+                return n - 7 * extra8[vi]
             for e, t in L:
                 if e.get("acc_x") is not None and any(abs(e["acc_x"] - kx) < 0.3 for kx in keyx):
                     e.pop("acc", None)
@@ -207,7 +224,7 @@ def collect(D, res, nvoices, clefs, beats_per_bar, fifths, pickup_shift=None):
                 if e["t"] == "R":
                     ev["rest"] = True
                 else:
-                    ev["step"] = hs0[vi] + e["hs"]
+                    ev["step"] = hs0_at(e["x"]) + e["hs"]
                     alt = None
                     for g in small:
                         if pgo.staff_of(g["y"]) == st and 0 <= g["x"] - e["x"] <= 3.2 * pgo.k:

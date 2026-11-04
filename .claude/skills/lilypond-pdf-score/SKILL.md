@@ -32,7 +32,12 @@ tuplets. Two voices on one staff (tenor and bass sharing a bass staff) or a gran
 reduction, a translation) are skipped with `--pages 1`.
 
 Sources: Cloudflare blocks `curl` on cpdl.org and imslp.org (a "Just a moment" 403), so fetching
-from there needs a browser. mutopiaproject.org downloads with plain `curl` and is always LilyPond.
+from there needs a real browser. With Claude in Chrome the check clears by itself after about five
+seconds (wait, then read the page); list a page's files with `javascript_tool`
+(`[...document.querySelectorAll('a')].filter(a=>/\.(pdf|mid|zip)/i.test(a.href))`) and download by
+clicking a generated `<a download>`; the file lands in ~/Downloads. CPDL search for
+`lilypond SATB Renaissance` lists hundreds of editions, and a `-source.zip` usually holds the `.ly`
+and the score's MIDI. mutopiaproject.org downloads with plain `curl` and is always LilyPond.
 
 ## 2. How it reads
 
@@ -130,7 +135,15 @@ compared with the earlier hand-proofread score.
 | Unquiet Thoughts (Dowland) | SATB lute-song layout, two flats, 2/1 | 65 of 66, 79 of 80, 81 of 82, 61 of 62 notes; the last note is where the print has a repeat and the MIDI jumps |
 | Come Again (Dowland) | SATB, 4/2 to 2/2 to 6/2 | All 4 parts match the MIDI (43, 45, 49, 44 notes); time changes written |
 | Nuz my dzis krzescijani (2.8.7) | S, A, and T+B sharing one bass staff | Refused with a clear message (two voices on a staff) |
+| Obrecht, Missa Malheur me bat, Kyrie (CPDL, LilyPond 2.18.2) | SATB, 3/1 and cut-C, treble-8 voices, clef changes at the Christe | Kyrie I matches the MIDI: Superius 26 of 26 notes, Altus 75, Tenor 94, Bassus 80. The Christe and Kyrie II were not verified: the MIDI keeps them in separate tracks and the first notes of the Christe differ, which may be a clef read or a stale MIDI |
+| de la Rue, Secretz regretz (CPDL, 2.18.2) and Bianciardi, Ego dormivi (CPDL, 2.22.1) | Unbarred editions with ligature brackets, neomensural note shapes and incipits | Not readable yet: voices disagree on duration wherever a ligature is used (`noteheads.srM1neomensural` and similar). Their zips ship a MIDI, so they are good test cases for ligature support |
 | Brumel, Du tout plongiet (Preview-saved) | 4 staves, mensural incipit, cut-C | Identical to the proofread score except one explicit A flat (bar 44, Cantus) that the first reader dropped |
+
+Limits found on the CPDL files: ligature editions (neomensural heads inside `brackettips`) are not
+read; an edition without barlines still gets a system timeline, but there is nothing to check bar sums
+against; a clef change inside the piece is applied to the notes after it, but the MusicXML only carries
+the opening clefs (the pitches are right, the clef sign is not repeated); incipit clefs are
+`clefs.petrucci.*` and are ignored.
 
 What the validation changed in the code: glyph names instead of ids; sizes scaled; ties and beams
 (rect beams) read; pickup grid; bar-length changes; time-signature changes; incipit skipped;
