@@ -13,6 +13,7 @@
   "musescore": "musescore",
   "musescore-pdf-convert": "musescore",
   "omr-score-repair": "score-editing-core",
+  "phrase-breaks": "score-editing-core",
   "playback-divisi-split": "sibelius",
   "proof-listen-mixes": "sibelius",
   "rehearsal-mixes": "sibelius",
