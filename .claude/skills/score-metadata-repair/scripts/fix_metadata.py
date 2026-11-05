@@ -4,7 +4,7 @@
 Standard library only, so the skill runs without the rest of this repository.
 
 Usage:
-    fix_metadata.py IN OUT [--title T] [--composer C] [--arranger A]
+    fix_metadata.py IN OUT [--title T] [--subtitle S] [--composer C] [--arranger A]
         [--lyricist L] [--rights-template public-domain|in-copyright|own-arrangement]
         [--source S] [--notice N] [--year Y] [--name NAME]
         [--parts "Soprano,Alto,Tenor,Bass"] [--normalize-title]
@@ -279,8 +279,8 @@ def _page(root: ET.Element, tag: str, default: float) -> float:
         return default
 
 
-def add_credits(root: ET.Element) -> list[str]:
-    """Add title/composer/arranger/lyricist credits when the score has none."""
+def add_credits(root: ET.Element, subtitle: str | None = None) -> list[str]:
+    """Add title/subtitle/composer/arranger/lyricist credits when the score has none."""
     if root.find("credit") is not None:
         return []
     width, height = _page(root, "page-width", 1233), _page(root, "page-height", 1600)
@@ -289,6 +289,8 @@ def add_credits(root: ET.Element) -> list[str]:
     rows = []
     if title:
         rows.append(("title", title, width / 2, height - 100, "center", 24))
+    if subtitle:
+        rows.append(("subtitle", subtitle, width / 2, height - 135, "center", 14))
     if people.get("lyricist"):
         rows.append(("lyricist", people["lyricist"], 80, height - 150, "left", 12))
     if people.get("composer"):
@@ -344,8 +346,8 @@ def repair(root: ET.Element, args: argparse.Namespace) -> list[str]:
     if rights:
         set_rights(root, rights)
         log.append(f"rights: {rights!r}")
-    wants_credits = args.title is not None or args.normalize_title or args.composer or args.arranger or args.lyricist
-    added = add_credits(root) if wants_credits else []
+    wants_credits = args.title is not None or args.normalize_title or args.composer or args.arranger or args.lyricist or args.subtitle
+    added = add_credits(root, args.subtitle.strip() if args.subtitle else None) if wants_credits else []
     if added:
         log.append("credits added: " + ", ".join(added))
     log += fix_parts(root, names)
@@ -369,6 +371,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("input")
     ap.add_argument("output")
     ap.add_argument("--title")
+    ap.add_argument("--subtitle", help="printed under the title, e.g. \"(Stille Nacht)\"; written as a credit")
     ap.add_argument("--composer")
     ap.add_argument("--arranger")
     ap.add_argument("--lyricist")
