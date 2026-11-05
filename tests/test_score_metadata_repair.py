@@ -253,3 +253,10 @@ def test_audit_no_longer_reports_fixed_metadata(tmp_path) -> None:
 def test_output_is_well_formed_for_all_options(tmp_path) -> None:
     rc, text, root = run(tmp_path, "--title", "Stille Nacht", "--arranger", "A", "--parts", "Soprano")
     assert rc == 0 and re.search(r"<part-name>Soprano</part-name>", text)
+
+
+def test_voice_letter_names_abbreviate_to_themselves() -> None:
+    for name in ("S A", "T B", "S", "A & B", "SATB"):
+        assert fix.abbreviate(name) == name
+    assert fix.abbreviate("Baritone") == "Bar."
+    assert fix.abbreviate("Soprano") == "S."
