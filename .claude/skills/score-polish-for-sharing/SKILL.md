@@ -217,11 +217,12 @@ Use `render`/`score-snapshot` and a PDF after each group of changes.
 When the source is an engraved PDF read by `lilypond-pdf-score`, three more
 checks apply:
 
-- **Clef octave.** Compare the clef in the XML with the print. The XML had the
-  Cantus in treble-8 (sounding an octave low) while the print has a plain
-  treble; fix it by dropping `clef-octave-change` and raising the pitches an
-  octave. Written positions stay the same, so the staff looks unchanged and
-  only playback and the editor's clef show the error.
+- **Clef octave.** Do not "fix" a treble-8 from the PDF image or text alone.
+  On Brumel I judged the Cantus clef a plain treble (a 400 dpi crop and a text
+  search for an "8" both missed it) and moved the line up an octave; the print
+  does have a treble-8 and the older XML was right. If the XML and your reading
+  of the clef disagree, ask the user or have them look at the print, and leave
+  the old value in place until they say.
 - **Ficta.** Re-read the PDF with the current `mxl.py` (it writes ficta as
   `accidental-mark`), copy only the marks onto the corrected XML by note
   position, import, then run `list_ficta.py --query ... --editor sibelius`
