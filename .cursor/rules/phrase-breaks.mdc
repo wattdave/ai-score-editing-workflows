@@ -51,6 +51,10 @@ So this skill is a conversation, not a one-shot fix:
 - Candidates: `wide` about 5-6 bars per system, `medium` about 4, `narrow`
   about 3, scaled by density (notes per bar, syllable length, bar length) and
   clamped to a factor of 0.75-1.2. A bare number is used as given.
+- Stacked verses cap the system length (`VERSE_CAPS`): 3 or more verses under a
+  staff allow at most 4 bars per system, 2 verses at most 6. A capped candidate
+  says so in the table. Lessons that came from review are in
+  `references/layout-taste.md`.
 - Costs (weights in `W`): off-phrase breaks, systems far from the target,
   uneven neighbours, a one- or two-bar last system, tied notes split by a
   break, and a break that leaves only the last note on the final line.

@@ -90,6 +90,9 @@ PHRASE_CAP = 4.0   # score at which the break cost reaches zero
 CANDIDATES = {"wide": 5.5, "medium": 4.0, "narrow": 3.0}
 REF_LOAD = 8.0     # notes per bar (busiest part) that counts as normal density
 SCALE_MIN, SCALE_MAX = 0.75, 1.2
+# Stacked verses need room under the notes: the longest system allowed, by number of verses.
+# Lesson 2026-11-05 (Deck the Halls, 3 verses): 8 bars per system crushed and collided the lyrics.
+VERSE_CAPS = {2: 6, 3: 4}   # 3 or more verses -> at most 4 bars per system
 MAX_LEN_FACTOR = 1.75  # longest allowed system = target * factor + 1
 
 BARLINE_STYLES = {"light-light", "light-heavy", "heavy-light", "heavy-heavy"}
@@ -132,6 +135,7 @@ class Bar:
         self.final_only = False      # bar holds a single sounding note or chord
         self.tie_out = False         # a note is tied into the next bar
         self.lyric_chars: list[int] = []
+        self.verses = 0              # most lyric lines under one note
         self.pickup = False
 
     @property
@@ -151,7 +155,7 @@ def _read_part(part: ET.Element, n: int) -> tuple[list[dict], int]:
     for i, m in enumerate(part.findall("measure")[:n]):
         info: dict = {"events": [], "fermata": False, "last_lyric": None, "barline": False, "fwd": False,
                       "tempo": False, "reh": False, "volta": False, "keychg": False, "timechg": False,
-                      "lyric_chars": []}
+                      "lyric_chars": [], "verses": 0}
         for a in m.findall("attributes"):
             if a.find("divisions") is not None:
                 divisions = _int(a.find("divisions"), divisions)
@@ -187,6 +191,7 @@ def _read_part(part: ET.Element, n: int) -> tuple[list[dict], int]:
                     lyrics += 1
                     info["last_lyric"] = (onset, " ".join(t for t in texts if t))
                     info["lyric_chars"].extend(len(t) for t in texts if t)
+                    info["verses"] = max(info["verses"], sum(1 for t in texts if t))
                 if not grace:
                     info["events"].append(ev)
                 if el.find(".//fermata") is not None:
@@ -244,6 +249,7 @@ def analyse(root: ET.Element) -> tuple[list[Bar], list[str]]:
         bar.pickup = i == 0 and n > 1 and 0 < bar.length < bar.quarters * 0.999
         bar.notes = max(sum(1 for e in r["events"] if not e["rest"] and not e["chord"]) for r in rows)
         bar.lyric_chars = [c for r in rows for c in r["lyric_chars"]]
+        bar.verses = max(r["verses"] for r in rows)
         bar.final_only = sum(1 for e in mel["events"] if not e["rest"] and not e["chord"]) <= 1
         bar.tie_out = any(e["tie"] for r in rows for e in r["events"])
     for i, bar in enumerate(bars):
@@ -315,7 +321,16 @@ def density_scale(bars: list[Bar]) -> tuple[float, dict]:
                    "bar_quarters": round(quarters, 1), "load": round(load, 1), "scale": round(scale, 2)}
 
 
-def solve(bars: list[Bar], target: float) -> tuple[list[int], float]:
+def verse_cap(bars: list[Bar]) -> int | None:
+    """Longest system (in bars) that the stacked verses allow, or None when unconstrained."""
+    verses = max((b.verses for b in bars), default=0)
+    for v in sorted(VERSE_CAPS, reverse=True):
+        if verses >= v:
+            return VERSE_CAPS[v]
+    return None
+
+
+def solve(bars: list[Bar], target: float, max_bars: int | None = None) -> tuple[list[int], float]:
     """Return (system start indices, cost), minimising the cost model by DP over (start, end)."""
     n = len(bars)
     if n == 0:
@@ -324,6 +339,8 @@ def solve(bars: list[Bar], target: float) -> tuple[list[int], float]:
     for b in bars:
         pre.append(pre[-1] + b.weight)
     max_len = max(2, int(target * MAX_LEN_FACTOR) + 1)
+    if max_bars is not None:
+        max_len = max(2, min(max_len, max_bars))
     pickup = bars[0].pickup
     last_only = n >= 2 and bars[-1].final_only
 
@@ -432,9 +449,16 @@ def page_starts(bars: list[Bar], starts: list[int], page_bars: int) -> list[int]
 
 def layouts(bars: list[Bar], spec: str, page_bars: int = 0) -> tuple[list[dict], dict]:
     scale, facts = density_scale(bars)
+    cap = verse_cap(bars)
+    facts["verses"] = max((b.verses for b in bars), default=0)
+    if cap is not None:
+        facts["max_bars_per_system"] = cap
     result = []
     for name, target in resolve_candidates(spec, scale):
-        starts, cost = solve(bars, target)
+        capped = cap is not None and target > cap
+        if capped:
+            target = float(cap)
+        starts, cost = solve(bars, target, cap)
         pages = page_starts(bars, starts, page_bars)
         systems = []
         for k, s in enumerate(starts):
@@ -445,7 +469,7 @@ def layouts(bars: list[Bar], spec: str, page_bars: int = 0) -> tuple[list[dict],
                 "break_after": None if e == len(bars) else reason(bars, e - 1),
                 "break_score": None if e == len(bars) else round(bars[e - 1].score, 1),
             })
-        result.append({"name": name, "target": target, "cost": round(cost, 1), "starts": starts, "pages": pages,
+        result.append({"name": name, "target": target, "capped_by_verses": capped, "cost": round(cost, 1), "starts": starts, "pages": pages,
                        "sizes": [s["bars"] for s in systems], "systems": systems})
     return result, facts
 
@@ -458,7 +482,9 @@ def format_text(title: str, bars: list[Bar], cands: list[dict], facts: dict, war
     lines += [f"warning: {w}" for w in warnings]
     for c in cands:
         lines += ["", f"== {c['name']}: target {c['target']:g} bars/system, {len(c['systems'])} systems, "
-                      f"sizes {'-'.join(map(str, c['sizes']))}, cost {c['cost']}",
+                      f"sizes {'-'.join(map(str, c['sizes']))}, cost {c['cost']}"
+                  + (f" (capped: {facts['verses']} stacked verses leave room for {facts['max_bars_per_system']} bars at most)"
+                     if c.get("capped_by_verses") else ""),
                   f"{'sys':>3}  {'bars':<9} {'n':>2}  break"]
         for s in c["systems"]:
             rng = s["first_bar"] if s["first_bar"] == s["last_bar"] else f"{s['first_bar']}-{s['last_bar']}"
