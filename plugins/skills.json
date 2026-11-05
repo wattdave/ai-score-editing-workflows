@@ -16,6 +16,7 @@
   "rehearsal-mixes": "sibelius",
   "satb-part-splitting": "sibelius",
   "score-editing": "score-editing-core",
+  "score-engraving-audit": "score-editing-core",
   "setup": "score-editing-core",
   "sibelius": "sibelius",
   "swing-playback-copy": "sibelius",

@@ -1,0 +1,77 @@
+---
+name: score-engraving-audit
+description: >
+  Check a MusicXML file (typically OMR output from a scan, or a split or
+  repaired copy) for what makes it unfit to print or share with people:
+  missing or badly cased title, no composer or copyright line, generic part
+  names (Voice0), partly beamed beat groups, chord symbols read as text with
+  wrong capitals, unjoined lyric syllables, padding bars and missing layout.
+  Use after any scan or import, before polishing a score for sharing, or when
+  asked whether a score is ready to print.
+---
+
+# Score engraving audit
+
+A read-only check that turns "is this score fit to share?" into a list of
+findings. It needs only `python3` (standard library); it does not need this
+repository or any score editor.
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/audit_musicxml.py" score.xml          # text
+python3 "${CLAUDE_SKILL_DIR}/scripts/audit_musicxml.py" score.xml --json   # for scripts
+```
+
+Exit status is 1 when there is an `error`, 2 when the file cannot be read.
+It reads `.xml`, `.musicxml` and `.mxl`.
+
+## Severities
+
+- `error`: fix before sharing (no title, generic part names, mostly padding).
+- `warn`: probably wrong; compare with the source print.
+- `info`: a fact, not a defect.
+
+## What it checks
+
+| Code | Meaning |
+|---|---|
+| `title-missing`, `title-case`, `title-whitespace`, `title-numbered` | Title absent, all lower/upper case, padded, or carrying a list number |
+| `composer-missing`, `rights-missing` | No composer/credit text, no copyright/source line |
+| `part-name-generic`, `part-abbreviation-missing` | `Voice0`-style names; no short names for later systems |
+| `beams-mixed` | A beat group where some notes are beamed and others are not |
+| `beams-some-unbeamed`, `beams-none` | Unbeamed groups (see the beaming note below) |
+| `chords-as-text`, `chords-lowercase` | Chord symbols stored as text; `c` where `C` was meant |
+| `lyrics-unjoined` | Every syllable is its own word, so no hyphens will print |
+| `padding-bars`, `clefs-after-bar1` | OMR padding and redundant clefs; fix with `omr-score-repair` |
+| `layout-no-breaks` | No system or page breaks; choose them by phrase after import |
+
+## Beaming: what is and is not a defect
+
+Tested in Sibelius on 2026-11-05: a MusicXML file with **no** `<beam>`
+elements is beamed by meter on import, so `beams-none` is informational. But
+Sibelius keeps **explicit** beams, so a partial beam from an OMR scan stays
+wrong: in the Silent Night scan, bars 1 and 2 (6/8) beam a dotted eighth with
+the sixteenth and leave the third eighth flagged. `beams-mixed` finds these.
+
+Beams are a style choice for vocal music. Syllabic editions break beams at
+each syllable change, so compare with the source print before treating a
+`beams-mixed` or `beams-some-unbeamed` finding as an error. Also note that a
+file exported by an editor can show few `<beam>` elements and still print
+correctly: judge those by the rendered PDF, not by the XML.
+
+## Using the result
+
+1. Run the audit on the OMR output, before importing.
+2. Fix what is fixable in the XML (`omr-score-repair`, `lyric-hyphenation`).
+3. Import, fix the rest in the editor, export a PDF and compare it with the
+   source scan.
+4. Run the audit again on the re-exported MusicXML; no count should get worse.
+
+## Copyright line templates
+
+`rights-missing` asks for one of three lines. Ask the user for the source and
+its rights status; never add a (c) to a transcription unprompted.
+
+1. Public-domain source: `Public domain. Transcribed from [source] for rehearsal use.`
+2. In-copyright source: carry the original notice, then
+   `Transcribed for rehearsal use only. Not for distribution.`
+3. Our own arrangement: `Arrangement (c) [year] [name].`
