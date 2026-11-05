@@ -1,5 +1,6 @@
 {
   "beaming-repair": "score-editing-core",
+  "chord-symbol-repair": "score-editing-core",
   "dorico": "dorico",
   "git-workflow": null,
   "halbestunde-omr": "score-editing-core",
