@@ -50,7 +50,7 @@ def raise_if_busy(response: dict[str, Any]) -> None:
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 62
+CURRENT_BRIDGE_VERSION = 63
 QUERY_BRIDGE_VERSION = 38
 BATCH_BRIDGE_VERSION = 39
 NUDGE_BRIDGE_VERSION = 41
@@ -69,11 +69,14 @@ SET_LYRIC_VERSE_BRIDGE_VERSION = 59
 TUPLET_NOTES_BRIDGE_VERSION = 60
 TEXT_FONTS_BRIDGE_VERSION = 61
 QUERY_CONTAINERS_BRIDGE_VERSION = 62
+FICTA_BRIDGE_VERSION = 63
 
 
 def batch_bridge_version(operations: list[dict[str, Any]]) -> int:
     """The oldest bridge that runs every operation in a validated batch."""
     names = {operation["op"] for operation in operations}
+    if "ficta" in names:
+        return FICTA_BRIDGE_VERSION
     if names & {"add-tuplet-notes", "clear-bars"}:
         return TUPLET_NOTES_BRIDGE_VERSION
     if "set-lyric-verse" in names:

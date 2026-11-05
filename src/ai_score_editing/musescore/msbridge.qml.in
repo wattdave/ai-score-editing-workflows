@@ -539,6 +539,21 @@ MuseScore {
         return addElement(c, el, "Text", p.at);
     }
 
+    // The staff text that carries a ficta sign: nothing but one accidental symbol.
+    function removeFictaText(p) {
+        var c = cursorAt(p.at.track, p.at.tick);
+        if (!c)
+            return null;
+        var found = [];
+        var notes = c.segment.annotations;
+        for (var i = 0; i < notes.length; i++)
+            if (notes[i].track === p.at.track && /^<sym>accidental(Flat|Natural|Sharp)<\/sym>$/.test(notes[i].text))
+                found.push(notes[i]);
+        for (var f = 0; f < found.length; f++)
+            root.removeElement(found[f]);
+        return null;
+    }
+
     function addClef(p, measure) {
         var c = seat(p.at, measure);
         var el = root.newElement(Element.CLEF);
@@ -733,6 +748,7 @@ MuseScore {
         case "add-rest": return addRest(p, measure);
         case "add-tuplet": return addTuplet(p, measure);
         case "add-text": return addText(p, measure);
+        case "remove-ficta-text": return removeFictaText(p);
         case "add-clef": return addClef(p, measure);
         case "add-lyric": return addLyric(p, measure);
         case "add-line": return addLine(p, measure);
@@ -768,6 +784,15 @@ MuseScore {
         case "bracket":
             for (var n = 0; n < el.notes.length; n++)
                 el.notes[n].hasParentheses = p.on ? 3 : 0;
+            return;
+        case "ficta-show":
+            // Editorial ficta: the note keeps its pitch, only the accidental drawn in the staff goes.
+            for (var fn = 0; fn < el.notes.length; fn++) {
+                var acc = el.notes[fn].accidental;
+                if (!acc)
+                    throw new Error("the note shows no accidental to hide or show");
+                acc.visible = p.on;
+            }
             return;
         case "flip-stem":
             el.stemDirection = el.up ? 2 : 1;

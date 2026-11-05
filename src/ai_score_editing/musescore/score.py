@@ -428,6 +428,8 @@ def prepare_batch(
             ties = []
         if op == "beam":
             made = _beam(operation, label, by_address, objects)
+        elif op == "ficta":
+            made = _ficta(operation, label, _target(original, operation, label, by_address))
         elif op in NOTE_OPS:
             target = _target(original, operation, label, by_address)
             made = [_note_op(original, operation, label, target, objects, bar_info, division)]
@@ -983,6 +985,25 @@ def _adding(
         return [{"op": "add-line", "at": at, "line": kind,
                  "endTick": at["tick"] + to_ticks(operation["duration"], division, f"{label}.duration")}]
     raise MuseScoreBatchError(f"{label}: {op} is not handled")  # pragma: no cover
+
+
+#: MuseScore has no ficta. The sign is staff text holding one SMuFL accidental, above the note, and the
+#: note's own accidental is hidden, so the pitch and playback are unchanged.
+FICTA_SYMBOLS = {"flat": "accidentalFlat", "natural": "accidentalNatural", "sharp": "accidentalSharp"}
+
+
+def _ficta(operation: dict[str, Any], label: str, item: dict[str, Any]) -> list[dict[str, Any]]:
+    """Hide (or show again) a chord's staff accidental and add (or remove) the ficta text above it."""
+    _chord(item, "ficta", label)
+    at = {"staff": item["staff"], "bar": item["bar"], "tick": item["_ref"]["tick"],
+          "track": (item["staff"] - 1) * 4 + item["voice"] - 1}
+    # Any ficta text already there goes first, so adding twice leaves one.
+    primitives: list[dict[str, Any]] = [{"op": "remove-ficta-text", "at": at}]
+    if operation["remove"]:
+        return [{"op": "ficta-show", "ref": item["_ref"], "on": True}, *primitives]
+    text = f"<sym>{FICTA_SYMBOLS[operation['accidental']]}</sym>"
+    return [{"op": "ficta-show", "ref": item["_ref"], "on": False}, *primitives,
+            {"op": "add-text", "at": at, "element": "STAFF_TEXT", "text": text}]
 
 
 def _note_op(

@@ -217,6 +217,13 @@ and verify once for the whole set.
   - `{"op":"set-pitch","staff":S,"bar":B,"index":I,"oldPitch":P,"newPitch":Q}`
   - `{"op":"tie","staff":S,"bar":B,"index":I[,"remove":true]}`
   - `{"op":"bracket","staff":S,"bar":B,"index":I[,"remove":true]}` (parenthesize a note/chord)
+  - `{"op":"ficta","staff":S,"bar":B,"index":I,"accidental":"flat"|"natural"|"sharp"}` or
+    `{"op":"ficta",...,"remove":true}` (bridge v63): an editorial ficta above a single note. Sibelius has no
+    ficta property; this does what its own Add Ficta plug-in does: a one-character technique text in Opus
+    Text Std 36 units after the note (`b`, `#`, or `§` for a natural) and the note's accidental set to
+    hidden. Remove deletes that text and sets the accidental back to normal. Adding twice replaces the
+    sign. The note's pitch is not changed, so the pitch must already be the sounding one; query the
+    `Text` objects of the bar to see the sign. A rest is refused; on a chord every note's accidental is hidden, so use single notes (Sibelius's own plug-in skips chords).
   - `{"op":"flip-stem","staff":S,"bar":B,"index":I}`
   - `{"op":"delete","staff":S,"bar":B,"index":I}`
   - `{"op":"delete-voice","staff":S,"fromBar":A,"toBar":B,"voice":V}`

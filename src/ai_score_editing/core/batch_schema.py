@@ -35,7 +35,9 @@ from ai_score_editing.core.intervals import compute_transposition
 #: (operation, label) and returns the normalized operation.
 ExtraOps = dict[str, Callable[[dict[str, Any], str], dict[str, Any]]]
 
-ADDRESSED = {"set", "set-pitch", "tie", "bracket", "flip-stem", "delete", "nudge"}
+ADDRESSED = {"set", "set-pitch", "tie", "bracket", "ficta", "flip-stem", "delete", "nudge"}
+#: Accidentals an editorial ficta mark can show above a note.
+FICTA_ACCIDENTALS = ("flat", "natural", "sharp")
 ADDING = {"add-note", "add-tuplet-notes", "add-text", "add-line", "add-lyric"}
 STRUCTURAL = {
     "transpose", "copy-passage", "set-key", "set-time", "set-break",
@@ -189,6 +191,19 @@ def _validate(
         if not isinstance(remove, bool):
             raise BatchError(f"{label}.remove must be boolean")
         out["tied" if op == "tie" else "bracketed"] = not remove
+    elif op == "ficta":
+        remove = operation.get("remove", False)
+        if not isinstance(remove, bool):
+            raise BatchError(f"{label}.remove must be boolean")
+        accidental = operation.get("accidental")
+        if remove:
+            if accidental is not None:
+                raise BatchError(f"{label}.accidental is not used with remove")
+        elif accidental not in FICTA_ACCIDENTALS:
+            raise BatchError(f"{label}.accidental must be one of {', '.join(FICTA_ACCIDENTALS)}")
+        out["remove"] = remove
+        if not remove:
+            out["accidental"] = accidental
     elif op == "nudge":
         for field in ("dx", "dy"):
             value = operation.get(field, 0)

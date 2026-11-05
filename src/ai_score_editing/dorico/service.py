@@ -491,6 +491,10 @@ async def _apply_commands(
                 if "tempRest" in op:
                     steps += await _delete_temporary_rest(bridge, target, flow, flow_id)
                 results.append({"op": op["op"], "bar": op["bar"], "definition": op["definition"], "id": made[0]["id"]})
+            elif op["op"] == "ficta":
+                done, result = await _run_ficta(bridge, op, flow, flow_id, blocks)
+                steps += done
+                results.append(result)
             elif op["op"] in score.NOTE_COMMAND_OPS:
                 results.append(await _run_note_command(bridge, op, flow))
                 steps += 1
@@ -918,6 +922,48 @@ async def _repitch(bridge: DoricoBridge, op: dict[str, Any], flow: int) -> tuple
     if note.get("pitch") != op["newPitch"] or not (note.get("name") or "").startswith(op["letter"]):
         raise DoricoError(f"note {op['id']} reads {note.get('name')} ({note.get('pitch')}), not {op['letter']} ({op['newPitch']})")
     return steps, {"op": "set-pitch", "id": op["id"], "via": "command", "before": op.get("name"), "after": note.get("name")}
+
+
+async def _run_ficta(
+    bridge: DoricoBridge, op: dict[str, Any], flow: int, flow_id: int, blocks: dict[str, Any],
+) -> tuple[int, dict[str, Any]]:
+    """Hide the selected note's accidental and put the ficta technique above it, or undo both.
+
+    Returns (undo steps, result). The technique must exist in the project (score.FICTA_TECHNIQUES).
+    A technique event shows no name to Lua, so removing deletes the one at the note's position in its
+    voice, and leaves it (saying so) when there are none or several.
+    """
+    before = {e["id"] for e in (await bridge.read_partial(flow))[0] if "id" in e}
+    await bridge.client.command(op["command"])
+    steps = 1
+    result: dict[str, Any] = {"op": "ficta", "note": op["select"]["id"], "ficta": op["ficta"]}
+    stream = op["select"]["stream"]
+    if op["ficta"] is not None:
+        await bridge.client.command(f"NoteInput.CreatePlayingTechnique?Definition={op['technique']}")
+        steps += 1
+        events, _ = await bridge.read_partial(flow)
+        made = [e for e in events if "id" in e and e["id"] not in before and e["position"] == op["position"]]
+        result["made"] = sorted({e["type"] for e in made})
+        if "PlayingTechniqueEvent" not in result["made"]:
+            raise DoricoError(
+                f"Dorico made no ficta technique ({op['technique']}); the project needs the three "
+                f"playing techniques with popover text {', '.join(score.FICTA_TECHNIQUES.values())} "
+                f"(docs/dorico.md, Ficta); {steps} undo step(s) were applied (undo that many to revert)"
+            )
+        return steps, result
+    events, _ = await bridge.read_partial(flow)
+    found = [e for e in events if e.get("type") == "PlayingTechniqueEvent" and e.get("stream") == stream
+             and e.get("position") == op["position"]]
+    block = blocks.get(str(stream))
+    if len(found) == 1 and block is not None:
+        await bridge.client.command(f"EventEdit.Delete?FlowID={flow_id}&EventID={found[0]['id']}&EventBlockID={block}")
+        steps += 1
+        if any(e.get("id") == found[0]["id"] for e in (await bridge.read_partial(flow))[0]):
+            raise DoricoError(f"Dorico did not delete the technique {found[0]['id']}; {steps} undo step(s) were applied")
+        result["deleted"] = found[0]["id"]
+    else:
+        result["techniqueLeft"] = f"{len(found)} playing techniques at the note, so none was deleted"
+    return steps, result
 
 
 async def _run_note_command(bridge: DoricoBridge, op: dict[str, Any], flow: int) -> dict[str, Any]:

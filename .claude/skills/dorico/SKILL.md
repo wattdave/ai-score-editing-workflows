@@ -33,7 +33,7 @@ bar (`flowPosition` from the flow start), MIDI pitches. Give
   undo step.
   set-pitch/transpose there replace the note, so its id changes.
 - **Command ops** (set-time, set-key, set-barline, set-break, add-dynamic,
-  set-articulation, add-slur, add-tempo, add-rehearsal-mark, add-line,
+  set-articulation, add-slur, add-tempo, add-rehearsal-mark, ficta, add-line,
   add-bars, delete-bars, set-layout, copy-passage, add-lyrics, and edits to notes on staves with lyrics) drive Dorico's own
   commands. Each takes several undo steps; the result's `undoSteps` says how
   many. They cannot share a batch with Lua ops.
@@ -95,3 +95,15 @@ CLI: `dorico-cli lyrics --staff 1`, `edit-lyrics --staff 1 --text "..."`, `save 
 - If a call says Dorico did not answer, a dialog is open in Dorico: ask the
   user to dismiss it; do not retry.
 - The first connection needs the user to accept Dorico's approval prompt.
+
+## Ficta (editorial accidental above a note)
+
+Dorico has no ficta. `{"op":"ficta","id":N,"accidental":"flat"|"natural"|"sharp"}` hides the note's
+staff accidental (`Edit.HideAccidental`) and attaches a playing technique above it
+(`NoteInput.CreatePlayingTechnique`); `"remove":true` shows the accidental again and deletes the technique.
+Address the note by `id`: once a technique exists in the bar, the note's `index` moves.
+The project needs three custom playing techniques with popover text `fictaflat`, `fictanatural` and
+`fictasharp`; without them the op stops after hiding the accidental and says so (undo the steps it
+reports). Create them once per project: Library > Playing Techniques, `+`, type Text, paste the sign
+(U+266D, U+266E, U+266F; typed keystrokes lose these characters, paste from the clipboard), default
+placement Above, set the popover text, OK. See docs/dorico.md for the details checked on 2026-11-04.
