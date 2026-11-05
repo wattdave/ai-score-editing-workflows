@@ -43,6 +43,8 @@ says where its limits are.
 | Sibelius-exported vector PDF to MusicXML (no OMR) | `vector-pdf-score` | any editor (MusicXML) |
 | PDF to score with MuseScore's online converter (4.7.6+) | `musescore-pdf-convert` | MuseScore (then MusicXML) |
 | Scanned or OMR-imported MusicXML cleanup | `omr-score-repair` | any editor (checked in Sibelius) |
+| Make a scanned score fit to print and share (title block, beams, chords, breaks, layout) | `score-polish-for-sharing` | Sibelius first (any editor for the XML steps) |
+| Check a MusicXML file for print readiness | `score-engraving-audit` | any editor (MusicXML) |
 | Lyric sheet or lyrics book for a show (words from Sibelius files, Markdown and Word) | `lyric-sheet` | Sibelius |
 | Rehearsal tracks, per-voice MP3s | `rehearsal-mixes` | Sibelius |
 | Split 2-staff choral scores into SATB | `satb-part-splitting` | Sibelius |
