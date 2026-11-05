@@ -94,6 +94,15 @@ verse 2's refrain was lost, and the crescendo hairpin was dropped. Fix lyric
 text with the editor's lyric operations after import, or in the XML before.
 Record what could not be fixed so the user can decide.
 
+Notes need the same care. In the Silent Night scan, OMR invented junk lower
+notes in a treble bar and extra bass notes, and read `pp` as `ppp`. If a
+corrected version of the piece exists (an SATB file, another edition), diff
+note pitches bar by bar against it; a script that collapses the junk notes
+and then re-checks for zero differing bars is safer than hand edits. Rewrite
+lyrics slot by slot (per verse, per bar, one entry per note, a melisma is an
+empty slot) rather than patching words, then re-run the lyric join. A
+subtitle (e.g. a German title) goes in with `fix_metadata.py --subtitle`.
+
 ### 4. Choose breaks by phrase
 
 ```bash
@@ -133,6 +142,9 @@ Use `render`/`score-snapshot` and a PDF after each group of changes.
   Recipe that worked for a two-staff choral reduction with three stacked
   verses on a Letter page (Deck the Halls): `staffSize` 6.5,
   `spacesBetweenStaves` 9.5, `spacesBetweenSystems` 8, `aboveTopStaveGap` 32.
+  With four stacked verses (Silent Night, 3 systems, German verse 4) use
+  `spacesBetweenStaves` 16, `spacesBetweenSystems` 6, `aboveTopStaveGap` 28 at
+  `staffSize` 6.5: 14 let the fourth verse touch the bass stems.
   At staff size 7 and 4 systems the page fills, Sibelius stretches the last
   system down to the bottom margin, and the copyright footer (which sits at
   the margin) lands on the last bass staff; raising `bottomMargin` moves the

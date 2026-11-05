@@ -260,3 +260,14 @@ def test_voice_letter_names_abbreviate_to_themselves() -> None:
         assert fix.abbreviate(name) == name
     assert fix.abbreviate("Baritone") == "Bar."
     assert fix.abbreviate("Soprano") == "S."
+
+
+def test_subtitle_is_written_as_a_credit(tmp_path) -> None:
+    src, dst = tmp_path / "in.xml", tmp_path / "out.xml"
+    src.write_text('<?xml version="1.0"?>\n<score-partwise version="3.0"><work><work-title>x</work-title></work>'
+                   '<part-list><score-part id="P1"><part-name>S</part-name></score-part></part-list>'
+                   '<part id="P1"><measure number="1"/></part></score-partwise>\n')
+    assert fix.main([str(src), str(dst), "--title", "Silent Night", "--subtitle", "(Stille Nacht)"]) == 0
+    root = ET.parse(dst).getroot()
+    kinds = {c.findtext("credit-type"): c.findtext("credit-words") for c in root.findall("credit")}
+    assert kinds["title"] == "Silent Night" and kinds["subtitle"] == "(Stille Nacht)"

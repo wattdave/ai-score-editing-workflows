@@ -26,6 +26,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/fix_metadata.py" IN.xml OUT.xml [options]
 | Option | Effect |
 |---|---|
 | `--normalize-title` | Trim, drop a leading list number, title-case an all-lower or ALL CAPS title (small words such as "the", "of", "to" stay lower case except first and last) |
+| `--subtitle S` | Printed under the title, for example `(Stille Nacht)`; written as a `subtitle` credit |
 | `--title T` | Set the title exactly (work and movement title; a matching title credit follows) |
 | `--composer C`, `--arranger A`, `--lyricist L` | Write `<creator type=...>` (replaces an existing one of that type) |
 | `--rights-template T` | Write `<rights>` from one of three templates, below |
@@ -51,7 +52,7 @@ arrangement. A missing value is an error (exit status 2), not a guess.
 
 - `<identification>`: creators first, then `<rights>`, then the existing
   `<encoding>`; the element order stays valid MusicXML.
-- `<credit>` blocks for the title, lyricist, composer and arranger, placed after
+- `<credit>` blocks for the title, subtitle, lyricist, composer and arranger, placed after
   `<defaults>` and before `<part-list>`, only when the score has no credits at
   all (so the editor prints a title page header). If credits exist, a credit
   that repeats the old title is updated and nothing else is added.
