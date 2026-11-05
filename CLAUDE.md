@@ -45,6 +45,15 @@ on-demand references, is symlinked into `.agents/skills/`; the sync script also
 generates the corresponding `.cursor/rules/*.mdc` entrypoint. `AGENTS.md` is a
 symlink to this file.
 
+## Pull requests
+
+After opening a PR or pushing to its branch, watch CI (`gh pr checks N --watch`)
+and read the failed log (`gh run view RUN --log-failed`) if it does not pass;
+report the result before calling the work done. After editing anything under
+`.claude/skills/`, run `python3 scripts/sync_skills.py` first so the generated
+`.cursor/rules/*.mdc` goes in the same commit (`tests/test_skills_sync.py`
+fails otherwise).
+
 ## Script execution
 
 Use quoted heredocs for multi-line Python or AppleScript. Do not pass multi-line
