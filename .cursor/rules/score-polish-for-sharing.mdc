@@ -207,6 +207,26 @@ Use `render`/`score-snapshot` and a PDF after each group of changes.
 - Report the PDF path, what was fixed, and the list of things left for the
   user (misread words, missing markings, rights wording).
 
+## Early music and other engraved sources (Brumel, Du tout plongiet)
+
+When the source is an engraved PDF read by `lilypond-pdf-score`, three more
+checks apply:
+
+- **Clef octave.** Do not "fix" a treble-8 from the PDF image or text alone.
+  On Brumel I judged the Cantus clef a plain treble (a 400 dpi crop and a text
+  search for an "8" both missed it) and moved the line up an octave; the print
+  does have a treble-8 and the older XML was right. If the XML and your reading
+  of the clef disagree, ask the user or have them look at the print, and leave
+  the old value in place until they say.
+- **Ficta.** Re-read the PDF with the current `mxl.py` (it writes ficta as
+  `accidental-mark`), copy only the marks onto the corrected XML by note
+  position, import, then run `list_ficta.py --query ... --editor sibelius`
+  and `sibelius-cli apply` the batch. 25 marks placed in the Brumel file.
+- **Re-read differences.** A fresh read exposed two wrong Cantus accidentals
+  in the older XML (a sharp that was a natural, a natural that was a flat):
+  diff pitches per part against a fresh read before trusting an old XML.
+  Four staves with lyrics need `staffSize` 5 for three systems per page.
+
 ## What is still manual
 
 Lyric and note proofreading against the source, removing stray text,
