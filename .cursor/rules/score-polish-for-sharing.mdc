@@ -56,7 +56,8 @@ python3 "${CLAUDE_SKILL_DIR}/../score-engraving-audit/scripts/audit_musicxml.py"
 ```
 
 Read the findings against the source. Note what is only informational:
-`beams-none` is fine (Sibelius beams a beamless import by meter);
+`beams-none` is only fine if the source print is also unbeamed (check it: on the
+Brumel file Sibelius left every eighth flagged);
 `layout-no-breaks` is expected; `stems-wrong-direction` and `lyrics-crowded`
 are estimates to compare with the PDF.
 
@@ -77,12 +78,14 @@ Each step writes a new file (`01-...`, `02-...`) so any step can be undone.
    traditions!" beside the real "Words traditional"). Remove duplicates of
    what the credits now say; there is no script for this yet.
 
-Beams: Sibelius beams a beamless import by meter but **keeps explicit partial
-beams**, which print wrong. If the audit reports `beams-mixed`, run
+Beams: a beamless import may or may not be beamed by Sibelius (Silent Night
+yes, Brumel no), and it **keeps explicit partial beams**, which print wrong. If the audit reports `beams-mixed`, run
 `fix_beams.py` (default scope completes partly beamed groups). Choose the
 style from the source print: the audit's `beam-style` hints (syllabic vs
-modern); when undetermined, look at the PDF. A scan with no beams needs no
-step.
+modern); when undetermined, look at the PDF. If the source print is beamed and the
+file has no beams, run `fix_beams.py --scope all`; in 2/2 a beat is a half
+note, so four eighths join. Only a source print that is itself unbeamed needs
+no step.
 
 ### 3. Proofread against the source
 
