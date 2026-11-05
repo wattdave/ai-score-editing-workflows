@@ -209,3 +209,23 @@ moved into `set-score-info`.
   window; `halbestunde_convert.py` now picks the 1020x720 window by size.
 - If Halbestunde opens a PDF passed as an `open -a` argument, it does not load
   it; use the + flow.
+
+## Ficta (editorial accidentals above the notes)
+
+Renaissance and early-music editions print **ficta** as a small accidental *above* the staff, over
+the note it changes and for that note only. It is not a printed-in-the-staff accidental, and it must
+not be rendered as one. Sibelius and Dorico both ignore `<accidental-mark placement="above">` on
+import and draw the accidental in the staff (checked on Brumel, *Du tout plongiet*, 2026-11-04;
+MuseScore imported the pitches correctly but its engraving was not looked at). So after import:
+
+- Keep the sounding pitch right (the `<alter>` carries it); do not add `<accidental>` for a ficta.
+- Write `<notations><accidental-mark placement="above">flat|sharp|natural</accidental-mark></notations>`
+  on the note so the information survives in the MusicXML (`lilypond-pdf-score` does).
+- **Sibelius:** save the import as `.sib`, then for each ficta note run
+  `sibelius-cli ficta --staff S --bar B --index I --accidental flat|natural|sharp` (and `--remove` to
+  undo). It puts the sign above the note and hides the staff accidental, as Sibelius's own Add Ficta
+  plug-in does. Find the notes with `grep -n 'accidental-mark' file.musicxml`, then `query` for indices.
+- **Dorico:** `dorico-cli apply` with `{"op":"ficta","id":N,"accidental":"flat"|"natural"|"sharp"}` (address the
+  note by `id`). It hides the staff accidental and attaches a playing technique above the note; the project
+  needs three custom techniques first (see the dorico skill, "Ficta").
+- **MuseScore:** `musescore-cli apply` with `{"op":"ficta","staff":S,"bar":B,"index":I,"type":"NoteRest","position":P,"accidental":"flat"|"natural"|"sharp"}` (bridge v11). It hides the staff accidental and adds the sign as staff text above the note; `"remove":true` undoes it. The added text takes an index in the bar, so query again between batches.

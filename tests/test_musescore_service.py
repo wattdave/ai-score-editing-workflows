@@ -158,6 +158,17 @@ def test_nudge_tie_bracket_flip(objects) -> None:
     ]
 
 
+def test_ficta_hides_the_accidental_and_adds_a_sign_above(objects) -> None:
+    primitives, _ = prepare(objects, [{"op": "ficta", "staff": 1, "bar": 1, "index": 2, "accidental": "flat"}])
+    assert [p["op"] for p in primitives] == ["ficta-show", "remove-ficta-text", "add-text"]
+    assert primitives[0]["on"] is False
+    assert primitives[2]["text"] == "<sym>accidentalFlat</sym>"
+    assert primitives[2]["element"] == "STAFF_TEXT"
+    primitives, _ = prepare(objects, [{"op": "ficta", "staff": 1, "bar": 1, "index": 2, "remove": True}])
+    assert [p["op"] for p in primitives] == ["ficta-show", "remove-ficta-text"]
+    assert primitives[0]["on"] is True
+
+
 def test_beam_marks_begin_middle_and_breaks_after(objects) -> None:
     primitives, _ = prepare(objects, [{"op": "beam", "staff": 1, "bar": 2, "firstIndex": 1, "lastIndex": 5}])
     # Index 2 is voice 2, which stays out of a voice-1 beam.

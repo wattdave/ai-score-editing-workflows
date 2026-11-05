@@ -40,6 +40,7 @@ REQUIRED_COMMANDS = sorted({
     "EventEdit.NavigateRightExtendBar", "Edit.DeleteBars", "File.Export", "File.Save", "File.ScoreInfo", "Print.ExportCurrentLayoutAsPDF",
     "Filter.LyricsLine1", "Filter.LyricsLine2", "Filter.LyricsLine3", "Filter.LyricsLine4", "Filter.LyricsLine5",
     "Window.SwitchMode", "Window.SwitchToLayout", "NoteInput.Mode", "NoteInput.CreateDynamic",
+    "Edit.HideAccidental", "Edit.ShowAccidental", "NoteInput.CreatePlayingTechnique",
     "NoteInput.SetArticulation", "NoteInput.SlurStart", "NoteInput.CreateTempo", "NoteInput.CreateRehearsalMark",
     "NoteInput.CreateTimeSignature", "NoteInput.CreateKeySignature", "NoteInput.CreateBarLine",
     "NoteInput.StartLyricInput", "NoteInput.AcceptCurrentLyricInput", "NoteInput.AdvanceLyricInput",

@@ -47,7 +47,10 @@ CLEFS = {"treble", "bass", "percussion", "tab", "tab.4"}
 #: Ops that run as Dorico commands, one undo step each, so they cannot share
 #: a batch with the Lua ops (one batch, one undo step).
 #: Ops that select a note and run one Dorico command on it.
-NOTE_COMMAND_OPS = {"add-dynamic", "set-articulation", "add-slur", "add-tempo", "add-rehearsal-mark"}
+NOTE_COMMAND_OPS = {"add-dynamic", "set-articulation", "add-slur", "add-tempo", "add-rehearsal-mark", "ficta"}
+#: Dorico has no ficta. It is a custom playing technique that shows the sign above the note, with the
+#: note's own accidental hidden; these are the popover entries the three techniques must have in the project.
+FICTA_TECHNIQUES = {"flat": "fictaflat", "natural": "fictanatural", "sharp": "fictasharp"}
 COMMAND_OPS = {
     "set-break", "add-lyrics", "set-time", "set-key", "set-barline", "copy-passage", "move-passage", "add-line", "add-bars",
     "set-layout", "delete-bars",
@@ -382,6 +385,22 @@ def _note_command(
         if event["type"] not in TYPE_ALIASES["Note"]:
             raise DoricoBatchError(f"{label}: slurs start on a note, not a {event['type']}")
         out.update(command="NoteInput.SlurStart", parameters={})
+    elif op == "ficta":
+        if event["type"] not in TYPE_ALIASES["Note"]:
+            raise DoricoBatchError(f"{label}: ficta goes on a note, not a {event['type']}")
+        remove = operation.get("remove", False)
+        if not isinstance(remove, bool):
+            raise DoricoBatchError(f"{label}.remove must be boolean")
+        if remove:
+            if "accidental" in operation:
+                raise DoricoBatchError(f"{label}.accidental is not used with remove")
+            out.update(command="Edit.ShowAccidental", parameters={}, ficta=None)
+        else:
+            accidental = operation.get("accidental")
+            if accidental not in FICTA_TECHNIQUES:
+                raise DoricoBatchError(f"{label}.accidental must be one of: {', '.join(FICTA_TECHNIQUES)}")
+            out.update(command="Edit.HideAccidental", parameters={}, ficta=accidental,
+                       technique=FICTA_TECHNIQUES[accidental])
     elif op == "add-tempo":
         out.update(command="NoteInput.CreateTempo", parameters={"Definition": command_value(_str(operation, "text", label))},
                    expect="ImmediateTempoChangeEvent")

@@ -110,6 +110,16 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
     bracket.add_argument("--index", type=int, required=True)
     bracket.add_argument("--remove", action="store_true", help="remove the parentheses instead")
     bracket.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
+    ficta = sub.add_parser(
+        "ficta",
+        help="show a ficta accidental above a note and hide the one in the staff (backs up first)",
+    )
+    ficta.add_argument("--staff", type=int, required=True)
+    ficta.add_argument("--bar", type=int, required=True)
+    ficta.add_argument("--index", type=int, required=True)
+    ficta.add_argument("--accidental", choices=("flat", "natural", "sharp"), help="the sign to show above the note")
+    ficta.add_argument("--remove", action="store_true", help="remove the ficta and show the staff accidental again")
+    ficta.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     beam = sub.add_parser("beam", help="beam a contiguous group of NoteRest objects (backs up first)")
     beam.add_argument("--staff", type=int, required=True)
     beam.add_argument("--bar", type=int, required=True)
@@ -159,6 +169,7 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
         "clear-bars": _run_clear_bars,
         "flip-stem": _run_flip_stem,
         "bracket": _run_bracket,
+        "ficta": _run_ficta,
         "beam": _run_beam,
         "nudge": _run_nudge,
         "add-notes": _run_add_notes,
@@ -420,6 +431,19 @@ async def _run_bracket(args: argparse.Namespace) -> int:
         lambda result: {
             **runner.address(args), "bracketed": not args.remove, "notes": len(runner.notes(result["after"])),
         },
+    )
+
+
+async def _run_ficta(args: argparse.Namespace) -> int:
+    if args.remove == (args.accidental is not None):
+        raise BridgeError("give --accidental to add a ficta, or --remove to take it away")
+    operation = {"op": "ficta", **runner.address(args), "remove": args.remove}
+    if args.accidental:
+        operation["accidental"] = args.accidental
+    return await runner.run_op(
+        args,
+        operation,
+        lambda result: {**runner.address(args), "ficta": None if args.remove else args.accidental},
     )
 
 

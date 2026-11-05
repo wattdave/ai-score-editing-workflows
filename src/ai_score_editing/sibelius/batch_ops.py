@@ -27,6 +27,9 @@ WRITABLE_PROPS: dict[str, dict[str, type]] = {
     "Line": {"Duration": int, "RhDx": int},
 }
 
+#: Characters of Opus Text Std that Sibelius's own Add Ficta plug-in writes above a note.
+FICTA_SYMBOLS = {"flat": "b", "sharp": "#", "natural": "\u00a7"}
+
 #: Every writable property with its JSON type, as validate_batch takes it.
 WRITABLE: dict[str, type] = {
     **COMMON_WRITABLE,
@@ -47,4 +50,8 @@ def load_batch(path: str) -> list[dict[str, Any]]:
 
 def validate_batch(payload: Any, extra: ExtraOps | None = None) -> list[dict[str, Any]]:
     """Validate a batch for Sibelius: the shared schema plus the writable table."""
-    return batch_schema.validate_batch(payload, extra, WRITABLE)
+    batch = batch_schema.validate_batch(payload, extra, WRITABLE)
+    for operation in batch:
+        if operation["op"] == "ficta" and not operation["remove"]:
+            operation["symbol"] = FICTA_SYMBOLS[operation["accidental"]]
+    return batch

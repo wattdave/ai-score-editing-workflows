@@ -1830,6 +1830,98 @@
     }
    ]
   },
+  "ficta": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staff",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bar",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bar"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "index",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--index"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": [
+      "flat",
+      "natural",
+      "sharp"
+     ],
+     "const": null,
+     "default": null,
+     "dest": "accidental",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--accidental"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "remove",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--remove"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
   "flip-stem": {
    "arguments": [
     {

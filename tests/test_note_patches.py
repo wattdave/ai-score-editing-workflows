@@ -69,3 +69,29 @@ def test_bracket_rejects_non_boolean_remove(tmp_path) -> None:
         load_note_patches(_write(tmp_path, [
             {"op": "bracket", "staff": 1, "bar": 8, "index": 1, "remove": "yes"},
         ]))
+
+
+def test_ficta_validates_and_gets_its_symbol() -> None:
+    from ai_score_editing.sibelius.batch_ops import validate_batch
+
+    batch = validate_batch([
+        {"op": "ficta", "staff": 1, "bar": 8, "index": 1, "accidental": "natural"},
+        {"op": "ficta", "staff": 1, "bar": 8, "index": 2, "remove": True},
+    ])
+    assert batch[0]["symbol"] == "§" and batch[0]["accidental"] == "natural"
+    assert batch[1]["remove"] is True and "symbol" not in batch[1]
+
+
+def test_ficta_rejects_bad_input() -> None:
+    import pytest
+
+    from ai_score_editing.core.errors import BatchError
+    from ai_score_editing.sibelius.batch_ops import validate_batch
+
+    for bad in (
+        {"op": "ficta", "staff": 1, "bar": 8, "index": 1},
+        {"op": "ficta", "staff": 1, "bar": 8, "index": 1, "accidental": "double-flat"},
+        {"op": "ficta", "staff": 1, "bar": 8, "index": 1, "remove": True, "accidental": "flat"},
+    ):
+        with pytest.raises(BatchError):
+            validate_batch([bad])

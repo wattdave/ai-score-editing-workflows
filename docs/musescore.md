@@ -44,6 +44,7 @@ Accessibility permission for the terminal.
 | `query_score` | ✅ | plus `ticks` (exact for tuplets) and `msType`; grace notes listed read-only (`GraceNote`, with `graceType`) |
 | `apply_batch` + `dry_run` | ✅ | the dry run really runs and rolls back; a MusicXML backup before a real run |
 | `set` | ⚠️ | Dx, Dy, Hidden, CueSize, Beam (MuseScore modes), RestPosition, Text, Duration; lyric `NumNotes` is `Duration` |
+| `ficta` | ✅ | hides the staff accidental, adds `<sym>accidentalFlat\|Natural\|Sharp</sym>` staff text above; re-query after (text takes an index) |
 | `set-pitch`, `tie`, `bracket`, `flip-stem`, `nudge`, `delete`, `beam` | ✅ | set-pitch keeps ties, lyrics and articulations |
 | `add-note`, `add-rest`, `add-tuplet`, `add-text`, `add-lyric`, `add-clef` | ✅ | voices 2-4 only where voice 1 has a note or rest starting |
 | `add-line` | ⚠️ | slurs and octave lines; **hairpins refused** (they crashed MuseScore twice) |

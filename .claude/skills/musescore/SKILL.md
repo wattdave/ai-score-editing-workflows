@@ -47,7 +47,7 @@ bar, MIDI pitches (concert). Bars count every measure from 1.
 
 ## Batch order
 
-Object ops (set, set-pitch, tie, bracket, flip-stem, nudge, delete, beam)
+Object ops (set, set-pitch, tie, bracket, flip-stem, nudge, delete, beam, ficta)
 come first, then adding ops (add-note, add-rest, add-tuplet, add-text,
 add-lyric, add-line, add-clef, add-dynamic, set-articulation, add-slur,
 add-tempo, add-rehearsal-mark), then structural ops. transpose and

@@ -183,6 +183,8 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
       lines.
     - {"op":"set-pitch",...,"oldPitch":P,"newPitch":Q}
     - {"op":"tie"|"bracket",...[,"remove":true]}
+    - {"op":"ficta",...,"accidental":"flat"|"natural"|"sharp"} or {"op":"ficta",...,"remove":true}: an
+      editorial ficta, the small sign above a note, with the staff accidental hidden (bridge v63)
     - {"op":"flip-stem",...}
     - {"op":"nudge",...,"dx":X,"dy":Y}: move by relative offsets (1/32 space)
     - {"op":"delete",...} (a deleted NoteRest becomes a rest)

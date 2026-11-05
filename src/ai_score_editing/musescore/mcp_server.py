@@ -139,6 +139,10 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
       the note keeps its ties, lyrics and articulations
     - {"op":"tie"|"bracket",...[,"remove":true]}: every note of the chord;
       a tie needs a next note of the same pitch
+    - {"op":"ficta",...,"accidental":"flat"|"natural"|"sharp"|"remove":true}:
+      hides the chord's staff accidental and adds the sign as small text
+      above the note (editorial ficta); the added text takes an index in
+      the bar, so query again before the next batch
     - {"op":"flip-stem",...}
     - {"op":"nudge",...,"dx":X,"dy":Y}: relative offsets (1/32 space)
     - {"op":"delete",...}: a deleted chord becomes a rest

@@ -784,6 +784,29 @@ def test_note_command_refusals(operation: dict[str, Any], message: str) -> None:
         prepare_batch([operation], locate_events(EVENTS, BARS), STAVES, BARS)
 
 
+def test_ficta_hides_the_accidental_and_names_the_technique() -> None:
+    ops = prepare_batch([
+        {"op": "ficta", "id": 4, "accidental": "flat"},
+        {"op": "ficta", "id": 4, "remove": True},
+    ], locate_events(EVENTS, BARS), STAVES, BARS)
+    assert [(o["command"], o["ficta"], o.get("technique")) for o in ops] == [
+        ("Edit.HideAccidental", "flat", "fictaflat"),
+        ("Edit.ShowAccidental", None, None),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("operation", "message"),
+    [({"op": "ficta", "id": 4}, "accidental must be"),
+     ({"op": "ficta", "id": 4, "accidental": "double-sharp"}, "accidental must be"),
+     ({"op": "ficta", "id": 4, "remove": True, "accidental": "flat"}, "not used with remove"),
+     ({"op": "ficta", "id": 4, "remove": "yes"}, "remove must be boolean")],
+)
+def test_ficta_refusals(operation: dict[str, Any], message: str) -> None:
+    with pytest.raises(DoricoBatchError, match=message):
+        prepare_batch([operation], locate_events(EVENTS, BARS), STAVES, BARS)
+
+
 # ------------------------------------------------------------------ copy-passage
 
 def test_copy_passage_anchors_at_the_first_note_offset() -> None:

@@ -187,11 +187,14 @@ def build(pdf,out,title,composer,names=None,nvoices=4,pages=None,clefs=None,fift
                     if tie_prev: nx+='<tie type="stop"/>'
                     if tie_next: nx+='<tie type="start"/>'
                     nx+=f'<voice>1</voice><type>{typ}</type>'+'<dot/>'*dot
+                    aname='natural' if alt==0 else 'flat' if alt==-1 else 'sharp'
+                    ficta=bool(e.get("ficta")) and not tie_prev and not e.get("acc")
                     if alt==0 and (e.get("ficta") or key!=0) or alt!=0 and (e.get("acc") or e.get("ficta")):
-                        if not tie_prev: nx+='<accidental>'+('natural' if alt==0 else 'flat' if alt==-1 else 'sharp')+'</accidental>'
+                        # ficta is editorial: a mark above the note, not an accidental in the staff
+                        if not tie_prev and not ficta: nx+='<accidental>'+aname+'</accidental>'
                     nx+=tm
-                    if tie_prev or tie_next:
-                        nx+='<notations>'+('<tied type="stop"/>' if tie_prev else '')+('<tied type="start"/>' if tie_next else '')+'</notations>'
+                    if tie_prev or tie_next or ficta:
+                        nx+='<notations>'+('<tied type="stop"/>' if tie_prev else '')+('<tied type="start"/>' if tie_next else '')+(f'<accidental-mark placement="above">{aname}</accidental-mark>' if ficta else '')+'</notations>'
                     if e.get("lyric") and not tie_prev:
                         tx,sy=e["lyric"]
                         nx+=f'<lyric number="1"><syllabic>{sy}</syllabic><text>{escape(tx)}</text></lyric>'

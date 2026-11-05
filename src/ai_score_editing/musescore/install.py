@@ -16,7 +16,7 @@ from pathlib import Path
 from ai_score_editing import paths
 
 #: Bump when msbridge.qml.in changes; the client refuses an older bridge.
-BRIDGE_VERSION = 10
+BRIDGE_VERSION = 11
 DEFAULT_PORT = 8766
 PLUGIN_TITLE = "ScoreBridge"
 TEMPLATE = Path(__file__).with_name("msbridge.qml.in")

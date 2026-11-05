@@ -127,7 +127,7 @@ def test_container_kinds_take_only_their_own_props() -> None:
     # Bar and Staff rows are built by their own helper, never by DescribeObject
     assert "QueryContainerRow(staff, 'Staff'" in source
     assert "QueryContainerRow(staff.NthBar(barNum), 'Bar'" in source
-    assert "('version', 62)" in source
+    assert "('version', 63)" in source
 
 
 def test_bar_and_staff_query_selector() -> None:

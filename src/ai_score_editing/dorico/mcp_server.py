@@ -184,6 +184,11 @@ async def apply_batch(
       {"op":"add-rehearsal-mark",...}: at a note addressed like set-pitch
       (works on staves with lyrics too). Two undo steps each; slurs cannot be
       checked afterwards (verified: false).
+    - {"op":"ficta",...,"accidental":"flat"|"natural"|"sharp"} or {"op":"ficta",...,"remove":true}: an
+      editorial ficta on a note (address it by "id": its index shifts once a technique is added). Hides
+      the note's staff accidental and adds the playing technique with popover text fictaflat,
+      fictanatural or fictasharp above it; the project must have those three techniques (docs/dorico.md).
+      Three undo steps.
     - {"op":"add-line","line":"crescendo"|"diminuendo"|"8va"|"8vb"|"trill"|
       "pedal"|"glissando","staff":S,"bar":B,"position":P,"duration":D}: a line
       from the note or rest on staff S at that position (a temporary rest

@@ -150,6 +150,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `set` (Dx, Dy, Hidden, ...), `tie`, `bracket`, `flip-stem`, `nudge`, `beam` | ❌ | not in the Lua model |
 | `add-line` | ⚠️ | crescendo/diminuendo hairpins, 8va/8vb, trills, pedal lines and glissandos at any position and length (multiples of 32), by command then resize (see gaps); hairpin lengths cannot be read back; octave lines keep the sounding pitch and rewrite the notes, unlike Sibelius; other Sibelius line styles are not mapped. Slurs: `add-slur`, note to next note |
 | (Dorico only) `add-dynamic`, `set-articulation`, `add-slur`, `add-tempo`, `add-rehearsal-mark` | ✅ | by command at a note; slurs cannot be read back |
+| `ficta` (add or `remove`) | ✅ | `Edit.HideAccidental` / `Edit.ShowAccidental` then `NoteInput.CreatePlayingTechnique?Definition=fictaflat\|fictanatural\|fictasharp` (3 undo steps; needs the three custom techniques, see Ficta below); a technique event shows no name to Lua, so remove deletes the single one at the note and leaves it when there are several |
 | `read_lyrics`, `edit_lyrics` | ⚠️ | `staff` is a staff number (mapped to its player; a two-staff player gives its first staff) or a player name; `player=` is the deprecated alias (give exactly one). A player's verse as text through the Edit Lyrics dialog; edits must keep the syllable count |
 | `add-lyric` → `add-lyrics` | ⚠️ | verses 1-10, typed through the lyric popover by command (see gaps); refuses to type over a lyric already in that verse |
 | `copy-passage` | ✅ | by selection + `Edit.Copy` / `Edit.Paste` (see gaps); destPosition 0 only |
@@ -819,3 +820,23 @@ touches, so the bars removed show how far a selection reaches.
   anchor, and the old recipe only when no plan exists. Its read-back used to
   look at one destination voice only, so it reported `verified: false` for
   any staff with two voices; it now checks every voice of the destination.
+
+## Ficta
+
+Checked 2026-11-04 on Dorico 6.2.31 with the Brumel *Du tout plongiet* import.
+
+- Dorico has no native ficta. The usual workaround (Steinberg forum, Scoring Notes) is what the `ficta` op
+  does: hide the note's real accidental so playback is unchanged, and attach a custom playing technique
+  showing the sign above the note.
+- `Edit.HideAccidental` and `Edit.ShowAccidental` act on the selected note (also present:
+  `Edit.ToggleAccidentalVisibility`, `Edit.ShowAccidentalInBrackets`, `Edit.ShowAccidentalInParentheses`).
+- `NoteInput.CreatePlayingTechnique?Definition=<popover text>` with the note selected made a
+  `PlayingTechniqueEvent` at the note's position (readable by Lua, with no name). With a popover text no
+  technique has, it makes nothing and raises no error.
+- A technique added to a bar takes an index there, so a note's `index` shifts; address notes by `id`.
+- Creating a technique: Library > Playing Techniques, `+` (bottom left), Name, Type Text, Text, default
+  placement Above, Popover text. The preview shows the sign. Typing U+266D to U+266F with System Events
+  `keystroke` gives the wrong character; paste from the clipboard. The sign is set in the Playing
+  Technique Font at text size, so it may need scaling to match editorial accidentals.
+- MusicXML import ignores `accidental-mark placement="above"` in Dorico (see the OMR skills).
+- The techniques live in the project. To reuse them, save a project template or use Library > Export Library.

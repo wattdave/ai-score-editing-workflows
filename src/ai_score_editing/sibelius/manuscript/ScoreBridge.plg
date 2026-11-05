@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 62);
+		return CreateDictionary('version', 63);
 	}"
 
 	Echo "(value) {
@@ -1457,8 +1457,55 @@
 		return CreateDictionary('common', common, 'types', types);
 	}"
 
+	FictaPrefix "() {
+		return '\\fOpus Text Std\\';
+	}"
+
+	FictaOffset "() {
+		return 36;
+	}"
+
+	BatchFicta "(target, op) {
+		// Editorial ficta as the Add Ficta plug-in that ships with Sibelius does it:
+		// a small accidental in Opus Text Std above the note (technique text) and
+		// the note's own accidental hidden. Removal deletes that text and shows
+		// the accidental again.
+		bar = target.ParentBar;
+		at = target.Position + FictaOffset();
+		prefix = FictaPrefix();
+		old = CreateSparseArray();
+		for each obj in bar {
+			if (obj.Type = 'Text') {
+				if (obj.Position = at) {
+					if ('' & obj.StyleId = 'text.staff.technique') {
+						if (Length(obj.Text) = 1) {
+							old.Push(obj);
+						}
+					}
+				}
+			}
+		}
+		for each stale in old {
+			stale.Delete();
+		}
+		if (op['remove']) {
+			for each note in target {
+				note.AccidentalStyle = NormalAcc;
+			}
+			return CreateDictionary('removed', old.Length);
+		}
+		bar.AddText(at, prefix & op['symbol'] & '\\f_\\', 'text.staff.technique');
+		for each note in target {
+			note.AccidentalStyle = HiddenAcc;
+		}
+		return CreateDictionary('ficta', op['accidental']);
+	}"
+
 	BatchAddressed "(opName) {
 		if (opName = 'set' or opName = 'set-pitch' or opName = 'tie' or opName = 'bracket') {
+			return True;
+		}
+		if (opName = 'ficta') {
 			return True;
 		}
 		if (opName = 'flip-stem' or opName = 'delete' or opName = 'nudge') {
@@ -2009,7 +2056,7 @@
 					return 'no note with pitch ' & op['oldPitch'];
 				}
 			}
-			if (opName = 'tie' or opName = 'bracket') {
+			if (opName = 'tie' or opName = 'bracket' or opName = 'ficta') {
 				if (target.NoteCount < 1) {
 					return 'cannot ' & opName & ' a rest';
 				}
@@ -2087,6 +2134,9 @@
 				note.Bracketed = op['bracketed'];
 			}
 			return DescribeObject(target, op['index']);
+		}
+		if (opName = 'ficta') {
+			return BatchFicta(target, op);
 		}
 		if (opName = 'flip-stem') {
 			target.FlipStem();
