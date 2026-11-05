@@ -18,7 +18,7 @@ def test_frontmatter_names_the_skill() -> None:
 def test_required_skills_exist() -> None:
     table = SKILL.read_text().split("## Requires", 1)[1].split("## Before you start", 1)[0]
     names = set(re.findall(r"`([a-z][a-z-]+)`", table))
-    assert {"score-engraving-audit", "score-metadata-repair", "chord-symbol-repair", "beaming-repair", "phrase-breaks"} <= names
+    assert {"score-engraving-audit", "score-metadata-repair", "chord-symbol-repair", "beaming-repair", "phrase-breaks", "transpose-score"} <= names
     missing = sorted(n for n in names if not (SKILLS / n).is_dir())
     assert not missing, f"skills named but not present: {missing}"
 

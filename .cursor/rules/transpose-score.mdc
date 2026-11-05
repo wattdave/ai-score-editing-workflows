@@ -1,0 +1,73 @@
+---
+description: Transpose a MusicXML file by an interval ("up M2", "down m3") before it is imported into Sibelius, Dorico or MuseScore: respells every pitch, shifts the key signature (or takes one you give), moves chord symbols, rewrites ficta marks to name the new accidental, and reports each part's range before and after so you can see whether a voice goes too high or low. Use when a piece has to be sung in another key, when a scanned or glyph-read score needs transposing, or when asked to compare a transposition with someone else's.
+globs: *
+alwaysApply: false
+---
+
+# Transpose a score
+
+`scripts/transpose_musicxml.py` needs only `python3` (standard library). It
+changes pitches, key signatures, chord symbols and ficta marks; durations,
+lyrics, beams, ties, breaks and layout are copied unchanged. Do it on the XML,
+before import: the spelling is then decided once, in the file, and survives
+every later step (breaks, tidy, export).
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/transpose_musicxml.py" in.xml out.xml --by "up M2" --report
+python3 "${CLAUDE_SKILL_DIR}/scripts/transpose_musicxml.py" in.xml out.xml --by "down m3" --fifths 1
+python3 "${CLAUDE_SKILL_DIR}/scripts/transpose_musicxml.py" in.xml out.xml --by "up M2" --octave Bassus=1
+```
+
+| Option | Meaning |
+|---|---|
+| `--by "up M2"` | Direction and interval: `m2 M2 m3 M3 P4 A4 d5 P5 m6 M6 m7 M7 P8`, `up` or `down` |
+| `--fifths N` | Key signature to write (default: the old key shifted by the interval) |
+| `--keep-key` | Leave key signatures alone and spell with accidentals |
+| `--octave PART=N` | After transposing, move one part (id or name) by whole octaves |
+| `--report` | Lowest and highest note of each part before and after |
+
+## Steps
+
+1. **Choose the interval from the singers, not the page.** Run with
+   `--report` and read the ranges. A transposition that is wrong for one part
+   (a bass that now sits at D2) needs a decision: `--octave Bassus=1` moves
+   the whole line, but a director may prefer to double only the low notes at
+   the octave, which is a manual edit after import (see below).
+2. **Key signature.** The default shifts the old key (B-flat major, -2, up a
+   major second gives 0). If the music is modal and you want a different
+   signature, pass `--fifths`. Check that the notes look right in the
+   editor; mid-piece key changes are all shifted.
+3. **Ficta.** The marks name the accidental the note now has, so a ficta
+   natural on B in B-flat major (a B natural) becomes a ficta sharp on C
+   (up a major second, no signature). The script keeps ficta one-note-only:
+   the next note of the same letter returns to the key signature. Many
+   modern transcribers carry an accidental to the end of the bar instead;
+   a hand transposition of the Brumel Du tout plongiet differed from this
+   script at exactly the 7 notes that follow a ficta in the same bar. Decide
+   which convention the choir expects and say so in the score or the
+   delivery note; do not mix them.
+4. **Import and check.** Import, then compare the result with the source
+   (or someone else's transposition) bar by bar: sounding pitches, ficta,
+   and range. Use `score-polish-for-sharing` for the rest of the chain; run
+   transposing before the phrase-break and layout steps.
+5. **Range fixes after import.** Octave doublings (for example the first two
+   Bassus bars doubled a D3 above the D2) are editorial: add them with
+   `add-note` in the editor and tell the user which bars you changed.
+
+## Checked against
+
+Brumel, Du tout plongiet (4 parts, 62 bars, B-flat to no signature, up a
+major second): the script's spelling matches a hand transposition in 700 of
+709 notes. The 9 differences are all ficta handling: 7 notes that follow a
+ficta in the same bar (above) and 2 ficta that the hand version leaves out.
+
+## Limits
+
+- Only `score-partwise`; percussion and unpitched notes are left alone.
+- A `<transpose>` element (a transposing instrument) is not interpreted:
+  the file is treated as concert pitch.
+- Mixed enharmonic spelling follows the interval, not the key: a note that
+  needs a double accidental in the new key is written with one.
+- The editors can also transpose a score they have open (see the `sibelius`,
+  `dorico` and `musescore` skills); use this script when the file is not
+  imported yet or the spelling must stay under your control.
