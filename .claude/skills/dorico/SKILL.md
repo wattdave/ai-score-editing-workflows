@@ -106,4 +106,7 @@ The project needs three custom playing techniques with popover text `fictaflat`,
 `fictasharp`; without them the op stops after hiding the accidental and says so (undo the steps it
 reports). Create them once per project: Library > Playing Techniques, `+`, type Text, paste the sign
 (U+266D, U+266E, U+266F; typed keystrokes lose these characters, paste from the clipboard), default
-placement Above, set the popover text, OK. See docs/dorico.md for the details checked on 2026-11-04.
+placement Above, set the popover text, OK. To reuse them, use Library > Library Manager (compare with a
+project that has them, copy the playing technique appearances into this project or the User library); do not
+open a `.doricolib` file with `open` (Dorico answers "invalid parameter"). See docs/dorico.md for the details
+checked on 2026-11-04.

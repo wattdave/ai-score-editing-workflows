@@ -839,4 +839,16 @@ Checked 2026-11-04 on Dorico 6.2.31 with the Brumel *Du tout plongiet* import.
   `keystroke` gives the wrong character; paste from the clipboard. The sign is set in the Playing
   Technique Font at text size, so it may need scaling to match editorial accidentals.
 - MusicXML import ignores `accidental-mark placement="above"` in Dorico (see the OMR skills).
-- The techniques live in the project. To reuse them, save a project template or use Library > Export Library.
+- `ficta` with `accidental: "sharp"` was checked live (2026-11-04): adds a technique at the note, remove deletes it.
+- Reusing the techniques (the three live in the project, as `pta.user.ficta_flat|natural|sharp` plus a user text and
+  composite each):
+  - Library > Export Library only writes a `.doricolib` of the whole library: about 10 MB of plain XML, not
+    worth keeping in the repo. Trimmed to the three user entities it is 8 KB, but opening a `.doricolib` (Finder or
+    `open -a`) shows "Error: invalid parameter" in Dorico, so that is not an import route and a trimmed file was
+    not shipped. Do not open `.doricolib` files that way.
+  - Library > Library Manager compares this project with Factory settings, the User library or another project
+    (drop a `.dorico` file on the box at the top right). That is the intended way to copy the three Playing
+    Technique Appearances into the User library (so new projects have them) or into another project. The copy
+    step itself was not run here, since it changes the user's own library.
+  - Fallback that always works: keep one small project that has the three techniques (or use one as a project
+    template) and start from it.
