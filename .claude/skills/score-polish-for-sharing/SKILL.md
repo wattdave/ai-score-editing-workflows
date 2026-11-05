@@ -119,6 +119,14 @@ missing notes in the editor with `add-note` (as a chord on the voice-1 note
 when the scan shares stems) and hide leftover empty voice-2 rests with `set`
 `Hidden`.
 
+Translation or alternate-language lines (the German verse under Silent Night)
+are set in italic in the scan and were lost in the MusicXML. Give the verse
+a label ("4.") in its first syllable's text and put `font-style="italic"` on
+every `<text>` of that lyric number; Sibelius imports it as Times Italic.
+When the source line is unnumbered, label it anyway so a first reader can tell
+what it is. Editor-side restyling of one lyric line is not available through
+the bridge, so make this change in the XML and re-import.
+
 A subtitle (e.g. a German title) goes in with `fix_metadata.py --subtitle`.
 
 ### 4. Choose breaks by phrase
