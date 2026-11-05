@@ -224,7 +224,7 @@ MuseScore imported the pitches correctly but its engraving was not looked at). S
 - **Sibelius:** save the import as `.sib`, then for each ficta note run
   `sibelius-cli ficta --staff S --bar B --index I --accidental flat|natural|sharp` (and `--remove` to
   undo). It puts the sign above the note and hides the staff accidental, as Sibelius's own Add Ficta
-  plug-in does. Find the notes with `grep -n 'accidental-mark' file.musicxml`, then `query` for indices.
+  plug-in does. List the marks with `uv run python .claude/skills/lilypond-pdf-score/scripts/list_ficta.py file.musicxml` (staff, bar, position, pitch); give it `--query q.json --editor sibelius|musescore|dorico` (the editor's `query` output for the whole score) to get the ready-to-run `ficta` batch. It matches by staff, bar, position and pitch, so no hand-counted indices.
 - **Dorico:** `dorico-cli apply` with `{"op":"ficta","id":N,"accidental":"flat"|"natural"|"sharp"}` (address the
   note by `id`). It hides the staff accidental and attaches a playing technique above the note; the project
   needs three custom techniques first (see the dorico skill, "Ficta").
