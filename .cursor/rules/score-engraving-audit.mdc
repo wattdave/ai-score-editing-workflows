@@ -43,8 +43,11 @@ It reads `.xml`, `.musicxml` and `.mxl`.
 
 ## Beaming: what is and is not a defect
 
-Tested in Sibelius on 2026-11-05: a MusicXML file with **no** `<beam>`
-elements is beamed by meter on import, so `beams-none` is informational. But
+A MusicXML file with **no** `<beam>` elements is not reliably beamed on
+import: the Silent Night import beamed by meter, but the Brumel one (2026-11-05,
+four-part 2/2, 187 eighths) came out with every eighth flagged while the source
+print beamed them. So `beams-none` is informational only after you have
+compared with the source; if the print beams, run `beaming-repair --scope all`.
 Sibelius keeps **explicit** beams, so a partial beam from an OMR scan stays
 wrong: in the Silent Night scan, bars 1 and 2 (6/8) beam a dotted eighth with
 the sixteenth and leave the third eighth flagged. `beams-mixed` finds these.

@@ -152,7 +152,7 @@ def check_beams(root: ET.Element, software: str) -> list[dict]:
                         stats["groups_mixed"] += 1
                         mixed.append(f"{pid} bar {mnum}")
     if stats["groups_unbeamed"] and not stats["groups_fully_beamed"] and not stats["groups_mixed"]:
-        out.append(finding("beams-none", "info", f"{stats['groups_unbeamed']} beat groups have no beams. Sibelius, Dorico and MuseScore beam these by meter on import (tested in Sibelius), so this is fine for a beamless OMR file."))
+        out.append(finding("beams-none", "info", f"{stats['groups_unbeamed']} beat groups have no beams. Some imports beam these by meter, but Sibelius left them flagged in the Brumel file. Compare with the source print: if it beams its eighths, run beaming-repair --scope all."))
     elif stats["groups_unbeamed"] and stats["groups_fully_beamed"]:
         sev = "warn" if software.lower().startswith(OMR_SOFTWARE) else "info"
         out.append(finding("beams-some-unbeamed", sev, f"{stats['groups_unbeamed']} beat groups unbeamed while {stats['groups_fully_beamed']} are beamed: syllabic style, or beams the scan missed."))
