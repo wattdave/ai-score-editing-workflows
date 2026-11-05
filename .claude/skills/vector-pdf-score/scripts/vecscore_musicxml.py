@@ -55,6 +55,10 @@ for s in sts:
     for bi, b in enumerate(s['bars']):
         num = order[(s['page'], s['sys'], bi)]
         stream[s['part']][gi(num)] = overrides.get((s['page'], s['sys'], s['part'], bi), [b]); src[s['part']][gi(num)] = s
+for k in range(NP):      # a whole-bar rest glyph is read as 16 sixteenths; make it the bar length (6/8, 3/4, ...)
+    for g_ in range(NB):
+        for voice in stream[k][g_]:
+            if len(voice) == 1 and voice[0]['rest'] and voice[0]['dur'] == 16 and BAR != 16: voice[0] = dict(voice[0], dur=BAR)
 flat = {k: [(g_, e) for g_ in range(NB) for voice in stream[k][g_] for e in voice] for k in range(NP)}
 
 # ties
