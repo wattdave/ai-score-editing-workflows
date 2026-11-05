@@ -130,6 +130,9 @@ def abbreviate(name: str) -> str:
     m = re.fullmatch(r"([A-Za-z]+)\s*(\d+)?", name)
     if m and m.group(1).lower() in ABBREVIATIONS:
         return ABBREVIATIONS[m.group(1).lower()] + (f" {m.group(2)}" if m.group(2) else "")
+    # Voice-letter names for a choral reduction ("S A", "T B", "S", "A & B") abbreviate to themselves.
+    if re.fullmatch(r"[A-Za-z](\s*[&/,]?\s*[A-Za-z])*", name) and len(re.sub(r"[^A-Za-z]", "", name)) <= 4 and name == name.upper():
+        return name
     letters = re.sub(r"[^A-Za-z]", "", name)
     return (letters[:3] or name[:3]).capitalize() + "."
 

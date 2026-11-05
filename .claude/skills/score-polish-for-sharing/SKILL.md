@@ -132,11 +132,20 @@ file is the active score, and never touch the user's other open scores.
 
 Use `render`/`score-snapshot` and a PDF after each group of changes.
 
-- **Staff spacing and page** (`set-layout`): `spacesBetweenStaves`,
-  `extraSpacesBelowVocalStaves`, `spacesBetweenSystems`, `pageSize`,
-  `staffSize`. Stacked verses collide with the staff below unless this is
-  opened up. The Paraclete choral octavo numbers are a candidate preset
-  (staff size 0.23 in, margins 0.4/0.5 in); use Letter or A4 for handouts.
+- **Staff spacing and page** (`set-layout`): writes need a saved score, so
+  first save the import (`ExportScore` with `SIBL` to a new path, close the
+  untitled import with **No**, `OpenScore` the saved file). Then one batch:
+  `add-line` and other content ops first, `set-layout` last (structural ops
+  must come last). Each `apply --save` leaves a `.backup-...sib` next to the
+  file, so batch the edits and move the backups away when done.
+  Recipe that worked for a two-staff choral reduction with three stacked
+  verses on a Letter page (Deck the Halls): `staffSize` 6.5,
+  `spacesBetweenStaves` 9.5, `spacesBetweenSystems` 8, `aboveTopStaveGap` 32.
+  At staff size 7 and 4 systems the page fills, Sibelius stretches the last
+  system down to the bottom margin, and the copyright footer (which sits at
+  the margin) lands on the last bass staff; raising `bottomMargin` moves the
+  footer up with it and does not help. Make the page less full instead.
+  Check the PDF for the footer, not just the lyrics.
 - **Duplicate lyrics:** when every voice sings the same words, keep one set
   and hide the others (`set` `Hidden` on the lyric items of the lower staves)
   to give the systems room.
@@ -145,6 +154,11 @@ Use `render`/`score-snapshot` and a PDF after each group of changes.
 - **Redundant clefs** (`remove-redundant-clefs`), **bar numbers** at the start
   of each system (`set-bar-number`), tempo text aligned over the time
   signature.
+- **Duplicate markings from the scan:** OMR often repeats a dynamic on both
+  staves (`f` twice in Deck the Halls where the print has one). Delete the
+  extra Text object (`query --type Text`, then `delete` with its `index`).
+  Add a dropped hairpin with `add-line` (`line.staff.hairpin.crescendo`, in
+  quarter/256 units: a bar of 4/4 is 1024).
 - **Stems and beams by hand**: `flip-stem` and the `beam` operation for the odd
   group left.
 - Reset the design if the import left odd text styles (`reset-design`).
