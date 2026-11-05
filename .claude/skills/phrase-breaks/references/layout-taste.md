@@ -63,8 +63,29 @@ under `wide`. Pass a number to `--candidates` to force bars per system.
 
 ## Lessons from review
 
-Nothing here yet. After the user critiques a proposal, add an entry below and
-change the rule, weight or signal it names. Keep entries short and dated.
+After the user critiques a proposal, add an entry below and change the rule,
+weight or signal it names. Keep entries short and dated.
+
+### 2026-11-05  Deck the Halls (16 bars, 4/4, three verses on the treble staff)
+- Candidate chosen: medium (4 systems, 4-4-4-4). Wide (8-8) was rejected: three stacked
+  verses collided and crushed together.
+- What was wrong: the wide candidate ignored how many verses sit under the staff.
+- Rule to change: rule 3 (match the density). 4+4+4+4 is the natural default for a 16-bar
+  carol, provided the page layout supports it. With 3 or more stacked verses a system
+  never holds more than 4 bars; with 2 verses, 6 (`VERSE_CAPS`).
+- Changed in script: yes, `VERSE_CAPS` and `--candidates` report a capped target.
+
+### 2026-11-05  Deck the Halls: identical lyrics on every voice
+- Tactic: when every voice sings the same words, show the lyrics once and hide the
+  copies below the lower staves to give the systems more room (in a 2-staff reduction,
+  keep the lyrics under the top staff only). Also give the staves enough space for
+  stacked verses instead of squeezing the bars.
+- Changed in script: no, noted only (an editor step after import).
+
+### 2026-11-05  Deck the Halls: staff names
+- For a two-staff choral reduction name the staves "S A" and "T B" (abbreviations the
+  same), not Treble and Bass. `score-metadata-repair --parts "S A,T B"`.
+- Changed in script: no, noted only.
 
 Template:
 

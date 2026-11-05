@@ -239,3 +239,42 @@ def test_report_and_json(tmp_path, capsys) -> None:
     import json
     data = json.loads(capsys.readouterr().out)
     assert [c["name"] for c in data["candidates"]] == ["medium", "5"]
+
+
+def verse_note(verses: int) -> str:
+    ly = "".join(f'<lyric number="{v}"><syllabic>single</syllabic><text>la</text></lyric>' for v in range(1, verses + 1))
+    return f"<note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type>{ly}</note>"
+
+
+def sparse_phrase_score(verses: int) -> str:
+    """16 sparse bars with strong phrase ends after bars 8 (and 4, 12) so wide wants 8-8."""
+    ms = []
+    for i in range(1, 17):
+        end = "." if i % 4 == 0 else ""
+        first = f'<note><pitch><step>C</step><octave>4</octave></pitch><duration>8</duration><type>half</type><lyric><syllabic>single</syllabic><text>la{end}</text></lyric></note>'
+        ms.append(measure(i, first + verse_note(verses).replace("<duration>4", "<duration>8").replace(">quarter<", ">half<"), ATTRS if i == 1 else ""))
+    return score(ms)
+
+
+def test_stacked_verses_cap_the_system_length() -> None:
+    bars = bars_of(sparse_phrase_score(3))
+    assert pb.verse_cap(bars) == 4
+    cands, facts = pb.layouts(bars, "wide,medium,narrow")
+    assert facts["verses"] == 3 and facts["max_bars_per_system"] == 4
+    for c in cands:
+        assert max(c["sizes"]) <= 4, c
+    assert any(c["capped_by_verses"] for c in cands)
+
+
+def test_one_verse_is_not_capped_and_wide_may_exceed_four() -> None:
+    bars = bars_of(sparse_phrase_score(1))
+    assert pb.verse_cap(bars) is None
+    cands, _ = pb.layouts(bars, "wide")
+    assert max(cands[0]["sizes"]) > 4 and not cands[0]["capped_by_verses"]
+
+
+def test_two_verses_cap_at_six() -> None:
+    bars = bars_of(sparse_phrase_score(2))
+    assert pb.verse_cap(bars) == 6
+    cands, _ = pb.layouts(bars, "wide")
+    assert max(cands[0]["sizes"]) <= 6
