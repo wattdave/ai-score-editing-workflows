@@ -1,5 +1,5 @@
 ---
-description: Check a MusicXML file (typically OMR output from a scan, or a split or repaired copy) for what makes it unfit to print or share with people: missing or badly cased title, no composer or copyright line, generic part names (Voice0), partly beamed beat groups, chord symbols read as text with wrong capitals, unjoined lyric syllables, padding bars and missing layout. Use after any scan or import, before polishing a score for sharing, or when asked whether a score is ready to print.
+description: Check a MusicXML file (typically OMR output from a scan, or a split or repaired copy) for what makes it unfit to print or share with people: missing or badly cased title, no composer or copyright line, generic part names (Voice0), partly beamed beat groups, chord symbols read as text with wrong capitals, unjoined lyric syllables, crowded lyrics, stems pointing the wrong way, the beam style (syllabic or modern), padding bars and missing layout. Use after any scan or import, before polishing a score for sharing, or when asked whether a score is ready to print.
 globs: *
 alwaysApply: false
 ---
@@ -33,6 +33,9 @@ It reads `.xml`, `.musicxml` and `.mxl`.
 | `part-name-generic`, `part-abbreviation-missing` | `Voice0`-style names; no short names for later systems |
 | `beams-mixed` | A beat group where some notes are beamed and others are not |
 | `beams-some-unbeamed`, `beams-none` | Unbeamed groups (see the beaming note below) |
+| `beam-style` | Info: the beamed groups look syllabic or modern, or "undetermined" (see below) |
+| `stems-wrong-direction` | Stems against the usual rule (needs `<stem>` elements; info when there are none) |
+| `lyrics-crowded` | Bars where lyric syllables will probably collide, worst bars listed |
 | `chords-as-text`, `chords-lowercase` | Chord symbols stored as text; `c` where `C` was meant |
 | `lyrics-unjoined` | Every syllable is its own word, so no hyphens will print |
 | `padding-bars`, `clefs-after-bar1` | OMR padding and redundant clefs; fix with `omr-score-repair` |
@@ -48,9 +51,51 @@ the sixteenth and leave the third eighth flagged. `beams-mixed` finds these.
 
 Beams are a style choice for vocal music. Syllabic editions break beams at
 each syllable change, so compare with the source print before treating a
-`beams-mixed` or `beams-some-unbeamed` finding as an error. Also note that a
+`beams-mixed` or `beams-some-unbeamed` finding as an error. The `beam-style`
+finding reports which style the already-beamed groups follow. Also note that a
 file exported by an editor can show few `<beam>` elements and still print
 correctly: judge those by the rendered PDF, not by the XML.
+
+### Beam style (`beam-style`, info)
+
+Feeds the `--style` choice of the `beaming-repair` skill. It looks at pairs of
+neighbouring beamable notes inside one beat (meter group) where the second
+note starts a new syllable: a joined pair is evidence for **modern** (beamed
+by the beat regardless of syllables, `--style meter`), a broken pair is
+evidence for **syllabic** (`--style syllabic --scope all`). At least about 6
+beamed groups are needed, otherwise it reports "undetermined", as it does for
+mixed evidence (neither side at least 70 percent) or when no beamed group has
+a new syllable inside a beat. Broken pairs can also be beams the scan missed,
+so confirm with the source print before choosing.
+
+## Stems (`stems-wrong-direction`)
+
+Only for files that keep `<stem>` elements (OMR output); editor exports
+have none and get an info saying stems were not checked. The clef (G2, F4, C3,
+C4 and octave-change) gives the staff position. On a staff with one voice in
+the bar, a note on or above the middle line stems down and below it up;
+a chord is decided by its note farthest from the middle line, and so is a
+beamed group (Gould), so mixed directions inside a group are ignored. A note on
+the middle line, or a chord equally far above and below, is not judged. With
+two voices on the staff, voice 1 stems up and voice 2 down; three or more
+voices are skipped. A staff whose stems all point one way (at least 12) is
+treated as a deliberate open-score style and skipped, and named in the message.
+It warns only when at least 3 and 5 percent of the units are wrong.
+
+## Crowded lyrics (`lyrics-crowded`)
+
+MusicXML has no layout, so collisions are estimated. For each voice and bar,
+every syllable counts its characters plus 1 for a trailing hyphen (the widest
+verse at that note when verses are stacked). A bar is flagged when
+
+- a syllable of 4 or more characters sits on a note shorter than an eighth, or
+- characters per beat exceed 7 (5.5 when the voice has 3 or more verses, because
+  stacked verses also collide with the staff below in tight systems).
+
+The beat count is the larger of the stated meter and the notes actually in the
+bar (OMR bars often outgrow a wrong time signature). Bars are ranked by
+long-syllable count and density; the worst five are in `where`. It is a
+warning to look at the rendered PDF, not proof of a collision.
 
 ## Using the result
 

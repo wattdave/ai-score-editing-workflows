@@ -161,6 +161,228 @@ def check_beams(root: ET.Element, software: str) -> list[dict]:
     return out
 
 
+STEP_INDEX = {"C": 0, "D": 1, "E": 2, "F": 3, "G": 4, "A": 5, "B": 6}
+# Diatonic number (octave * 7 + step) of the pitch each clef sign names.
+CLEF_REF = {"G": 4 * 7 + 4, "F": 3 * 7 + 3, "C": 4 * 7 + 0}
+
+
+def parse_events(root: ET.Element) -> list[dict]:
+    """Flatten the score into note/chord events with the context the newer checks need.
+
+    Each event is one note or chord: part, measure, staff, voice, onset, dur
+    (divisions), divisions, beat_len, bar_quarters, rest, grace, type, stem,
+    beams, lyrics [(verse, text, syllabic)] and positions (diatonic steps of
+    each pitch above the staff's middle line, negative below).
+    """
+    events: list[dict] = []
+    for part in root.findall("part"):
+        pid = part.get("id")
+        divisions, beats, beat_type = 1, 4, 4
+        clefs: dict[str, tuple[str, int, int]] = {}
+        for m in part.findall("measure"):
+            mnum = m.get("number")
+            cursor = last_onset = 0
+            cur: dict | None = None
+            for el in m:
+                if el.tag == "attributes":
+                    if el.findtext("divisions"):
+                        divisions = int(el.findtext("divisions"))
+                    t = el.find("time")
+                    if t is not None and t.findtext("beats", "").isdigit():
+                        beats, beat_type = int(t.findtext("beats")), int(t.findtext("beat-type"))
+                    for c in el.findall("clef"):
+                        sign = (c.findtext("sign") or "G").strip()
+                        line = (c.findtext("line") or "").strip()
+                        line = int(line) if line.isdigit() else {"G": 2, "F": 4, "C": 3}.get(sign, 2)
+                        oc = (c.findtext("clef-octave-change") or "0").strip()
+                        clefs[c.get("number", "1")] = (sign, line, int(oc) if oc.lstrip("-").isdigit() else 0)
+                elif el.tag == "backup":
+                    cursor -= int(el.findtext("duration") or 0)
+                elif el.tag == "forward":
+                    cursor += int(el.findtext("duration") or 0)
+                elif el.tag == "note":
+                    is_chord = el.find("chord") is not None
+                    grace = el.find("grace") is not None
+                    dur = int(el.findtext("duration") or 0)
+                    onset = last_onset if is_chord else cursor
+                    staff = el.findtext("staff") or "1"
+                    pos = None
+                    pitch = el.find("pitch")
+                    if pitch is not None and pitch.findtext("step") in STEP_INDEX and (pitch.findtext("octave") or "").strip().lstrip("-").isdigit():
+                        sign, line, oc = clefs.get(staff, ("G", 2, 0))
+                        middle = CLEF_REF.get(sign, 34) + (3 - line) * 2 + 7 * oc
+                        pos = int(pitch.findtext("octave")) * 7 + STEP_INDEX[pitch.findtext("step")] - middle
+                    if is_chord and cur is not None:
+                        if pos is not None:
+                            cur["positions"].append(pos)
+                        continue
+                    last_onset = onset
+                    cursor += 0 if grace else dur
+                    lyrics = []
+                    for ly in el.findall("lyric"):
+                        text = "".join(t.text or "" for t in ly.findall("text")).strip()
+                        if text:
+                            lyrics.append((ly.get("number", "1"), text, ly.findtext("syllabic") or "single"))
+                    cur = {
+                        "part": pid, "measure": mnum, "staff": staff, "voice": el.findtext("voice") or "1",
+                        "onset": onset, "dur": dur, "divisions": divisions,
+                        "beat_len": beat_length(divisions, beats, beat_type) or 1,
+                        "bar_quarters": beats * 4 / beat_type,
+                        "rest": el.find("rest") is not None, "grace": grace, "type": el.findtext("type"),
+                        "stem": (el.findtext("stem") or "").strip(),
+                        "beams": {b.get("number", "1"): b.text for b in el.findall("beam")},
+                        "lyrics": lyrics, "positions": [pos] if pos is not None else [],
+                    }
+                    events.append(cur)
+    return events
+
+
+def _bars_text(bars: list[tuple[str, str]], limit: int = 5) -> str:
+    return ", ".join(f"{p} bar {b}" for p, b in bars[:limit])
+
+
+def check_lyrics_crowded(events: list[dict]) -> list[dict]:
+    """Estimate lyric collisions (MusicXML has no layout; heuristic documented in SKILL.md)."""
+    verses: dict[tuple, set] = {}
+    bars: dict[tuple, list[dict]] = {}
+    for e in events:
+        if e["rest"] or e["grace"] or not e["lyrics"] or not e["dur"]:
+            continue
+        verses.setdefault((e["part"], e["staff"], e["voice"]), set()).update(n for n, _, _ in e["lyrics"])
+        bars.setdefault((e["part"], e["staff"], e["voice"], e["measure"]), []).append(e)
+    scored = []
+    for (pid, staff, voice, mnum), evs in bars.items():
+        stacked = len(verses[(pid, staff, voice)])
+        limit = 5.5 if stacked >= 3 else 7.0
+        total = crowded = 0
+        for e in evs:
+            chars = max(len(t) + (1 if syl in ("begin", "middle") else 0) for _, t, syl in e["lyrics"])
+            total += chars
+            if chars >= 4 and e["dur"] / e["divisions"] < 0.5:
+                crowded += 1
+        span = max(e["onset"] + e["dur"] for e in evs) / evs[0]["divisions"]  # OMR bars can outgrow the stated meter
+        density = total / max(evs[0]["bar_quarters"], span)
+        if crowded or density > limit:
+            scored.append((crowded * 3 + density, density, crowded, stacked, pid, mnum))
+    if not scored:
+        return []
+    scored.sort(key=lambda r: -r[0])
+    worst = ", ".join(
+        f"{pid} bar {mnum} ({d:.1f} chars/beat" + (f", {c} long syllable(s) on short notes" if c else "") + ")"
+        for _, d, c, _, pid, mnum in scored[:5]
+    )
+    maxv = max(r[3] for r in scored)
+    extra = f" {maxv} verses are stacked under one staff, so lines can also collide with the staff below in tight systems." if maxv >= 3 else ""
+    return [finding("lyrics-crowded", "warn", f"{len(scored)} bars have lyrics likely to collide (estimated from text length and note length; compare with the source print).{extra} Worst: {worst}.", _bars_text([(r[4], r[5]) for r in scored]))]
+
+
+def _expected_stem(positions: list[int]) -> str | None:
+    """Direction for a note/chord/beamed group: the pitch farthest from the middle line decides."""
+    if not positions:
+        return None
+    far = max(abs(p) for p in positions)
+    if far == 0:
+        return None  # on the middle line either direction is acceptable
+    if far in positions and -far in positions:
+        return None  # equally far above and below: either way is correct
+    return "down" if far in positions else "up"
+
+
+def check_stems(events: list[dict]) -> list[dict]:
+    if not any(e["stem"] for e in events):
+        return [finding("stems-wrong-direction", "info", "No <stem> elements (typical of editor exports): stem directions not checked; editors choose them on import.")]
+    voices: dict[tuple, set] = {}
+    for e in events:
+        voices.setdefault((e["part"], e["measure"], e["staff"]), set()).add(e["voice"])
+    units: dict[tuple, list[list[dict]]] = {}
+    open_group: dict[tuple, list[dict] | None] = {}
+    for e in events:
+        if e["rest"] or e["grace"] or e["stem"] not in ("up", "down"):
+            continue
+        key = (e["part"], e["measure"], e["staff"], e["voice"])
+        grp = open_group.get(key)
+        b = e["beams"].get("1")
+        if grp is not None:
+            grp.append(e)
+            if b in ("end", None):
+                open_group[key] = None
+        elif b == "begin":
+            grp = [e]
+            units.setdefault(key, []).append(grp)
+            open_group[key] = grp
+        else:
+            units.setdefault(key, []).append([e])
+    checked = wrong = 0
+    bad: list[tuple[str, str]] = []
+    # A staff whose stems all point one way (at least 12 of them, every bar single-voice)
+    # is a deliberate open-score style (stem direction names the voice), not OMR noise.
+    dirs: dict[tuple, Counter] = {}
+    for (pid, mnum, staff, voice), groups in units.items():
+        if len(voices[(pid, mnum, staff)]) == 1:
+            dirs.setdefault((pid, staff), Counter()).update(g[0]["stem"] for g in groups)
+    uniform = {k for k, c in dirs.items() if len(c) == 1 and sum(c.values()) >= 12}
+    skipped = sorted(f"{p}/staff {st}" for p, st in uniform)
+    for (pid, mnum, staff, voice), groups in units.items():
+        if (pid, staff) in uniform:
+            continue
+        vs = sorted(voices[(pid, mnum, staff)], key=lambda v: (len(v), v))
+        for g in groups:
+            if len(vs) == 1:
+                want = _expected_stem([p for e in g for p in e["positions"]])
+            elif len(vs) == 2:
+                want = "up" if voice == vs[0] else "down"
+            else:
+                want = None
+            if want is None:
+                continue
+            checked += 1
+            if g[0]["stem"] != want:
+                wrong += 1
+                if (pid, mnum) not in bad:
+                    bad.append((pid, mnum))
+    note = f" Skipped staves whose stems all point one way (voice-by-stem style): {', '.join(skipped)}." if skipped else ""
+    if not checked:
+        return [finding("stems-wrong-direction", "info", f"Stems not checked.{note}")] if skipped else []
+    if wrong >= 3 and wrong / checked >= 0.05:
+        return [finding("stems-wrong-direction", "warn", f"{wrong} of {checked} notes or beamed groups have a stem against the usual rule (one voice on the staff: down on or above the middle line, up below; two voices: voice 1 up, voice 2 down; a beamed group by its note farthest from the middle line). Likely OMR errors; compare with the source print.{note} First: {_bars_text(bad)}.", _bars_text(bad))]
+    return [finding("stems-wrong-direction", "info", f"Stems checked: {wrong} of {checked} differ from the usual rule, too few to matter.{note}")]
+
+
+def check_beam_style(events: list[dict]) -> list[dict]:
+    """Detect syllabic versus modern (by-beat) beaming from the beamed groups."""
+    by_voice: dict[tuple, list[dict]] = {}
+    for e in events:
+        if e["rest"] or e["grace"] or e["type"] not in BEAMABLE:
+            continue
+        by_voice.setdefault((e["part"], e["measure"], e["staff"], e["voice"]), []).append(e)
+    beamed = modern = syllabic = 0
+    for notes in by_voice.values():
+        groups: dict[int, list[dict]] = {}
+        for n in notes:
+            groups.setdefault(n["onset"] // n["beat_len"], []).append(n)
+        for g in groups.values():
+            joins = [
+                a["beams"].get("1") in ("begin", "continue") and b["beams"].get("1") in ("continue", "end")
+                for a, b in zip(g, g[1:])
+            ]
+            beamed += any(joins)
+            for (a, b), j in zip(zip(g, g[1:]), joins):
+                if b["lyrics"]:
+                    modern += j
+                    syllabic += not j
+    if beamed < 6:
+        return [finding("beam-style", "info", f"Beam style undetermined: only {beamed} beamed groups (need about 6). Look at the source print before choosing beaming-repair --style.")]
+    if modern + syllabic == 0:
+        return [finding("beam-style", "info", f"Beam style undetermined: {beamed} beamed groups, but none has a new syllable inside a beat to tell the styles apart.")]
+    counts = f"{beamed} beamed groups; {modern} joined note pairs start a new syllable, {syllabic} such pairs are broken"
+    share = modern / (modern + syllabic)
+    if share >= 0.7:
+        return [finding("beam-style", "info", f"Beam style looks modern (beamed by the beat regardless of syllables): {counts}. Use beaming-repair --style meter.")]
+    if share <= 0.3:
+        return [finding("beam-style", "info", f"Beam style looks syllabic (beams break where a new syllable starts): {counts}. Use beaming-repair --style syllabic --scope all. Beams the scan missed also count as broken pairs, so confirm with the source print.")]
+    return [finding("beam-style", "info", f"Beam style undetermined (mixed evidence): {counts}. Look at the source print before choosing beaming-repair --style.")]
+
+
 def check_text(root: ET.Element) -> list[dict]:
     out, words = [], Counter()
     harmony = len(root.findall(".//harmony"))
@@ -215,7 +437,8 @@ def check_layout(root: ET.Element) -> list[dict]:
 def audit(root: ET.Element) -> list[dict]:
     software = (root.findtext(".//encoding/software") or "")
     findings = check_metadata(root) + check_parts(root) + check_beams(root, software) + check_text(root) + check_lyrics(root) + check_layout(root)
-    return findings
+    events = parse_events(root)
+    return findings + check_lyrics_crowded(events) + check_stems(events) + check_beam_style(events)
 
 
 def main(argv: list[str] | None = None) -> int:
