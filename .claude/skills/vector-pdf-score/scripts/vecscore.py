@@ -122,8 +122,8 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F')):
                 # within 4.2 spaces of this staff and nearer to it than to any other staff on the page
                 d = band_dist(top, bot, y)
                 return d <= 4.2*sp and all(d <= band_dist(o['top'], o['bottom'], y) for o in st)
-            heads=[(x,y,c) for x,y,c,f in glyphs if c in H_GLYPH and mine(y) and x>s['x0']+25]
-            rests=[(x,y,c) for x,y,c,f in glyphs if c in REST and mine(y) and x>s['x0']+25]
+            heads=[(x,y,c) for x,y,c,f in glyphs if c in H_GLYPH and mine(y) and x>s['x0']+15]
+            rests=[(x,y,c) for x,y,c,f in glyphs if c in REST and mine(y) and x>s['x0']+15]
             dots=[(x,y) for x,y,c,f in glyphs if c=='™' and mine(y) and (x,y) not in rdots]
             flags=[(x,y,c) for x,y,c,f in glyphs if c in 'jJ' and mine(y)]
             stems=[(x,y0,y1) for x,y0,y1,w in vlines if 0.3<w<=BARW and y1-y0>sp*2 and y1>top-3.2*sp and y0<bot+3.2*sp and s['x0']<x<s['x1']]
@@ -160,7 +160,7 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F')):
                 else: merged.append(e)
             # accidentals printed in the bar: '#', 'b', 'n' glyph left of a notehead at about the same height; they hold
             # for the same pitch for the rest of the bar. e['alt'] = {pitch index: -1|0|1} for pitches that carry one.
-            accs=[(x,y,{'#':1,'b':-1,'n':0}[c]) for x,y,c,f in glyphs if c in '#bn' and mine(y) and x>s['x0']+25]
+            accs=[(x,y,{'#':1,'b':-1,'n':0}[c]) for x,y,c,f in glyphs if c in '#bn' and mine(y) and x>s['x0']+15]
             for e in merged:
                 e['alt']={}
                 if e['rest']: continue

@@ -109,6 +109,9 @@ into extra staves; for those, split by hand: top note to the first staff, bottom
 
 - Opus: `vecscore.py` output on Shenandoah and Sail Away Ladies, and the MusicXML for Shenandoah,
   are identical before and after the Helsinki change.
+- Opus, 6/8 (Fortune plango vulnera, Sibelius 7.1.3 export, three treble staves, 85 bars, Latin lyrics): after
+  the left-edge and whole-bar-rest fixes every bar sums to the bar length and the first note of each system
+  is read. Not run on the older test PDFs after the change.
 - Helsinki: Sibelius 26.8 export, one page, 2/2, G major, SAB with a solo-staff section, repeat and
   voltas, three lyric verses (Mi Burrito Sabanero). With `--staves auto --clefs auto` every bar's
   pitches, durations (half-bar pickup, dotted quarters, beamed eighths, half and quarter rests) and
