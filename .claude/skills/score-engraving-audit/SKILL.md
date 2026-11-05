@@ -69,9 +69,9 @@ correctly: judge those by the rendered PDF, not by the XML.
 ## Copyright line templates
 
 `rights-missing` asks for one of three lines. Ask the user for the source and
-its rights status; never add a (c) to a transcription unprompted.
+its rights status; never add a © to a transcription unprompted.
 
 1. Public-domain source: `Public domain. Transcribed from [source] for rehearsal use.`
 2. In-copyright source: carry the original notice, then
    `Transcribed for rehearsal use only. Not for distribution.`
-3. Our own arrangement: `Arrangement (c) [year] [name].`
+3. Our own arrangement: `Arrangement © [year] [name].`
