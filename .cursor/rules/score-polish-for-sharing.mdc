@@ -100,8 +100,18 @@ corrected version of the piece exists (an SATB file, another edition), diff
 note pitches bar by bar against it; a script that collapses the junk notes
 and then re-checks for zero differing bars is safer than hand edits. Rewrite
 lyrics slot by slot (per verse, per bar, one entry per note, a melisma is an
-empty slot) rather than patching words, then re-run the lyric join. A
-subtitle (e.g. a German title) goes in with `fix_metadata.py --subtitle`.
+empty slot) rather than patching words, then re-run the lyric join.
+
+Do not call a lower note "junk" from the XML alone: in Silent Night bar 11
+the stacked lower noteheads were the real alto line (sharing the soprano's
+stems), and deleting them left an alto rest that sat on the lyrics. Before
+deleting any note, find it in the scan at 600 dpi and compare the *whole*
+voice with the corrected SATB staff for that bar, not pitch classes. Restore
+missing notes in the editor with `add-note` (as a chord on the voice-1 note
+when the scan shares stems) and hide leftover empty voice-2 rests with `set`
+`Hidden`.
+
+A subtitle (e.g. a German title) goes in with `fix_metadata.py --subtitle`.
 
 ### 4. Choose breaks by phrase
 
@@ -143,8 +153,9 @@ Use `render`/`score-snapshot` and a PDF after each group of changes.
   verses on a Letter page (Deck the Halls): `staffSize` 6.5,
   `spacesBetweenStaves` 9.5, `spacesBetweenSystems` 8, `aboveTopStaveGap` 32.
   With four stacked verses (Silent Night, 3 systems, German verse 4) use
-  `spacesBetweenStaves` 16, `spacesBetweenSystems` 6, `aboveTopStaveGap` 28 at
-  `staffSize` 6.5: 14 let the fourth verse touch the bass stems.
+  `spacesBetweenStaves` 17, `spacesBetweenSystems` 9, `aboveTopStaveGap` 28 at
+  `staffSize` 6.5: 14 let the fourth verse touch the bass stems, 19 filled the
+  page so the footer collided, and systems gap 4 cramped the bar numbers.
   At staff size 7 and 4 systems the page fills, Sibelius stretches the last
   system down to the bottom margin, and the copyright footer (which sits at
   the margin) lands on the last bass staff; raising `bottomMargin` moves the
