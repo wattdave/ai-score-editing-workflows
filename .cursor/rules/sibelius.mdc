@@ -95,9 +95,10 @@ Do not load unrelated references.
 
 - A new Sibelius process or changed declared plug-in list can show an approval
   dialog. If a command reports that it is waiting, ask the user to click OK in
-  Sibelius; the connection timeout is 120 seconds.
+  Sibelius, or click it if allowed
+  ([details](../../.claude/skills/sibelius/references/commands.md#windows-and-connection)); timeout 120 seconds.
 - A fresh Sibelius may reject the first connection
-  (`kClientRejected_UserRefusedRequest`) without a prompt; retry once.
+  (`kClientRejected_UserRefusedRequest`); retry once.
 - Exit 2 means Sibelius is unavailable or Sibelius Connect is disabled under
   Preferences → Input Devices.
 - Exit 1 with a bridge-unreachable or version-mismatch message requires

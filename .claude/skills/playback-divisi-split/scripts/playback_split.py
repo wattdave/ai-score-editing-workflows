@@ -124,7 +124,8 @@ def fill_rests(part_evs: list[Event], melody_evs: list[Event]) -> list[Event]:
     return out
 
 
-def split(root: ET.Element, melody_id: str, unison_until: int, double_rests: bool) -> list[str]:
+def split(root: ET.Element, melody_id: str, unison_until: int, double_rests: bool,
+          borrow: bool = True) -> list[str]:
     parts = root.findall("part")
     ids = [p.get("id") for p in parts]
     if melody_id not in ids:
@@ -191,7 +192,10 @@ def split(root: ET.Element, melody_id: str, unison_until: int, double_rests: boo
                     previous = midi(ev.notes[0])
                     continue
                 pitches = [copy.deepcopy(n) for n in sorted(ev.notes, key=midi, reverse=True)]
-                keep = min(pitches, key=lambda n: abs(midi(n) - previous)) if previous is not None else pitches[0]
+                if not borrow and pid == ids[-1]:
+                    keep = pitches[-1]  # rehearsal copy: the lowest staff keeps its lowest note
+                else:
+                    keep = min(pitches, key=lambda n: abs(midi(n) - previous)) if previous is not None else pitches[0]
                 keep_pitch = keep
                 extras = [n for n in pitches if n is not keep]
                 set_pitch(ev.notes[0], keep_pitch)
@@ -203,6 +207,9 @@ def split(root: ET.Element, melody_id: str, unison_until: int, double_rests: boo
                                              and not e.rest), None) for other in ids if other != pid}
                     if any(e is not None and midi(e.notes[0]) == midi(extra) for e in sounding.values()):
                         moves.append(f"{name(extra)} already sounds, dropped")
+                        continue
+                    if not borrow:
+                        moves.append(f"{name(extra)} dropped (--no-borrow)")
                         continue
                     neighbours = [ids[order[pid] + d] for d in (-1, 1) if 0 <= order[pid] + d < len(ids)]
                     def doubled(other: str, e: Event) -> bool:
@@ -241,12 +248,16 @@ def main() -> int:
                         help="every part copies the melody for bars 1..N (bar indexes, pickup = 1)")
     parser.add_argument("--no-double-rests", dest="double_rests", action="store_false",
                         help="leave rests in other parts as written")
+    parser.add_argument("--no-borrow", dest="borrow", action="store_false",
+                        help="drop a chord's extra notes instead of moving them onto a neighbouring "
+                             "part (keeps every voice's own line, as rehearsal mixes need); the lowest "
+                             "staff then keeps its lowest note")
     parser.add_argument("--title-suffix", default=" (playback)")
     args = parser.parse_args()
 
     tree = ET.parse(args.input)
     root = tree.getroot()
-    log = split(root, args.melody, args.unison_until, args.double_rests)
+    log = split(root, args.melody, args.unison_until, args.double_rests, args.borrow)
     if root.findall(".//note/chord"):
         raise SystemExit("internal error: chords remain after splitting")
     title = root.find("work/work-title")

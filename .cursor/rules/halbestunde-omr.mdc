@@ -125,6 +125,11 @@ dropped notes (use `omr-score-repair`). Results so far:
   with some misreads ("Tale" for "See the new"/"Yule", "Get"/"Cset" for "Fa");
   chord symbols and the pencil notes did not break it.
 
+- All I Want For Christmas Is You (11 pages, SATB with a split alto, one image
+  scan): 11 parts of 95 bars for 5 staves. The main parts hold whole-bar rests
+  in stretches (bars 14-20, 29-36, 44-51, 52-60, 78-87) and the real notes sit
+  in small fragment parts, so a first merge by part order was wrong. See
+  `omr-score-repair`, "Fragmented parts".
 - Feliz Navidad (10 pages, SATB and piano, Musicnotes print-out): about 90
   seconds. Six parts of 76 bars (`Voice0`...; four voices plus two piano
   staves), 1794 notes. Lyrics are bare syllables, and in places two voices'

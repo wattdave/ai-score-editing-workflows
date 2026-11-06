@@ -148,3 +148,11 @@ def test_identical_mixes_over_resting_voices_are_a_note():
     stems["01 Alto.aiff"] = voice(0, pitch=200)
     kept = mp.note_accompaniment_only(findings, stems)
     assert all(f.severity == "error" for f in kept)
+
+
+def test_text_report_names_the_files_of_each_finding() -> None:
+    from ai_score_editing.workflows.mix_proof import Finding
+
+    line = Finding("error", "level", "13 dB louder", ("Song - Alto only.mp3",), 1.0, 4.0).line()
+    assert line.endswith("(Song - Alto only.mp3)")
+    assert "[1.0-4.0 s]" in line

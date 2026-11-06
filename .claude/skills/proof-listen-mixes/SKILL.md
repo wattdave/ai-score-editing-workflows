@@ -22,7 +22,10 @@ those mixes.
 uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli proof-mixes DIR [--stems STEMS_DIR] [--json]
 ```
 
-Allow about 5 seconds per file. Pass `--stems` (the `stems` folder from
+Allow about 5 seconds per file, and more with many files: 21 mixes of ten
+staves took over ten minutes, so run it (and `rehearsal-mixes`) in the
+background. Each text-report line ends with the file names it is about; with
+`--json` the same names are in each finding's `files`. Pass `--stems` (the `stems` folder from
 `rehearsal-mixes --keep-stems`) for the stem-level checks as well. Loose
 recordings in the same folder (no `only`, `louder` or `All voices` in the
 name) are skipped.
@@ -63,6 +66,16 @@ renders that differ from each other are healthy.
 Other causes of `shared` between two staves: both play the same Cantai voice,
 so they share one playback channel (give each staff a different voice); or
 the staves hold identical notes.
+
+## A `level` error is not always a fault
+
+A solo voice entering over resting parts is far louder than that voice's file
+median. On All I Want For Christmas two Alto 2 files (the "only" and "louder"
+mixes) flagged +13 and +18 dB at 267-276 s, in the repeated ending where Alto 2
+sings alone; the user listened and said it sounded fine. Check the score at
+the flagged time, then ask the user to listen to that stretch, before
+re-exporting. If the user wants the files uploaded anyway, say what was
+flagged and upload on their instruction.
 
 ## Auditing mixes already in Drive
 

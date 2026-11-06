@@ -33,6 +33,45 @@ systematic architectural and engraving mistakes:
 5. **Redundant Clef Objects**: Every recognized system break restates the clef,
    leaving duplicate `Clef` objects mid-bar across all staves after import.
 
+6. **Fragmented parts**: one printed staff comes back as several parts, and
+   the notes for stretches where the main part shows a whole-bar rest sit in
+   the fragments.
+
+---
+
+## Fragmented parts (read before merging)
+
+Halbestunde and MuseScore's converter can return more parts than the page has
+staves (11 for 5 staves on All I Want For Christmas). To merge:
+
+1. List, per part and bar, whether it holds notes or only rests, and find the
+   stretches where a main part rests but a fragment has notes.
+2. Decide which fragment belongs to which staff **from the print**, not from
+   part order: at bars 29-36 the A2 line ("din a") sat in the part numbered
+   for A1, so merging in order swapped A1 and A2. Render the page and compare
+   pitches and lyrics.
+3. Keep a tied note's accidental: a note tied from a D# is a D#, whatever the
+   scan wrote (bars 52 and 69-70 had it wrong).
+4. When a stretch has a chord (stacked voices) do not collapse it to one note:
+   a dropped voice is a lost line. Keep every note and split later
+   (`playback-divisi-split`, extra-staves mode).
+5. A tenor line may already be marked treble 8vb with sounding pitches. Import
+   first and compare the tenor's octave with the print; do not add a
+   `<transpose>` or raise the pitches until you have seen it wrong (a
+   Sibelius-exported tenor is different, see `tenor-playback-repair`).
+6. Check the structure after every script edit:
+
+   ```bash
+   python3 ${CLAUDE_SKILL_DIR}/scripts/check_musicxml.py "Score.xml"
+   ```
+
+   It flags `<transpose>` before `<clef>`, a note with two `<rest/>` (a second
+   `to_rest()` on an existing rest), note children out of schema order,
+   bars of the wrong length and parts with different bar counts. Sibelius
+   shows each of these as a MusicXML warning on import (the first import of
+   this score had two).
+7. Count notes before and after; do not trust that nothing was lost.
+
 ---
 
 ## Dependencies

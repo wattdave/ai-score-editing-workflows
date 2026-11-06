@@ -63,5 +63,20 @@ Sibelius cannot change a lyric's syllable type in place. Two options:
   `set-lyric` for this; it cannot change the syllable type, and a bare
   `--raw` write can leave the lyric invisible on the page.
 
+Recipe for one hyphen: one `apply` batch holding a `delete` of the lyric and
+an `add-lyric` with the same `text`, `staff`, `bar`, `position`, `voice`,
+`verse`, `dy` (verse 1 is -192), `"syllableType":"middle"` and `duration` set to the
+note's duration (a duration of 0 is rejected). Addresses in a batch are read
+before it runs, so one batch can fix many words. A tenor "Christ ma" missing
+its "s" is fixed the same way, by deleting and adding it with new text.
+
 Verify with `uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli read-lyrics --words`, which prints joined
 words with hyphens.
+
+**The data can say "middle" and the page can still show no hyphen.** Sibelius
+leaves the hyphen out when the two syllables are too close. Re-creating the
+lyric does not help. Export a PNG of the page (`sibelius-cli export --format
+png`) and look. A system break after the crowded bar (`patch-layout set-break`)
+gives it the room; so can widening the spacing. The OMR scan of All I Want For
+Christmas wrote "ba by", "Christ mas", "san ta" and "real ly" as separate
+words, so check these common ones (baby, Christmas, Santa, really) first.

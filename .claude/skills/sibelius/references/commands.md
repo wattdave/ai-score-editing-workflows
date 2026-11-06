@@ -339,3 +339,21 @@ and retain the required read/write/verify workflow from the main skill. When a
 task needs many bridge calls with no batch command, write one Python script
 that opens a single `SibeliusClient` session (see the `omr-score-repair` skill's `scripts/clean_clefs.py`)
 rather than looping CLI invocations.
+
+## Windows and connection
+
+- The approval dialog ("... wants to connect") appears for a new Sibelius
+  process, including one the CLI launches itself. Click it yourself with a real
+  mouse click only when the user has said you may, after confirming Sibelius is
+  the frontmost application, and never type into the terminal. Otherwise ask
+  the user to click it.
+- `OpenScore` on a score that is already open does not bring its window to the
+  front. Switch with the Window menu (System Events, after checking Sibelius is
+  frontmost), then confirm with `score-snapshot` that `fileName` is the score
+  you meant. `--expect-file` needs an absolute path.
+- The status bar can show "Edit Lyric" after your own edits. That is not the
+  user editing.
+- Before the user closes a score window, check its last save time against your
+  last edit (`ls -l`) and tell them whether closing without saving loses
+  anything.
+
