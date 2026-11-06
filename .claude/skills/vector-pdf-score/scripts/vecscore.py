@@ -135,11 +135,11 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F')):
             ev=[]
             for x,y,c in heads:
                 p=pitch(y)
-                base=8 if c=='˙' else 4
+                base=16 if c=='w' else 8 if c=='˙' else 4
                 # stem for this head: a stem line with x near head left/right edge and spanning y
                 st_=[(sx,y0,y1) for sx,y0,y1 in stems if (abs(sx-x)<1.3 or abs(sx-(x+sp*1.18))<1.3) and y0-1<=y<=y1+1]
                 beam=0; flag=0
-                if st_ and c!='˙':
+                if st_ and c=='œ':
                     sx,y0,y1=st_[0]
                     end_ys=[y0,y1]
                     for r in beams:

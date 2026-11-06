@@ -92,39 +92,45 @@ Helsinki details: stems are 0.60 wide and barlines 0.75 (the reader switches thr
 and the repeat dots and augmentation dots are the same glyph (repeat dots are told apart by sitting
 in a pair on the middle line beside a barline).
 
-## Not handled yet
+## Limits
 
-`vecscore_musicxml.py` still assumes every system has the same staves, so for a mixed page like the
-Helsinki test piece it cannot write the whole file: read it with `vecscore.py --staves auto`, and
-write the MusicXML by hand or from per-section runs. Voltas (1.2. / 3.) are not read, neither is the
-bar count of a multi-bar rest beyond the number printed above it.
+**Read correctly now**
+- Several staves per system, and a bracket or brace line (a barline only one staff has is merged away).
+- A repeat-start barline after the clef (no empty bar); a pickup bar.
+- Seconds: two noteheads a second apart with the same duration become one chord.
+- Whole notes; flat beams drawn as thin rectangles (Apple Tree Wassail).
+- One verse per row of words under a staff (`<lyric number="1">`, `"2"`, ...).
+- Meter changes, with `--time-changes "8:3/2,9:4/4"` (measure numbers as in the output). A change
+  printed at the right end of a system applies to the next bar.
 
-Layout quirks the reader now absorbs (Jingle Bells, 2/2, SB, two verses): a bracket or
-braces line is not a barline (a barline only one staff of a system has is merged away); a
-repeat-start barline right after the clef makes no empty bar; two noteheads a second apart
-with the same duration become one chord; and each row of words under a staff is its own
-verse (`<lyric number="1">`, `"2"`, ...). Check verse 2 per note: when the rows differ in
-rhythm from the first verse, patch the XML by onset (chord members take no lyric).
-Repeat signs and endings are still written by hand into the MusicXML
-(`<barline><repeat/>`, `<ending number="1" type="start|stop|discontinue">`), as are cut time
-(`<time symbol="cut">`) and accents (`<articulations><accent/>`). A bar whose unused voice
-prints a half rest beside quarter rests sums too long: give that bar with `--override`.
-Flat beams that some PDFs draw as thin filled rectangles (Apple Tree Wassail) count as beams too;
-before that, their eighths read as quarters and the bars summed too long.
-After importing a piece with a pickup bar and endings, Sibelius can draw the first and second
-ending brackets in the wrong place (Apple Tree Wassail: under bars 12-13 instead of 17-18, though
-`query --staff system --type Line` shows them on the right bars). Delete both `RepeatTimeLine`
-objects with `apply` and add them again (`add-line` on staff 0, `line.system.repeat.1st` and
-`.2nd`, same bar, position 0, same duration); the score must be saved first.
-Ligatures (U+FB01) and a stray `>` or `&quot;` in a lyric need a search and replace.
+**Read, but finish by hand in the MusicXML**
+- Repeats, endings and double barlines: the dump marks them, the writer does not emit them. Use
+  `<barline><repeat/>` and `<ending number="1" type="start|stop|discontinue">`.
+- Cut time (`<time symbol="cut">`), accents (`<articulations><accent/>`).
+- Triplets: scale `<divisions>` by 3, give the three notes `<time-modification>` 3:2 and a
+  `<tuplet>` start and stop (Sussex Mummers Carol).
+- Lyrics: a verse printed inline after another (Sussex) needs its `number` changed; verse 2 with a
+  different rhythm needs patching by onset (chord members take no lyric); ligatures (U+FB01), a
+  stray `>` or `&quot;`, and words that fit no note (an elided "a long") need a search and replace.
+- A bar whose unused voice prints a half rest beside quarter rests sums too long: use `--override`.
+- Ties: any curve between two same-pitch notes counts as a tie. Stem-sharing chords in two-voice
+  passages can come out as one note: check every chord bar.
 
-Tuplets, grace notes, whole notes, 16th rests and
-shorter, repeats and voltas, dynamics, hairpins, tempo and expression text, slurs (ignored),
-cross-staff notes, key or time changes, more than one verse (read each lyric row yourself),
-systems with different numbers of staves (parse with `--staves 1` and assemble the staves by
-hand), and stem-sharing chords in two-voice passages, which can come out as a single note: check
-every chord bar against the print. Dorico and MuseScore PDFs (different
-fonts). The tie rule treats any curve between two same-pitch notes as a tie.
+**Not read**
+- Tuplets in the reader, grace notes, 16th rests and shorter, key changes, voltas as objects,
+  dynamics, hairpins, tempo and expression text, slurs, cross-staff notes, the bar count of a
+  multi-bar rest beyond the number printed above it.
+- Systems with different numbers of staves: `vecscore_musicxml.py` assumes every system has the
+  same staves. Read a mixed page with `vecscore.py --staves auto` and assemble the MusicXML from
+  per-section runs.
+- PDFs from Dorico or MuseScore (different fonts): use `halbestunde-omr`.
+
+**After import (Sibelius)**
+- With a pickup bar and endings, Sibelius can draw the first and second ending brackets in the
+  wrong place (Apple Tree Wassail: under bars 12-13 instead of 17-18, although
+  `query --staff system --type Line` shows the right bars). Save the score, delete both
+  `RepeatTimeLine` objects with `apply`, and `add-line` them again on staff 0 (`line.system.repeat.1st`
+  and `.2nd`, same bar, position 0, same duration).
 
 ## After the MusicXML
 
