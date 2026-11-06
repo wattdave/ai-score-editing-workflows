@@ -27,6 +27,7 @@ without the rest of the repository.
 | Title, credits, copyright, part names | `score-metadata-repair` |
 | Chord symbols | `chord-symbol-repair` |
 | Beams | `beaming-repair` |
+| Transposition (when the piece must be sung in another key) | `transpose-score` |
 | System and page breaks | `phrase-breaks` |
 | Editor operations after import | `sibelius`, `dorico` or `musescore` |
 
@@ -86,6 +87,10 @@ modern); when undetermined, look at the PDF. If the source print is beamed and t
 file has no beams, run `fix_beams.py --scope all`; in 2/2 a beat is a half
 note, so four eighths join. Only a source print that is itself unbeamed needs
 no step.
+
+Transposing, when asked, belongs here: run `transpose-score` on the
+repaired XML (before the phrase breaks, because the ranges and the key
+signature decide the layout) and check each part's range in its `--report`.
 
 ### 3. Proofread against the source
 
