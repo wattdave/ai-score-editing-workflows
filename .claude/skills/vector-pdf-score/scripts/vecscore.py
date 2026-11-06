@@ -66,6 +66,7 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F')):
                 if it[0]=='l' and abs(it[1].x-it[2].x)<0.01:
                     vlines.append((it[1].x,min(it[1].y,it[2].y),max(it[1].y,it[2].y),round(dr.get('width') or 0,2)))
             if dr['type'] in('f','fs') and len(dr['items'])==4 and dr['rect'].width>3 and dr['rect'].height<8: beams.append(dr['rect'])
+            elif dr['type']=='f' and len(dr['items'])==1 and dr['items'][0][0]=='re' and dr['rect'].width>3 and 1<dr['rect'].height<3.2: beams.append(dr['rect'])   # flat beam drawn as a rectangle (some drivers); a stem must end on it, so multi-bar rests never match
             if dr['type'] in('fs','f','s') and any(it[0]=='c' for it in dr['items']): curves.append(dr)
         mrests=[dr['rect'] for dr in draws if dr['type']=='f' and dr['rect'].width>30 and dr['rect'].height<8 and len(dr['items'])==1]
         glyphs=[]

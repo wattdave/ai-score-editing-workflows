@@ -118,9 +118,17 @@ new time signature at the given measure numbers and checks each bar against its 
 claire fontaine: 4/4 with 3/2 bars). Look at the right end of each system for a printed change:
 it applies to the next bar. Triplets still need hand edits (see Sussex Mummers Carol: scale
 `<divisions>` by 3, give the three notes `<time-modification>` 3:2 and a `<tuplet>` start and stop).
+
+Flat beams that some PDFs draw as thin filled rectangles (Apple Tree Wassail) count as beams too;
+before that, their eighths read as quarters and the bars summed too long.
+After importing a piece with a pickup bar and endings, Sibelius can draw the first and second
+ending brackets in the wrong place (Apple Tree Wassail: under bars 12-13 instead of 17-18, though
+`query --staff system --type Line` shows them on the right bars). Delete both `RepeatTimeLine`
+objects with `apply` and add them again (`add-line` on staff 0, `line.system.repeat.1st` and
+`.2nd`, same bar, position 0, same duration); the score must be saved first.
 Ligatures (U+FB01) and a stray `>` or `&quot;` in a lyric need a search and replace.
 
-Tuplets, grace notes, whole notes, 16th rests and
+Tuplets, grace notes, 16th rests and
 shorter, repeats and voltas, dynamics, hairpins, tempo and expression text, slurs (ignored),
 cross-staff notes, key or time changes, more than one verse (read each lyric row yourself),
 systems with different numbers of staves (parse with `--staves 1` and assemble the staves by
