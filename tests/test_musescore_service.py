@@ -275,7 +275,7 @@ def test_adding_refusals(objects) -> None:
         ({**note, "pitches": [60, 60]}, "same pitch twice"),
         ({**note, "spellings": ["C"]} | {"pitches": [60, 64]}, "one spelling"),
         ({"op": "add-line", "staff": 1, "bar": 1, "position": 0, "duration": 512,
-          "styleId": "line.staff.hairpin.crescendo"}, "crashed MuseScore"),
+          "styleId": "line.staff.hairpin.diminuendo"}, "only crescendo"),
         ({"op": "add-line", "staff": 1, "bar": 1, "position": 0, "duration": 512,
           "styleId": "line.staff.trill"}, "can add these lines"),
         ({"op": "add-tuplet", "staff": 1, "bar": 1, "position": 0, "duration": 256, "actual": 5, "normal": 3,
@@ -556,3 +556,11 @@ def test_instrument_lookup() -> None:
         instruments.resolve("Clarinet")
     with pytest.raises(MuseScoreError, match="close: violin"):
         instruments.resolve("violn")
+
+
+def test_crescendo_hairpin_is_a_bridge_line(objects) -> None:
+    primitives, _ = prepare(objects, [
+        {"op": "add-line", "staff": 1, "bar": 1, "position": 0, "duration": 512,
+         "styleId": "line.staff.hairpin.crescendo"}])
+    assert primitives[0]["line"] == "hairpin" and primitives[0]["endTick"] == 960
+    assert score.LINES_REFUSED and "hairpin" in " ".join(score.LINES_REFUSED)  # a diminuendo stays refused
