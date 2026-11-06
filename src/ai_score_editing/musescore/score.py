@@ -101,11 +101,12 @@ TEXT_ELEMENTS = {"text.staff.expression": "EXPRESSION"}
 LINE_STYLES = {
     "line.staff.slur.up": "slur", "line.staff.slur.down": "slur", "line.staff.slur": "slur",
     "line.staff.octava.plus8": "8va", "line.staff.octava.minus8": "8vb",
+    "line.staff.hairpin.crescendo": "hairpin",
 }
 #: Lines refused, and why (docs/musescore.md).
 LINES_REFUSED = {
-    "line.staff.hairpin": "adding a hairpin from a plug-in crashed MuseScore 4.7.5 twice (once with the "
-                          "hairpin's interactive edit ended at once); add hairpins by hand",
+    "line.staff.hairpin": "only crescendo hairpins are tested (line.staff.hairpin.crescendo); "
+                          "add a diminuendo by hand",
 }
 #: set-articulation names and the MuseScore actions that add them to a
 #: selected note [seen]. The actions toggle; the bridge checks the result.
@@ -972,7 +973,7 @@ def _adding(
     if op == "add-line":
         kind = LINE_STYLES.get(operation["styleId"])
         for prefix, reason in LINES_REFUSED.items():
-            if operation["styleId"].startswith(prefix):
+            if kind is None and operation["styleId"].startswith(prefix):
                 raise MuseScoreBatchError(f"{label}: {reason}")
         if kind is None:
             raise MuseScoreBatchError(

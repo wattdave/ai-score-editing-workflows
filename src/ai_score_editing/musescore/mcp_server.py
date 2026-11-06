@@ -166,8 +166,8 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
     - {"op":"add-lyric",...,"duration":D,"text":T[,"syllableType":"middle",
       "verse":N]}: on a note starting there; hyphens follow the verse
     - {"op":"add-line",...,"duration":D,"styleId":S}: line.staff.slur(.up/
-      .down), line.staff.octava.plus8/.minus8; no hairpins (they crashed
-      MuseScore)
+      .down), line.staff.octava.plus8/.minus8, line.staff.hairpin.crescendo
+      (no diminuendo)
     - {"op":"add-clef",...,"clef":"treble"|"treble-8vb"|"treble-8va"|
       "alto"|"tenor"|"bass"|"bass-8vb"|"percussion"}
     - At a note or rest by staff/bar/index (Dorico's ops):

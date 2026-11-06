@@ -59,8 +59,10 @@ description lists every op's fields.
 
 ## Limits
 
-- **No hairpins.** add-line refuses them: adding one crashed MuseScore
-  twice. Slurs and octave lines work. Ask the user to add hairpins by hand.
+- **Hairpins:** add-line adds crescendo hairpins (`line.staff.hairpin.crescendo`,
+  bridge 13). A diminuendo is refused: add it by hand. They crashed 4.7.5
+  twice; on 4.7.6 a dry run and real runs with undo were clean, so check the
+  result after the first one on a new score.
 - An empty voice 2-4 can only start where voice 1 has a note or rest
   starting. Durations are single note values (up to three dots) in the bar.
 - `set` Beam takes MuseScore beam modes (0 auto, 1 none, 2 begin,

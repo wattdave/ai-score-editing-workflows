@@ -618,9 +618,12 @@ MuseScore {
         return { kind: "LyricItem", el: el, tick: at.tick, track: at.track };
     }
 
-    // No hairpins: add-hairpin crashed MuseScore twice (docs/musescore.md).
-    readonly property var lineActions: ({ "slur": "add-slur", "8va": "add-8va", "8vb": "add-8vb" })
-    readonly property var lineNames: ({ "slur": "Slur", "8va": "Ottava", "8vb": "Ottava" })
+    // add-hairpin crashed MuseScore 4.7.5 twice; on 4.7.6 it ran cleanly
+    // (dry run, real run, undo; docs/musescore.md). Crescendo only.
+    readonly property var lineActions: ({ "slur": "add-slur", "8va": "add-8va", "8vb": "add-8vb",
+                                          "hairpin": "add-hairpin" })
+    readonly property var lineNames: ({ "slur": "Slur", "8va": "Ottava", "8vb": "Ottava",
+                                        "hairpin": "HairPin" })
 
     function spannerKeys(name) {
         var keys = {}, spanners = curScore.spanners;

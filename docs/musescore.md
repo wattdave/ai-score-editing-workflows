@@ -47,7 +47,7 @@ Accessibility permission for the terminal.
 | `ficta` | ✅ | hides the staff accidental, adds `<sym>accidentalFlat\|Natural\|Sharp</sym>` staff text above; re-query after (text takes an index) |
 | `set-pitch`, `tie`, `bracket`, `flip-stem`, `nudge`, `delete`, `beam` | ✅ | set-pitch keeps ties, lyrics and articulations |
 | `add-note`, `add-rest`, `add-tuplet`, `add-text`, `add-lyric`, `add-clef` | ✅ | voices 2-4 only where voice 1 has a note or rest starting |
-| `add-line` | ⚠️ | slurs and octave lines; **hairpins refused** (they crashed MuseScore twice) |
+| `add-line` | ⚠️ | slurs, octave lines and crescendo hairpins (bridge 13); no diminuendo. Hairpins crashed 4.7.5 twice; see the hairpin note below |
 | Dorico's note ops (`add-dynamic`, `set-articulation`, `add-slur`, `add-tempo`, `add-rehearsal-mark`) | ✅ | |
 | `transpose`, `copy-passage`, `set-key`, `set-time` | ✅ | copy-passage goes through the clipboard, one per batch |
 | `set-break`, `set-barline`, `set-bar-number`, `add-bars` | ✅ | no between-staves, tick, short or triple barlines in MuseScore |
@@ -143,10 +143,11 @@ voice, and report what they added. How they behave:
   system text, which does not.
 - set-articulation does staccato, tenuto, marcato and accent (the actions
   that add them by name); one already there is left as it was.
-- **Hairpins are refused.** `add-hairpin` crashed MuseScore again on
-  2026-10-03, with two notes selected and the interactive edit cancelled
-  straight after, inside a command. That makes two crashes; hairpins are
-  added by hand for now.
+- **Hairpins (crescendo only).** `add-hairpin` crashed MuseScore 4.7.5
+  twice (2026-10-03, with two notes selected and the interactive edit
+  cancelled straight after, inside a command). On 4.7.6 (2026-11-06) a dry
+  run and real runs with undo were clean; the live results are in the
+  hairpin trial below. A diminuendo is refused: it is untested.
 - A clef that starts a bar is stored at the end of the bar before; the
   read reports it in the bar it starts, at position 0, as Sibelius does.
 
@@ -433,6 +434,21 @@ probe ran in its own `startCmd` and was rolled back unless noted.
   also starts dragging its end handle (`startEditGrip`) [src], an
   interactive edit that a rollback would cut from under; that may be what
   crashed. Hairpins and other lines stay open.
+
+### Hairpin trial, 2026-11-06 (MuseScore 4.7.6, bridge 13)
+
+Live on ScratchScore through `add-line` with `line.staff.hairpin.crescendo`:
+dry run and real run both add one `HairPin` (`lineType` Hairpin, duration as
+asked); undo takes it away (count 0 again). Cases that passed: within a bar
+starting on a two-note chord; across a barline (bar 2 position 768 into bar
+3); across two barlines (bar 2 to bar 4); two hairpins in one batch; two
+overlapping hairpins in one batch. MusicXML export holds a `wedge`
+crescendo start and stop; PDF export worked; the hairpin survived save and
+reopen (bar 2, position 768, 512 long). No crash, no crash dump. Not
+tried: a diminuendo (refused), hairpins on the piano staves (ScratchScore has
+no notes there), voices 2-4, and a hairpin on a rest. PR #35139 (the plug-in
+`add-hairpin` crash fix) is in upstream's 4.7 branch but not in the v4.7.6
+tag, so 4.7.6 evidently did not need it for these cases.
 
 ### Selections, copy and paste (P11), 2026-10-03
 
