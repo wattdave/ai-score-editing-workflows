@@ -11,7 +11,7 @@ Only Sibelius PDFs (Opus and Helsinki fonts) have been tested, plus Opus PDFs pr
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pymupdf
-from vecglyph import normalize_glyph
+from vecglyph import normalize_glyph, has_music_code
 # Opus and Helsinki (Sibelius's two music fonts) use the same legacy glyph codes (verified, see SKILL.md); neither is SMuFL.
 MUSIC_FONTS=('Opus','Helsinki')
 H_GLYPH={'œ':'q','˙':'h','w':'w'}           # notehead glyphs (stem drawn separately)

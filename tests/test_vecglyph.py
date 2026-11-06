@@ -16,3 +16,9 @@ def test_print_driver_codes_map_to_the_sibelius_glyphs() -> None:
 def test_plain_sibelius_glyphs_are_left_alone() -> None:
     for ch in "œ˙™&?bJjÓŒ‰>":
         assert vecglyph.normalize_glyph(ch) == ch
+
+
+def test_music_glyph_runs_are_not_lyric_words() -> None:
+    # Text extraction returned runs of music glyphs as "words" in print-driver PDFs; they stole notes from lyrics.
+    assert vecglyph.has_music_code("") and vecglyph.has_music_code("a")
+    assert not vecglyph.has_music_code("Al-le") and not vecglyph.has_music_code("lu")

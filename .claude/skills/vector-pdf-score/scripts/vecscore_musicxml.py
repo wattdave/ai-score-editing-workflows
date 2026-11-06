@@ -88,7 +88,7 @@ for pi, pg in enumerate(pdf):
     if not stf: continue
     for w in pg.get_text('words'):
         t = w[4]
-        if t in skip or re.fullmatch(r'[0-9]+', t) or t.startswith('(') or w[2] < 60 or any(c in t for c in 'œ™˙&?#°¢‹Ó‰Œ∑'): continue
+        if t in skip or re.fullmatch(r'[0-9]+', t) or t.startswith('(') or w[2] < 60 or any(c in t for c in 'œ™˙&?#°¢‹Ó‰Œ∑') or v.has_music_code(t): continue
         cand = [x for x in stf if x[1] <= w[1] + 3]
         if not cand or w[1] < stf[0][0] - 40: continue
         top, bot, sysi, part = max(cand, key=lambda x: x[1])
