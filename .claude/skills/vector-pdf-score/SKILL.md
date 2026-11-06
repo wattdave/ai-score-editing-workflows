@@ -103,6 +103,18 @@ Helsinki test piece it cannot write the whole file: read it with `vecscore.py --
 write the MusicXML by hand or from per-section runs. Voltas (1.2. / 3.) are not read, neither is the
 bar count of a multi-bar rest beyond the number printed above it.
 
+Layout quirks the reader now absorbs (Jingle Bells, 2/2, SB, two verses): a bracket or
+braces line is not a barline (a barline only one staff of a system has is merged away); a
+repeat-start barline right after the clef makes no empty bar; two noteheads a second apart
+with the same duration become one chord; and each row of words under a staff is its own
+verse (`<lyric number="1">`, `"2"`, ...). Check verse 2 per note: when the rows differ in
+rhythm from the first verse, patch the XML by onset (chord members take no lyric).
+Repeat signs and endings are still written by hand into the MusicXML
+(`<barline><repeat/>`, `<ending number="1" type="start|stop|discontinue">`), as are cut time
+(`<time symbol="cut">`) and accents (`<articulations><accent/>`). A bar whose unused voice
+prints a half rest beside quarter rests sums too long: give that bar with `--override`.
+Ligatures (U+FB01) and a stray `>` or `&quot;` in a lyric need a search and replace.
+
 Tuplets, grace notes, whole notes, 16th rests and
 shorter, repeats and voltas, dynamics, hairpins, tempo and expression text, slurs (ignored),
 cross-staff notes, key or time changes, more than one verse (read each lyric row yourself),

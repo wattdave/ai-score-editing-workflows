@@ -34,6 +34,34 @@ altered = {s_: 1 for s_ in SHARPS[:a.key]} if a.key > 0 else {s_: -1 for s_ in F
 beats, beat_type = map(int, a.time.split('/')); BAR = 16 * beats // beat_type
 
 sts = v.parse(a.pdf, NP, tuple(CLEFS))
+
+def _fix(sts):
+    by_sys = {}
+    for s_ in sts: by_sys.setdefault((s_['page'], s_['sys']), []).append(s_)
+    for (pg_, sy_), group in by_sys.items():
+        for s_ in group:      # (b) empty first bar made by a repeat-start barline just after the clef and key
+            if s_['bars'] and not s_['bars'][0]:
+                s_['bars'].pop(0); s_['edges'].pop(0); s_['marks'] = {k - 1: m for k, m in s_['marks'].items() if k >= 1}; s_['repeat_start'] = True
+        for s_ in group:      # (a) a barline other staves of the system do not have (a bracket): merge its two bars
+            others = [o for o in group if o is not s_]
+            i = 1
+            while i < len(s_['edges']) - 1 and i < len(s_['bars']):
+                x = s_['edges'][i]
+                if others and all(not any(abs(x - e) < 3 for e in o['edges']) for o in others):
+                    s_['bars'][i - 1] = s_['bars'][i - 1] + s_['bars'].pop(i); s_['edges'].pop(i)
+                    s_['marks'] = {(k if k < i else k - 1): m for k, m in s_['marks'].items()}
+                else: i += 1
+        for s_ in group:      # (c) notes a second apart sit side by side: same duration, close x -> one chord
+            for b in s_['bars']:
+                if sum(e['dur'] for e in b) == BAR: continue
+                b.sort(key=lambda e: e['x']); k_ = 0
+                while k_ + 1 < len(b):
+                    e1, e2 = b[k_], b[k_ + 1]
+                    if not e1['rest'] and not e2['rest'] and e1['dur'] == e2['dur'] and abs(e1['x'] - e2['x']) < 8:
+                        e1['p'] = sorted(set(e1['p']) | set(e2['p'])); b.pop(k_ + 1)
+                    else: k_ += 1
+    return sts
+sts = _fix(sts)
 def nidx(name): return STEPN.index(name[0]) + 7 * int(name[1:])
 overrides = {}
 if a.override:
@@ -88,28 +116,40 @@ for pi, pg in enumerate(pdf):
     if not stf: continue
     for w in pg.get_text('words'):
         t = w[4]
-        if t in skip or re.fullmatch(r'[0-9]+', t) or t.startswith('(') or w[2] < 60 or any(c in t for c in 'œ™˙&?#°¢‹Ó‰Œ∑') or v.has_music_code(t): continue
+        if t in skip or re.fullmatch(r'[0-9]+\.?', t) or t.startswith('(') or w[2] < 60 or any(c in t for c in 'œ™˙&?#°¢‹Ó‰Œ∑') or v.has_music_code(t): continue
         cand = [x for x in stf if x[1] <= w[1] + 3]
         if not cand or w[1] < stf[0][0] - 40: continue
         top, bot, sysi, part = max(cand, key=lambda x: x[1])
         if w[3] - bot > 48: continue
-        words.setdefault((pi, sysi, part), []).append(((w[0] + w[2]) / 2, t))
-lyr = {}
-for (pi, sysi, part), ws in words.items():
-    ws.sort(); toks = []
-    for i, (cx, t) in enumerate(ws):
-        if t.strip('-') == '': continue
-        nh = i + 1 < len(ws) and ws[i + 1][1].strip('-') == ''; ph = i > 0 and ws[i - 1][1].strip('-') == ''
-        toks.append((cx, t.rstrip('-'), 'middle' if ph and nh else 'begin' if nh else 'end' if ph else 'single'))
-    cands = [(g_, vi, ei, e) for g_ in range(NB) if src[part][g_] and (src[part][g_]['page'], src[part][g_]['sys']) == (pi, sysi)
-             for vi, voice in enumerate(stream[part][g_]) for ei, e in enumerate(voice) if not e['rest'] and id(e) not in tie_end]
-    pairs = sorted((abs(c[3]['x'] + 4.5 - cx), ti, ci) for ti, (cx, t, sy) in enumerate(toks) for ci, c in enumerate(cands) if abs(c[3]['x'] + 4.5 - cx) < 24)
-    ut, uc = set(), set()
-    for d_, ti, ci in pairs:
-        if ti in ut or ci in uc: continue
-        ut.add(ti); uc.add(ci); c = cands[ci]; lyr[(part, c[0], c[1], c[2])] = (toks[ti][1], toks[ti][2])
-    for ti, (cx, t, sy) in enumerate(toks):
-        if ti not in ut: print('UNMATCHED lyric', PARTS[part], 'page', pi, 'system', sysi, repr(t), round(cx))
+        words.setdefault((pi, sysi, part), []).append(((w[0] + w[2]) / 2, t, w[1]))
+words_rows = {}
+for key_, lst_ in words.items():
+    ys_ = sorted({round(w_[2]) for w_ in lst_}); rows_ = []
+    for y_ in ys_:
+        if rows_ and y_ - rows_[-1][-1] <= 5: rows_[-1].append(y_)
+        else: rows_.append([y_])
+    for r_, grp in enumerate(rows_):
+        words_rows.setdefault(r_, {})[key_] = [(cx_, t_) for cx_, t_, y_ in lst_ if round(y_) in grp]
+lyr_v = []
+for vrow in sorted(words_rows):
+    words = words_rows[vrow]; lyr = {}
+    for (pi, sysi, part), ws in words.items():
+        ws.sort(); toks = []
+        for i, (cx, t) in enumerate(ws):
+            if t.strip('-') == '': continue
+            nh = i + 1 < len(ws) and ws[i + 1][1].strip('-') == ''; ph = i > 0 and ws[i - 1][1].strip('-') == ''
+            toks.append((cx, t.rstrip('-'), 'middle' if ph and nh else 'begin' if nh else 'end' if ph else 'single'))
+        cands = [(g_, vi, ei, e) for g_ in range(NB) if src[part][g_] and (src[part][g_]['page'], src[part][g_]['sys']) == (pi, sysi)
+                 for vi, voice in enumerate(stream[part][g_]) for ei, e in enumerate(voice) if not e['rest'] and id(e) not in tie_end]
+        pairs = sorted((abs(c[3]['x'] + 4.5 - cx), ti, ci) for ti, (cx, t, sy) in enumerate(toks) for ci, c in enumerate(cands) if abs(c[3]['x'] + 4.5 - cx) < 24)
+        ut, uc = set(), set()
+        for d_, ti, ci in pairs:
+            if ti in ut or ci in uc: continue
+            ut.add(ti); uc.add(ci); c = cands[ci]; lyr[(part, c[0], c[1], c[2])] = (toks[ti][1], toks[ti][2])
+        for ti, (cx, t, sy) in enumerate(toks):
+            if ti not in ut: print('UNMATCHED lyric', PARTS[part], 'page', pi, 'system', sysi, repr(t), round(cx))
+    lyr_v.append(lyr)
+lyr = lyr_v[0] if lyr_v else {}
 for spec in a.copy_lyrics:
     fr, to = map(int, spec.split(':'))
     for g_ in range(NB):
@@ -148,8 +188,10 @@ def part_xml(k):
                     s += f'<voice>{vi + 1}</voice><type>{ty}</type>' + ('<dot/>' if dot else '')
                     nt = ('<tied type="stop"/>' if tstop and not e['rest'] else '') + ('<tied type="start"/>' if tstart and not e['rest'] else '')
                     if nt: s += f'<notations>{nt}</notations>'
-                    if pi_ == 0 and (k, g_, vi, ei) in lyr:
-                        t, sy = lyr[(k, g_, vi, ei)]; s += f'<lyric number="1"><syllabic>{sy}</syllabic><text>{html.escape(t)}</text></lyric>'
+                    if pi_ == 0:
+                        for vn_, lv_ in enumerate(lyr_v):
+                            if (k, g_, vi, ei) in lv_:
+                                t, sy = lv_[(k, g_, vi, ei)]; s += f'<lyric number="{vn_ + 1}"><syllabic>{sy}</syllabic><text>{html.escape(t)}</text></lyric>'
                     o.append(s + '</note>')
         o.append('</measure>')
     o.append('</part>'); return '\n'.join(o)
