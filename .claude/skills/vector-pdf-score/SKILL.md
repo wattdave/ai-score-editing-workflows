@@ -29,6 +29,12 @@ font whose name starts with `Opus` or `Helsinki`). Both use the same legacy glyp
 codepoints), so one table serves both. Scans, photos and PDFs from Dorico or MuseScore (Bravura,
 Leland, Petaluma use SMuFL codepoints) are **not covered**: use `halbestunde-omr`.
 
+A PDF printed through a Windows driver (Creator `PScript5.dll`, `PDFCreator`, `PrimoPDF`) names the fonts
+`Opus` and `OpusSpecial` and stores each glyph as its code plus 0xF000 (U+F0CF for the notehead `œ`).
+`vecglyph.py` maps those back, so `vecscore.py` reads them like Sibelius's own export. They carry no
+"Sibelius" Creator, so judge them by the font name. Checked 2026-11-06 on Stille Nacht, Gaudete and Tourdion
+(glyphs and bar sums read; the limits below still apply).
+
 Then look at the pages (render at 100 dpi and read the picture) and note: staves per system and
 which voice each is, clefs (a treble clef with a small 8 below is a tenor: `G8`), key, time, tempo,
 pickup bar, repeats, bars where one staff carries two voices, and lyrics that belong to no staff.

@@ -6,9 +6,12 @@ parse(pdf, nstaves_per_system, clefs) returns one dict per staff and system:
 An event is a dict: x, p (list of diatonic indices, C0 = 0, so C4 = 28), dur (sixteenths), rest, dot.
 Pitches are *written* pitches: the 'G8' clef (treble 8vb tenor) is read as an ordinary treble staff.
 CLI (debug dump with the bar sums):  python vecscore.py SCORE.pdf [--staves 4] [--clefs G,G,G8,F]
-Only Sibelius PDFs (Opus and Helsinki fonts) have been tested; see SKILL.md for the limits."""
-import sys
+Only Sibelius PDFs (Opus and Helsinki fonts) have been tested, plus Opus PDFs printed through a Windows driver
+(glyph codes shifted by 0xF000, see vecglyph.py); see SKILL.md for the limits."""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pymupdf
+from vecglyph import normalize_glyph
 # Opus and Helsinki (Sibelius's two music fonts) use the same legacy glyph codes (verified, see SKILL.md); neither is SMuFL.
 MUSIC_FONTS=('Opus','Helsinki')
 H_GLYPH={'œ':'q','˙':'h','w':'w'}           # notehead glyphs (stem drawn separately)
@@ -72,7 +75,8 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F')):
                 for s in l['spans']:
                     if s['font'].startswith(MUSIC_FONTS):
                         for c in s['chars']:
-                            if c['c']!=' ': glyphs.append((c['origin'][0],c['origin'][1],c['c'],s['font']))
+                            ch=normalize_glyph(c['c'])
+                            if ch!=' ': glyphs.append((c['origin'][0],c['origin'][1],ch,s['font']))
         words=[w for w in pg.get_text("words")]
         sysmap=system_of(pg,st) if not nstaves_per_system else None
         for si,s in enumerate(st):
