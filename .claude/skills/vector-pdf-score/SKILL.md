@@ -113,6 +113,13 @@ Repeat signs and endings are still written by hand into the MusicXML
 (`<barline><repeat/>`, `<ending number="1" type="start|stop|discontinue">`), as are cut time
 (`<time symbol="cut">`) and accents (`<articulations><accent/>`). A bar whose unused voice
 prints a half rest beside quarter rests sums too long: give that bar with `--override`.
+Flat beams that some PDFs draw as thin filled rectangles (Apple Tree Wassail) count as beams too;
+before that, their eighths read as quarters and the bars summed too long.
+After importing a piece with a pickup bar and endings, Sibelius can draw the first and second
+ending brackets in the wrong place (Apple Tree Wassail: under bars 12-13 instead of 17-18, though
+`query --staff system --type Line` shows them on the right bars). Delete both `RepeatTimeLine`
+objects with `apply` and add them again (`add-line` on staff 0, `line.system.repeat.1st` and
+`.2nd`, same bar, position 0, same duration); the score must be saved first.
 Ligatures (U+FB01) and a stray `>` or `&quot;` in a lyric need a search and replace.
 
 Tuplets, grace notes, whole notes, 16th rests and
