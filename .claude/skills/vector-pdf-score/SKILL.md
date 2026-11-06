@@ -33,7 +33,9 @@ A PDF printed through a Windows driver (Creator `PScript5.dll`, `PDFCreator`, `P
 `Opus` and `OpusSpecial` and stores each glyph as its code plus 0xF000 (U+F0CF for the notehead `œ`).
 `vecglyph.py` maps those back, so `vecscore.py` reads them like Sibelius's own export. They carry no
 "Sibelius" Creator, so judge them by the font name. Checked 2026-11-06 on Stille Nacht, Gaudete and Tourdion
-(glyphs and bar sums read; the limits below still apply).
+(glyphs and bar sums read; the limits below still apply). Runs of music glyphs that text extraction returns as
+"words" are skipped as lyrics (`vecglyph.has_music_code`): left in, they became boxes in the lyric row and took
+notes away from real syllables (Alle Psallite Cum Luya).
 
 Then look at the pages (render at 100 dpi and read the picture) and note: staves per system and
 which voice each is, clefs (a treble clef with a small 8 below is a tenor: `G8`), key, time, tempo,

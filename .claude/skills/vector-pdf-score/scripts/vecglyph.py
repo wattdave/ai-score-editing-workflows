@@ -11,3 +11,9 @@ def normalize_glyph(ch: str) -> str:
     if 0xF000 <= code <= 0xF0FF:
         return bytes([code - 0xF000]).decode("mac_roman")
     return ch
+
+
+def has_music_code(text: str) -> bool:
+    """True if the text holds a symbol-font code (U+F000-U+F0FF): a run of music glyphs that text extraction
+    returned as a "word", never a lyric syllable."""
+    return any(0xF000 <= ord(ch) <= 0xF0FF for ch in text)
