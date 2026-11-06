@@ -73,11 +73,20 @@ class MuseScoreClient:
             request_id = next(self._ids)
             await self._ws.send(json.dumps({"id": request_id, "token": self.token, "method": method,
                                             "args": args or {}}))
-            try:
-                reply = json.loads(await asyncio.wait_for(self._ws.recv(), timeout or self.timeout))
-            except TimeoutError:
-                raise MuseScoreError("MuseScore did not answer: a dialog may be open there; "
-                                     "dismiss it and try again") from None
+            deadline = asyncio.get_running_loop().time() + (timeout or self.timeout)
+            while True:
+                try:
+                    reply = json.loads(await asyncio.wait_for(
+                        self._ws.recv(), max(deadline - asyncio.get_running_loop().time(), 0)))
+                except TimeoutError:
+                    raise MuseScoreError("MuseScore did not answer: a dialog may be open there; "
+                                         "dismiss it and try again") from None
+                # A reply to an earlier call that timed out arrives late: drop it
+                # instead of leaving every later call one reply behind.
+                reply_id = reply.get("id")
+                if isinstance(reply_id, int) and reply_id < request_id:
+                    continue
+                break
         if reply.get("id") != request_id:
             raise MuseScoreError(f"reply for request {reply.get('id')} arrived for request {request_id}")
         self.last = {k: reply.get(k) for k in ("bridge", "mscoreVersion", "score")}
