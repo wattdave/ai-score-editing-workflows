@@ -21,6 +21,7 @@ ap.add_argument('--parts', default='Soprano,Alto,Tenor,Bass')
 ap.add_argument('--clefs', default='G,G,G8,F')
 ap.add_argument('--key', type=int, default=0, help='key signature as fifths (2 = D major, -3 = E flat major)')
 ap.add_argument('--time', default='4/4')
+ap.add_argument('--time-changes', default='', help='measure:meter list where the time signature changes, e.g. "8:3/2,11:4/4" (measure numbers as in the output)')
 ap.add_argument('--tempo', type=int, default=0, help='quarter-note tempo, 0 = none')
 ap.add_argument('--title', default=''); ap.add_argument('--composer', default='')
 ap.add_argument('--override', help='JSON file: [{"page":P,"sys":S,"part":K,"bar":B,"voices":[[{"p":["F3"],"dur":4,"x":418.8}, ...], ...]}]')
@@ -32,6 +33,13 @@ STEPN = 'CDEFGAB'
 SHARPS, FLATS = 'FCGDAEB', 'BEADGCF'
 altered = {s_: 1 for s_ in SHARPS[:a.key]} if a.key > 0 else {s_: -1 for s_ in FLATS[:-a.key]}
 beats, beat_type = map(int, a.time.split('/')); BAR = 16 * beats // beat_type
+TC = {int(m_): tuple(map(int, t_.split('/'))) for m_, t_ in (x_.split(':') for x_ in a.time_changes.split(',') if x_)}
+def meter_at(num):
+    cur = (beats, beat_type)
+    for m_ in sorted(TC):
+        if m_ <= num: cur = TC[m_]
+    return cur
+def bar_at(num): return 16 * meter_at(num)[0] // meter_at(num)[1]
 
 sts = v.parse(a.pdf, NP, tuple(CLEFS))
 
@@ -86,7 +94,7 @@ for s in sts:
 for k in range(NP):      # a whole-bar rest glyph is read as 16 sixteenths; make it the bar length (6/8, 3/4, ...)
     for g_ in range(NB):
         for voice in stream[k][g_]:
-            if len(voice) == 1 and voice[0]['rest'] and voice[0]['dur'] == 16 and BAR != 16: voice[0] = dict(voice[0], dur=BAR)
+            if len(voice) == 1 and voice[0]['rest'] and voice[0]['dur'] == 16 and bar_at(g_ + first) != 16: voice[0] = dict(voice[0], dur=bar_at(g_ + first))
 flat = {k: [(g_, e) for g_ in range(NB) for voice in stream[k][g_] for e in voice] for k in range(NP)}
 
 # ties
@@ -171,13 +179,14 @@ def part_xml(k):
             clef = {'G': '<sign>G</sign><line>2</line>', 'G8': '<sign>G</sign><line>2</line><clef-octave-change>-1</clef-octave-change>', 'F': '<sign>F</sign><line>4</line>'}[CLEFS[k]]
             o.append(f'<attributes><divisions>4</divisions><key><fifths>{a.key}</fifths></key><time><beats>{beats}</beats><beat-type>{beat_type}</beat-type></time><clef>{clef}</clef></attributes>')
             if k == 0 and a.tempo: o.append(f'<direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>{a.tempo}</per-minute></metronome></direction-type><sound tempo="{a.tempo}"/></direction>')
+        if g_ and num in TC: o.append(f'<attributes><time><beats>{TC[num][0]}</beats><beat-type>{TC[num][1]}</beat-type></time></attributes>')
         for vi, voice in enumerate(stream[k][g_]):
             if vi: o.append(f'<backup><duration>{sum(e["dur"] for e in stream[k][g_][0])}</duration></backup>')
             for ei, e in enumerate(voice):
                 tstart = e.get('tie', False); tstop = id(e) in tie_end
                 for pi_ in range(max(1, len(e['p']))):
                     s = '<note>' + ('<chord/>' if pi_ else '')
-                    if e['rest']: s += '<rest measure="yes"/>' if e['dur'] == BAR else '<rest/>'
+                    if e['rest']: s += '<rest measure="yes"/>' if e['dur'] == bar_at(num) else '<rest/>'
                     else:
                         idx = e['p'][pi_]; st = STEPN[idx % 7]; oc = idx // 7 - (1 if CLEFS[k] == 'G8' else 0); al = e.get('alt', {}).get(idx, altered.get(st, 0))
                         s += f'<pitch><step>{st}</step>' + (f'<alter>{al}</alter>' if al else '') + f'<octave>{oc}</octave></pitch>'
@@ -203,6 +212,6 @@ bad = 0
 for g_ in range(NB):
     for k in range(NP):
         tot = [sum(e['dur'] for e in voice) for voice in stream[k][g_]]
-        want = BAR if (g_ or not pickup) else None
-        if any(t != BAR for t in tot) and want: print('BAR SUM', PARTS[k], 'bar', g_ + first, tot); bad += 1
+        want = bar_at(g_ + first) if (g_ or not pickup) else None
+        if any(t != want for t in tot) and want: print('BAR SUM', PARTS[k], 'bar', g_ + first, tot); bad += 1
 print(f'{NB} bars{" (pickup + " + str(NB - 1) + ")" if pickup else ""}, {NP} parts, ties {sum(1 for k in range(NP) for _, e in flat[k] if e["tie"])}, lyrics {len(lyr)}, bars to fix: {bad}')

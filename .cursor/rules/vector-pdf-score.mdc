@@ -109,6 +109,11 @@ Repeat signs and endings are still written by hand into the MusicXML
 (`<barline><repeat/>`, `<ending number="1" type="start|stop|discontinue">`), as are cut time
 (`<time symbol="cut">`) and accents (`<articulations><accent/>`). A bar whose unused voice
 prints a half rest beside quarter rests sums too long: give that bar with `--override`.
+Whole notes are read (they were counted as quarters), and `--time-changes "8:3/2,9:4/4"` writes a
+new time signature at the given measure numbers and checks each bar against its own length (A la
+claire fontaine: 4/4 with 3/2 bars). Look at the right end of each system for a printed change:
+it applies to the next bar. Triplets still need hand edits (see Sussex Mummers Carol: scale
+`<divisions>` by 3, give the three notes `<time-modification>` 3:2 and a `<tuplet>` start and stop).
 Ligatures (U+FB01) and a stray `>` or `&quot;` in a lyric need a search and replace.
 
 Tuplets, grace notes, whole notes, 16th rests and
