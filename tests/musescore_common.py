@@ -29,10 +29,10 @@ class FakeBridge:
         async for message in ws:
             request = json.loads(message)
             self.requests.append(request)
-            reply = {"id": request["id"], "bridge": self.bridge, "mscoreVersion": self.mscore}
             if request.get("token") != TOKEN:
-                reply.update(ok=False, error="unauthorised")
+                reply = {"id": request["id"], "ok": False, "error": "unauthorised"}
             else:
+                reply = {"id": request["id"], "bridge": self.bridge, "mscoreVersion": self.mscore}
                 try:
                     reply.update(ok=True, result=self.answer(request["method"], request["args"]))
                 except KeyError as exc:

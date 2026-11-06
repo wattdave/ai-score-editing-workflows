@@ -1,5 +1,6 @@
 """MuseScore client: plug-in install, version checks, token and error handling."""
 
+import json
 import stat
 import pytest
 
@@ -101,3 +102,36 @@ async def test_real_port_is_guarded() -> None:
 
 def test_version_text() -> None:
     assert version_text(40705) == "4.7.5"
+
+
+def test_unauthorised_reply_carries_no_versions() -> None:
+    text = install.TEMPLATE.read_text()
+    start = text.index('request.token !== root.token')
+    branch = text[start:text.index("} else {", start)]
+    assert "unauthorised" in branch and "bridgeVersion" not in branch and "mscoreVersion" not in branch
+
+
+async def test_late_reply_from_a_timed_out_call_is_dropped(fake) -> None:
+    import asyncio
+    release = asyncio.Event()
+    state = {"slow": True}
+
+    async def serve(ws):
+        async for message in ws:
+            request = json.loads(message)
+            if state["slow"]:
+                state["slow"] = False
+                await release.wait()  # answer the first call only after its timeout
+                await ws.send(json.dumps({"id": request["id"], "ok": True, "result": "late"}))
+            else:
+                await ws.send(json.dumps({"id": request["id"], "ok": True, "result": "fresh"}))
+
+    import websockets
+    async with websockets.serve(serve, "127.0.0.1", 0) as server:
+        port = server.sockets[0].getsockname()[1]
+        async with MuseScoreClient(port=port, token=TOKEN, timeout=0.2) as client:
+            with pytest.raises(MuseScoreError, match="did not answer"):
+                await client.call("Slow")
+            release.set()
+            await asyncio.sleep(0.1)  # the late reply is now waiting on the socket
+            assert await client.call("Next") == "fresh"

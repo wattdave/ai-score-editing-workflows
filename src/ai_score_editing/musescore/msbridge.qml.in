@@ -1341,11 +1341,13 @@ MuseScore {
         } catch (e) {
             return;
         }
-        var reply = { id: request.id, bridge: root.bridgeVersion, mscoreVersion: root.mscoreVersion };
+        var reply;
         if (request.token !== root.token) {
-            reply.ok = false;
-            reply.error = "unauthorised";
+            // No versions here: MuseScore listens on every interface, so an
+            // unauthenticated caller must learn nothing about this install.
+            reply = { id: request.id, ok: false, error: "unauthorised" };
         } else {
+            reply = { id: request.id, bridge: root.bridgeVersion, mscoreVersion: root.mscoreVersion };
             try {
                 reply.result = dispatch(request.method, request.args || {});
                 reply.ok = true;
