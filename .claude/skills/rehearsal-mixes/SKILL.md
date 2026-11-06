@@ -23,7 +23,10 @@ score is not changed.
    refuses to run if any voice plays something else.
 3. **One note per staff.** If a voice staff has chords or divisi, the
    rendered sound may drop notes. Offer the `playback-divisi-split` skill
-   first to build a playback copy.
+   first to build a playback copy. If every note must sound, use its
+   extra-staves mode: each part gets a "<part> div" staff, so a four-part
+   choir with divisi becomes up to ten staves, and the mixes are then named
+   "Alto 1 only", "Alto 1 div only", and so on (21 files for ten staves).
 4. **Staff names.** Voices are the staves with lyrics; file names come from
    staff names. Name unnamed staves with `--name 1=Soprano` (repeatable).
    For an instrumental score, `--all-parts` makes every staff a part.
@@ -68,7 +71,11 @@ uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli --expect-file SCORE rehearsa
   [--bitrate 192k] [--loudness -16] [--keep-stems]
 ```
 
-Allow about 10 seconds per staff: each staff is exported twice, because an
+Pass `--expect-file` an **absolute** path: a bare file name is resolved
+against the working directory and the export stops with "active score
+mismatch". Ten staves take over ten minutes including the proof-listen, longer
+than a foreground command may run, so start it in the background and wait for
+it. Allow about 10 seconds per staff: each staff is exported twice, because an
 export's opening can carry the previous staff's voice. That does not cure a
 stale render cache (see Afterwards). Read
 `--help` before composing unusual invocations. Quote `--name` values that

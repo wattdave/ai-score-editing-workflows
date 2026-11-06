@@ -75,7 +75,8 @@ class Finding:
 
     def line(self) -> str:
         span = f" [{self.start:.1f}-{self.end:.1f} s]" if self.start is not None else ""
-        return f"{self.severity.upper():7s} {self.check:10s}{span} {self.message}"
+        names = f" ({', '.join(self.files)})" if self.files else ""
+        return f"{self.severity.upper():7s} {self.check:10s}{span} {self.message}{names}"
 
 
 @dataclass

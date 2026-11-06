@@ -6,6 +6,8 @@ description: >
   staves, fill unison openings, and let resting voices double the melody.
   Use when playback (one vocal sample or MIDI channel per singer) drops
   stacked notes, or when the user asks for a separate playback version.
+  For rehearsal mixes where every note must sound, use the extra-staves mode
+  (one "div" staff per part) rather than the one-staff-per-part rules.
 ---
 
 # Playback Divisi Split
@@ -19,7 +21,13 @@ import and save the result.
 
 ## Ask the user first
 
-These choices change the notes. Do not assume them:
+These choices change the notes. Ask before building anything; guessing here
+cost a rebuild (the first attempt dropped about 160 chord notes and replaced
+a divided part's notes with rests, and the user had to correct both):
+
+0. **Must every note be audible?** For rehearsal mixes the answer is almost
+   always yes. Then use the extra-staves mode below and skip the rest of this
+   list: no note is dropped or moved.
 
 1. **Unison passages.** Does the whole choir sing the opening (or any passage)
    printed on one staff? Get the last unison bar, and state whether it is a
@@ -30,7 +38,31 @@ These choices change the notes. Do not assume them:
    chord, where do the extra notes go? The script's rule is described below;
    offer it, or take the user's rule and edit the script.
 
-## Run
+## Extra staves: every note audible (rehearsal mixes)
+
+`extra_staves.py` adds a second staff, named "<part> div", after every part:
+
+- where the part sings one note, the div staff **duplicates** it (never rests,
+  so a half-divided part still sounds as a full line on both staves);
+- where the part has a chord, the highest note stays on the main staff and the
+  lowest goes on the div staff; lyrics are copied to both.
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/scripts/extra_staves.py "Score.xml" "Score divisi.xml"
+```
+
+It checks that every source note sounds on one of the two staves and exits 1
+(printing `MISSING ...`) if not. Chords of three or more notes are refused:
+decide with the user which notes to give which staff, or add more staves.
+Ten staves (five parts times two) is normal for SATB with divisi in every part.
+Check the staff count with the user before building. Then, in Sibelius, each
+staff needs a **different** Cantai voice (see `rehearsal-mixes`), and the play
+order and repeats must be set on the playback copy (`play-order`).
+
+Tested on All I Want For Christmas Is You (SATB plus A2): 253 chords split,
+2006 of 2006 notes accounted for.
+
+## One staff per part (rules below)
 
 ```bash
 uv run --project "${CLAUDE_SKILL_DIR}" python ${CLAUDE_SKILL_DIR}/scripts/playback_split.py \
@@ -40,6 +72,10 @@ uv run --project "${CLAUDE_SKILL_DIR}" python ${CLAUDE_SKILL_DIR}/scripts/playba
 - `--melody`: the part carrying the tune (default `P1`).
 - `--unison-until N`: every part copies the melody for bar indexes 1..N.
 - `--no-double-rests`: leave other parts' rests as written.
+- `--no-borrow`: drop a chord's extra notes instead of moving them onto a
+  neighbouring part. Borrowing overwrote the bass line's own notes; use this
+  when each voice must keep its written line (the lowest staff then keeps its
+  lowest note). The dropped notes are logged.
 
 The rules:
 
@@ -96,4 +132,14 @@ Then:
   bridge and this script count it as bar 1.
 - **Rebuilding from a stale XML.** Apply MusicXML fixes (for example a missing
   key signature) to the source XML first, then regenerate the playback copy
-  from it.
+  from it. Fixes made only in the engraved `.sib` (deleting stray lyrics,
+  hyphens) do not reach a playback copy built from the old XML: on All I Want
+  For Christmas the divisi copy still had 118 junk "." lyrics the engraved
+  score had lost. After building, compare lyrics and notes with the engraved
+  score, and apply the same Sibelius fixes to both.
+- **Losing notes silently.** Count notes before and after. `extra_staves.py`
+  does it; with `playback_split.py` read every decision-log line.
+- **A hyphen that vanishes.** Adding staves changes the spacing, and Sibelius
+  drops a lyric hyphen between crowded syllables without warning. Export a PNG
+  (`sibelius-cli export --format png`) and look; a system break (`set-break`)
+  after the crowded bar restored "real-ly" in bar 60.
