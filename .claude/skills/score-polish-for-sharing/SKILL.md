@@ -201,8 +201,10 @@ Use `render`/`score-snapshot` and a PDF after each group of changes.
   source print (dotted quarter = 108 stays that way). Importers and the vector
   reader write `<sound tempo>` in quarters per minute, so a 6/8 or 9/8 piece
   comes in as quarter = 162 where the print says dotted quarter = 108: replace
-  the text (`query --type Text`, then `set` or `delete` and re-add) and check
-  playback speed is unchanged.
+  the text (`query --staff system --type SystemTextItem` finds `text.system.tempo`;
+  `set` with `"prop":"Text"` and a value like `\\fOpus Text\\q.\\f_\\ = 108`
+  in the JSON, which draws a dotted quarter; plain `q.` prints as letters) and
+  check playback speed is unchanged.
 - **Duplicate markings from the scan:** OMR often repeats a dynamic on both
   staves (`f` twice in Deck the Halls where the print has one). Delete the
   extra Text object (`query --type Text`, then `delete` with its `index`).
