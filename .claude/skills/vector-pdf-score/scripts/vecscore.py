@@ -79,6 +79,9 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F'), split_voices='aut
                             ch=normalize_glyph(c['c'])
                             if ch!=' ': glyphs.append((c['origin'][0],c['origin'][1],ch,s['font']))
         words=[w for w in pg.get_text("words")]
+        # some Opus exports draw the augmentation dot as '.' (U+F02E) and have no '™' at all; '.' is also the staccato
+        # glyph, so on such a page a '.' counts as a dot only when it sits beside a notehead or rest (see dots below)
+        DOTC='™' if any(c=='™' for x,y,c,f in glyphs) else '.'
         sysmap=system_of(pg,st) if not nstaves_per_system else None
         for si,s in enumerate(st):
             if nstaves_per_system: sysi=si//nstaves_per_system; part=si%nstaves_per_system
@@ -101,7 +104,7 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F'), split_voices='aut
             bl=[(x,w) for x,w in bl if x>s['x0']+30]       # drop the system-start line
             # a repeat sign or final barline prints a thick and a thin line (and dots) close together: one bar edge, kind noted
             bars=[]; marks={}
-            allots=[(x,y) for x,y,c,f in glyphs if c=='™']
+            allots=[(x,y) for x,y,c,f in glyphs if c==DOTC]
             # repeat dots: two dots one staff space apart straddling the middle line (the glyph is also the augmentation dot)
             rdots=[(x,y) for x,y in allots if abs(y-(top+2*sp)+sp/2)<sp*0.3 and any(abs(x2-x)<0.5 and abs(y2-(y+sp))<sp*0.3 for x2,y2 in allots)
                    or abs(y-(top+2*sp)-sp/2)<sp*0.3 and any(abs(x2-x)<0.5 and abs(y2-(y-sp))<sp*0.3 for x2,y2 in allots)]
@@ -132,7 +135,11 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F'), split_voices='aut
                 return d <= 4.2*sp and all(d <= band_dist(o['top'], o['bottom'], y) for o in st)
             heads=[(x,y,c) for x,y,c,f in glyphs if c in H_GLYPH and mine(y) and x>s['x0']+15]
             rests=[(x,y,c) for x,y,c,f in glyphs if c in REST and mine(y) and x>s['x0']+15]
-            dots=[(x,y) for x,y,c,f in glyphs if c=='™' and mine(y) and (x,y) not in rdots]
+            dots=[(x,y) for x,y,c,f in glyphs if c==DOTC and mine(y) and (x,y) not in rdots]
+            if DOTC=='.': dots=[(x,y) for x,y in dots if any(sp*0.9<x-hx<sp*2.6 and abs(y-hy)<sp*0.6 for hx,hy,hc in heads+rests)]
+            # fermatas: 'U' above (upright) and 'u' below (inverted), nearest this staff
+            fermatas=[(x,'upright' if c=='U' else 'inverted') for x,y,c,f in glyphs if c in 'Uu' and band_dist(top,bot,y)<=6*sp
+                      and all(band_dist(top,bot,y)<=band_dist(o['top'],o['bottom'],y) for o in st)]
             flags=[(x,y,c) for x,y,c,f in glyphs if c in 'jJ' and mine(y)]
             stems=[(x,y0,y1) for x,y0,y1,w in vlines if 0.3<w<=BARW and y1-y0>sp*2 and y1>top-3.2*sp and y0<bot+3.2*sp and s['x0']<x<s['x1']]
             ev=[]; raw=[]
@@ -198,7 +205,7 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F'), split_voices='aut
                         num=''.join(c for x,y,c,f in sorted(glyphs) if c.isdigit() and r.x0<=x<=r.x1 and y<top)
                         bar_ev[bi].append(dict(x=r.x0,p=[],dur=0,rest=True,multirest=int(num) if num else 1,dot=False,y=r.y0))
             while bar_ev and not bar_ev[-1]: bar_ev.pop(); nbars-=1
-            st_d=dict(page=pi,sys=sysi,part=part,clef=clef,bars=bar_ev,edges=edges,marks=marks,staff=s,curves=curves,words=words)
+            st_d=dict(page=pi,sys=sysi,part=part,clef=clef,bars=bar_ev,edges=edges,marks=marks,staff=s,curves=curves,words=words,fermatas=fermatas)
             if split_voices!='off':
                 st_d['voices']=[split_bar_voices([h for h in raw if edges[bi]<=h['x']<edges[bi+1]],[e for e in bar_ev[bi] if e['rest']],
                                                  bar_ev[bi],stems,beams,flags,dots,s) for bi in range(nbars)]
@@ -233,6 +240,9 @@ def split_bar_voices(heads, rests, merged, stems, beams, flags, dots, staff):
                         rest=False,dot=dot,up=up,hidx=hs_,beam=beam,flag=flag,stem=True))
     ups=[e for e in sev if e['up']]; downs=[e for e in sev if not e['up']]
     together=any(abs(a['x']-b['x'])<sp*1.5 for a in ups for b in downs)
+    # a whole note (no stem) at the x of a stemmed note sounds with it but cannot share its voice
+    wholes=[h for h in heads if h['c']=='w']
+    together=together or any(abs(o['x']-h['x'])<sp*2 for h in wholes for o in sev)   # a unison whole sits a head width aside
     offrest=any(abs(r['y']-mid)>=sp*0.5 for r in rests if not r.get('multirest'))
     if not together and not offrest: return None
     if not together and not any(abs(r['y']-mid)>=sp*0.5 and not r.get('multirest') for r in rests if (r['y']<mid)==(not ups)):
@@ -243,8 +253,9 @@ def split_bar_voices(heads, rests, merged, stems, beams, flags, dots, staff):
         if i in stemmed: continue
         base=16 if h['c']=='w' else 8 if h['c']=='˙' else 4
         e=dict(x=h['x'],p=[h['p']],dur=base*3//2 if h['dot'] else base,rest=False,dot=h['dot'],stem=False)
-        other=[o for o in sev if abs(o['x']-h['x'])<sp*1.5]
-        if other and h['p']>max(max(o['p']) for o in other): v1.append(e)
+        other=[o for o in sev if abs(o['x']-h['x'])<sp*(2 if h['c']=='w' else 1.5)]
+        if other and h['c']=='w' and len({o['up'] for o in other})==1: (v2 if other[0]['up'] else v1).append(e)   # opposite the stems
+        elif other and h['p']>max(max(o['p']) for o in other): v1.append(e)
         elif other and h['p']<min(min(o['p']) for o in other): v2.append(e)
         else: v1.append(e); v2.append(dict(e))
     for r in rests:

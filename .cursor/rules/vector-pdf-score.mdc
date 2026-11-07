@@ -79,6 +79,22 @@ uv run --with pymupdf python -I "${CLAUDE_SKILL_DIR}/scripts/vecscore_musicxml.p
   (`dur` in sixteenths, `x` is only used to place lyrics, `p` is a list of note names; an empty list is a rest).
   `page`, `sys` and `bar` count from 0, `part` from the top staff of a system.
 - `--copy-lyrics FROM:TO` copies one staff's syllables onto another staff that has none in a system.
+- Lyric rows: by default every row that follows the one before it under a staff is kept (the first
+  within 48 pt), up to the next staff, so verses 3 and 4 are read; skipped rows are printed. A footer or
+  copyright line and tokens with `=` are never lyrics. `--lyric-reach 90` sets a fixed reach instead.
+  `--skip-word "Revels,"` (repeatable) or `--skip-words skip.json` (a JSON list) for words with commas.
+- What the print has but the reader cannot see: `--metronome dotted-quarter=60` (or `half=86`; the
+  sound tempo is written in quarters), `--tempo-text Langsam`, `--cut-time`, `--breaks 5,9,p13`
+  (system starts, `p` = page), `--final-barline`, `--abbrevs S/A,T/B`, `--rights auto` (the copyright
+  line printed on the page, verbatim; nothing when none is printed), and `--patch patch.json`:
+  `[{"type":"fermata","measure":14,"part":1,"beat":3}, {"type":"slur","measure":2,"from":1,"to":2.5},
+  {"type":"barline","measure":8,"style":"repeat-end"}, {"type":"volta","number":1,"from":7,"to":8},
+  {"type":"rehearsal","measure":5,"text":"A"}, {"type":"words","measure":1,"text":"Solo"},
+  {"type":"dynamics","measure":1,"part":2,"text":"mf"}]` (measures as numbered in the output, parts
+  from 1, beats in quarters from 1; `voice` defaults to 1, `note` (0-based) may replace `beat`).
+- Fermatas (`U` above, `u` below) are read and put on the note under them. A whole note beside a
+  stemmed note (unison or not) is a second voice. Pages that print the dot as `.` (no `™`) are read.
+- Beams are not written: run `beaming-repair` (`fix_beams.py --scope all`).
 - **Name parts Soprano, Alto, Tenor, Bass (with numbers), never "Women" or "Men".** Sibelius picks the
   instrument from the part name on import; generic names give staves without a vocal range
   (everything below F3 flagged out of range, no choir sound).
@@ -135,7 +151,7 @@ in a pair on the middle line beside a barline).
 
 **Not read**
 - Tuplets in the reader, grace notes, 16th rests and shorter, key changes, voltas as objects,
-  dynamics, hairpins, tempo and expression text, slurs, cross-staff notes, the bar count of a
+  dynamics, hairpins, tempo and expression text, slurs (use `--patch`), cross-staff notes, the bar count of a
   multi-bar rest beyond the number printed above it.
 - Systems with different numbers of staves: `vecscore_musicxml.py` assumes every system has the
   same staves. Read a mixed page with `vecscore.py --staves auto` and assemble the MusicXML from

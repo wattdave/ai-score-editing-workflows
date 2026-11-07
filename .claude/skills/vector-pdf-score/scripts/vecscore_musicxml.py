@@ -14,6 +14,7 @@ import argparse, html, json, re, sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pymupdf
 import vecscore as v
+import vecscore_post as post
 
 ap = argparse.ArgumentParser()
 ap.add_argument('pdf'); ap.add_argument('out')
@@ -28,6 +29,16 @@ ap.add_argument('--override', help='JSON file: [{"page":P,"sys":S,"part":K,"bar"
 ap.add_argument('--copy-lyrics', action='append', default=[], help='FROM:TO part indexes: copy lyrics onto a staff that has none in a system')
 ap.add_argument('--skip-words', default='p,mp,mf,pp,ppp,f,ff,fff,rit.,rall.,accel.,cresc.,dim.,poco,retenuto,legato,staccato,Broad,Allegro,Andante,Moderato,Adagio', help='lyric rows to ignore (comma list); words of one letter are kept unless listed')
 ap.add_argument('--split-voices', default='auto', choices=('auto', 'off'), help='auto: a staff with two voices in a bar (stems up and down together) is written as voice 1 and 2, with hidden rests where a voice has none printed')
+ap.add_argument('--skip-word', action='append', default=[], help='one more word to skip (may contain a comma, e.g. "Revels,"); repeatable')
+ap.add_argument('--lyric-reach', default='auto', help='auto: rows below a staff are kept while they follow each other (the first within 48 pt), up to the next staff; or a number of pt below the staff bottom')
+ap.add_argument('--metronome', default='', help='printed metronome mark, e.g. "dotted-quarter=60", "half=86" (sound tempo is written in quarters)')
+ap.add_argument('--tempo-text', default='', help='printed tempo words, e.g. "Langsam" (bold, above the first bar)')
+ap.add_argument('--cut-time', action='store_true', help='write the time signature with symbol="cut" (2/2)')
+ap.add_argument('--breaks', default='', help='measure numbers that start a system, e.g. "5,9" (<print new-system>); "p12" starts a page')
+ap.add_argument('--final-barline', action='store_true', help='light-heavy barline after the last measure')
+ap.add_argument('--abbrevs', default='', help='part abbreviations in part order, e.g. "S/A,T/B"')
+ap.add_argument('--rights', default='', help='"auto": the copyright line printed on the page, verbatim (nothing if none is printed); or the text')
+ap.add_argument('--patch', help='JSON list of fermatas, slurs, barlines, voltas, rehearsal marks, words, dynamics (see vecscore_post.apply_patch)')
 a = ap.parse_args()
 PARTS = a.parts.split(','); CLEFS = a.clefs.split(','); NP = len(PARTS)
 STEPN = 'CDEFGAB'
@@ -132,6 +143,17 @@ for k in range(NP):      # a whole-bar rest glyph is read as 16 sixteenths; make
     for g_ in range(NB):
         for voice in stream[k][g_]:
             if len(voice) == 1 and voice[0]['rest'] and voice[0]['dur'] == 16 and bar_at(g_ + first) != 16: voice[0] = dict(voice[0], dur=bar_at(g_ + first))
+nferm = 0      # printed fermatas: on the nearest event of the staff (any voice), within one staff space
+for k in range(NP):
+    for s_ in {id(x_): x_ for x_ in src[k] if x_}.values():
+        sp_ = s_['staff']['sp']
+        evs = [(vi, e) for g_ in range(NB) if src[k][g_] is s_ for vi, voice in enumerate(stream[k][g_]) for e in voice if not e.get('hidden')]
+        for fx, ft in s_.get('fermatas', []):
+            near = [(vi, e) for vi, e in evs if abs(e['x'] - fx) < sp_ * 1.2]
+            if len({vi for vi, e in near}) > 1: near = [(vi, e) for vi, e in near if vi == (0 if ft == 'upright' else max(v_ for v_, _ in near))]
+            if any(e.get('fermata') for vi, e in near): continue   # one fermata per note (two-voice chords print one above, one below)
+            for vi, e in near: e['fermata'] = ft
+            nferm += bool(near)
 flat = {k: [(g_, e) for g_ in range(NB) for voice in stream[k][g_] for e in voice] for k in range(NP)}
 
 # ties
@@ -154,19 +176,40 @@ tie_end = {id(flat[k][i + 1][1]) for k in range(NP) for i in range(len(flat[k]) 
 
 # lyrics
 pdf = pymupdf.open(a.pdf)
-skip = set(a.skip_words.split(','))
+skip = post.load_skip_words(a.skip_words, a.skip_word)
+reach = None if a.lyric_reach == 'auto' else float(a.lyric_reach)
+rights_lines = []
 words = {}
 for pi, pg in enumerate(pdf):
     stf = sorted({(s['staff']['top'], s['staff']['bottom'], s['sys'], s['part']) for s in sts if s['page'] == pi})
     if not stf: continue
-    for w in pg.get_text('words'):
+    pw = pg.get_text('words'); foot = post.footer_lines(pw)
+    if (c_ := post.copyright_text(pw)): rights_lines.append(c_)
+    for w in pw:
         t = w[4]
-        if t in skip or re.fullmatch(r'[0-9]+\.?', t) or t.startswith('(') or w[2] < 60 or any(c in t for c in 'œ™˙&?#°¢‹Ó‰Œ∑') or v.has_music_code(t): continue
+        if (w[5], w[6]) in foot or ('=' in t and len(t) > 1): continue
+        if t in skip or re.fullmatch(r'[0-9]+\.?', t) or t.startswith('(') or w[2] < 60 or any(c in t for c in 'œ™˙&#°¢‹Ó‰Œ∑') or ('?' in t and not re.search(r'[^\W\d_]{2}', t)) or v.has_music_code(t): continue
         cand = [x for x in stf if x[1] <= w[1] + 3]
         if not cand or w[1] < stf[0][0] - 40: continue
         top, bot, sysi, part = max(cand, key=lambda x: x[1])
-        if w[3] - bot > 48: continue
-        words.setdefault((pi, sysi, part), []).append(((w[0] + w[2]) / 2, t, w[1]))
+        if w[3] - bot > (reach if reach is not None else 48 * 8): continue
+        words.setdefault((pi, sysi, part), []).append(((w[0] + w[2]) / 2, t, w[1], w[3]))
+    if reach is None:     # keep the rows that follow each other under the staff, up to the next staff
+        for (top, bot, sysi, part) in stf:
+            ws = words.get((pi, sysi, part))
+            if not ws: continue
+            nxt = min((t_ for t_, b_, _, _ in stf if t_ > bot), default=1e9)
+            rows = {}
+            for w_ in ws: rows.setdefault(round(w_[2]), []).append(w_)
+            tops = sorted(rows); grp = []
+            for y_ in tops:
+                if grp and y_ - grp[-1][-1] <= 5: grp[-1].append(y_)
+                else: grp.append([y_])
+            bots = [max(w_[3] for y_ in g for w_ in rows[y_]) for g in grp]
+            kept = set(post.keep_rows(bots, bot, nxt, 48, sp=[s for s in sts if s['page'] == pi and s['sys'] == sysi and s['part'] == part][0]['staff']['sp']))
+            drop = [w_ for g, b_ in zip(grp, bots) if b_ not in kept for y_ in g for w_ in rows[y_]]
+            if drop: print('lyric rows skipped under', PARTS[part], 'page', pi, 'system', sysi, ':', ' '.join(w_[1] for w_ in sorted(drop, key=lambda w_: (w_[2], w_[0])))[:80])
+            words[(pi, sysi, part)] = [w_ for w_ in ws if w_ not in drop]
 words_rows = {}
 for key_, lst_ in words.items():
     ys_ = sorted({round(w_[2]) for w_ in lst_}); rows_ = []
@@ -174,7 +217,7 @@ for key_, lst_ in words.items():
         if rows_ and y_ - rows_[-1][-1] <= 5: rows_[-1].append(y_)
         else: rows_.append([y_])
     for r_, grp in enumerate(rows_):
-        words_rows.setdefault(r_, {})[key_] = [(cx_, t_) for cx_, t_, y_ in lst_ if round(y_) in grp]
+        words_rows.setdefault(r_, {})[key_] = [(cx_, t_) for cx_, t_, y_, _ in lst_ if round(y_) in grp]
 lyr_v = []
 for vrow in sorted(words_rows):
     words = words_rows[vrow]; lyr = {}
@@ -215,8 +258,9 @@ def part_xml(k):
         o.append(f'<measure number="{num}"' + (' implicit="yes"' if pickup and g_ == 0 else '') + '>')
         if g_ == 0:
             clef = {'G': '<sign>G</sign><line>2</line>', 'G8': '<sign>G</sign><line>2</line><clef-octave-change>-1</clef-octave-change>', 'F': '<sign>F</sign><line>4</line>'}[CLEFS[k]]
-            o.append(f'<attributes><divisions>4</divisions><key><fifths>{a.key}</fifths></key><time><beats>{beats}</beats><beat-type>{beat_type}</beat-type></time><clef>{clef}</clef></attributes>')
-            if k == 0 and a.tempo: o.append(f'<direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>{a.tempo}</per-minute></metronome></direction-type><sound tempo="{a.tempo}"/></direction>')
+            o.append(f'<attributes><divisions>4</divisions><key><fifths>{a.key}</fifths></key><time' + (' symbol="cut"' if a.cut_time else '') + f'><beats>{beats}</beats><beat-type>{beat_type}</beat-type></time><clef>{clef}</clef></attributes>')
+            if k == 0 and (a.metronome or a.tempo_text): o.append(post.metronome_xml(a.metronome, a.tempo_text))
+            if k == 0 and a.tempo and not a.metronome: o.append(f'<direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>{a.tempo}</per-minute></metronome></direction-type><sound tempo="{a.tempo}"/></direction>')
         if g_ and num in TC: o.append(f'<attributes><time><beats>{TC[num][0]}</beats><beat-type>{TC[num][1]}</beat-type></time></attributes>')
         for vi, voice in enumerate(stream[k][g_]):
             if vi: o.append(f'<backup><duration>{sum(e["dur"] for e in stream[k][g_][0])}</duration></backup>')
@@ -234,6 +278,7 @@ def part_xml(k):
                     if tstart and not e['rest']: s += '<tie type="start"/>'
                     s += f'<voice>{vi + 1}</voice><type>{ty}</type>' + ('<dot/>' if dot else '')
                     nt = ('<tied type="stop"/>' if tstop and not e['rest'] else '') + ('<tied type="start"/>' if tstart and not e['rest'] else '')
+                    if e.get('fermata') and pi_ == 0: nt += f'<fermata type="{e["fermata"]}"/>'
                     if nt: s += f'<notations>{nt}</notations>'
                     if pi_ == 0:
                         for vn_, lv_ in enumerate(lyr_v):
@@ -242,10 +287,20 @@ def part_xml(k):
                     o.append(s + '</note>')
         o.append('</measure>')
     o.append('</part>'); return '\n'.join(o)
-ident = (f'<identification><creator type="composer">{html.escape(a.composer)}</creator></identification>' if a.composer else '')
+rights = (rights_lines[0] if rights_lines else '') if a.rights == 'auto' else a.rights
+if a.rights == 'auto': print('rights:', repr(rights) if rights else 'no copyright line printed, none written')
+ident = ('<identification>' + (f'<creator type="composer">{html.escape(a.composer)}</creator>' if a.composer else '')
+         + (f'<rights>{html.escape(rights)}</rights>' if rights else '') + '</identification>') if a.composer or rights else ''
 head = ('<?xml version="1.0" encoding="UTF-8"?><score-partwise version="3.0">' + (f'<work><work-title>{html.escape(a.title)}</work-title></work>' if a.title else '') + ident + '<part-list>'
         + ''.join(f'<score-part id="P{i + 1}"><part-name>{html.escape(n_)}</part-name></score-part>' for i, n_ in enumerate(PARTS)) + '</part-list>')
-open(a.out, 'w').write(head + '\n'.join(part_xml(k) for k in range(NP)) + '</score-partwise>')
+xml = head + '\n'.join(part_xml(k) for k in range(NP)) + '</score-partwise>'
+if a.abbrevs: xml = post.abbreviations(xml, a.abbrevs.split(','))
+if a.breaks:
+    bk = [x_.strip() for x_ in a.breaks.split(',') if x_.strip()]
+    xml = post.breaks(xml, [int(x_) for x_ in bk if not x_.startswith('p')], [int(x_[1:]) for x_ in bk if x_.startswith('p')])
+if a.patch: xml = post.apply_patch(xml, json.load(open(a.patch)))
+if a.final_barline and '<barline location="right"><bar-style>' not in xml.rsplit('<measure ', 1)[-1]: xml = post.final_barline(xml)
+open(a.out, 'w').write(xml)
 bad = 0
 for g_ in range(NB):
     for k in range(NP):
@@ -254,4 +309,5 @@ for g_ in range(NB):
         if any(t != want for t in tot) and want: print('BAR SUM', PARTS[k], 'bar', g_ + first, tot); bad += 1
 nhid = sum(1 for k in range(NP) for g_ in range(NB) if any(e.get('hidden') for voice in stream[k][g_] for e in voice))
 if nhid: print(f'two voices on a staff in {len(split_bars)} bars; hidden rests added in {nhid} (check them against the print)')
+if nferm: print(f'fermatas {nferm}')
 print(f'{NB} bars{" (pickup + " + str(NB - 1) + ")" if pickup else ""}, {NP} parts, ties {sum(1 for k in range(NP) for _, e in flat[k] if e["tie"])}, lyrics {len(lyr)}, bars to fix: {bad}')

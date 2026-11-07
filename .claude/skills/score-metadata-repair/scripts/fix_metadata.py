@@ -5,7 +5,7 @@ Standard library only, so the skill runs without the rest of this repository.
 
 Usage:
     fix_metadata.py IN OUT [--title T] [--subtitle S] [--composer C] [--arranger A]
-        [--lyricist L] [--rights-template public-domain|in-copyright|own-arrangement]
+        [--lyricist L] [--rights-template public-domain|in-copyright|own-arrangement|verbatim]
         [--source S] [--notice N] [--year Y] [--name NAME]
         [--parts "Soprano,Alto,Tenor,Bass"] [--normalize-title]
 
@@ -196,6 +196,10 @@ def rights_text(template: str, source: str | None, notice: str | None, year: str
         if not source:
             raise ValueError("--rights-template public-domain needs --source")
         return f"Public domain. Transcribed from {source.strip()} for rehearsal use."
+    if template == "verbatim":
+        if not notice:
+            raise ValueError("--rights-template verbatim needs --notice (the copyright line exactly as printed)")
+        return notice.strip()
     if template == "in-copyright":
         if not notice:
             raise ValueError("--rights-template in-copyright needs --notice (the original copyright notice)")
@@ -375,7 +379,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--composer")
     ap.add_argument("--arranger")
     ap.add_argument("--lyricist")
-    ap.add_argument("--rights-template", choices=["public-domain", "in-copyright", "own-arrangement"])
+    ap.add_argument("--rights-template", choices=["public-domain", "in-copyright", "own-arrangement", "verbatim"], help="verbatim: write --notice unchanged (only text printed on the source)")
     ap.add_argument("--source", help="public-domain: where it was transcribed from")
     ap.add_argument("--notice", help="in-copyright: the original copyright notice")
     ap.add_argument("--year", help="own-arrangement: year")
