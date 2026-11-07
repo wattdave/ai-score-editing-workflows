@@ -53,18 +53,46 @@ def frontmost() -> str:
     return osa('tell application "System Events" to return name of first process whose frontmost is true')
 
 
-def window_origin() -> tuple[int, int]:
-    # Other small windows (notification overlays) can be listed first, so look for the right size.
-    raw = osa('tell application "System Events" to tell process "Halbestunde" to return '
-              '(position of every window) & (size of every window)')
-    values = [int(float(v)) for v in raw.split(",")]
+Window = tuple[tuple[int, int], tuple[int, int]]  # (position, size)
+
+
+def parse_windows(raw: str) -> list[Window]:
+    """Parse "x1, y1, x2, y2, ..., w1, h1, w2, h2, ..." (positions, then sizes); "" means no windows."""
+    values = [int(float(v)) for v in raw.split(",") if v.strip()]
     count = len(values) // 4
     positions = list(zip(values[0:2 * count:2], values[1:2 * count:2]))
     sizes = list(zip(values[2 * count::2], values[2 * count + 1::2]))
-    for pos, size in zip(positions, sizes):
-        if size == tuple(WINDOW_SIZE):
-            return pos
-    raise SystemExit(f"No window of size {WINDOW_SIZE}; found {sizes}. Resize it or update the offsets.")
+    return list(zip(positions, sizes))
+
+
+def list_windows() -> list[Window]:
+    return parse_windows(osa('tell application "System Events" to tell process "Halbestunde" to return '
+                             '(position of every window) & (size of every window)'))
+
+
+def reopen_app() -> None:
+    """Ask the app for its main window, as clicking its Dock icon does (it may have closed every window)."""
+    osa('tell application "Halbestunde" to reopen')
+
+
+def window_origin(lookup=list_windows, reopen=reopen_app, sleep=time.sleep,
+                  attempts: int = 5, delay: float = 2.0) -> tuple[int, int]:
+    """Top-left corner of the main window, re-opening the window if the app has none."""
+    windows: list[Window] = []
+    for attempt in range(attempts):
+        windows = lookup()
+        # Other small windows (notification overlays) can be listed first, so look for the right size.
+        for pos, size in windows:
+            if size == tuple(WINDOW_SIZE):
+                return pos
+        if attempt < attempts - 1:
+            reopen()
+            sleep(delay)
+    if not windows:
+        raise SystemExit(f"Halbestunde has no window after {attempts} tries to re-open it. "
+                         "Click its Dock icon (or quit and relaunch it), then run again.")
+    raise SystemExit(f"No window of size {WINDOW_SIZE}; found {[s for _, s in windows]}. "
+                     "Resize it or update the offsets.")
 
 
 def focus() -> tuple[int, int]:

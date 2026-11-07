@@ -534,11 +534,94 @@ def check_hidden_time(root: ET.Element) -> list[dict]:
     return [finding("time-hidden", "info", f"{len(bars)} bar(s) with a hidden time signature (print-object=\"no\"), from bar {bars[0]}; Sibelius ignores this and shows them. After import run sibelius-cli hide-time-signatures --musicxml FILE.")]
 
 
+VERSE_NUMBER = re.compile(r"^\d+\.?$")
+
+
+def _voice_ends(events: list[dict]) -> dict[tuple[str, str], dict[tuple[str, str], int]]:
+    """(part, bar) -> {(staff, voice): where the voice's last note or rest ends}, in divisions."""
+    ends: dict[tuple[str, str], dict[tuple[str, str], int]] = {}
+    for e in events:
+        bar = ends.setdefault((e["part"], e["measure"]), {})
+        key = (e["staff"], e["voice"])
+        bar[key] = max(bar.get(key, 0), e["onset"] + (0 if e["grace"] else e["dur"]))
+    return ends
+
+
+def check_bar_sums(root: ET.Element, events: list[dict]) -> list[dict]:
+    """OMR bar faults: an empty first bar, an invented or padded pickup, and voices short of the meter.
+
+    Uses the per-voice onsets from parse_events. Rules and the cases behind
+    them are in references/bar-checks.md.
+    """
+    if not any(not e["rest"] and not e["grace"] for e in events):
+        return [finding("score-empty", "error", "The score has no notes: the scan returned an empty result. Scan again (Halbestunde: clean_pdf.py --pad 100).")]
+    ends = _voice_ends(events)
+    full_len = {(e["part"], e["measure"]): round(e["bar_quarters"] * e["divisions"]) for e in events}
+    sounding = {(e["part"], e["measure"]) for e in events if not e["rest"] and not e["grace"]}
+    out, pickup, short = [], [], []
+    parts = [(p.get("id"), [m for m in p.findall("measure")]) for p in root.findall("part")]
+    firsts = [(pid, ms[0].get("number")) for pid, ms in parts if ms]
+    if firsts and not any(f in sounding for f in firsts):
+        where = _bars_text(firsts)
+        out.append(finding("bar1-empty", "warn", f"Bar 1 holds no notes in any part ({where}): usually an empty leading bar the scan added. Delete it unless the print opens with a rest bar.", where))
+    for pid, measures in parts:
+        if not measures:
+            continue
+        first, last = measures[0].get("number"), measures[-1].get("number")
+        if (pid, first) not in sounding:
+            continue
+        bar1 = ends.get((pid, first), {})
+        bar1_events = [e for e in events if e["part"] == pid and e["measure"] == first and not e["grace"]]
+        full = full_len[(pid, first)]
+        length = max(bar1.values())
+        last_len = max(ends.get((pid, last), {}).values(), default=full) if last != first else full
+        reasons = []
+        if length > full:
+            reasons.append(f"a voice lasts {length} of {full} divisions")
+        if length < full:
+            if len(set(bar1.values())) > 1:
+                reasons.append(f"its voices last {sorted(set(bar1.values()))} of {full} divisions")
+            opening: dict[tuple[str, str], dict] = {}
+            for e in bar1_events:
+                key = (e["staff"], e["voice"])
+                if key not in opening or e["onset"] < opening[key]["onset"]:
+                    opening[key] = e
+            leading = sorted(v for (_, v), e in opening.items() if e["rest"])
+            if leading:
+                reasons.append(f"voice {', '.join(leading)} opens with a rest")
+            if last_len < full and length + last_len != full:
+                reasons.append(f"it lasts {length} and the last bar {last_len}, which do not add up to a bar of {full}")
+        elif last_len < full:
+            reasons.append(f"it is a full bar but the last bar lasts {last_len} of {full}, so the print probably opens with a pickup of {full - last_len}")
+        if any(e["lyrics"] and all(VERSE_NUMBER.match(t) for _, t, _ in e["lyrics"]) for e in bar1_events):
+            reasons.append("a note carries only a verse number ('1.') as its lyric")
+        if reasons:
+            pickup.append(f"{pid} bar {first}: {'; '.join(reasons)}")
+        for i, m in enumerate(measures[1:], start=1):
+            mnum = m.get("number")
+            voices = ends.get((pid, mnum))
+            # a bar split in two (implicit="yes" on one half, as Dorico writes) is short on purpose
+            split = any(n.get("implicit") == "yes" for n in measures[i - 1:i + 2])
+            if not voices or split or m.find("forward") is not None:
+                continue
+            full = full_len[(pid, mnum)]
+            if max(voices.values()) >= full or mnum != last:
+                low = sorted(f"{s}/{v}" for (s, v), end in voices.items() if end < full)
+                if low:
+                    short.append((pid, mnum, ", ".join(low)))
+    if pickup:
+        out.append(finding("bar1-pickup-suspect", "warn", "Bar 1 does not look like the print's first bar or pickup: " + " | ".join(pickup[:5]) + ". The scan may have invented notes from verse numbers or flecks, padded a pickup with rests, or read a pickup as a full bar; compare with the print.", "; ".join(pickup[:5])))
+    if short:
+        where = ", ".join(f"{p} bar {b} (staff/voice {v})" for p, b, v in short[:5])
+        out.append(finding("bars-short", "warn", f"{len(short)} bars where a voice stops before the end of the bar, usually rests the scan dropped (in the last bar, a rest may have been added to another voice instead): {where}. A mid-piece pickup at a repeat is fine.", where))
+    return out
+
+
 def audit(root: ET.Element) -> list[dict]:
     software = (root.findtext(".//encoding/software") or "")
     findings = check_metadata(root) + check_credits_split(root) + check_parts(root) + check_beams(root, software) + check_text(root) + check_lyrics(root) + check_layout(root) + check_tempo(root) + check_hidden_time(root)
     events = parse_events(root)
-    return findings + check_lyrics_crowded(events) + check_stems(events) + check_beam_style(events)
+    return findings + check_bar_sums(root, events) + check_lyrics_crowded(events) + check_stems(events) + check_beam_style(events)
 
 
 def main(argv: list[str] | None = None) -> int:
