@@ -233,6 +233,9 @@ def split_bar_voices(heads, rests, merged, stems, beams, flags, dots, staff):
                         rest=False,dot=dot,up=up,hidx=hs_,beam=beam,flag=flag,stem=True))
     ups=[e for e in sev if e['up']]; downs=[e for e in sev if not e['up']]
     together=any(abs(a['x']-b['x'])<sp*1.5 for a in ups for b in downs)
+    # a whole note (no stem) at the x of a stemmed note sounds with it but cannot share its voice
+    wholes=[h for h in heads if h['c']=='w']
+    together=together or any(abs(o['x']-h['x'])<sp*1.5 for h in wholes for o in sev)
     offrest=any(abs(r['y']-mid)>=sp*0.5 for r in rests if not r.get('multirest'))
     if not together and not offrest: return None
     if not together and not any(abs(r['y']-mid)>=sp*0.5 and not r.get('multirest') for r in rests if (r['y']<mid)==(not ups)):
@@ -244,7 +247,8 @@ def split_bar_voices(heads, rests, merged, stems, beams, flags, dots, staff):
         base=16 if h['c']=='w' else 8 if h['c']=='˙' else 4
         e=dict(x=h['x'],p=[h['p']],dur=base*3//2 if h['dot'] else base,rest=False,dot=h['dot'],stem=False)
         other=[o for o in sev if abs(o['x']-h['x'])<sp*1.5]
-        if other and h['p']>max(max(o['p']) for o in other): v1.append(e)
+        if other and h['c']=='w' and len({o['up'] for o in other})==1: (v2 if other[0]['up'] else v1).append(e)   # opposite the stems
+        elif other and h['p']>max(max(o['p']) for o in other): v1.append(e)
         elif other and h['p']<min(min(o['p']) for o in other): v2.append(e)
         else: v1.append(e); v2.append(dict(e))
     for r in rests:
