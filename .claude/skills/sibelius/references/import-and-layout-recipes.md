@@ -88,15 +88,18 @@ Raising `bottomMargin` does not help; make the page less full.
 - **Sixth and later verses** share the verse-5 style, so rows 5 and 6 overprint. For each position
   holding two items at the same `Dy`, set the second lower (-512 to -592).
 - **Descant staff lyrics** written as verse 3: `set-lyric-verse` them to verse 1 (this also sets Dy).
-- **Hidden time signatures** (print-object=no is not kept): `set Hidden true` on staff 0, index 0 of
-  each such bar (type TimeSignature).
+- **Hidden time signatures** (print-object=no is not kept): `hide-time-signatures --musicxml
+  FILE.musicxml` (or `--bars 2-54`) sets `Hidden` on the system staff's TimeSignature in each such
+  bar as one checked batch; `--dry-run` first. Bars where Sibelius has no time signature are listed.
 - **Final barline** where the print has an end repeat, and a missing start repeat: set both by hand.
 - **Melisma extender lines** are not drawn: `set` `NumNotes` (3, 2 ...) on the LyricItem. `Duration`
   alone changes nothing. A middle-type syllable before a long rest draws a hyphen line to the
   rest; delete it and `add-lyric` with `syllableType` end.
 - **Tempo.** A dotted `<metronome>` unit (dotted half, dotted quarter) imports correctly as tempo
   text; no rewrite needed. A tempo can also be drawn a second time above the lowest staff
-  ("tempo above this staff" property). A tempo the print does not have: `set Hidden true`.
+  ("tempo above this staff" property). A tempo the print does not have: fix the file first with
+  `score-metadata-repair --tempo once` (or `none`), which keeps `<sound tempo>` for playback but out
+  of the printed direction; if a tempo text still appears, `set Hidden true` on it.
 - **Staff names.** `set-staff-name --full X --short X` sets the instrument names only (bridge
   v64). Bridge v63 and older also wrote the staff name, so Sibelius drew the name twice per
   system ("I I"), bold beside the staff; running it again on v64 clears that duplicate. Do not

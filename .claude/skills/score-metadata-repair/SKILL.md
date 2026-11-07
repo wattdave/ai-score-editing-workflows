@@ -8,7 +8,9 @@ description: >
   line; generic part names (Voice0, Voice1) and missing part abbreviations.
   Use after an OMR scan or import, when the audit reports title-*,
   composer-missing, rights-missing, part-name-generic or
-  part-abbreviation-missing, or before sharing a score.
+  part-abbreviation-missing, or before sharing a score. Also writes the
+  tempo as the print has it (--tempo once|none: one tempo mark, no "q = N"
+  the print lacks; audit tempo-twice, tempo-sound-printed).
 ---
 
 # Score metadata repair
@@ -16,7 +18,7 @@ description: >
 Writes a corrected copy of a MusicXML file; the input is never modified. It
 needs only `python3` (standard library), not this repository or an editor. It
 reads `.xml`, `.musicxml` and `.mxl` and writes plain MusicXML. It changes only
-metadata: notes, lyrics, beams and layout are copied as they were, and the XML
+metadata (and, with `--tempo`, tempo directions): notes, lyrics, beams and layout are copied as they were, and the XML
 declaration and DOCTYPE are kept.
 
 ```bash
@@ -33,6 +35,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/fix_metadata.py" IN.xml OUT.xml [options]
 | `--source`, `--notice`, `--year`, `--name` | Values the templates need |
 | `--parts "Soprano,Alto,Tenor,Bass"` | Name the parts in score order and add abbreviations |
 | `--merge-credits` | Join credit lines of one printed block into one credit with line breaks (below) |
+| `--tempo once` / `--tempo none` | Print the tempo as the source does: one mark per place, no extra "q = N"; `none` when the print has no tempo (below) |
 
 **`--merge-credits`** (audit code `credits-split`): OMR and PDF readers write
 one `<credit>` per printed line, and Sibelius then keeps only one line of a
@@ -43,6 +46,22 @@ translator) or both plain/rights text. The first line keeps its position and
 gains the others' `credit-type`s. Titles, subtitles and credits of different
 alignment are never merged; each merge is printed. Nelson Carol Book: 14
 files, for example "anon. 16th century French" + "arr. Thomas Lindemuth 1998".
+
+**`--tempo`** (audit codes `tempo-twice`, `tempo-sound-printed`). What Sibelius
+did in the Nelson Carol Book run: a `<direction>` holding only `<sound
+tempo="84"/>` imported as tempo text "q = 84" (Away in a Manger, We Three Kings,
+O Come All Ye Faithful; the prints have none), and words + sound tempo as
+"Langsam q = 78" (Stille Nacht; the print has the word only). A `<metronome>`
+with its sound imports as one correct tempo. `once` merges tempo directions at
+the same bar and beat (in several parts, or twice in one) into one in the first
+part, and moves a `<sound tempo>` that sits in a direction with no metronome to a
+measure-level `<sound>` at the same place, so playback keeps the tempo. `none`
+(the print shows no tempo) also removes the metronome and words of tempo
+directions. Each change is printed. Not yet confirmed in Sibelius: that a
+measure-level `<sound tempo>` plays but prints nothing. If a tempo text still
+appears after import, `set Hidden true` on it (the run's workaround). A tempo
+drawn a second time above the lowest staff (Coventry Carol) is one item in the
+file; that is Sibelius's system-object position, not something this fixes.
 
 With no options the file is copied unchanged. The script never invents a
 composer, arranger, lyricist or copyright line: you must pass the value. Ask

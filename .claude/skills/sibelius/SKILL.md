@@ -82,7 +82,7 @@ write before using an address again.
   [the lyric workflow](references/lyrics.md).
 - For collisions, typography, stems, spacing, or page review, read
   [the engraving workflow](references/engraving.md).
-- MusicXML import, layout (`auto-layout`): [recipes](references/import-and-layout-recipes.md).
+- MusicXML import, `auto-layout`, `hide-time-signatures`: [recipes](references/import-and-layout-recipes.md).
 - For transposition, key changes, note edits, or passage copying, read
   [the music-edit workflow](references/music-edits.md).
 - For bridge plug-in development or a bridge-version failure, read

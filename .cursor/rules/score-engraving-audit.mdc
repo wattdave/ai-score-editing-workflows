@@ -41,6 +41,9 @@ It reads `.xml`, `.musicxml` and `.mxl`.
 | `lyrics-unjoined` | Every syllable is its own word, so no hyphens will print |
 | `padding-bars`, `clefs-after-bar1` | OMR padding and redundant clefs; fix with `omr-score-repair` |
 | `layout-no-breaks` | No system or page breaks; choose them by phrase after import |
+| `tempo-twice` | Two or more tempo directions at one bar and beat (often one per part); the editor draws each. Fix with `score-metadata-repair --tempo once` |
+| `tempo-sound-printed` | A `<sound tempo>` in a direction with no metronome: Sibelius prints "q = N" (after any words) that the print may not have. Fix with `score-metadata-repair --tempo once` (or `none`) |
+| `time-hidden` | Info: bars with `<time print-object="no">`; Sibelius ignores it, so run `sibelius-cli hide-time-signatures --musicxml FILE` after import |
 
 ## Beaming: what is and is not a defect
 
