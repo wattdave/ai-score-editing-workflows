@@ -741,6 +741,194 @@
     }
    ]
   },
+  "auto-layout": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "systems",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--systems"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "ready",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--ready"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "verses",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--verses"
+     ],
+     "required": true,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "staves",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--staves"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": [],
+     "dest": "hide_empty",
+     "kind": "_AppendAction",
+     "metavar": "A-B",
+     "nargs": null,
+     "options": [
+      "--hide-empty"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "pickup",
+     "kind": "BooleanOptionalAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--pickup",
+      "--no-pickup"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": [],
+     "dest": "layout",
+     "kind": "_AppendAction",
+     "metavar": "NAME=VALUE",
+     "nargs": null,
+     "options": [
+      "--layout"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": true,
+     "dest": "unlock_format",
+     "kind": "BooleanOptionalAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--unlock-format",
+      "--no-unlock-format"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "out",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--out"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "dry_run",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--dry-run"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "verify",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--verify"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "pdf",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--pdf"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
   "backup": {
    "arguments": [
     {

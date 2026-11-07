@@ -20,6 +20,31 @@ Measured on about 40 one-page to five-page carols (overnight run, 2026-11-06/07)
   appears, or take a screenshot and post a real Quartz click on **No** (screen point = screenshot
   pixel x, y divided by 1.371 on this display).
 
+## One command: auto-layout
+
+`auto-layout` runs the order below and picks the `set-layout` row from the table
+for the score's staves (read from Sibelius, or `--staves`) and `--verses`:
+
+```bash
+sibelius-cli --expect-file /abs/x.sib auto-layout --ready _work/x/ready.json --verses 4 --dry-run
+sibelius-cli --expect-file /abs/x.sib auto-layout --systems "1,5,9/13,17" --verses 4 \
+  --hide-empty 11-18 --verify --pdf /abs/x.pdf --save
+```
+
+- `--systems`: printed bars where systems start, pages split by `/`; `--ready` reads
+  `breaks`/`page_breaks` in any of the ready.json shapes (starts, ends-after, bare
+  list; a bare list is read as starts unless `post_import` says "after").
+- Bars are as printed. `--pickup` (auto when ready.json mentions a pickup) adds 1:
+  the pickup is score bar 1. Check the `notes` in the output.
+- `--unlock-format` is on by default and **clears manual formatting** (all breaks,
+  locked layout) before the batch, as its own undo step; `--no-unlock-format` keeps it.
+- `--hide-empty` caps `staffSize` at 5.5; `--layout staffSize=5` overrides any value.
+- `--out FILE` writes the plain `apply` batch (needs `--staves`) to merge with other
+  ops; run `invoke select_all unlock_format select_none` first yourself.
+- `--verify` reads each bar's `OnNthPage`/`OnNthSystem` and fails on a page or system
+  that differs from the plan; `--pdf` exports and counts pages. On overlap shrink
+  `staffSize` (rows marked `presetMeasured: false` were not measured).
+
 ## Layout order that worked
 
 When `set-layout` seems to do nothing, or the last staff of a system overlaps the next system, the

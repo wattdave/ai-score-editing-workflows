@@ -182,15 +182,18 @@ async def apply(
 
     The batch is checked against the score first, so a refused batch neither
     saves nor backs up. A real run saves the user's score to its file before
-    copying it as the backup. Raises BatchError for an invalid batch and
+    copying it as the backup. A set-layout that is not last is moved to the
+    end, with a note under "warnings". Raises BatchError for an invalid batch and
     BatchFailed for a refused or partly applied one.
     """
-    batch = batch_ops.validate_batch(ops)
+    batch, warning = batch_ops.layout_last(batch_ops.validate_batch(ops))
     await b.require(batch_bridge_version(batch), feature)
     result = await check(b, batch)
-    if dry_run:
-        return result
-    return await commit(b, batch, backup_name=backup_name, backup_dir=backup_dir, backup_fn=backup_fn)
+    if not dry_run:
+        result = await commit(b, batch, backup_name=backup_name, backup_dir=backup_dir, backup_fn=backup_fn)
+    if warning:
+        result["warnings"] = [*result.get("warnings", []), warning]
+    return result
 
 
 async def undo(b: SibeliusBridge, steps: int = 1) -> dict[str, Any]:
