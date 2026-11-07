@@ -38,6 +38,7 @@ It reads `.xml`, `.musicxml` and `.mxl`.
 |---|---|
 | `title-missing`, `title-case`, `title-whitespace`, `title-numbered` | Title absent, all lower/upper case, padded, or carrying a list number |
 | `composer-missing`, `rights-missing` | No composer/credit text, no copyright/source line |
+| `credits-split` | A credit block (composer + arranger, multi-line footer) stored one line per credit; fix with `score-metadata-repair --merge-credits` |
 | `part-name-generic`, `part-abbreviation-missing` | `Voice0`-style names; no short names for later systems |
 | `beams-mixed` | A beat group where some notes are beamed and others are not |
 | `beams-some-unbeamed`, `beams-none` | Unbeamed groups (see the beaming note below) |

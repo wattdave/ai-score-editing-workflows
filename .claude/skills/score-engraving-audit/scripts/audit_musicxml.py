@@ -66,6 +66,55 @@ def check_metadata(root: ET.Element) -> list[dict]:
     return out
 
 
+CREDIT_CREATORS = {"composer", "arranger", "lyricist", "poet", "translator"}
+CREDIT_NEVER_MERGE = {"title", "subtitle", "page number", "part name"}
+CREDIT_STYLE = ("justify", "halign", "valign", "font-size", "font-family", "font-style", "font-weight")
+
+
+def _float(value: str | None) -> float | None:
+    try:
+        return float(value) if value is not None else None
+    except ValueError:
+        return None
+
+
+def check_credits_split(root: ET.Element) -> list[dict]:
+    """One printed block (composer + arranger, a multi-line footer) stored as
+    one <credit> per line. Same rule as score-metadata-repair --merge-credits:
+    same page, alignment, font and x, line gap at most 3 x font size, both
+    creator credits or both plain/rights text; titles and subtitles never."""
+    groups: dict[tuple, list[tuple[float, float, str, float]]] = {}
+    for credit in root.findall("credit"):
+        kids = list(credit)
+        words = credit.findall("credit-words")
+        if len(words) != 1 or any(k.tag not in ("credit-type", "credit-words") for k in kids):
+            continue
+        cw = words[0]
+        types = {(t.text or "").strip().lower() for t in credit.findall("credit-type")}
+        x, y, text = _float(cw.get("default-x")), _float(cw.get("default-y")), (cw.text or "").strip()
+        if x is None or y is None or not text or len(cw) or types & CREDIT_NEVER_MERGE:
+            continue
+        kind = "creator" if types and types <= CREDIT_CREATORS else "|".join(sorted(types - {"rights"})) or "text"
+        key = (credit.get("page", "1"), tuple(cw.get(a) for a in CREDIT_STYLE), kind)
+        groups.setdefault(key, []).append((x, y, text, _float(cw.get("font-size")) or 12.0))
+    blocks = []
+    for lines in groups.values():
+        lines.sort(key=lambda ln: (round(ln[0]), -ln[1]))
+        run: list = []
+        for ln in lines:
+            if run and (abs(ln[0] - run[-1][0]) > 2 or not 0 < run[-1][1] - ln[1] <= 3 * run[-1][3]):
+                if len(run) > 1:
+                    blocks.append(run)
+                run = []
+            run.append(ln)
+        if len(run) > 1:
+            blocks.append(run)
+    if not blocks:
+        return []
+    sample = "; ".join(" / ".join(ln[2] for ln in b) for b in blocks[:3])
+    return [finding("credits-split", "warn", f"{len(blocks)} credit block(s) stored one line per credit, so the editor imports each line as its own text (or drops one): {sample}. Use score-metadata-repair --merge-credits.")]
+
+
 def check_parts(root: ET.Element) -> list[dict]:
     out = []
     for sp in root.findall("part-list/score-part"):
@@ -436,7 +485,7 @@ def check_layout(root: ET.Element) -> list[dict]:
 
 def audit(root: ET.Element) -> list[dict]:
     software = (root.findtext(".//encoding/software") or "")
-    findings = check_metadata(root) + check_parts(root) + check_beams(root, software) + check_text(root) + check_lyrics(root) + check_layout(root)
+    findings = check_metadata(root) + check_credits_split(root) + check_parts(root) + check_beams(root, software) + check_text(root) + check_lyrics(root) + check_layout(root)
     events = parse_events(root)
     return findings + check_lyrics_crowded(events) + check_stems(events) + check_beam_style(events)
 

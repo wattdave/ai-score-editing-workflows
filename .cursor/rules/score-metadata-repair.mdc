@@ -25,6 +25,17 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/fix_metadata.py" IN.xml OUT.xml [options]
 | `--rights-template T` | Write `<rights>` from one of three templates, below |
 | `--source`, `--notice`, `--year`, `--name` | Values the templates need |
 | `--parts "Soprano,Alto,Tenor,Bass"` | Name the parts in score order and add abbreviations |
+| `--merge-credits` | Join credit lines of one printed block into one credit with line breaks (below) |
+
+**`--merge-credits`** (audit code `credits-split`): OMR and PDF readers write
+one `<credit>` per printed line, and Sibelius then keeps only one line of a
+composer + arranger block (or imports each line as separate text to retype).
+Lines join when they share page, alignment, font and x, stack at most 3 x the
+font size apart, and are both creator credits (composer, arranger, lyricist,
+translator) or both plain/rights text. The first line keeps its position and
+gains the others' `credit-type`s. Titles, subtitles and credits of different
+alignment are never merged; each merge is printed. Nelson Carol Book: 14
+files, for example "anon. 16th century French" + "arr. Thomas Lindemuth 1998".
 
 With no options the file is copied unchanged. The script never invents a
 composer, arranger, lyricist or copyright line: you must pass the value. Ask
