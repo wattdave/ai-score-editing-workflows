@@ -70,6 +70,16 @@ async def test_dry_run_checks_and_neither_unlocks_nor_backs_up(
     assert report["dryRun"] is True and report["preset"] == "4+ staves"
 
 
+async def test_the_batch_sent_to_sibelius_is_validated_like_apply(cli_session: CliSession) -> None:
+    """set-layout must reach the plug-in with its "settings" list (BatchHasSetting fails without it)."""
+    cli_session.client.replies["GetStaves"] = [{"staffNum": 1}, {"staffNum": 2}]
+    with bridge_apply_batch(new=AsyncMock(return_value={"applied": 0, "dryRun": True})) as apply_batch:
+        assert await _run_auto_layout(_args("--systems", "1,5", "--verses", "2", "--dry-run")) == EXIT_OK
+    sent = apply_batch.await_args_list[0].args[1]
+    layout = [op for op in sent if op["op"] == "set-layout"]
+    assert len(layout) == 1 and layout[0]["settings"] == [k for k in layout[0] if k not in ("op", "settings")]
+
+
 async def test_real_run_backs_up_unlocks_applies_and_verifies(
     cli_session: CliSession, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -166,12 +166,20 @@ async def _run_auto_layout(args: argparse.Namespace) -> int:
             except BatchError as exc:
                 print(f"error: {exc}", file=sys.stderr)
                 return EXIT_COMMAND_FAILED
-            await bridge.require_bridge(client, bridge.batch_bridge_version(plan.batch), "auto-layout")
+            # The same validation apply does: it names the set-layout settings
+            # ("settings") and turns page size words into the plug-in's indexes;
+            # without it the plug-in fails in BatchHasSetting.
+            try:
+                batch, _ = batch_ops.layout_last(batch_ops.validate_batch(plan.batch))
+            except BatchError as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return EXIT_COMMAND_FAILED
+            await bridge.require_bridge(client, bridge.batch_bridge_version(batch), "auto-layout")
             await runner.assert_expected_score(client, args)
             summary: dict[str, Any] = {**plan.summary(), "unlockFormat": args.unlock_format}
             try:
                 # Check first, so a refused batch neither unlocks nor backs up.
-                checked = await service.check(sb, plan.batch)
+                checked = await service.check(sb, batch)
             except service.BatchFailed as exc:
                 print(f"error: {exc.result.get('error')} (nothing was changed)", file=sys.stderr)
                 return EXIT_COMMAND_FAILED
@@ -193,7 +201,7 @@ async def _run_auto_layout(args: argparse.Namespace) -> int:
                 return made
 
             try:
-                result = await service.commit(sb, plan.batch, backup_name="before auto-layout",
+                result = await service.commit(sb, batch, backup_name="before auto-layout",
                                               backup_fn=same_backup)
             except service.BatchFailed as exc:
                 undo = "run 'invoke undo' once for the batch" if exc.applied else "nothing in the batch was applied"
