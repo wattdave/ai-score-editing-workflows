@@ -40,7 +40,11 @@ in memory: keystrokes have landed in the user's terminal before).
    score's name). Click **Convert**. A "Your score is being processed" dialog appears: **OK**.
 5. Wait. A 4-page, 62 KB choir score took about 2.5 minutes. Poll with screenshots every 20 s; the
    toast "Your score is ready!" has **Open score**. Progress also shows under Home > Scores >
-   My online scores. Server errors (too complex, notes not recognised, rate limited) show there.
+   My online scores. **Do not click the card or Open score before the toast** (or the log line
+   "status changed: Processing -> AwaitingReview" in
+   `~/Library/Application Support/MuseScore/MuseScore4/logs/MuseScore_*.log`): a card that looks
+   ready at +1 min is still Processing, and clicking it starts a second blank `mscore` process
+   that never loads. Server errors (too complex, notes not recognised, rate limited) show there.
 
 A click helper (needs `uv`; screen points equal screenshot pixels on the 1920x1080 display):
 
@@ -59,6 +63,16 @@ scratchpad, and read coordinates off a fresh screenshot each time.
 
 ## 2. Export to MusicXML
 
+**Headless alternative (no bridge, no window juggling).** Open score downloads the cloud file to
+`~/Library/Application Support/MuseScore/MuseScore4/cloud_scores/ID.mscz`. Export it directly
+(under 10 s; the process then lingers, kill it):
+
+```bash
+"/Applications/MuseScore 4.app/Contents/MacOS/mscore" -o out.xml "$HOME/Library/Application Support/MuseScore/MuseScore4/cloud_scores/ID.mscz"
+```
+
+Otherwise use the bridge as follows.
+
 **Open score** opens the cloud score in a new window. Export through the bridge, not the File >
 Export dialog: that dialog and the bridge both attach to the *first* score window, so with
 another score open they export the wrong one (a file with the wrong piece was exported this way).
@@ -73,6 +87,12 @@ uv run musescore-cli export --format musicxml --path "<folder>/<name>.musicxml"
 ```
 
 ## 3. Check the result
+
+Calibration on two one-page prints (Deck the Hall, We Wish You a Merry Christmas): MuseScore kept
+the pickup bar, rests and part names and read the title block (with garbled subtitle/composer),
+but misread about 25 lyric syllables on one page and 2 notes; verse numbers stay in the lyric text
+and apostrophes are lost. About 2 min server time plus 6-8 min of GUI steps per piece. Halbestunde
+is the default scanner; this is the second opinion.
 
 ```bash
 uv run python -I ${CLAUDE_SKILL_DIR}/scripts/compare_musicxml.py original.musicxml converted.musicxml
