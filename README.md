@@ -84,7 +84,10 @@ which both read the skills in `.agents/skills/` (Codex also reads
   `.codex/config.toml`, which connects the `sibelius` tool server.
 - **Antigravity** has a free Individual plan with weekly usage limits. It
   does not load this folder's `sibelius` tool server automatically, but the
-  skills can run the `sibelius-cli` commands directly instead.
+  skills can run the `sibelius-cli` commands directly instead. To run
+  Antigravity autonomously overnight in an isolated container (with all
+  permissions pre-approved inside the container), see
+  [`docs/container.md`](docs/container.md) and `./container/run.sh`.
 
 Free tiers have low limits. Setup fits easily; a long editing session may
 run out partway.
