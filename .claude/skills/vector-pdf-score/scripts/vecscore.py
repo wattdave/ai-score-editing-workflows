@@ -11,9 +11,8 @@ Only Sibelius PDFs (Opus and Helsinki fonts) have been tested, plus Opus PDFs pr
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pymupdf
-from vecglyph import normalize_glyph, has_music_code, stem_barline_cut
+from vecglyph import normalize_glyph, has_music_code, stem_barline_cut, is_music_font
 # Opus and Helsinki (Sibelius's two music fonts) use the same legacy glyph codes (verified, see SKILL.md); neither is SMuFL.
-MUSIC_FONTS=('Opus','Helsinki')
 H_GLYPH={'œ':'q','˙':'h','w':'w'}           # notehead glyphs (stem drawn separately)
 REST={'Ó':8,'Œ':4,'‰':2,'∑':16}   # half, quarter, eighth, whole-bar rest (other rest glyphs are not mapped yet)
 STEPS='CDEFGAB'
@@ -52,9 +51,11 @@ def system_of(pg, st):
         out.append((sysi,part))
     return out
 
-def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F')):
+def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F'), split_voices='auto'):
     """nstaves_per_system=0 (CLI --staves auto) finds the systems from the joining line, so systems may differ in size;
-    clefs=None finds each staff's clef from its & (treble) or ? (bass) glyph. Otherwise as documented above."""
+    clefs=None finds each staff's clef from its & (treble) or ? (bass) glyph. Otherwise as documented above.
+    split_voices='auto' also gives each staff a 'voices' list parallel to 'bars': None for a one-voice bar, or
+    [voice1, voice2] (stems up, stems down) for a bar with two voices on the staff (see split_bar_voices); 'off' skips it."""
     d=pymupdf.open(pdf); staves=[]; dbg=[]
     for pi,pg in enumerate(d):
         st=staves_of(pg)
@@ -73,7 +74,7 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F')):
         for b in pg.get_text("rawdict")['blocks']:
             for l in b.get('lines',[]):
                 for s in l['spans']:
-                    if s['font'].startswith(MUSIC_FONTS):
+                    if is_music_font(s['font'],''.join(c['c'] for c in s['chars'])):
                         for c in s['chars']:
                             ch=normalize_glyph(c['c'])
                             if ch!=' ': glyphs.append((c['origin'][0],c['origin'][1],ch,s['font']))
@@ -134,7 +135,7 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F')):
             dots=[(x,y) for x,y,c,f in glyphs if c=='™' and mine(y) and (x,y) not in rdots]
             flags=[(x,y,c) for x,y,c,f in glyphs if c in 'jJ' and mine(y)]
             stems=[(x,y0,y1) for x,y0,y1,w in vlines if 0.3<w<=BARW and y1-y0>sp*2 and y1>top-3.2*sp and y0<bot+3.2*sp and s['x0']<x<s['x1']]
-            ev=[]
+            ev=[]; raw=[]
             for x,y,c in heads:
                 p=pitch(y)
                 base=16 if c=='w' else 8 if c=='˙' else 4
@@ -155,6 +156,7 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F')):
                     elif lv>=2: dur=1
                 dot=any(0<dx-x<sp*2.6 and abs(dy-y)<sp*0.9 for dx,dy in dots)
                 ev.append(dict(x=x,p=[p],dur=dur*3//2 if dot else dur,y=y,beam=beam,flag=flag,stem=bool(st_),dot=dot,rest=False))
+                raw.append(dict(x=x,y=y,c=c,p=p,dot=dot))
             for x,y,c in rests:
                 rdot=any(0<dx-x<sp*2.4 and abs(dy-y)<sp*1.6 for dx,dy in dots)
                 ev.append(dict(x=x,p=[],dur=REST[c]*3//2 if rdot else REST[c],rest=True,y=y,dot=rdot))
@@ -196,8 +198,79 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F')):
                         num=''.join(c for x,y,c,f in sorted(glyphs) if c.isdigit() and r.x0<=x<=r.x1 and y<top)
                         bar_ev[bi].append(dict(x=r.x0,p=[],dur=0,rest=True,multirest=int(num) if num else 1,dot=False,y=r.y0))
             while bar_ev and not bar_ev[-1]: bar_ev.pop(); nbars-=1
-            staves.append(dict(page=pi,sys=sysi,part=part,clef=clef,bars=bar_ev,edges=edges,marks=marks,staff=s,curves=curves,words=words))
+            st_d=dict(page=pi,sys=sysi,part=part,clef=clef,bars=bar_ev,edges=edges,marks=marks,staff=s,curves=curves,words=words)
+            if split_voices!='off':
+                st_d['voices']=[split_bar_voices([h for h in raw if edges[bi]<=h['x']<edges[bi+1]],[e for e in bar_ev[bi] if e['rest']],
+                                                 bar_ev[bi],stems,beams,flags,dots,s) for bi in range(nbars)]
+            staves.append(st_d)
     return staves
+
+def split_bar_voices(heads, rests, merged, stems, beams, flags, dots, staff):
+    """Two voices on one staff: return [voice1, voice2] (events as in parse, in x order) or None for a one-voice bar.
+    A bar has two voices when a stem-up and a stem-down note sound together (x within 1.5 spaces), or a rest sits a
+    space or more off its usual height (voice 1 rests are raised, voice 2 rests lowered). Each stem is one event:
+    its heads are a chord, its direction is the side it extends to, its beams and flags give the duration. Stem-up
+    events go to voice 1 and stem-down to voice 2; a notehead on both an up and a down stem (unison) is in both.
+    Stemless heads (whole notes) join the voice they are above or below at the same x, or both voices when alone."""
+    sp=staff['sp']; mid=staff['top']+2*sp
+    if not heads and not rests: return None
+    sinfo=[]   # (stem x, y0, y1, [head idx])
+    for sx,y0,y1 in stems:
+        hs_=[i for i,h in enumerate(heads) if h['c']!='w' and (abs(sx-h['x'])<1.3 or abs(sx-(h['x']+sp*1.18))<1.3) and y0-1<=h['y']<=y1+1]
+        if hs_: sinfo.append((sx,y0,y1,hs_))
+    sev=[]
+    for sx,y0,y1,hs_ in sinfo:
+        hy=[heads[i]['y'] for i in hs_]
+        up=(min(hy)-y0)>(y1-max(hy))
+        tip=y0 if up else y1
+        lo,hi=(tip-1.5,tip+sp*1.6) if up else (tip-sp*1.6,tip+1.5)   # beams stack from the tip towards the heads
+        beam=sum(1 for r in beams if r.x0-1.5<=sx<=r.x1+1.5 and r.y1>lo and r.y0<hi)
+        flag=sum(1 for fx,fy,fc in flags if abs(fx-sx)<3 and abs(fy-tip)<6)
+        c=heads[hs_[0]]['c']; base=8 if c=='˙' else 4
+        if c=='œ': base=2 if beam+flag==1 else 1 if beam+flag>=2 else 4
+        dot=any(heads[i]['dot'] for i in hs_)
+        sev.append(dict(x=min(heads[i]['x'] for i in hs_),p=sorted({heads[i]['p'] for i in hs_}),dur=base*3//2 if dot else base,
+                        rest=False,dot=dot,up=up,hidx=hs_,beam=beam,flag=flag,stem=True))
+    ups=[e for e in sev if e['up']]; downs=[e for e in sev if not e['up']]
+    together=any(abs(a['x']-b['x'])<sp*1.5 for a in ups for b in downs)
+    offrest=any(abs(r['y']-mid)>=sp*0.5 for r in rests if not r.get('multirest'))
+    if not together and not offrest: return None
+    if not together and not any(abs(r['y']-mid)>=sp*0.5 and not r.get('multirest') for r in rests if (r['y']<mid)==(not ups)):
+        return None   # a displaced rest only on the side of the notes' own voice: leave the bar as read
+    v1=list(ups); v2=list(downs)
+    stemmed={i for e in sev for i in e['hidx']}
+    for i,h in enumerate(heads):
+        if i in stemmed: continue
+        base=16 if h['c']=='w' else 8 if h['c']=='˙' else 4
+        e=dict(x=h['x'],p=[h['p']],dur=base*3//2 if h['dot'] else base,rest=False,dot=h['dot'],stem=False)
+        other=[o for o in sev if abs(o['x']-h['x'])<sp*1.5]
+        if other and h['p']>max(max(o['p']) for o in other): v1.append(e)
+        elif other and h['p']<min(min(o['p']) for o in other): v2.append(e)
+        else: v1.append(e); v2.append(dict(e))
+    for r in rests:
+        if r.get('multirest'): v1.append(r); v2.append(dict(r)); continue
+        off=(r['y']-mid)/sp
+        if off<=-0.5: v1.append(r)
+        elif off>=0.5: v2.append(r)
+        else:   # at the usual height: the voice with nothing at this x
+            if any(abs(e['x']-r['x'])<sp*1.5 for e in v1): v2.append(r)
+            else: v1.append(r)
+    for vv in (v1,v2):
+        vv.sort(key=lambda e:e['x'])
+        for e in vv:
+            if e['rest']: continue
+            e['alt']={}
+            for m in merged:
+                if not m['rest'] and abs(m['x']-e['x'])<sp*1.5:
+                    for pp in e['p']:
+                        if pp in m.get('alt',{}): e['alt'][pp]=m['alt'][pp]
+            for k in ('hidx','up'): e.pop(k,None)
+    if [(e['dur'],e['rest']) for e in v1]==[(e['dur'],e['rest']) for e in v2]:
+        # same rhythm in both voices: one voice of chords, as merged, but with the durations read from each stem
+        one=[dict(a,p=sorted(set(a['p'])|set(b['p'])),alt={**b.get('alt',{}),**a.get('alt',{})}) if not a['rest'] else a for a,b in zip(v1,v2)]
+        if [(e['dur'],e['rest']) for e in one]==[(e['dur'],e['rest']) for e in merged]: return None
+        return [one]
+    return [v1,v2]
 
 def midi_name(p):  # diatonic index -> name+octave
     return f"{STEPS[p%7]}{p//7}"
@@ -206,12 +279,16 @@ if __name__=='__main__':
     import argparse
     ap=argparse.ArgumentParser(); ap.add_argument('pdf'); ap.add_argument('--staves',default='4',help='staves per system, or auto (systems found from the joining line; may differ in size)')
     ap.add_argument('--clefs',default='G,G,G8,F',help='clef per staff within a system: G, G8 (treble 8vb) or F; auto reads each clef from its glyph (never finds G8)')
+    ap.add_argument('--split-voices',default='auto',choices=('auto','off'),help='auto: read two voices on one staff (stems up = voice 1, down = voice 2)')
     a=ap.parse_args()
-    sts=parse(a.pdf,0 if a.staves=='auto' else int(a.staves),None if a.clefs=='auto' else tuple(a.clefs.split(',')))
+    sts=parse(a.pdf,0 if a.staves=='auto' else int(a.staves),None if a.clefs=='auto' else tuple(a.clefs.split(',')),a.split_voices)
+    def evs(b): return ' '.join(('r' if e['rest'] else '/'.join(midi_name(p) for p in e['p']))+(f":{e['dur']}" if not e.get('multirest') else f"x{e['multirest']}bars") for e in b)
     for s in sts:
         print(f"page {s['page']} sys {s['sys']} part {s['part']} ({s['clef']}) bars {len(s['bars'])}")
         for bi,b in enumerate(s['bars']):
             tot=sum(e['dur'] for e in b)
             mk=s['marks'].get(bi-1) if bi else None; mk2=s['marks'].get(bi)
             note=('|: ' if mk in ('repeat-start','repeat-both') else '')+('[ends '+mk2+']' if mk2 else '')
-            print('  bar',bi,'sum',tot,note.strip(),' '.join(('r' if e['rest'] else '/'.join(midi_name(p) for p in e['p']))+(f":{e['dur']}" if not e.get('multirest') else f"x{e['multirest']}bars") for e in b))
+            vv=(s.get('voices') or [None]*len(s['bars']))[bi]
+            if vv: print('  bar',bi,'sum','+'.join(str(sum(e['dur'] for e in x)) for x in vv),note.strip(),' | '.join(f"v{i+1}: "+evs(x) for i,x in enumerate(vv)))
+            else: print('  bar',bi,'sum',tot,note.strip(),evs(b))

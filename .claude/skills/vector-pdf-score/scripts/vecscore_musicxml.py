@@ -6,7 +6,7 @@
 
 Ties come from curve drawings that start on a note and end on the next note of the same pitch.
 Lyrics are matched to notes by position (greedy, nearest first). A bar whose events do not add up
-(for example two voices on one staff) is reported as BAR SUM and must be given with --override.
+is reported as BAR SUM and must be given with --override (two voices on one staff are split, see --split-voices).
 Tenor staves written with a treble-8vb clef (G8) are written one octave lower: MusicXML pitch is sounding pitch.
 Accidentals (#, b, natural) are read and held for the rest of the bar. Not handled: tuplets, grace notes,
 repeats, dynamics and text."""
@@ -27,6 +27,7 @@ ap.add_argument('--title', default=''); ap.add_argument('--composer', default=''
 ap.add_argument('--override', help='JSON file: [{"page":P,"sys":S,"part":K,"bar":B,"voices":[[{"p":["F3"],"dur":4,"x":418.8}, ...], ...]}]')
 ap.add_argument('--copy-lyrics', action='append', default=[], help='FROM:TO part indexes: copy lyrics onto a staff that has none in a system')
 ap.add_argument('--skip-words', default='p,mp,mf,pp,ppp,f,ff,fff,rit.,rall.,accel.,cresc.,dim.,poco,retenuto,legato,staccato,Broad,Allegro,Andante,Moderato,Adagio', help='lyric rows to ignore (comma list); words of one letter are kept unless listed')
+ap.add_argument('--split-voices', default='auto', choices=('auto', 'off'), help='auto: a staff with two voices in a bar (stems up and down together) is written as voice 1 and 2, with hidden rests where a voice has none printed')
 a = ap.parse_args()
 PARTS = a.parts.split(','); CLEFS = a.clefs.split(','); NP = len(PARTS)
 STEPN = 'CDEFGAB'
@@ -41,12 +42,42 @@ def meter_at(num):
     return cur
 def bar_at(num): return 16 * meter_at(num)[0] // meter_at(num)[1]
 
-sts = v.parse(a.pdf, NP, tuple(CLEFS))
+sts = v.parse(a.pdf, NP, tuple(CLEFS), a.split_voices)
+
+def _merge_voices(vs, i):
+    a_, b_ = vs[i - 1], vs.pop(i)
+    if a_ or b_: vs[i - 1] = [(a_[k] if a_ else []) + (b_[k] if b_ else []) for k in range(2)] if a_ and b_ else None
+
+def pad_voices(vv, barlen, sp):
+    """Fill each voice of a two-voice bar to barlen with hidden rests: a gap goes before a note when the other voice
+    (the one that adds up) has a note at the same x starting later."""
+    sums = [sum(e['dur'] for e in x) for x in vv]
+    ref = next((x for x, t in zip(vv, sums) if t == barlen), None)
+    on = []; t = 0
+    for e in ref or []: on.append((e['x'], t)); t += e['dur']
+    out = []
+    for x, tot in zip(vv, sums):
+        if x is ref or tot >= barlen: out.append(x); continue
+        nv = []; t = 0
+        for e in x:
+            want = next((o for rx, o in on if abs(rx - e['x']) < sp * 1.3), None)
+            if want is not None and want > t: nv += _hidden(want - t, e['x'] - 1); t = want
+            nv.append(e); t += e['dur']
+        if t < barlen: nv += _hidden(barlen - t, (x[-1]['x'] + 1) if x else 0)
+        out.append(nv)
+    return out
+def _hidden(d, x):
+    o = []
+    for u in (24, 16, 12, 8, 6, 4, 3, 2, 1):
+        while d >= u: o.append(dict(x=x, p=[], dur=u, rest=True, hidden=True)); d -= u
+    return o
 
 def _fix(sts):
     by_sys = {}
     for s_ in sts: by_sys.setdefault((s_['page'], s_['sys']), []).append(s_)
     for (pg_, sy_), group in by_sys.items():
+        for s_ in group:
+            if s_.get('voices') and s_['bars'] and not s_['bars'][0]: s_['voices'].pop(0)
         for s_ in group:      # (b) empty first bar made by a repeat-start barline just after the clef and key
             if s_['bars'] and not s_['bars'][0]:
                 s_['bars'].pop(0); s_['edges'].pop(0); s_['marks'] = {k - 1: m for k, m in s_['marks'].items() if k >= 1}; s_['repeat_start'] = True
@@ -57,6 +88,7 @@ def _fix(sts):
                 x = s_['edges'][i]
                 if others and all(not any(abs(x - e) < 3 for e in o['edges']) for o in others):
                     s_['bars'][i - 1] = s_['bars'][i - 1] + s_['bars'].pop(i); s_['edges'].pop(i)
+                    if s_.get('voices'): _merge_voices(s_['voices'], i)
                     s_['marks'] = {(k if k < i else k - 1): m for k, m in s_['marks'].items()}
                 else: i += 1
         for s_ in group:      # (c) notes a second apart sit side by side: same duration, close x -> one chord
@@ -77,7 +109,8 @@ if a.override:
         overrides[(o['page'], o['sys'], o['part'], o['bar'])] = [[dict(x=e.get('x', 0), p=[nidx(n_) for n_ in e['p']], dur=e['dur'], rest=not e['p']) for e in voice] for voice in o['voices']]
 systems = sorted({(s['page'], s['sys']) for s in sts})
 order = {}; g = 0
-first_bar = [s for s in sts if (s['page'], s['sys'], s['part']) == (systems[0][0], systems[0][1], 0)][0]['bars'][0]
+s0_ = [s for s in sts if (s['page'], s['sys'], s['part']) == (systems[0][0], systems[0][1], 0)][0]
+first_bar = (s0_.get('voices') or [None])[0][0] if (s0_.get('voices') or [None])[0] else s0_['bars'][0]
 pickup = sum(e['dur'] for e in first_bar) < BAR
 n = 0 if pickup else 1
 for pi, si in systems:
@@ -86,11 +119,15 @@ for pi, si in systems:
 first = 0 if pickup else 1
 NB = n - first
 def gi(num): return num - first
+split_bars = set()
 stream = {k: [None] * NB for k in range(NP)}; src = {k: [None] * NB for k in range(NP)}
 for s in sts:
     for bi, b in enumerate(s['bars']):
         num = order[(s['page'], s['sys'], bi)]
-        stream[s['part']][gi(num)] = overrides.get((s['page'], s['sys'], s['part'], bi), [b]); src[s['part']][gi(num)] = s
+        vv = (s.get('voices') or [None] * len(s['bars']))[bi] if bi < len(s.get('voices') or []) else None
+        if vv and (g_n := gi(num)) >= 0: vv = pad_voices(vv, bar_at(num) if (g_n or not pickup) else max(sum(e['dur'] for e in x) for x in vv), s['staff']['sp'])
+        stream[s['part']][gi(num)] = overrides.get((s['page'], s['sys'], s['part'], bi), vv or [b]); src[s['part']][gi(num)] = s
+        if vv and (s['page'], s['sys'], s['part'], bi) not in overrides: split_bars.add((s['part'], gi(num)))
 for k in range(NP):      # a whole-bar rest glyph is read as 16 sixteenths; make it the bar length (6/8, 3/4, ...)
     for g_ in range(NB):
         for voice in stream[k][g_]:
@@ -148,7 +185,8 @@ for vrow in sorted(words_rows):
             nh = i + 1 < len(ws) and ws[i + 1][1].strip('-') == ''; ph = i > 0 and ws[i - 1][1].strip('-') == ''
             toks.append((cx, t.rstrip('-'), 'middle' if ph and nh else 'begin' if nh else 'end' if ph else 'single'))
         cands = [(g_, vi, ei, e) for g_ in range(NB) if src[part][g_] and (src[part][g_]['page'], src[part][g_]['sys']) == (pi, sysi)
-                 for vi, voice in enumerate(stream[part][g_]) for ei, e in enumerate(voice) if not e['rest'] and id(e) not in tie_end]
+                 for vi, voice in enumerate(stream[part][g_]) for ei, e in enumerate(voice) if not e['rest'] and id(e) not in tie_end
+                 and not (vi and (part, g_) in split_bars and any(abs(e1['x'] - e['x']) < 6 for e1 in stream[part][g_][0] if not e1.get('hidden')))]
         pairs = sorted((abs(c[3]['x'] + 4.5 - cx), ti, ci) for ti, (cx, t, sy) in enumerate(toks) for ci, c in enumerate(cands) if abs(c[3]['x'] + 4.5 - cx) < 24)
         ut, uc = set(), set()
         for d_, ti, ci in pairs:
@@ -185,7 +223,7 @@ def part_xml(k):
             for ei, e in enumerate(voice):
                 tstart = e.get('tie', False); tstop = id(e) in tie_end
                 for pi_ in range(max(1, len(e['p']))):
-                    s = '<note>' + ('<chord/>' if pi_ else '')
+                    s = ('<note print-object="no">' if e.get('hidden') else '<note>') + ('<chord/>' if pi_ else '')
                     if e['rest']: s += '<rest measure="yes"/>' if e['dur'] == bar_at(num) else '<rest/>'
                     else:
                         idx = e['p'][pi_]; st = STEPN[idx % 7]; oc = idx // 7 - (1 if CLEFS[k] == 'G8' else 0); al = e.get('alt', {}).get(idx, altered.get(st, 0))
@@ -214,4 +252,6 @@ for g_ in range(NB):
         tot = [sum(e['dur'] for e in voice) for voice in stream[k][g_]]
         want = bar_at(g_ + first) if (g_ or not pickup) else None
         if any(t != want for t in tot) and want: print('BAR SUM', PARTS[k], 'bar', g_ + first, tot); bad += 1
+nhid = sum(1 for k in range(NP) for g_ in range(NB) if any(e.get('hidden') for voice in stream[k][g_] for e in voice))
+if nhid: print(f'two voices on a staff in {len(split_bars)} bars; hidden rests added in {nhid} (check them against the print)')
 print(f'{NB} bars{" (pickup + " + str(NB - 1) + ")" if pickup else ""}, {NP} parts, ties {sum(1 for k in range(NP) for _, e in flat[k] if e["tie"])}, lyrics {len(lyr)}, bars to fix: {bad}')

@@ -33,6 +33,8 @@ A PDF printed through a Windows driver (Creator `PScript5.dll`, `PDFCreator`, `P
 "words" are skipped as lyrics (`vecglyph.has_music_code`): left in, they became boxes in the lyric row and took
 notes away from real syllables (Alle Psallite Cum Luya).
 
+Ghostscript-converted copies of those PDFs rename the fonts (`TT1F7t00`, `TT204t00`, `TT206t00`: Ghostscript 8.15, Creator `PScript5.dll`); the reader accepts any span made only of U+F0xx codes as music (`vecglyph.is_music_font`), so the names do not matter (Non Nobis Domine, Nou Is Yole, Ther Is No Rose).
+
 Then look at the pages (render at 100 dpi and read the picture) and note: staves per system and
 which voice each is, clefs (a treble clef with a small 8 below is a tenor: `G8`), key, time, tempo,
 pickup bar, repeats, bars where one staff carries two voices, and lyrics that belong to no staff.
@@ -49,9 +51,18 @@ For pages whose systems differ in size (a solo staff beside three-staff systems)
 and each clef from its `&` or `?` glyph (it never finds `G8`, so a tenor needs `--clefs`). The dump
 marks repeat starts (`|:`), repeat ends, double and final barlines, and multi-bar rests (`x7bars`).
 
-Every bar must add up (16 sixteenths in 2/2 or 4/4). Bars that do not are two voices on one staff, a
-missing rest or dot, or a glyph the reader does not know: look at the print at 260 dpi, then give
-the bar by hand (below).
+Every bar must add up (16 sixteenths in 2/2 or 4/4). A bar with two voices on one staff prints as
+`sum 12+12  v1: ... | v2: ...` (see Two voices below). Bars that do not add up are a missing rest or
+dot, or a glyph the reader does not know: look at the print at 260 dpi, then give the bar by hand (below).
+
+**Two voices on one staff** (`--split-voices auto`, the default in both scripts; `off` gives the old
+merged reading). A bar is split when a stem-up and a stem-down note sound together, or a rest sits off
+its usual height on the other voice's side. Stems up are voice 1, stems down voice 2; a shared
+notehead (unison, two stems) is in both; noteheads on one stem stay a chord; each stem's beams and
+flags give its duration, so a 16th beside a dotted 8th reads right. Bars whose two voices have the
+same rhythm stay one voice of chords. The writer emits `<voice>1/2` with `<backup>`, fills a voice
+with no printed rest by `print-object="no"` rests (reported as "hidden rests added in N bars": check
+those against the print), and puts lyrics on voice 1 (voice 2 only where voice 1 has no note).
 
 ## 3. Write MusicXML
 
@@ -115,8 +126,12 @@ in a pair on the middle line beside a barline).
   different rhythm needs patching by onset (chord members take no lyric); ligatures (U+FB01), a
   stray `>` or `&quot;`, and words that fit no note (an elided "a long") need a search and replace.
 - A bar whose unused voice prints a half rest beside quarter rests sums too long: use `--override`.
-- Ties: any curve between two same-pitch notes counts as a tie. Stem-sharing chords in two-voice
-  passages can come out as one note: check every chord bar.
+- Ties: any curve between two same-pitch notes counts as a tie. Ties inside a two-voice bar are
+  not read; add them by hand.
+- Two voices on a staff: read (Stille Nacht, both Midnight Clears, Parting Glass, Somerset Wassail,
+  Gloucester RVW, Die Ehre Gottes), but a hidden rest is placed by matching x with the other voice:
+  check bars where the reader reports hidden rests. Slanted beams on a few stems still read as
+  quarters (Die Ehre Gottes, bar 21).
 
 **Not read**
 - Tuplets in the reader, grace notes, 16th rests and shorter, key changes, voltas as objects,
