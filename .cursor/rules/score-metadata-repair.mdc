@@ -36,6 +36,7 @@ the user (or read the source print) for each one first.
 |---|---|---|
 | `public-domain` | `--source` | `Public domain. Transcribed from [source] for rehearsal use.` |
 | `in-copyright` | `--notice` (the original notice) | `[notice] Transcribed for rehearsal use only. Not for distribution.` |
+| `verbatim` | `--notice` (the line as printed) | `[notice]` unchanged: use when the print's own line must not gain text |
 | `own-arrangement` | `--year`, `--name` | `Arrangement © [year] [name].` |
 
 Never add a © to a transcription unless the user says it is their own
