@@ -23,6 +23,7 @@ import re
 import sys
 import zipfile
 from collections import Counter
+from fractions import Fraction
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -483,9 +484,59 @@ def check_layout(root: ET.Element) -> list[dict]:
     return res
 
 
+def _tempo_directions(root: ET.Element) -> list[tuple[tuple[int, Fraction], ET.Element]]:
+    """((bar, onset in quarters), direction) for each direction with a metronome or a <sound tempo>."""
+    out = []
+    for part in root.findall("part"):
+        divisions = 1
+        for bar, measure in enumerate(part.findall("measure"), start=1):
+            pos = 0
+            for child in measure:
+                if child.tag == "attributes" and (child.findtext("divisions") or "").strip().isdigit():
+                    divisions = int(child.findtext("divisions")) or divisions
+                elif child.tag == "direction":
+                    sound = child.find("sound")
+                    if (sound is not None and sound.get("tempo") is not None) or child.find("direction-type/metronome") is not None:
+                        out.append(((bar, Fraction(pos, divisions)), child))
+                elif child.tag in ("note", "forward", "backup"):
+                    if child.find("chord") is not None or child.find("grace") is not None:
+                        continue
+                    dur = int(child.findtext("duration") or 0) if (child.findtext("duration") or "0").strip().isdigit() else 0
+                    pos += -dur if child.tag == "backup" else dur
+    return out
+
+
+def check_tempo(root: ET.Element) -> list[dict]:
+    """Tempo directions Sibelius prints differently from what the file says (Nelson Carol Book run)."""
+    out = []
+    found = _tempo_directions(root)
+    seen = Counter(key for key, _ in found)
+    twice = sorted(key for key, n in seen.items() if n > 1)
+    if twice:
+        where = ", ".join(f"bar {b}" + (f" +{o}" if o else "") for b, o in twice[:5])
+        out.append(finding("tempo-twice", "warn", f"More than one tempo direction at the same place ({where}); the editor draws each one. Use score-metadata-repair --tempo once."))
+    unprinted = []
+    for (bar, _), d in found:
+        sound = d.find("sound")
+        if sound is not None and sound.get("tempo") is not None and d.find("direction-type/metronome") is None:
+            words = " ".join((w.text or "").strip() for w in d.findall("direction-type/words")).strip()
+            unprinted.append(f"bar {bar}: " + (f"{words!r} + " if words else "") + f"sound tempo {sound.get('tempo')}")
+    if unprinted:
+        out.append(finding("tempo-sound-printed", "warn", f"A <sound tempo> inside a direction with no metronome: Sibelius prints it as 'q = N' (after any words), which the print may not have ({'; '.join(unprinted[:4])}). Use score-metadata-repair --tempo once (or none if the print has no tempo)."))
+    return out
+
+
+def check_hidden_time(root: ET.Element) -> list[dict]:
+    bars = sorted({n for part in root.findall("part") for n, m in enumerate(part.findall("measure"), start=1)
+                   if any(t.get("print-object") == "no" for t in m.iter("time"))})
+    if not bars:
+        return []
+    return [finding("time-hidden", "info", f"{len(bars)} bar(s) with a hidden time signature (print-object=\"no\"), from bar {bars[0]}; Sibelius ignores this and shows them. After import run sibelius-cli hide-time-signatures --musicxml FILE.")]
+
+
 def audit(root: ET.Element) -> list[dict]:
     software = (root.findtext(".//encoding/software") or "")
-    findings = check_metadata(root) + check_credits_split(root) + check_parts(root) + check_beams(root, software) + check_text(root) + check_lyrics(root) + check_layout(root)
+    findings = check_metadata(root) + check_credits_split(root) + check_parts(root) + check_beams(root, software) + check_text(root) + check_lyrics(root) + check_layout(root) + check_tempo(root) + check_hidden_time(root)
     events = parse_events(root)
     return findings + check_lyrics_crowded(events) + check_stems(events) + check_beam_style(events)
 

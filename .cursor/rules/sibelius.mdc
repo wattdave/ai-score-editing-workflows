@@ -83,7 +83,7 @@ write before using an address again.
   [the lyric workflow](../../.claude/skills/sibelius/references/lyrics.md).
 - For collisions, typography, stems, spacing, or page review, read
   [the engraving workflow](../../.claude/skills/sibelius/references/engraving.md).
-- MusicXML import, layout (`auto-layout`): [recipes](../../.claude/skills/sibelius/references/import-and-layout-recipes.md).
+- MusicXML import, `auto-layout`, `hide-time-signatures`: [recipes](../../.claude/skills/sibelius/references/import-and-layout-recipes.md).
 - For transposition, key changes, note edits, or passage copying, read
   [the music-edit workflow](../../.claude/skills/sibelius/references/music-edits.md).
 - For bridge plug-in development or a bridge-version failure, read

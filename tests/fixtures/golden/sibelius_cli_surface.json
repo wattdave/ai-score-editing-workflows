@@ -2173,6 +2173,66 @@
   "forget-token": {
    "arguments": []
   },
+  "hide-time-signatures": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "bars",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--bars"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "musicxml",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--musicxml"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "dry_run",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--dry-run"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
   "inspect": {
    "arguments": []
   },

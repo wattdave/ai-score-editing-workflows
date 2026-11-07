@@ -234,6 +234,11 @@ and verify once for the whole set.
   [--no-unlock-format] [--out FILE | --dry-run] [--verify] [--pdf PATH] [--save]`:
   lays out an imported score like its print in one step
   ([recipe](import-and-layout-recipes.md#one-command-auto-layout)).
+- `hide-time-signatures (--bars "2-54,60" | --musicxml FILE) [--dry-run] [--save]`: hides the
+  time signatures the print does not show (Sibelius ignores `print-object="no"` on `<time>`):
+  `set Hidden true` on the system staff's TimeSignature objects in those bars, one checked batch.
+  `--musicxml` takes the bars from the imported file (n-th measure = bar n). Bars already hidden
+  or without a time signature object are reported.
 - `patch-layout --file PATH [--save] [--dry-run]`: JSON array of operations.
   Runs of `nudge`, `set-break`, `set-barline` and `set-time` go as `apply`
   batches, one undo step each; a new batch starts where the `apply` ordering
