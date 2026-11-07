@@ -271,3 +271,90 @@ def test_subtitle_is_written_as_a_credit(tmp_path) -> None:
     root = ET.parse(dst).getroot()
     kinds = {c.findtext("credit-type"): c.findtext("credit-words") for c in root.findall("credit")}
     assert kinds["title"] == "Silent Night" and kinds["subtitle"] == "(Stille Nacht)"
+
+
+# Credits copied from the Nelson Carol Book reader output (SingWeNoel, Chlausezauerli,
+# PartingGlass_2010, EsIstEinRos_Combined, LetUnionBe): one <credit> per printed line.
+def _cred(ctype: str | None, text: str, x: float, y: float, just: str, size: int = 12, page: int = 1, valign: str = "top") -> str:
+    t = f"<credit-type>{ctype}</credit-type>" if ctype else ""
+    return (f'  <credit page="{page}">{t}<credit-words default-x="{x:g}" default-y="{y:g}" justify="{just}" '
+            f'valign="{valign}" font-size="{size}">{text}</credit-words></credit>\n')
+
+
+NELSON_CREDITS = (
+    _cred("title", "Sing We Noël", 616.5, 1500, "center", 24)
+    + _cred("subtitle", "(Yodeling song for Silvesternacht)", 616.5, 1465, "center", 14)
+    + _cred("lyricist", "Susan Cooper for the Christmas Revels", 80, 1450, "left")
+    + _cred("composer", "anon. 16th century French", 1153, 1450, "right")
+    + _cred("arranger", "arr. Thomas Lindemuth 1998", 1153, 1430, "right")
+    + _cred("rights", "Transcription Copyright © 2009 California Revels, Inc.", 616.5, 60, "center", 9, valign="bottom")
+    + _cred(None, "2.  Old King Solomon in all his glory,", 230, 1000, "left", 11, page=2)
+    + _cred(None, "Told each wife a different story", 230, 974, "left", 11, page=2)
+    + _cred(None, "3.  Come on lads and raise your glasses", 230, 870, "left", 11, page=2)
+    + _cred(None, "Grab the bottle as it passes;", 230, 844, "left", 11, page=2)
+)
+
+
+def _credit_score(credits: str) -> str:
+    return ('<score-partwise version="3.0">\n  <work><work-title>Sing We Noël</work-title></work>\n'
+            + credits + '  <part-list><score-part id="P1"><part-name>Soprano</part-name>'
+            '<part-abbreviation>S.</part-abbreviation></score-part></part-list>\n'
+            '  <part id="P1"><measure number="1"/></part>\n</score-partwise>\n')
+
+
+def _credits(root: ET.Element) -> list[tuple[list[str], str, str, str]]:
+    return [([t.text for t in c.findall("credit-type")], c.findtext("credit-words"),
+             c.find("credit-words").get("default-x"), c.find("credit-words").get("default-y"))
+            for c in root.findall("credit")]
+
+
+def test_merge_credits_joins_stacked_lines_of_one_block(tmp_path) -> None:
+    rc, text, root = run(tmp_path, "--merge-credits", body=_credit_score(NELSON_CREDITS))
+    assert rc == 0
+    got = _credits(root)
+    assert (["composer", "arranger"], "anon. 16th century French\narr. Thomas Lindemuth 1998", "1153", "1450") in got
+    # Verses on page 2: each stanza becomes one block; the wider stanza gap keeps them apart.
+    assert ([], "2.  Old King Solomon in all his glory,\nTold each wife a different story", "230", "1000") in got
+    assert ([], "3.  Come on lads and raise your glasses\nGrab the bottle as it passes;", "230", "870") in got
+    # Title, subtitle, the left lyricist and the footer are untouched.
+    for kind, words in [("title", "Sing We Noël"), ("subtitle", "(Yodeling song for Silvesternacht)"),
+                        ("lyricist", "Susan Cooper for the Christmas Revels"),
+                        ("rights", "Transcription Copyright © 2009 California Revels, Inc.")]:
+        assert any(t == [kind] and w == words for t, w, _, _ in got)
+    assert len(got) == 7
+
+
+def test_merge_credits_reports_and_is_idempotent(tmp_path, capsys) -> None:
+    rc, text, _ = run(tmp_path, "--merge-credits", body=_credit_score(NELSON_CREDITS))
+    out = capsys.readouterr().out
+    assert "credits merged (composer/arranger, page 1, right): anon. 16th century French | arr. Thomas Lindemuth 1998" in out
+    assert out.count("credits merged") == 3
+    again = tmp_path / "again.xml"
+    assert fix.main([str(tmp_path / "out.xml"), str(again), "--merge-credits"]) == 0
+    assert "nothing to change" in capsys.readouterr().out
+    assert again.read_text(encoding="utf-8") == text
+
+
+def test_merge_credits_is_conservative(tmp_path) -> None:
+    credits = (
+        _cred("title", "The Parting", 616.5, 1500, "center", 14)
+        + _cred("title", "Glass", 616.5, 1480, "center", 14)  # two title lines: never merged
+        + _cred("composer", "Traditional Irish", 80, 1450, "left")
+        + _cred("arranger", "Arranged by Jerome Epstein", 1153, 1450, "right")  # other alignment
+        + _cred("arranger", "far below", 1153, 1300, "right")  # too far apart
+        + _cred("composer", "different font", 1153, 1280, "right", 10)
+        + _cred("rights", "score revision 002", 1153, 1262, "right", 10)  # creator vs rights text
+    )
+    rc, text, root = run(tmp_path, "--merge-credits", body=_credit_score(credits))
+    assert rc == 0 and len(root.findall("credit")) == 7
+    assert all("\n" not in (w or "") for _, w, _, _ in _credits(root))
+
+
+def test_merge_credits_off_by_default_and_audit_flags_split(tmp_path) -> None:
+    body = _credit_score(NELSON_CREDITS)
+    rc, text, root = run(tmp_path, body=body)
+    assert len(root.findall("credit")) == 10
+    split = [f for f in audit.audit(root) if f["code"] == "credits-split"]
+    assert split and split[0]["severity"] == "warn" and "3 credit block(s)" in split[0]["message"]
+    rc, text, root = run(tmp_path, "--merge-credits", body=body)
+    assert not [f for f in audit.audit(root) if f["code"] == "credits-split"]

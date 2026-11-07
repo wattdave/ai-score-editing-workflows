@@ -7,7 +7,7 @@ Usage:
     fix_metadata.py IN OUT [--title T] [--subtitle S] [--composer C] [--arranger A]
         [--lyricist L] [--rights-template public-domain|in-copyright|own-arrangement|verbatim]
         [--source S] [--notice N] [--year Y] [--name NAME]
-        [--parts "Soprano,Alto,Tenor,Bass"] [--normalize-title]
+        [--parts "Soprano,Alto,Tenor,Bass"] [--normalize-title] [--merge-credits]
 
 IN may be .xml, .musicxml or .mxl; OUT is plain MusicXML. Only metadata is
 touched (title, creators, rights, credits, part names and abbreviations);
@@ -319,6 +319,95 @@ def add_credits(root: ET.Element, subtitle: str | None = None) -> list[str]:
     return [r[0] for r in rows]
 
 
+# ---------------------------------------------------------- merge credits ---
+# OMR and PDF readers write one <credit> per printed line, so a two-line
+# composer/arranger block or a multi-line footer arrives as separate items and
+# Sibelius keeps only one of them (or imports each as its own text). These
+# helpers find runs of lines that belong to one block and join them.
+
+CREATOR_TYPES = {"composer", "arranger", "lyricist", "poet", "translator"}
+NEVER_MERGE = {"title", "subtitle", "page number", "part name"}
+SAME_STYLE = ("justify", "halign", "valign", "font-size", "font-family", "font-style", "font-weight")
+X_TOLERANCE = 2.0  # tenths
+GAP_FACTOR = 3.0  # a line gap above 3 x font size (tenths vs points, generous) starts a new block
+
+
+def _num(value: str | None) -> float | None:
+    try:
+        return float(value) if value is not None else None
+    except ValueError:
+        return None
+
+
+def _credit_line(credit: ET.Element) -> dict | None:
+    """A credit that is one plain positioned line of text, or None."""
+    kids = [k for k in credit if isinstance(k.tag, str)]
+    words = [k for k in kids if k.tag == "credit-words"]
+    if len(words) != 1 or any(k.tag not in ("credit-type", "credit-words") for k in kids):
+        return None
+    cw = words[0]
+    types = [(t.text or "").strip().lower() for t in credit.findall("credit-type")]
+    x, y = _num(cw.get("default-x")), _num(cw.get("default-y"))
+    text = (cw.text or "").strip()
+    if x is None or y is None or not text or len(cw) or set(types) & NEVER_MERGE:
+        return None
+    kind = "creator" if types and set(types) <= CREATOR_TYPES else "|".join(sorted(set(types) - {"rights"})) or "text"
+    return {"credit": credit, "words": cw, "types": types, "x": x, "y": y, "text": text, "kind": kind,
+            "page": credit.get("page", "1"), "style": tuple(cw.get(a) for a in SAME_STYLE)}
+
+
+def credit_blocks(root: ET.Element) -> list[list[dict]]:
+    """Runs of two or more credit lines that read as one block, top line first.
+
+    Lines join when they are on the same page, have the same alignment and
+    font, start at the same x, are close together vertically, and are both
+    creator credits (composer/arranger/lyricist) or both plain/rights text.
+    Titles, subtitles and credits with images or several words are left alone.
+    """
+    lines = [ln for ln in (_credit_line(c) for c in root.findall("credit")) if ln]
+    groups: dict[tuple, list[dict]] = {}
+    for ln in lines:
+        groups.setdefault((ln["page"], ln["style"], ln["kind"]), []).append(ln)
+    blocks = []
+    for group in groups.values():
+        group.sort(key=lambda ln: (round(ln["x"]), -ln["y"]))
+        run: list[dict] = []
+        for ln in group:
+            if run:
+                prev = run[-1]
+                size = _num(prev["words"].get("font-size")) or 12.0
+                if abs(ln["x"] - prev["x"]) > X_TOLERANCE or not 0 < prev["y"] - ln["y"] <= GAP_FACTOR * size:
+                    if len(run) > 1:
+                        blocks.append(run)
+                    run = []
+            run.append(ln)
+        if len(run) > 1:
+            blocks.append(run)
+    return sorted(blocks, key=lambda b: (b[0]["page"], -b[0]["y"]))
+
+
+def merge_credits(root: ET.Element) -> list[str]:
+    """Join each block into its first credit, lines separated by newlines."""
+    log = []
+    for block in credit_blocks(root):
+        first = block[0]
+        first["words"].text = "\n".join(ln["text"] for ln in block)
+        have = set(first["types"])
+        for ln in block[1:]:
+            for t in ln["types"]:
+                if t not in have:  # keep every credit-type (MusicXML allows several), first one leads
+                    have.add(t)
+                    idx = max((i + 1 for i, k in enumerate(list(first["credit"])) if k.tag == "credit-type"), default=0)
+                    el = ET.Element("credit-type")
+                    el.text = t
+                    insert_child(first["credit"], idx, el)
+            root.remove(ln["credit"])
+        label = "/".join(dict.fromkeys(t for ln in block for t in ln["types"])) or "text"
+        log.append(f"credits merged ({label}, page {first['page']}, {first['words'].get('justify') or first['words'].get('halign') or 'left'}): "
+                   + " | ".join(ln["text"] for ln in block))
+    return log
+
+
 # ------------------------------------------------------------------- main ---
 
 def repair(root: ET.Element, args: argparse.Namespace) -> list[str]:
@@ -350,6 +439,8 @@ def repair(root: ET.Element, args: argparse.Namespace) -> list[str]:
     if rights:
         set_rights(root, rights)
         log.append(f"rights: {rights!r}")
+    if args.merge_credits:
+        log += merge_credits(root)
     wants_credits = args.title is not None or args.normalize_title or args.composer or args.arranger or args.lyricist or args.subtitle
     added = add_credits(root, args.subtitle.strip() if args.subtitle else None) if wants_credits else []
     if added:
@@ -386,6 +477,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--name", help="own-arrangement: arranger's name")
     ap.add_argument("--parts", help='comma-separated part names in score order, e.g. "Soprano,Alto,Tenor,Bass"')
     ap.add_argument("--normalize-title", action="store_true", help="strip, drop a list number, fix ALL CAPS / lower case")
+    ap.add_argument("--merge-credits", action="store_true",
+                    help="join credit lines of one block (same alignment, stacked) into one credit with line breaks")
     return ap
 
 

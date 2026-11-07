@@ -136,6 +136,8 @@ what it is. Editor-side restyling of one lyric line is not available through
 the bridge, so make this change in the XML and re-import.
 
 A subtitle (e.g. a German title) goes in with `fix_metadata.py --subtitle`.
+Credits read one line per item (audit `credits-split`) are joined with
+`fix_metadata.py --merge-credits` before import.
 
 ### 4. Choose breaks by phrase
 
