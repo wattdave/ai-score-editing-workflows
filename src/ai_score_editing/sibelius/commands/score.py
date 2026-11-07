@@ -148,6 +148,9 @@ async def _run_apply(args: argparse.Namespace) -> int:
     except batch_ops.BatchError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_COMMAND_FAILED
+    operations, warning = batch_ops.layout_last(operations)
+    if warning:
+        print(f"warning: {warning}", file=sys.stderr)
 
     backup = None
     saved = None

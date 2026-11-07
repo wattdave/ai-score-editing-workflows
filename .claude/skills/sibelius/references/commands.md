@@ -96,7 +96,9 @@ and verify once for the whole set.
   the batch; they stay correct even when earlier operations shift indices.
   Add `"type"` and/or `"position"` from the query result to any addressed
   operation as a guard against editing the wrong object. `--dry-run` checks
-  and reports each target without changing anything.
+  and reports each target without changing anything. A `set-layout` that is
+  not last is moved to the end with a warning (Sibelius ignores it when later
+  breaks or hidden staves re-lay out the score).
   - `{"op":"set","staff":S,"bar":B,"index":I,"prop":P,"value":V}`: writable
     `Dx`, `Dy` (int), `Hidden`, `CueSize` (bool) on anything; `Beam`,
     `RestPosition` on NoteRest; `Text`, `Duration`, `NumNotes` (melisma span,
@@ -227,6 +229,11 @@ and verify once for the whole set.
   - `{"op":"flip-stem","staff":S,"bar":B,"index":I}`
   - `{"op":"delete","staff":S,"bar":B,"index":I}`
   - `{"op":"delete-voice","staff":S,"fromBar":A,"toBar":B,"voice":V}`
+- `auto-layout (--systems "1,5,9/13,17" | --ready ready.json) --verses N
+  [--staves N] [--hide-empty A-B ...] [--pickup] [--layout NAME=VALUE ...]
+  [--no-unlock-format] [--out FILE | --dry-run] [--verify] [--pdf PATH] [--save]`:
+  lays out an imported score like its print in one step
+  ([recipe](import-and-layout-recipes.md#one-command-auto-layout)).
 - `patch-layout --file PATH [--save] [--dry-run]`: JSON array of operations.
   Runs of `nudge`, `set-break`, `set-barline` and `set-time` go as `apply`
   batches, one undo step each; a new batch starts where the `apply` ordering

@@ -55,3 +55,24 @@ def validate_batch(payload: Any, extra: ExtraOps | None = None) -> list[dict[str
         if operation["op"] == "ficta" and not operation["remove"]:
             operation["symbol"] = FICTA_SYMBOLS[operation["accidental"]]
     return batch
+
+
+def layout_last(batch: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str | None]:
+    """Move set-layout operations to the end of a validated batch.
+
+    Sibelius ignored a set-layout that later breaks or hide-empty-staves
+    re-laid out (Nelson Carol Book run), so it must run last. set-layout names
+    no bars, so moving it past other structural operations is safe. Returns
+    the batch and a warning when anything moved.
+    """
+    layouts = [op for op in batch if op["op"] == "set-layout"]
+    others = [op for op in batch if op["op"] != "set-layout"]
+    reordered = others + layouts
+    if reordered == batch:
+        return batch, None
+    moved = [i for i, op in enumerate(batch) if op["op"] == "set-layout"]
+    return reordered, (
+        f"set-layout (op {', '.join(map(str, moved))}) was not last in the batch; moved to the end "
+        "because Sibelius ignores a set-layout that later breaks or hidden staves re-lay out. "
+        "Result indices follow the new order"
+    )
