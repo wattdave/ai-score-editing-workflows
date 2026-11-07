@@ -17,3 +17,13 @@ def has_music_code(text: str) -> bool:
     """True if the text holds a symbol-font code (U+F000-U+F0FF): a run of music glyphs that text extraction
     returned as a "word", never a lyric syllable."""
     return any(0xF000 <= ord(ch) <= 0xF0FF for ch in text)
+
+
+def is_music_font(font: str, text: str) -> bool:
+    """True if a text span is set in a music font. Sibelius names the fonts Opus* and Helsinki*; Ghostscript
+    renames them (TT1F7t00, TT204t00, TT206t00) and drops the name, so also accept a span whose non-space
+    characters are all symbol-font codes (U+F000-U+F0FF, never present in a text font's lyrics or title)."""
+    if font.startswith(("Opus", "Helsinki")):
+        return True
+    chars = [ch for ch in text if not ch.isspace()]
+    return bool(chars) and all(0xF000 <= ord(ch) <= 0xF0FF for ch in chars)

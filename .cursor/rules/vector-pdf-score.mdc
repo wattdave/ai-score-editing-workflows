@@ -33,6 +33,8 @@ A PDF printed through a Windows driver (Creator `PScript5.dll`, `PDFCreator`, `P
 "words" are skipped as lyrics (`vecglyph.has_music_code`): left in, they became boxes in the lyric row and took
 notes away from real syllables (Alle Psallite Cum Luya).
 
+Ghostscript-converted copies of those PDFs rename the fonts (`TT1F7t00`, `TT204t00`, `TT206t00`: Ghostscript 8.15, Creator `PScript5.dll`); the reader accepts any span made only of U+F0xx codes as music (`vecglyph.is_music_font`), so the names do not matter (Non Nobis Domine, Nou Is Yole, Ther Is No Rose).
+
 Then look at the pages (render at 100 dpi and read the picture) and note: staves per system and
 which voice each is, clefs (a treble clef with a small 8 below is a tenor: `G8`), key, time, tempo,
 pickup bar, repeats, bars where one staff carries two voices, and lyrics that belong to no staff.
