@@ -67,10 +67,21 @@ async def backup_and_report(b: bridge.SibeliusBridge, name: str) -> dict[str, An
     return made
 
 
-async def run_write(args: argparse.Namespace, method: str, call_args: list[Any]) -> int:
-    """Backup, then run a bridge write method and print its result."""
+async def run_write(
+    args: argparse.Namespace,
+    method: str,
+    call_args: list[Any],
+    min_bridge: int | None = None,
+) -> int:
+    """Backup, then run a bridge write method and print its result.
+
+    min_bridge, when given, refuses to run on an older bridge (checked before
+    the backup).
+    """
     async with client(args, plugins=[BRIDGE_PLUGIN]) as c:
         await bridge.check_bridge_version(c)
+        if min_bridge is not None:
+            await bridge.require_bridge(c, min_bridge, args.subcommand)
         await assert_expected_score(c, args)
         made = await backup(c, f"before {args.subcommand}")
         print(f"backed up: {made['copy']}", file=sys.stderr)

@@ -72,10 +72,11 @@ Raising `bottomMargin` does not help; make the page less full.
 - **Tempo.** A dotted `<metronome>` unit (dotted half, dotted quarter) imports correctly as tempo
   text; no rewrite needed. A tempo can also be drawn a second time above the lowest staff
   ("tempo above this staff" property). A tempo the print does not have: `set Hidden true`.
-- **Staff names.** `set-staff-name --full X --short X` makes Sibelius draw the name twice per
-  system. Do not rename parts in the MusicXML to fix it: re-importing with new part names lost the
-  group bracket and repeated the tempo above the last staff. Keep the imported names, or set only
-  one property.
+- **Staff names.** `set-staff-name --full X --short X` sets the instrument names only (bridge
+  v64). Bridge v63 and older also wrote the staff name, so Sibelius drew the name twice per
+  system ("I I"), bold beside the staff; running it again on v64 clears that duplicate. Do not
+  rename parts in the MusicXML instead: re-importing with new part names lost the group bracket
+  and repeated the tempo above the last staff.
 - **Not imported at all:** verse numbers ("1." "2."), brace, boxed text, slurs and extender lines
   from some readers, and fermatas on lower staves (no fermata op exists). Draw them by hand or list
   them as open items for the user.
