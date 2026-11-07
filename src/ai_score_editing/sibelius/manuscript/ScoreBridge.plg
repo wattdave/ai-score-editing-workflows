@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 63);
+		return CreateDictionary('version', 64);
 	}"
 
 	Echo "(value) {
@@ -566,18 +566,31 @@
 			return CreateDictionary('error', 'staffNum out of range');
 		}
 		staff = score.NthStaff(staffNum);
+		// Only the instrument name is set. Sibelius draws a staff name as well,
+		// so writing both drew the name twice. A staff name that repeats the
+		// old or new instrument name (left by bridge v63 and older) is cleared.
 		if (fullName != null and fullName != '') {
+			oldFull = staff.FullInstrumentName & '';
+			staffFull = staff.FullStaffName & '';
 			staff.FullInstrumentName = '' & fullName;
-			staff.FullStaffName = '' & fullName;
+			if (staffFull != '' and (staffFull = oldFull or staffFull = ('' & fullName))) {
+				staff.FullStaffName = '';
+			}
 		}
 		if (shortName != null and shortName != '') {
+			oldShort = staff.ShortInstrumentName & '';
+			staffShort = staff.ShortStaffName & '';
 			staff.ShortInstrumentName = '' & shortName;
-			staff.ShortStaffName = '' & shortName;
+			if (staffShort != '' and (staffShort = oldShort or staffShort = ('' & shortName))) {
+				staff.ShortStaffName = '';
+			}
 		}
 		return CreateDictionary(
 			'staffNum', staffNum,
 			'fullInstrumentName', staff.FullInstrumentName,
-			'shortInstrumentName', staff.ShortInstrumentName);
+			'shortInstrumentName', staff.ShortInstrumentName,
+			'fullStaffName', staff.FullStaffName,
+			'shortStaffName', staff.ShortStaffName);
 	}"
 
 	SetInitialInstrument "(staffNum, styleId) {

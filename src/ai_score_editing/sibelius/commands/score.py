@@ -76,7 +76,8 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
     add_bars.add_argument("--save", action="store_true", help="save active score in Sibelius after change")
     set_staff_name = sub.add_parser(
         "set-staff-name",
-        help="set full and short instrument names for a staff (backs up first)",
+        help="set full and short instrument names for a staff (backs up first); "
+        "the staff name is not set, so the name is drawn once",
     )
     set_staff_name.add_argument("--staff", type=int, required=True, help="staff number (from 1)")
     set_staff_name.add_argument("--full", help="full instrument name (e.g. 'Soprano')")
@@ -202,7 +203,11 @@ async def _run_do(args: argparse.Namespace) -> int:
 
 async def _run_set_staff_name(args: argparse.Namespace) -> int:
     return await runner.run_write(
-        args, "SetStaffName", [args.staff, args.full or "", args.short or ""]
+        args,
+        "SetStaffName",
+        [args.staff, args.full or "", args.short or ""],
+        # v63 and older also wrote the staff name, so Sibelius drew the name twice
+        min_bridge=bridge.STAFF_NAME_BRIDGE_VERSION,
     )
 
 

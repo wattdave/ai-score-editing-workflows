@@ -248,7 +248,8 @@ and verify once for the whole set.
 Single-object writes:
 
 - Structure: `add-staff`, `add-bars`, `set-staff-name`, `set-score-info`,
-  `set-break`.
+  `set-break`. `set-staff-name` (bridge v64) sets the full and short
+  instrument names, never the staff name, so the name is drawn once.
 - Entry: `add-notes` and `add-abc` (enter a whole passage per call).
 - Editing: `set-note`, `set-lyric`, `set-lyric-style`, `tie`, `delete-object`,
   `delete-voice`, `transpose`, `set-key`, `set-time`, `bracket`, `copy-passage`, `flip-stem`, `nudge`,
