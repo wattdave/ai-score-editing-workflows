@@ -72,7 +72,13 @@ Save As form. Before it starts it closes a leftover Save As dialog.
 
 An empty or tiny result (one bar, no notes) means the service could not read
 the page, not that the script failed. Retry with more padding or a different
-crop before blaming the scan.
+crop before blaming the scan. In the Nelson Carol Book run, 4 of 10
+pages came back empty at `--pad 40` (Adeste Fideles, Angels We Have Heard,
+Good King Wenceslas, Joy to the World) and converted at `--pad 100`: start
+with `--pad 100` for hymn-book pages. A scan takes about 65-75 s end to end.
+If the app has no window (all closed), `halbestunde_convert.py` dies with
+`ValueError: could not convert string to float: ''`: run
+`osascript -e 'tell application "Halbestunde" to reopen'` and rerun.
 
 ### The workflow it follows
 
@@ -118,6 +124,29 @@ f="01 Silent Night.xml"
 grep -c '<measure ' "$f"; grep -c '<score-part ' "$f"
 grep -o '<text>[^<]*</text>' "$f" | sed 's/<[^>]*>//g' | tr '\n' ' ' | head -c 900
 ```
+
+Check these first, they recurred on most pages:
+
+- **Bar 1.** Dots, verse numbers and flecks left of the first barline come
+  back as an invented "pickup" or extra notes (zero-duration notes with no
+  `<duration>`, stray quarters, duplicated alto/bass notes). Count the
+  barlines in the print before trusting the bar count, and check that every
+  voice sums to the meter (the pickup too). Also look for an empty leading bar,
+  a quarter rest added in the last bar, and rests dropped from lower voices.
+- **Title block.** Usually absent or the website banner garbled; retype it.
+- **Lyrics.** About 25-35 wrong syllables per page, verse numbers ("1.") as
+  lyric text, and with 4-5 verses the rows jumbled across notes. Proofread
+  every verse against the print.
+- **Slurs.** Some missing, some read as ties between different pitches.
+- For a hymn page with many such faults, rebuilding from a text spec (pitches
+  taken from the OMR, which were mostly right) was faster than patching.
+- **Which scanner.** Halbestunde is the default (about 99% of notes agree with
+  MuseScore Convert, scripted, nothing left in a cloud account). Use
+  [musescore-pdf-convert](../musescore-pdf-convert/SKILL.md) as a second
+  opinion when the first bar is a pickup Halbestunde read as a full bar, the
+  lyrics are shifted across verses, or the title block is needed; take notes
+  from Halbestunde unless it dropped bars or rests, and lyrics from whichever
+  matches the print.
 
 Expect to fix: lyrics split into syllables with no hyphens (use the
 `lyric-hyphenation` skill), misread lyric words (compare with the PDF),

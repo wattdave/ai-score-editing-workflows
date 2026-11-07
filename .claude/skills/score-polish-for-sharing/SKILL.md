@@ -185,6 +185,18 @@ Use `render`/`score-snapshot` and a PDF after each group of changes.
   the margin) lands on the last bass staff; raising `bottomMargin` moves the
   footer up with it and does not help. Make the page less full instead.
   Check the PDF for the footer, not just the lyrics.
+- **Layout that ignores `set-layout` or overlaps systems:** run
+  `invoke select_all unlock_format`, then `set-break` on bar N-1 for each
+  system/page start of the print, `hide-empty-staves` for resting ranges, and
+  `set-layout` last. Layout numbers by verse count (2, 4 and 5 verses; 3 and 4
+  staves; one-page 128 bars), page-aligned credit text that `set Dy` cannot
+  move (use leading newlines), multi-line credits, hidden time signatures,
+  verse 6 overprinting verse 5, melisma extenders (`NumNotes`), and
+  save-sheet / import-dialog handling are in
+  [import-and-layout-recipes](../sibelius/references/import-and-layout-recipes.md).
+  A dotted `<metronome>` unit (dotted half, dotted quarter) already imports as
+  correct tempo text; check, do not rewrite. Verse numbers, brace, slurs and
+  extender lines from the print are often not drawn: say so in the hand-off.
 - **Duplicate lyrics:** when every voice sings the same words, keep one set
   and hide the others (`set` `Hidden` on the lyric items of the lower staves)
   to give the systems room.

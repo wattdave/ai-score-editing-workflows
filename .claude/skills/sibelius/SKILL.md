@@ -80,9 +80,9 @@ write before using an address again.
   [the command reference](references/commands.md).
 - For proofreading or changing lyric text, read
   [the lyric workflow](references/lyrics.md).
-- For collisions, typography, stems, spacing, or rendered-page review, read
-  [the engraving workflow](references/engraving.md); also read the lyric
-  workflow when changing lyric text.
+- For collisions, typography, stems, spacing, or page review, read
+  [the engraving workflow](references/engraving.md).
+- MusicXML import, layout: [recipes](references/import-and-layout-recipes.md).
 - For transposition, key changes, note edits, or passage copying, read
   [the music-edit workflow](references/music-edits.md).
 - For bridge plug-in development or a bridge-version failure, read
