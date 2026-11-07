@@ -193,6 +193,16 @@ Use `render`/`score-snapshot` and a PDF after each group of changes.
 - **Redundant clefs** (`remove-redundant-clefs`), **bar numbers** at the start
   of each system (`set-bar-number`), tempo text aligned over the time
   signature.
+- **Tempo unit that fits the meter:** the beat unit in the tempo marking must
+  divide the bar evenly and match how the bar is felt. 9/8 (3+3+3) takes a
+  dotted quarter or an eighth, 6/8 a dotted quarter or an eighth, 12/8 a dotted
+  quarter, 3/4 a quarter, cut time a half. Never a plain quarter in compound
+  time, and never a unit longer than the bar. Take the unit and number from the
+  source print (dotted quarter = 108 stays that way). Importers and the vector
+  reader write `<sound tempo>` in quarters per minute, so a 6/8 or 9/8 piece
+  comes in as quarter = 162 where the print says dotted quarter = 108: replace
+  the text (`query --type Text`, then `set` or `delete` and re-add) and check
+  playback speed is unchanged.
 - **Duplicate markings from the scan:** OMR often repeats a dynamic on both
   staves (`f` twice in Deck the Halls where the print has one). Delete the
   extra Text object (`query --type Text`, then `delete` with its `index`).
