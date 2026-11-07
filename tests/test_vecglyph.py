@@ -22,3 +22,11 @@ def test_music_glyph_runs_are_not_lyric_words() -> None:
     # Text extraction returned runs of music glyphs as "words" in print-driver PDFs; they stole notes from lyrics.
     assert vecglyph.has_music_code("") and vecglyph.has_music_code("a")
     assert not vecglyph.has_music_code("Al-le") and not vecglyph.has_music_code("lu")
+
+
+def test_barline_cut_scales_with_staff_size_for_opus() -> None:
+    # (stem width, barline width, staff space) measured in Dona Nobis Pacem, Here's a Health and In Dulci Jubilo
+    for stem, bar, sp in [(0.42, 0.66, 4.25), (0.36, 0.60, 3.825), (0.36, 0.60, 3.9)]:
+        cut = vecglyph.stem_barline_cut(sp, False)
+        assert stem <= cut < bar
+    assert vecglyph.stem_barline_cut(4.0, True) == 0.68

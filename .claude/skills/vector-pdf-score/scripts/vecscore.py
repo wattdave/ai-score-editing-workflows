@@ -11,7 +11,7 @@ Only Sibelius PDFs (Opus and Helsinki fonts) have been tested, plus Opus PDFs pr
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pymupdf
-from vecglyph import normalize_glyph, has_music_code
+from vecglyph import normalize_glyph, has_music_code, stem_barline_cut
 # Opus and Helsinki (Sibelius's two music fonts) use the same legacy glyph codes (verified, see SKILL.md); neither is SMuFL.
 MUSIC_FONTS=('Opus','Helsinki')
 H_GLYPH={'œ':'q','˙':'h','w':'w'}           # notehead glyphs (stem drawn separately)
@@ -70,7 +70,6 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F')):
             if dr['type'] in('fs','f','s') and any(it[0]=='c' for it in dr['items']): curves.append(dr)
         mrests=[dr['rect'] for dr in draws if dr['type']=='f' and dr['rect'].width>30 and dr['rect'].height<8 and len(dr['items'])==1]
         glyphs=[]
-        BARW=0.68 if helsinki else 0.6   # Helsinki stems are 0.60 wide and barlines 0.75; Opus stems <0.6, barlines >0.6
         for b in pg.get_text("rawdict")['blocks']:
             for l in b.get('lines',[]):
                 for s in l['spans']:
@@ -89,6 +88,9 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F')):
                 clef='F' if '?' in cg else 'G'
             top,bot,sp=s['top'],s['bottom'],s['sp']
             hs=sp/2
+            # stem/barline width threshold. Helsinki stems are 0.60 wide and barlines 0.75. Opus line widths scale with the
+            # staff size (stems 0.09-0.10 sp, barlines 0.155 sp: 0.42/0.66 at sp 4.25, 0.36/0.60 at sp 3.75), so cut at 0.125 sp.
+            BARW=stem_barline_cut(sp,helsinki)
             def pitch(y):
                 n=round((bot-y)/hs)
                 base=(4*7+2) if clef in('G','G8') else (2*7+4)

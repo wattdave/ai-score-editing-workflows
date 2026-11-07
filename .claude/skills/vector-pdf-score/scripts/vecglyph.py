@@ -17,3 +17,10 @@ def has_music_code(text: str) -> bool:
     """True if the text holds a symbol-font code (U+F000-U+F0FF): a run of music glyphs that text extraction
     returned as a "word", never a lyric syllable."""
     return any(0xF000 <= ord(ch) <= 0xF0FF for ch in text)
+
+
+def stem_barline_cut(sp: float, helsinki: bool) -> float:
+    """Line width above which a vertical line is a barline and not a stem. Helsinki stems are 0.60 wide and barlines
+    0.75 whatever the staff size. Opus widths scale with the staff space sp (stems 0.09-0.10 sp, barlines 0.155 sp:
+    0.42/0.66 at sp 4.25 but 0.36/0.60 at sp 3.75, where a fixed 0.6 cut missed every barline)."""
+    return 0.68 if helsinki else 0.125 * sp

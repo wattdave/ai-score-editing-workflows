@@ -88,6 +88,8 @@ staff, hyphens as separate words, matched to the nearest note, greedy and one wo
 accidentals (sharp, flat and natural glyphs left of a notehead, held for the rest of the bar) and
 notes up to 4.2 staff spaces off the staff (ledger-line notes, for example E3 under a treble staff).
 
+Opus line widths scale with the staff size (barline 0.66 at 4.25 pt staff spacing, 0.60 at 3.8), so the stem/barline cut is 0.125 x staff space (`vecglyph.stem_barline_cut`); a fixed 0.6 found no barlines in Here's a Health or In Dulci Jubilo.
+
 Helsinki details: stems are 0.60 wide and barlines 0.75 (the reader switches thresholds per page),
 and the repeat dots and augmentation dots are the same glyph (repeat dots are told apart by sitting
 in a pair on the middle line beside a barline).
