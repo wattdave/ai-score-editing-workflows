@@ -11,9 +11,8 @@ Only Sibelius PDFs (Opus and Helsinki fonts) have been tested, plus Opus PDFs pr
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pymupdf
-from vecglyph import normalize_glyph, has_music_code
+from vecglyph import normalize_glyph, has_music_code, is_music_font
 # Opus and Helsinki (Sibelius's two music fonts) use the same legacy glyph codes (verified, see SKILL.md); neither is SMuFL.
-MUSIC_FONTS=('Opus','Helsinki')
 H_GLYPH={'œ':'q','˙':'h','w':'w'}           # notehead glyphs (stem drawn separately)
 REST={'Ó':8,'Œ':4,'‰':2,'∑':16}   # half, quarter, eighth, whole-bar rest (other rest glyphs are not mapped yet)
 STEPS='CDEFGAB'
@@ -74,7 +73,7 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F')):
         for b in pg.get_text("rawdict")['blocks']:
             for l in b.get('lines',[]):
                 for s in l['spans']:
-                    if s['font'].startswith(MUSIC_FONTS):
+                    if is_music_font(s['font'],''.join(c['c'] for c in s['chars'])):
                         for c in s['chars']:
                             ch=normalize_glyph(c['c'])
                             if ch!=' ': glyphs.append((c['origin'][0],c['origin'][1],ch,s['font']))
