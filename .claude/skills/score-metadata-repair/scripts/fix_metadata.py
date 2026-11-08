@@ -8,10 +8,11 @@ Usage:
         [--lyricist L] [--rights-template public-domain|in-copyright|own-arrangement|verbatim]
         [--source S] [--notice N] [--year Y] [--name NAME]
         [--parts "Soprano,Alto,Tenor,Bass"] [--normalize-title] [--merge-credits]
+        [--tempo once|none]
 
 IN may be .xml, .musicxml or .mxl; OUT is plain MusicXML. Only metadata is
-touched (title, creators, rights, credits, part names and abbreviations);
-notes, lyrics and layout are copied unchanged, and so is the XML declaration
+touched (title, creators, rights, credits, part names and abbreviations, and
+with --tempo the tempo directions); notes, lyrics and layout are copied unchanged, and so is the XML declaration
 and DOCTYPE. Nothing is invented: a composer, arranger, lyricist or rights
 line is written only when you pass it.
 
@@ -24,6 +25,7 @@ import argparse
 import re
 import sys
 import zipfile
+from fractions import Fraction
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -408,6 +410,146 @@ def merge_credits(root: ET.Element) -> list[str]:
     return log
 
 
+# ------------------------------------------------------------------ tempo ---
+# What Sibelius did with tempo directions in the Nelson Carol Book run:
+#  - <direction><sound tempo="84"/></direction> with no printed direction-type
+#    imported as tempo text "q = 84" (Away in a Manger, We Three Kings, O Come
+#    All Ye Faithful); the print has no tempo.
+#  - <words>Langsam</words> + <sound tempo="78"/> imported as "Langsam q = 78"
+#    (Stille Nacht); the print has the word only.
+#  - <metronome> + <sound tempo> imported as one correct tempo text.
+# So a <sound tempo> stays (playback) but moves out of any direction that has
+# no <metronome>, to a measure-level <sound> at the same place (valid
+# MusicXML). --tempo none also drops the printed metronome and words.
+
+TEMPO_MODES = ("none", "once")
+PRINTED_TEMPO = ("metronome", "words")
+
+
+def _tempo_sound(direction: ET.Element) -> ET.Element | None:
+    sound = direction.find("sound")
+    return sound if sound is not None and sound.get("tempo") is not None else None
+
+
+def _is_tempo(direction: ET.Element) -> bool:
+    return _tempo_sound(direction) is not None or direction.find("direction-type/metronome") is not None
+
+
+def _divisions(attributes: ET.Element, current: int) -> int:
+    try:
+        return int(attributes.findtext("divisions") or current) or current
+    except ValueError:
+        return current
+
+
+def tempo_directions(root: ET.Element) -> list[tuple[ET.Element, ET.Element, tuple[int, Fraction]]]:
+    """(measure, direction, (bar, onset in quarters)) for every tempo direction, parts in order."""
+    out = []
+    for part in root.findall("part"):
+        divisions = 1
+        for bar, measure in enumerate(part.findall("measure"), start=1):
+            pos = 0
+            for child in measure:
+                if child.tag == "attributes":
+                    divisions = _divisions(child, divisions)
+                elif child.tag == "direction" and _is_tempo(child):
+                    out.append((measure, child, (bar, Fraction(pos, divisions))))
+                elif child.tag in ("note", "forward", "backup"):
+                    if child.tag == "note" and (child.find("chord") is not None or child.find("grace") is not None):
+                        continue
+                    try:
+                        dur = int(child.findtext("duration") or 0)
+                    except ValueError:
+                        dur = 0
+                    pos += -dur if child.tag == "backup" else dur
+    return out
+
+
+def _signature(dt: ET.Element) -> str:
+    return re.sub(r"\s+", "", ET.tostring(dt, encoding="unicode").split(">", 1)[-1])
+
+
+def _describe(direction: ET.Element) -> str:
+    bits = []
+    for dt in direction.findall("direction-type"):
+        m = dt.find("metronome")
+        if m is not None:
+            bits.append(f"{m.findtext('beat-unit') or '?'}{'.' * len(m.findall('beat-unit-dot'))} = {m.findtext('per-minute') or '?'}")
+        for w in dt.findall("words"):
+            bits.append((w.text or "").strip())
+    sound = _tempo_sound(direction)
+    if sound is not None:
+        bits.append(f"sound tempo {sound.get('tempo')}")
+    return ", ".join(b for b in bits if b) or "empty"
+
+
+def _detach_sound(measure: ET.Element, direction: ET.Element) -> None:
+    """Move the direction's <sound> to a measure-level <sound> just before it; drop an empty direction."""
+    sound = direction.find("sound")
+    direction.remove(sound)
+    idx = list(measure).index(direction)
+    sound.tail = direction.tail
+    measure.insert(idx, sound)
+    if direction.find("direction-type") is None:
+        measure.remove(direction)
+
+
+def fix_tempo(root: ET.Element, mode: str) -> list[str]:
+    """Write each tempo once; keep <sound tempo> but out of directions without a metronome.
+
+    once: tempo directions at the same bar and beat in several parts (or
+    several in one part) become one, in the first part, merging any printed
+    marks that differ. none: the print has no tempo, so the metronome and
+    words of tempo directions go as well.
+    """
+    log: list[str] = []
+    groups: dict[tuple[int, Fraction], list[tuple[ET.Element, ET.Element]]] = {}
+    for measure, direction, key in tempo_directions(root):
+        groups.setdefault(key, []).append((measure, direction))
+    for (bar, onset), items in groups.items():
+        where = f"bar {bar}" + (f" beat +{onset}" if onset else "")
+        keep_m, keep = next(((m, d) for m, d in items if d.find("direction-type") is not None), items[0])
+        if len(items) > 1:
+            have = {_signature(dt) for dt in keep.findall("direction-type")}
+            for m, d in items:
+                if d is keep:
+                    continue
+                for dt in d.findall("direction-type"):
+                    if _signature(dt) not in have:
+                        have.add(_signature(dt))
+                        keep.insert(max((i + 1 for i, k in enumerate(keep) if k.tag == "direction-type"), default=0), dt)
+                if _tempo_sound(keep) is None and _tempo_sound(d) is not None:
+                    snd = d.find("sound")
+                    d.remove(snd)
+                    keep.append(snd)
+                m.remove(d)
+            log.append(f"tempo {where}: {len(items)} tempo directions -> 1 ({_describe(keep)})")
+        if mode == "none":
+            dropped = []
+            for dt in keep.findall("direction-type"):
+                if any(k.tag in PRINTED_TEMPO for k in dt):
+                    dropped.append(_describe_dt(dt))
+                    keep.remove(dt)
+            if dropped:
+                log.append(f"tempo {where}: printed tempo removed ({', '.join(dropped)})")
+        if _tempo_sound(keep) is not None and keep.find("direction-type/metronome") is None:
+            tempo = _tempo_sound(keep).get("tempo")
+            _detach_sound(keep_m, keep)
+            log.append(f"tempo {where}: <sound tempo=\"{tempo}\"> kept for playback as a measure-level <sound>, "
+                       "out of the printed direction")
+        elif keep.find("direction-type") is None and _tempo_sound(keep) is None:
+            keep_m.remove(keep)  # nothing printed, nothing played
+    return log
+
+
+def _describe_dt(dt: ET.Element) -> str:
+    holder = ET.Element("direction")
+    holder.append(dt)
+    text = _describe(holder)
+    holder.remove(dt)
+    return text
+
+
 # ------------------------------------------------------------------- main ---
 
 def repair(root: ET.Element, args: argparse.Namespace) -> list[str]:
@@ -446,6 +588,8 @@ def repair(root: ET.Element, args: argparse.Namespace) -> list[str]:
     if added:
         log.append("credits added: " + ", ".join(added))
     log += fix_parts(root, names)
+    if args.tempo:
+        log += fix_tempo(root, args.tempo)
     return log
 
 
@@ -479,6 +623,10 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--normalize-title", action="store_true", help="strip, drop a list number, fix ALL CAPS / lower case")
     ap.add_argument("--merge-credits", action="store_true",
                     help="join credit lines of one block (same alignment, stacked) into one credit with line breaks")
+    ap.add_argument("--tempo", choices=TEMPO_MODES,
+                    help="once: write each tempo mark once (one direction per bar and beat) and keep <sound tempo> "
+                    "out of a direction with no metronome, so Sibelius does not print 'q = N' the print lacks; "
+                    "none: the print has no tempo, drop the printed metronome and words too (playback tempo stays)")
     return ap
 
 

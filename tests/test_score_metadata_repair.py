@@ -358,3 +358,88 @@ def test_merge_credits_off_by_default_and_audit_flags_split(tmp_path) -> None:
     assert split and split[0]["severity"] == "warn" and "3 credit block(s)" in split[0]["message"]
     rc, text, root = run(tmp_path, "--merge-credits", body=body)
     assert not [f for f in audit.audit(root) if f["code"] == "credits-split"]
+
+
+# ------------------------------------------------------------------ --tempo ---
+
+QUARTER = "<note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><type>quarter</type></note>"
+METRONOME = ('<direction placement="above"><direction-type><metronome><beat-unit>half</beat-unit>'
+             '<per-minute>90</per-minute></metronome></direction-type><sound tempo="180"/></direction>')
+
+
+def _tempo_score(*measures: str) -> ET.Element:
+    """One part per measure string; each measure is divisions 4 then the string then three quarters."""
+    body = "".join(
+        f'<part id="P{p}"><measure number="1"><attributes><divisions>4</divisions></attributes>{m}{QUARTER * 3}</measure></part>'
+        for p, m in enumerate(measures, 1)
+    )
+    return ET.fromstring(f"<score-partwise>{body}</score-partwise>")
+
+
+def _codes(root: ET.Element) -> set[str]:
+    return {f["code"] for f in audit.audit(root)}
+
+
+def test_tempo_once_moves_a_bare_sound_tempo_out_of_its_direction() -> None:
+    """Away in a Manger: <direction><sound tempo="84"/></direction> imported as "q = 84"."""
+    root = _tempo_score('<direction placement="above"><sound tempo="84"/></direction>')
+    assert "tempo-sound-printed" in _codes(root)
+    log = fix.fix_tempo(root, "once")
+    m = root.find("part/measure")
+    assert m.find("direction") is None
+    assert [c.tag for c in m][:2] == ["attributes", "sound"] and m.find("sound").get("tempo") == "84"
+    assert "measure-level" in log[0]
+    assert not {"tempo-sound-printed", "tempo-twice"} & _codes(root)
+
+
+def test_tempo_once_keeps_words_but_not_the_sound_in_them() -> None:
+    """Stille Nacht: "Langsam" + sound tempo imported as "Langsam q = 78"."""
+    root = _tempo_score('<direction><direction-type><words>Langsam</words></direction-type><sound tempo="78"/></direction>')
+    fix.fix_tempo(root, "once")
+    m = root.find("part/measure")
+    assert m.findtext("direction/direction-type/words") == "Langsam" and m.find("direction/sound") is None
+    assert m.find("sound").get("tempo") == "78"
+
+
+def test_tempo_once_leaves_a_metronome_with_its_sound() -> None:
+    root = _tempo_score(METRONOME)
+    assert fix.fix_tempo(root, "once") == []
+    assert root.find("part/measure/direction/sound").get("tempo") == "180"
+
+
+def test_tempo_once_writes_one_direction_for_several_parts() -> None:
+    root = _tempo_score(METRONOME, METRONOME, METRONOME)
+    assert "tempo-twice" in _codes(root)
+    log = fix.fix_tempo(root, "once")
+    assert [len(p.findall("measure/direction")) for p in root.findall("part")] == [1, 0, 0]
+    assert len(root.findall("part/measure/direction/direction-type/metronome")) == 1
+    assert "3 tempo directions -> 1" in log[0]
+    assert "tempo-twice" not in _codes(root)
+
+
+def test_tempo_once_merges_different_marks_at_one_place_only() -> None:
+    with_words = METRONOME.replace("<direction-type>", "<direction-type><words>Stately</words></direction-type><direction-type>", 1)
+    root = _tempo_score(METRONOME, with_words)
+    fix.fix_tempo(root, "once")
+    assert len(root.findall("part/measure/direction")) == 1
+    assert len(root.find("part/measure/direction").findall("direction-type")) == 2
+    # A tempo one beat later is another place and stays.
+    root = _tempo_score(METRONOME + QUARTER + METRONOME.replace("90", "60"))
+    assert fix.fix_tempo(root, "once") == []
+    assert len(root.findall("part/measure/direction")) == 2
+
+
+def test_tempo_none_drops_printed_marks_and_keeps_playback() -> None:
+    root = _tempo_score(METRONOME.replace("<metronome>", "<words>Stately</words><metronome>", 1))
+    log = fix.fix_tempo(root, "none")
+    m = root.find("part/measure")
+    assert m.find("direction") is None and m.find("sound").get("tempo") == "180"
+    assert "printed tempo removed" in log[0]
+
+
+def test_tempo_option_on_the_command_line(tmp_path: Path) -> None:
+    src = tmp_path / "in.musicxml"
+    src.write_text(HEADER + ET.tostring(_tempo_score('<direction><sound tempo="84"/></direction>'), encoding="unicode"))
+    out = tmp_path / "out.musicxml"
+    assert fix.main([str(src), str(out), "--tempo", "once"]) == 0
+    assert '<sound tempo="84" />' in out.read_text() and "<direction" not in out.read_text()

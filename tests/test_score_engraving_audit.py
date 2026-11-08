@@ -61,3 +61,15 @@ def test_cli_exit_codes(tmp_path) -> None:
     good.write_text(ET.tostring(_score(_note("C", "quarter", 2))).decode())
     assert audit.main([str(good)]) == 0
     assert audit.main([str(tmp_path / "missing.xml")]) == 2
+
+
+def test_hidden_time_signatures_are_reported() -> None:
+    root = ET.fromstring(
+        """<score-partwise><part-list><score-part id="P1"><part-name>S</part-name></score-part></part-list>
+        <part id="P1"><measure number="1"><attributes><divisions>1</divisions>
+        <time print-object="no"><beats>3</beats><beat-type>2</beat-type></time></attributes></measure>
+        <measure number="2"><attributes><time print-object="no"><beats>2</beats><beat-type>2</beat-type></time></attributes></measure>
+        </part></score-partwise>"""
+    )
+    found = [f for f in audit.audit(root) if f["code"] == "time-hidden"]
+    assert found and found[0]["message"].startswith("2 bar(s)") and "hide-time-signatures" in found[0]["message"]
