@@ -153,9 +153,23 @@ mkdir -p "${HOST_CONFIG_DIR}"
 DOCKER_MOUNTS+=("-v" "${HOST_CONFIG_DIR}:/home/agent/.config/ai-score-editing")
 
 # Optional scores directory mount
+HELPER_PID=""
+cleanup_helper() {
+    if [ -n "${HELPER_PID}" ] && kill -0 "${HELPER_PID}" >/dev/null 2>&1; then
+        kill "${HELPER_PID}" >/dev/null 2>&1 || true
+    fi
+}
+trap cleanup_helper EXIT
+
 if [ -n "${SCORES_DIR}" ]; then
     RESOLVED_SCORES="$(cd "${SCORES_DIR}" && pwd)"
     DOCKER_MOUNTS+=("-v" "${RESOLVED_SCORES}:/scores")
+    # Start the host-side Sibelius helper on 127.0.0.1:1899 so the container can
+    # open .musicxml/.sib files in Sibelius and press Return on the import dialog.
+    if ! pgrep -f "sibelius_host_helper.py" >/dev/null 2>&1; then
+        python3 "${SCRIPT_DIR}/sibelius_host_helper.py" --port 1899 --scores-dir "${RESOLVED_SCORES}" >/dev/null 2>&1 &
+        HELPER_PID="$!"
+    fi
 fi
 
 # 5. Run container
@@ -178,14 +192,14 @@ if [ -n "${GH_TOKEN_VAL}" ]; then
 fi
 
 if [ "${SHELL_ONLY}" = "1" ]; then
-    exec docker run --rm "${TTY_FLAGS[@]}" \
+    docker run --rm "${TTY_FLAGS[@]}" \
         --add-host=host.docker.internal:host-gateway \
         "${DOCKER_MOUNTS[@]}" \
         "${DOCKER_ENV[@]}" \
         "${IMAGE_NAME}" \
         bash "${AGY_ARGS[@]}"
 else
-    exec docker run --rm "${TTY_FLAGS[@]}" \
+    docker run --rm "${TTY_FLAGS[@]}" \
         --add-host=host.docker.internal:host-gateway \
         "${DOCKER_MOUNTS[@]}" \
         "${DOCKER_ENV[@]}" \

@@ -69,7 +69,11 @@ COPY --chown=${USERNAME}:${USERNAME} src ./src
 RUN uv sync --locked && rm -rf /home/${USERNAME}/workspace/*
 
 COPY --chown=${USERNAME}:${USERNAME} container/entrypoint.sh /usr/local/bin/container-entrypoint.sh
-RUN chmod +x /usr/local/bin/container-entrypoint.sh
+COPY --chown=${USERNAME}:${USERNAME} container/sibelius_host_open.py /usr/local/bin/sibelius-host-open
+RUN chmod +x /usr/local/bin/container-entrypoint.sh /usr/local/bin/sibelius-host-open \
+    && printf '#!/bin/sh\nexec sleep infinity\n' | sudo tee /usr/local/bin/Sibelius >/dev/null \
+    && sudo chmod +x /usr/local/bin/Sibelius \
+    && sudo ln -sf /usr/local/bin/Sibelius /usr/local/bin/sibelius
 
 WORKDIR /home/${USERNAME}/workspace
 ENTRYPOINT ["/usr/local/bin/container-entrypoint.sh"]

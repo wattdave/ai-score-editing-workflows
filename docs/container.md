@@ -99,8 +99,21 @@ To start a brand-new task from a clean `main` branch, pass `--fresh`:
 
 Pure WebSocket commands (`score_overview`, `score_structure`, `query_score`, `apply_batch`, `undo`) work from inside the container for **Sibelius** (`1898`) and **MuseScore** (`8766`) because the container forwards `127.0.0.1` ports to `host.docker.internal` and mounts `~/.config/ai-score-editing/`.
 
+### Opening MusicXML / `.sib` Files & Dismissing Dialogs in Host Sibelius (`sibelius-host-open`)
+
+When you launch `./container/run.sh --scores-dir "/path/to/scores"`, `run.sh` starts a lightweight, tightly-scoped host listener (`container/sibelius_host_helper.py`) on `127.0.0.1:1899` (forwarded into the container via `socat`). Inside the container, the `sibelius-host-open` command can:
+- Open a `.musicxml`, `.xml`, or `.sib` file inside `/scores` in macOS Sibelius and automatically press `Return` (OK) on the MusicXML Import dialog:
+  ```bash
+  sibelius-host-open /scores/musicxml/AdesteFideles.musicxml
+  ```
+- Press `Return` on the Sibelius Connect remote-control approval dialog if Sibelius was just launched:
+  ```bash
+  sibelius-host-open --approve-connect
+  ```
+The host helper only accepts paths inside `--scores-dir` and verifies that `Sibelius` is the frontmost application before sending `Return`.
+
 ### Limitations When Driving Host GUI Editors from Linux
 
 Because the container runs Linux while the score editors run on macOS:
-- **File Paths (`save_score` / `export_score` / backups)**: When Sibelius writes a `.sib` backup or exports a file, Sibelius writes to the **macOS filesystem**. If you want the container to read/write exported score files shared with Sibelius or MuseScore, pass `--scores-dir /path/to/scores` (or set `SIBELIUS_BACKUP_DIR`) so both environments can access the files.
+- **File Paths (`save_score` / `export_score` / backups)**: When Sibelius writes a `.sib` file, backup, or PDF export, Sibelius expects a **macOS host path** (e.g., `/Users/wattd/Documents/Scores/...`), whereas tools inside the container read/write `/scores/...`. Pass the macOS path to `sibelius-cli save` / `export` / `--backup-dir`, and read the resulting file at `/scores/...` inside the container.
 - **Dorico Lua & UI Scripting**: `dorico-cli` exchanges temporary Lua request/response files on disk with Dorico and uses macOS `osascript` (System Events) for MusicXML/PDF export and Project Info dialogs. Full Dorico automation and macOS GUI skills (`halbestunde-omr`, `musescore-pdf-convert`) require running on macOS directly rather than inside the Linux container.
