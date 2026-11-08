@@ -76,9 +76,9 @@ crop before blaming the scan. In the Nelson Carol Book run, 4 of 10
 pages came back empty at `--pad 40` (Adeste Fideles, Angels We Have Heard,
 Good King Wenceslas, Joy to the World) and converted at `--pad 100`: start
 with `--pad 100` for hymn-book pages. A scan takes about 65-75 s end to end.
-If the app has no window (all closed), `halbestunde_convert.py` dies with
-`ValueError: could not convert string to float: ''`: run
-`osascript -e 'tell application "Halbestunde" to reopen'` and rerun.
+If the app has no window (all closed), `halbestunde_convert.py` sends it
+`reopen` and waits for the 1020x720 window (5 tries, about 10 s) before it
+gives up with a message; then click its Dock icon and rerun.
 
 ### The workflow it follows
 
@@ -133,6 +133,8 @@ Check these first, they recurred on most pages:
   barlines in the print before trusting the bar count, and check that every
   voice sums to the meter (the pickup too). Also look for an empty leading bar,
   a quarter rest added in the last bar, and rests dropped from lower voices.
+  `score-engraving-audit` flags these as `bar1-empty`, `bar1-pickup-suspect`,
+  `bars-short` and (no notes at all) `score-empty`.
 - **Title block.** Usually absent or the website banner garbled; retype it.
 - **Lyrics.** About 25-35 wrong syllables per page, verse numbers ("1.") as
   lyric text, and with 4-5 verses the rows jumbled across notes. Proofread

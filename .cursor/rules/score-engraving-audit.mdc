@@ -1,5 +1,5 @@
 ---
-description: Check a MusicXML file (typically OMR output from a scan, or a split or repaired copy) for what makes it unfit to print or share with people: missing or badly cased title, no composer or copyright line, generic part names (Voice0), partly beamed beat groups, chord symbols read as text with wrong capitals, unjoined lyric syllables, crowded lyrics, stems pointing the wrong way, the beam style (syllabic or modern), padding bars and missing layout. Use after any scan or import, before polishing a score for sharing, or when asked whether a score is ready to print.
+description: Check a MusicXML file (typically OMR output from a scan, or a split or repaired copy) for what makes it unfit to print or share with people: missing or badly cased title, no composer or copyright line, generic part names (Voice0), partly beamed beat groups, chord symbols read as text with wrong capitals, unjoined lyric syllables, crowded lyrics, stems pointing the wrong way, the beam style (syllabic or modern), padding bars, OMR bar faults (empty or invented first bar, dropped rests) and missing layout. Use after any scan or import, before polishing a score for sharing, or when asked whether a score is ready to print.
 globs: *
 alwaysApply: false
 ---
@@ -40,6 +40,7 @@ It reads `.xml`, `.musicxml` and `.mxl`.
 | `chords-as-text`, `chords-lowercase` | Chord symbols stored as text; `c` where `C` was meant |
 | `lyrics-unjoined` | Every syllable is its own word, so no hyphens will print |
 | `padding-bars`, `clefs-after-bar1` | OMR padding and redundant clefs; fix with `omr-score-repair` |
+| `score-empty`, `bar1-empty`, `bar1-pickup-suspect`, `bars-short` | OMR bar faults: no notes at all, an empty leading bar, an invented, padded or missed pickup, voices short of the meter (dropped rests); rules and cases in [references/bar-checks.md](../../.claude/skills/score-engraving-audit/references/bar-checks.md) |
 | `layout-no-breaks` | No system or page breaks; choose them by phrase after import |
 | `tempo-twice` | Two or more tempo directions at one bar and beat (often one per part); the editor draws each. Fix with `score-metadata-repair --tempo once` |
 | `tempo-sound-printed` | A `<sound tempo>` in a direction with no metronome: Sibelius prints "q = N" (after any words) that the print may not have. Fix with `score-metadata-repair --tempo once` (or `none`) |
