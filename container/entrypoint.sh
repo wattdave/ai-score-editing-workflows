@@ -40,8 +40,12 @@ start_port_forwarder() {
 
 if [ "${FORWARD_EDITOR_PORTS:-1}" = "1" ]; then
     start_port_forwarder "${SIBELIUS_PORT:-1898}" "Sibelius Connect"
+    start_port_forwarder "${SIBELIUS_HELPER_PORT:-1899}" "Sibelius Host Helper"
     start_port_forwarder "${DORICO_PORT:-4560}" "Dorico Remote Control"
     start_port_forwarder "${MUSESCORE_PORT:-8766}" "MuseScore ScoreBridge"
+    if ! pgrep -x Sibelius >/dev/null 2>&1 && [ -x /usr/local/bin/Sibelius ]; then
+        /usr/local/bin/Sibelius >/dev/null 2>&1 &
+    fi
 fi
 
 # ── 2. Configure Git & GitHub CLI (gh) authentication ────────────────────────
