@@ -240,6 +240,14 @@ moved into `set-score-info`.
 
 ## Pitfalls
 
+- **Scrambled output** (parts mixed, bar offset that changes mid-piece, 7 parts for 4 voices,
+  junk bars, empty result on a speckled photocopy): do not repair it bar by bar. Remap per
+  voice (by lyric row, checked against the print) into one builder, or transcribe by hand; see
+  `omr-score-repair` (fragmented parts) and `hand-transcribe-poor-scan`, which also says when to
+  stop and ask for a cleaner PDF. Lyric typos from the scan (Fam, res, Sin) are common.
+- Several agents on one machine: take the GUI lock first (`sibelius-shared-gui`); the scan clicks
+  for about 70 s and a stray window or dialog derails it.
+
 - A stray keystroke or click from the user during a run can derail it. If a
   file such as `01 Silent Night.xml` appears from an aborted run, check its
   bar count and delete it if it came from the wrong input.

@@ -50,6 +50,10 @@ staves (11 for 5 staves on All I Want For Christmas). To merge:
    part order: at bars 29-36 the A2 line ("din a") sat in the part numbered
    for A1, so merging in order swapped A1 and A2. Render the page and compare
    pitches and lyrics.
+2b. When the voices are spread over unnamed parts (7 parts for SATB + piano on Fum Fum Fum), assign
+   each part's notes to a voice by lyric row and print, collect them in one builder script with
+   per-bar overrides, and drop junk bars (empty or invented bars at 17, 18, 37 there). If the part
+   numbering offset changes mid-piece and nothing lines up, see `hand-transcribe-poor-scan`.
 3. Keep a tied note's accidental: a note tied from a D# is a D#, whatever the
    scan wrote (bars 52 and 69-70 had it wrong).
 4. When a stretch has a chord (stacked voices) do not collapse it to one note:

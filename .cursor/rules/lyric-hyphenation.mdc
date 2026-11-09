@@ -46,6 +46,10 @@ or "ba ba" (scat). Read the list and add `--not-word` for false joins and
 `--word` for missed words. Report both lists to the user. Unjoined leftovers
 usually mean a syllable is missing or sits on another staff.
 
+A word printed with an extender line instead of a hyphen ("bles__ sed") reads as two words:
+vector-pdf-score sets syllabic from drawn hyphens only. Look for a word that ends and a lowercase
+word that follows with no hyphen glyph between, and join it with `--word`.
+
 ## Sibelius scores that are already open
 
 Sibelius cannot change a lyric's syllable type in place. Two options:

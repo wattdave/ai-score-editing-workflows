@@ -158,6 +158,17 @@ in a pair on the middle line beside a barline).
   per-section runs.
 - PDFs from Dorico or MuseScore (different fonts): use `halbestunde-omr`.
 
+**Seen in the Nelson Carol Book run (check your piece; use `--override` with explicit voices)**
+- A bar with a chord, a shared rest and one unison note (two stems on the single head) can be
+  split into two voices wrongly: give it one voice.
+- A whole note over half notes of the other voice (no stem on the whole) can merge with them
+  into one chord.
+- A bar split by a double barline inside the measure is listed as "BAR SUM" though the pair adds
+  up; the notes are right.
+- A word printed with an extender and no hyphen reads as two words (see `lyric-hyphenation`).
+- Verse numbers, extender lines and the brace are not emitted (they are drawn by hand in the
+  editor; see the recipes in `sibelius`). Composer + arranger credits: use `--merge-credits`.
+
 **After import (Sibelius)**
 - With a pickup bar and endings, Sibelius can draw the first and second ending brackets in the
   wrong place (Apple Tree Wassail: under bars 12-13 instead of 17-18, although

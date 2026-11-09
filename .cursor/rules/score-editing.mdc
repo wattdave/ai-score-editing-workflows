@@ -48,6 +48,8 @@ says where its limits are.
 | One-note-per-staff playback copy | `playback-divisi-split` | Sibelius |
 | Hanging playback notes | `hanging-playback-note-repair` | Sibelius |
 | Octave-high tenor playback after import | `tenor-playback-repair` | Sibelius |
+| Several agents (or you and the user) on one Sibelius/macOS GUI: lock, dialogs, closing windows | `sibelius-shared-gui` | Sibelius |
+| Poor scan or photocopy where OMR is scrambled: triage and hand transcription | `hand-transcribe-poor-scan` | any editor (MusicXML) |
 | First-time install | `setup` | all |
 
 If a Sibelius-only workflow is wanted for a Dorico or MuseScore score, say
