@@ -51,6 +51,18 @@ sibelius-cli --expect-file /abs/x.sib auto-layout --systems "1,5,9/13,17" --vers
   that differs from the plan; `--pdf` exports and counts pages. On overlap shrink
   `staffSize` (rows marked `presetMeasured: false` were not measured).
 
+## Pickup bars: printed versus score numbers
+
+With a pickup, score bar = printed bar + 1 (pickup is printed 0). `auto-layout --pickup`
+expects **printed** numbers as the print shows them and no "1": `--systems "5,11,16" --pickup`
+(passing the old render's pickup-counted 4,10,15 gave a pickup-only first system and every break
+one bar early; `--verify` reports `systemStarts [1,6,12,17]` in score bars). `hide-empty-staves
+fromBar/toBar` and other direct ops take **score** bars: for printed bars 0-16 use 1-17, or give
+`auto-layout --hide-empty` the printed range and let it apply the offset. Afterwards check no
+system keeps a staff of only rests. The preset may overflow or leave systems touching; follow with
+`set-layout` (4.8 / 9 / 9 for Myrie it is; 6 / 17 / 8 with `extraSpacesBelowVocalStaves` 5 for
+Emmanuel).
+
 ## Layout order that worked
 
 When `set-layout` seems to do nothing, or the last staff of a system overlaps the next system, the
@@ -132,6 +144,11 @@ Raising `bottomMargin` does not help; make the page less full.
   system ("I I"), bold beside the staff; running it again on v64 clears that duplicate. Do not
   rename parts in the MusicXML instead: re-importing with new part names lost the group bracket
   and repeated the tempo above the last staff.
+- **Verse numbers** ("1." "2.") are lost on every import. Add them as text at the start of the
+  first syllable of each verse line with `patch-lyrics` (`--font-size` is tenths of a point, 74,
+  not points). With a pickup the first syllable of each line is not always in bar 1 (Bleak
+  Midwinter: only verse 2 starts in the pickup): `read-lyrics` per bar and take the earliest item
+  per verse; a piece may print its first line as verse 2. No helper exists yet.
 - **Not imported at all:** verse numbers ("1." "2."), brace, boxed text, slurs and extender lines
   from some readers, and fermatas on lower staves (no fermata op exists). Draw them by hand or list
   them as open items for the user.

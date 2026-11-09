@@ -183,8 +183,9 @@ Use `render`/`score-snapshot` and a PDF after each group of changes.
   leading newlines after a tight layout, has no footer); the fix and the `pdftotext -bbox` check
   are in the recipes. 5 and 6 staves need `staffSize` 5 (6 staves also 6.5 / 3) and, for 5,
   `bottomMargin` 12 and `belowBottomStaveGap` 35. Save a never-saved import with
-  `ExportScore ... SIBL`, not `save --path`. Verse numbers, extender lines and the brace are
-  not imported: list them as open items. When several agents share Sibelius, load
+  `ExportScore ... SIBL`, not `save --path`. Verse numbers are added by hand (recipes); extender lines
+  and the brace are not imported: list them as open items. With a pickup, printed and score bar
+  numbers differ by 1 (recipes, "Pickup bars"). When several agents share Sibelius, load
   `sibelius-shared-gui` before any GUI step.
 - **Layout that ignores `set-layout` or overlaps systems:** run
   `invoke select_all unlock_format`, then `set-break` on bar N-1 for each

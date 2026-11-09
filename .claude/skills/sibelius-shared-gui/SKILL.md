@@ -39,6 +39,9 @@ $S status                                            # owner, age in minutes
 - With many agents the lock was free only minutes per hour (waits of 4 h occurred). Give a
   long-running scanner a reserved turn instead of polling every 15 s, and put a whole task in
   one script so a turn is used fully.
+- Match owners exactly: `grep -q w2-slice2 owner` also matches `w2-slice2b`. `gui_lock.sh release`
+  compares the whole name. `python3` of the system has no Quartz: use
+  `uv run --with pyobjc-framework-Quartz`.
 - Never remove a lock you do not own (`release` refuses). Do not `rm -rf` the lock in a
   cleanup trap after you have already released it.
 - **Stale lock:** if `status` shows an owner more than 45 minutes old, look at the screen. If
@@ -72,6 +75,7 @@ A dialog left open blocks every agent, and the bridge then reports "plug-in not 
 | Missing Fonts (old-format file, e.g. Opus Text) | Return with Sibelius frontmost. It counts as a change, so closing the score later raises the save sheet. |
 | Update Score: FILE | click OK (the update is in memory only) |
 | Open MusicXML File | Return (OK). A schema warning before it is harmless. |
+| "X is already being edited. Open the previous version and lose your changes?" (opening a score that is already open; Yes is the default) | **No**, with a real click. Then close the stale window, then edit. Until answered, scripts time out with "not frontmost" / "bridge plug-in not reachable". Check the window list before opening a score. |
 | Do you want to save the changes | after edits: Save/Yes. After a read-only open: No. |
 
 `lyric-sheet/scripts/sib_windows.sh` has `update-ok`, `no-save`, `close FILE` and `list`
@@ -87,6 +91,9 @@ the lock while a dialog is open.
   `entire contents of window` and click the button named "No", or use `sib_windows.sh no-save`.
 - Closing a score you only read still asks to save (even unedited). Answer No; never No on a
   score you edited.
+- A close loop that does `activate` then Cmd+W skips the close when Terminal steals focus: four
+  stale windows then made later opens abort. Close by name (AXRaise that window, then Cmd+W) and
+  list the windows (`get name of every window`) after each score.
 - Leave windows you did not open alone. After saving and verifying a score, close it.
 
 ## 5. Display problems
