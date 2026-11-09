@@ -1,15 +1,21 @@
 ---
-name: halbestunde-omr
+name: omr-halbestunde
 description: >
   Scan a sheet-music PDF into a first-draft MusicXML file with the Halbestunde
   Mac app (it uploads the PDF to an online service). Covers cleaning the PDF
   first (crop and flatten scan borders and neighbouring pieces), driving the
   app's GUI with real mouse clicks, saving the XML, and what to check in the
   result. Use when asked to run, convert or OCR a score PDF with Halbestunde,
-  or to turn scanned carols or choral scores into MusicXML.
+  or to turn scanned carols or choral scores into MusicXML. Formerly halbestunde-omr.
 ---
 
 # Halbestunde OMR
+
+(Formerly `halbestunde-omr`.) **Which OMR runtime?** Use this skill for the Halbestunde Mac app,
+which uploads the PDF to an online service and is driven through its GUI. Use
+`omr-musescore-convert` instead for MuseScore 4.7.6+ Convert (a cloud score that you open and
+export as MusicXML through the bridge). Either output is a first draft: send it to
+`omr-score-repair` next.
 
 **Clean PDF exported from Sibelius?** If `pdfinfo` says the Creator is Sibelius and the music is
 text (the `OpusStd` font), use the `vector-pdf-score` skill instead: it reads exact pitches
@@ -144,7 +150,7 @@ Check these first, they recurred on most pages:
   taken from the OMR, which were mostly right) was faster than patching.
 - **Which scanner.** Halbestunde is the default (about 99% of notes agree with
   MuseScore Convert, scripted, nothing left in a cloud account). Use
-  [musescore-pdf-convert](../musescore-pdf-convert/SKILL.md) as a second
+  [omr-musescore-convert](../omr-musescore-convert/SKILL.md) as a second
   opinion when the first bar is a pickup Halbestunde read as a full bar, the
   lyrics are shifted across verses, or the title block is needed; take notes
   from Halbestunde unless it dropped bars or rests, and lyrics from whichever
@@ -239,6 +245,14 @@ Credits typed as text objects (`JOSEPH MOHR, 1818`) are better removed and
 moved into `set-score-info`.
 
 ## Pitfalls
+
+- **Scrambled output** (parts mixed, bar offset that changes mid-piece, 7 parts for 4 voices,
+  junk bars, empty result on a speckled photocopy): do not repair it bar by bar. Remap per
+  voice (by lyric row, checked against the print) into one builder, or transcribe by hand; see
+  `omr-score-repair` (fragmented parts) and `hand-transcribe-poor-scan`, which also says when to
+  stop and ask for a cleaner PDF. Lyric typos from the scan (Fam, res, Sin) are common.
+- Several agents on one machine: take the GUI lock first (`sibelius-shared-gui`); the scan clicks
+  for about 70 s and a stray window or dialog derails it.
 
 - A stray keystroke or click from the user during a run can derail it. If a
   file such as `01 Silent Night.xml` appears from an aborted run, check its

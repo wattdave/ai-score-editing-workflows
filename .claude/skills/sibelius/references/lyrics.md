@@ -65,6 +65,16 @@ formatting and lets the lyric text style supply its defaults. Do not rely on
 bare `set-lyric` style inference when the page uses overrides that differ from
 the score default.
 
+A bare `set-lyric --text X` (no `--raw`) re-tags the syllable at an inferred size (11 pt) and it
+prints larger than its neighbours. For a text-only correction on a lyric that has no overrides use
+`--raw --allow-style-reset` (leaves it on the score's lyric style). Before a scripted replace of
+every lyric equal to some text, list which staves hold it (another voice may have the same
+syllable with its own continuation) and filter with `--staff`.
+
+`plugin ScoreBridge AddLyric --args '[staff,bar,0,pos,"text","end"]'` adds a missing syllable but it
+reads as voice 0 and the previous syllable's hyphen sits against it; set the earlier
+syllable's `NumNotes` to 1 and nudge. Check the result in the PDF.
+
 `reset-design` clears formatting overrides and returns objects to their House
 Style definitions. Use it for lyric work only when the user explicitly asks to
 adopt those definitions.

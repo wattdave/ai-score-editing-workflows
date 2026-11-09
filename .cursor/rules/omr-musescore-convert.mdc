@@ -1,18 +1,19 @@
 ---
-name: musescore-pdf-convert
-description: >
-  MuseScore 4.7.6+. Turn a sheet-music PDF into a score with MuseScore's online "Convert file to
-  score" service (File > Convert file, same as Scores > Convert): upload from the GUI, wait for the
-  cloud score, open it, export MusicXML through the bridge and check it against the PDF. Use when
-  asked to convert a PDF with MuseScore, or for a scan or non-Sibelius PDF when Halbestunde is not
-  wanted. Clean Sibelius-exported PDFs go to vector-pdf-score instead.
+description: MuseScore 4.7.6+. Turn a sheet-music PDF into a score with MuseScore's online "Convert file to score" service (File > Convert file, same as Scores > Convert): upload from the GUI, wait for the cloud score, open it, export MusicXML through the bridge and check it against the PDF. Use when asked to convert a PDF with MuseScore, or for a scan or non-Sibelius PDF when Halbestunde is not wanted. Clean Sibelius-exported PDFs go to vector-pdf-score instead. Formerly musescore-pdf-convert.
+globs: *
+alwaysApply: false
 ---
 
 # MuseScore PDF to score
 
+(Formerly `musescore-pdf-convert`.) **Which OMR runtime?** Use this skill for MuseScore 4.7.6+
+Convert (a cloud score that you open and export as MusicXML through the bridge). Use
+`omr-halbestunde` instead for the Halbestunde Mac app, which uploads the PDF to an online service
+and is driven through its GUI. Either output is a first draft: send it to `omr-score-repair` next.
+
 **Clean PDF exported from Sibelius?** Use `vector-pdf-score` first: exact, local, nothing
 uploaded. This service is the fallback for scans and other programs' PDFs (see also
-`halbestunde-omr`).
+`omr-halbestunde`).
 
 MuseScore 4.7.6 added an online converter. The app uploads the PDF (or images, or audio in a
 beta) to musescore.com, which recognises it and puts a cloud score in the user's account. It is
@@ -71,6 +72,14 @@ scratchpad, and read coordinates off a fresh screenshot each time.
 "/Applications/MuseScore 4.app/Contents/MacOS/mscore" -o out.xml "$HOME/Library/Application Support/MuseScore/MuseScore4/cloud_scores/ID.mscz"
 ```
 
+**Opening a cloud score later (after the toast is gone):** only the toast's **Open score** downloads
+the `.mscz`. Clicking a card under Home > My online scores while a project is open just tries to
+open `cloud_scores/ID.mscz` (not yet downloaded) and starts a second blank `mscore` process that
+never loads: kill it. With **no score open** the same card click downloads and opens it. So:
+quit and relaunch MuseScore (or close every score tab), Home > My online scores, click one
+card, export headless, close the score tab (its X sits right of the title), next card. Toasts
+time out and shift when others are dismissed: do not click them blind.
+
 Otherwise use the bridge as follows.
 
 **Open score** opens the cloud score in a new window. Export through the bridge, not the File >
@@ -87,6 +96,20 @@ uv run musescore-cli export --format musicxml --path "<folder>/<name>.musicxml"
 ```
 
 ## 3. Check the result
+
+Check first, against the print: a **time signature inserted mid-piece** (a bogus 6/8 at bar 37 in
+every part of Carol of the Bells), a **lost 8vb** on the tenor staff, lyric junk ("1.=String,"),
+garbled title and credits, S/A or T/B pairs merged into one part, bar offsets that shift
+mid-piece, and single wrong pitches. Repair the XML with a script and verify every bar against
+200-800 dpi crops. The server can also reject a file ("better quality file": Riu Riu Chiu,
+O Holy Night): then use another route (`hand-transcribe-poor-scan`).
+
+Driving the app: when screenshots fail ("CU display unavailable"), use `screencapture` + Quartz
+clicks + System Events, re-activate MuseScore before every step, and see `sibelius-shared-gui`
+for the shared-display rules. In "Your score is being processed" do **not** use "Convert more"
+and do not leave a half-open dialog: a wrong file was uploaded that way (check the log's file
+size = PDF size + ~440 bytes and the card's name). `zsh` does not word-split `C="uv run ..."`
+(use a script).
 
 Calibration on two one-page prints (Deck the Hall, We Wish You a Merry Christmas): MuseScore kept
 the pickup bar, rests and part names and read the title block (with garbled subtitle/composer),

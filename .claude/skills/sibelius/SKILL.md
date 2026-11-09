@@ -30,6 +30,8 @@ open -a /Applications/Sibelius.app /absolute/path/to/score.sib
 
 Then run `inspect` and confirm `fileName` before reading or changing the score.
 
+Shared GUI: `sibelius-shared-gui`.
+
 Writes refuse a never-saved MusicXML import; import and save it through the
 bridge, not dialogs ([commands](references/commands.md#importing-musicxml)).
 
@@ -87,6 +89,7 @@ write before using an address again.
   [the music-edit workflow](references/music-edits.md).
 - For bridge plug-in development or a bridge-version failure, read
   [the bridge-development notes](references/bridge-development.md).
+
 
 Do not load unrelated references.
 

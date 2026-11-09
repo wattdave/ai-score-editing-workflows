@@ -9,7 +9,7 @@ import pytest
 
 from helpers import ROOT, load_script
 
-PATH = ROOT / ".claude/skills/halbestunde-omr/scripts/halbestunde_convert.py"
+PATH = ROOT / ".claude/skills/omr-halbestunde/scripts/halbestunde_convert.py"
 MAIN = ((100, 50), (1020, 720))
 TOAST = ((900, 40), (300, 80))
 
