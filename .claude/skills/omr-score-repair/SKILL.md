@@ -123,6 +123,17 @@ uv run --project "${CLAUDE_SKILL_DIR}" python ${CLAUDE_SKILL_DIR}/scripts/clean_
 
 ---
 
+### 7. Validate voices against the piano reduction (live Sibelius)
+
+When a choir score has a piano staff that doubles the voices, use it to settle unreadable or suspect notes before asking anyone:
+
+```bash
+uv run python .claude/skills/omr-score-repair/scripts/voice_vs_piano.py          # pitch classes
+uv run python .claude/skills/omr-score-repair/scripts/voice_vs_piano.py --exact  # octave must agree too
+```
+
+It lists each voice note whose pitch has no sounding piano note at its onset, per staff and bar. Pitch-class mode misses octave errors, so run `--exact` too. A hit is a lead, not proof: check the print. The reverse also happens: the piano line can be the one the OMR dropped (Fum Fum Fum, bars 46-47: the piano alto was missing, the voices were right).
+
 ## Core Workflow
 
 ### Step 1: Establish Visual Ground Truth
