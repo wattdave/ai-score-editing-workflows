@@ -219,3 +219,13 @@ MuseScore imported the pitches correctly but its engraving was not looked at). S
   note by `id`). It hides the staff accidental and attaches a playing technique above the note; the project
   needs three custom techniques first (see the dorico skill, "Ficta").
 - **MuseScore:** `musescore-cli apply` with `{"op":"ficta","staff":S,"bar":B,"index":I,"type":"NoteRest","position":P,"accidental":"flat"|"natural"|"sharp"}` (bridge v11). It hides the staff accidental and adds the sign as staff text above the note; `"remove":true` undoes it. The added text takes an index in the bar, so query again between batches.
+
+## PDFs engraved by MusiXTeX (TeXMUSIX fonts)
+
+Typeset-by-TeX scores (many IMSLP and hymnal PDFs) use `TeXMUSIX20-Regular` and the slur fonts `TeXXSLU/XSLD/XSLZ20`, not Opus. There is no Sibelius-style glyph reader for them, but the vectors are exact: read them with PyMuPDF and write MusicXML from a script (worked example: [references/musixtex-build-example.py](references/musixtex-build-example.py), Reinecke *Silent Night*, 12 bars, two parts, 4 lyric verses).
+
+1. `uv run --with pymupdf python3 -I` : `page.get_texttrace()` gives each glyph's Unicode and origin (x, y); `page.get_drawings()` gives the staff lines (thin horizontals) and stems/flat beams (rectangles).
+2. The PDF's Unicode is not the MusiXTeX code. Extract the font (`doc.extract_font(xref)`, a Type 1 program) and read its `dup N /glyphname put` lines: N is the code, then look it up in [references/musixtex-code-table.md](references/musixtex-code-table.md).
+3. Pitch from y: `steps = round((bottom_line_y - head_y) / (line_spacing / 2))` above the bottom line (treble: E4, bass: G2). Rhythm from head type, dots, flags (codes 40/41/45) and beams; check every bar sums.
+4. Lyrics are ordinary text in a text font; assign to notes by x.
+5. Verify the result against the PDF page image before importing, and run the audit/beaming skills as for any other source.
