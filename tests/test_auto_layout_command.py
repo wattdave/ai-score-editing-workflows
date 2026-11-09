@@ -43,7 +43,7 @@ async def test_out_writes_an_apply_batch_without_connecting(
         {"op": "set-break", "bar": 8, "type": "page"},
         {"op": "hide-empty-staves", "fromBar": 5, "toBar": 8},
         {"op": "set-layout", "staffSize": 5.5, "spacesBetweenStaves": 17, "spacesBetweenSystems": 9,
-         "aboveTopStaveGap": 24},
+         "aboveTopStaveGap": 24, "bottomMargin": 12, "belowBottomStaveGap": 35},
     ]
     report = json.loads(capsys.readouterr().out)
     assert report["next"][0] == "sibelius-cli invoke " + " ".join(UNLOCK_FORMAT)
