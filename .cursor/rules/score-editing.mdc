@@ -37,8 +37,9 @@ says where its limits are.
 | --- | --- | --- |
 | LilyPond source to a readable score | `lilypond-to-score` | any editor (MusicXML) |
 | Sibelius-exported vector PDF to MusicXML (no OMR) | `vector-pdf-score` | any editor (MusicXML) |
-| PDF to score with MuseScore's online converter (4.7.6+) | `musescore-pdf-convert` | MuseScore (then MusicXML) |
-| Scanned or OMR-imported MusicXML cleanup | `omr-score-repair` | any editor (checked in Sibelius) |
+| Scanned PDF to first-draft MusicXML, Halbestunde Mac app (uploads to an online service, GUI-driven) | `omr-halbestunde` | any editor (MusicXML) |
+| Scanned PDF to a score with MuseScore 4.7.6+ Convert (cloud score, export MusicXML through the bridge) | `omr-musescore-convert` | MuseScore (then MusicXML) |
+| Scanned or OMR-imported MusicXML cleanup (run after either OMR skill above) | `omr-score-repair` | any editor (checked in Sibelius) |
 | Make a scanned score fit to print and share (title block, beams, chords, breaks, layout) | `score-polish-for-sharing` | Sibelius first (any editor for the XML steps) |
 | Transpose a MusicXML score by an interval (key signature, chord symbols and ficta follow) | `transpose-score` | any editor (MusicXML) |
 | Check a MusicXML file for print readiness | `score-engraving-audit` | any editor (MusicXML) |

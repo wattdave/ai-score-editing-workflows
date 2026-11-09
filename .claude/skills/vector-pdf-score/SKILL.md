@@ -4,7 +4,7 @@ description: >
   Turn a vector sheet-music PDF (exported from Sibelius, so the music is text in the Opus or
   Helsinki font and not a scanned image) into MusicXML without OMR: exact pitches, rhythms, ties
   and lyrics read from the glyph positions. Use first for any clean PDF whose Creator is Sibelius;
-  fall back to halbestunde-omr for scans and for PDFs from other programs. Shenandoah (Opus, SATB,
+  fall back to omr-halbestunde for scans and for PDFs from other programs. Shenandoah (Opus, SATB,
   21 bars), three short Opus pieces and a Helsinki one-page choir piece were read correctly.
 ---
 
@@ -27,7 +27,7 @@ The font set must contain `OpusStd` or `HelsinkiStd` (Sibelius's two music fonts
 font whose name starts with `Opus` or `Helsinki`). Both use the same legacy glyph codes (noteheads
 `œ ˙`, rests `Ó Œ ‰`, clefs `& ?`, flags `j J`, dot `™`), and neither is SMuFL (no private-use
 codepoints), so one table serves both. Scans, photos and PDFs from Dorico or MuseScore (Bravura,
-Leland, Petaluma use SMuFL codepoints) are **not covered**: use `halbestunde-omr`.
+Leland, Petaluma use SMuFL codepoints) are **not covered**: use `omr-halbestunde`.
 
 A PDF printed through a Windows driver (Creator `PScript5.dll`, `PDFCreator`, `PrimoPDF`) names the fonts
 `Opus` and `OpusSpecial` and stores each glyph as its code plus 0xF000 (U+F0CF for the notehead `œ`).
@@ -160,7 +160,7 @@ in a pair on the middle line beside a barline).
 - Systems with different numbers of staves: `vecscore_musicxml.py` assumes every system has the
   same staves. Read a mixed page with `vecscore.py --staves auto` and assemble the MusicXML from
   per-section runs.
-- PDFs from Dorico or MuseScore (different fonts): use `halbestunde-omr`.
+- PDFs from Dorico or MuseScore (different fonts): use `omr-halbestunde`.
 
 **Seen in the Nelson Carol Book run (check your piece; use `--override` with explicit voices)**
 - A bar with a chord, a shared rest and one unison note (two stems on the single head) can be

@@ -1,14 +1,19 @@
 ---
-description: MuseScore 4.7.6+. Turn a sheet-music PDF into a score with MuseScore's online "Convert file to score" service (File > Convert file, same as Scores > Convert): upload from the GUI, wait for the cloud score, open it, export MusicXML through the bridge and check it against the PDF. Use when asked to convert a PDF with MuseScore, or for a scan or non-Sibelius PDF when Halbestunde is not wanted. Clean Sibelius-exported PDFs go to vector-pdf-score instead.
+description: MuseScore 4.7.6+. Turn a sheet-music PDF into a score with MuseScore's online "Convert file to score" service (File > Convert file, same as Scores > Convert): upload from the GUI, wait for the cloud score, open it, export MusicXML through the bridge and check it against the PDF. Use when asked to convert a PDF with MuseScore, or for a scan or non-Sibelius PDF when Halbestunde is not wanted. Clean Sibelius-exported PDFs go to vector-pdf-score instead. Formerly musescore-pdf-convert.
 globs: *
 alwaysApply: false
 ---
 
 # MuseScore PDF to score
 
+(Formerly `musescore-pdf-convert`.) **Which OMR runtime?** Use this skill for MuseScore 4.7.6+
+Convert (a cloud score that you open and export as MusicXML through the bridge). Use
+`omr-halbestunde` instead for the Halbestunde Mac app, which uploads the PDF to an online service
+and is driven through its GUI. Either output is a first draft: send it to `omr-score-repair` next.
+
 **Clean PDF exported from Sibelius?** Use `vector-pdf-score` first: exact, local, nothing
 uploaded. This service is the fallback for scans and other programs' PDFs (see also
-`halbestunde-omr`).
+`omr-halbestunde`).
 
 MuseScore 4.7.6 added an online converter. The app uploads the PDF (or images, or audio in a
 beta) to musescore.com, which recognises it and puts a cloud score in the user's account. It is

@@ -8,7 +8,7 @@ description: >
   export a PDF and check it against the source scan. Orchestrates the audit,
   repair and layout skills in order. Use when asked to clean up, polish,
   prepare, typeset or get a scanned score ready to share, print or send to a
-  choir, after halbestunde-omr or musescore-pdf-convert, or when a score
+  choir, after omr-halbestunde or omr-musescore-convert, or when a score
   imported from MusicXML looks unfinished.
 ---
 
@@ -246,7 +246,7 @@ Use `render`/`score-snapshot` and a PDF after each group of changes.
 2. Export MusicXML and run the audit again. Nothing should get worse: beams,
    chords, lyrics and breaks must not drop.
 3. If the pitches or rhythms could have changed, compare the notes with the
-   original (`compare_musicxml.py` in the `musescore-pdf-convert` skill: `uv run python -I ${CLAUDE_SKILL_DIR}/../musescore-pdf-convert/scripts/compare_musicxml.py original.xml new.xml`).
+   original (`compare_musicxml.py` in the `omr-musescore-convert` skill: `uv run python -I ${CLAUDE_SKILL_DIR}/../omr-musescore-convert/scripts/compare_musicxml.py original.xml new.xml`).
 
 ### 8. Deliver and clean up
 

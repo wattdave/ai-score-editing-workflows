@@ -55,7 +55,7 @@ $S status                                            # owner, age in minutes
   step (the user's Terminal steals focus when they type). Never type into Terminal.
 - Mouse: only real Quartz events work for Halbestunde, MuseScore and some Sibelius dialogs;
   System Events `click at` does nothing there. Use a click helper that exits unless the target
-  app is frontmost (the recipe is in `musescore-pdf-convert`, section 1).
+  app is frontmost (the recipe is in `omr-musescore-convert`, section 1).
 - **Screen scale differs per display.** Read it first: `CGDisplayBounds(CGMainDisplayID())`.
   On a 1920x1080 display screenshot pixels equal points; on another one the divisor was 1.371.
   Do not hard-code it.

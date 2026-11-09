@@ -4,7 +4,7 @@ description: >
   Decide whether a bad scan (photocopy, warped or skewed page, OMR that scrambles staves) can
   be transcribed by hand, and how: triage first, then read crops at full resolution, build
   MusicXML from a token text file instead of editing OMR output, and compare renders page by page.
-  Use when halbestunde-omr and musescore-pdf-convert both give scrambled parts, shifted bars or
+  Use when omr-halbestunde and omr-musescore-convert both give scrambled parts, shifted bars or
   empty results, or before spending hours on a speckled photocopy with piano reductions.
 ---
 

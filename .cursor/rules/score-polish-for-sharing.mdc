@@ -1,5 +1,5 @@
 ---
-description: Take a scanned or OMR-imported score from "plays back correctly" to "fit to print and hand to people": audit it, fix the MusicXML (title, credits, copyright line, part names, chord symbols, beams), choose system breaks by musical phrase, import it, tidy staff spacing and lyrics in the editor, export a PDF and check it against the source scan. Orchestrates the audit, repair and layout skills in order. Use when asked to clean up, polish, prepare, typeset or get a scanned score ready to share, print or send to a choir, after halbestunde-omr or musescore-pdf-convert, or when a score imported from MusicXML looks unfinished.
+description: Take a scanned or OMR-imported score from "plays back correctly" to "fit to print and hand to people": audit it, fix the MusicXML (title, credits, copyright line, part names, chord symbols, beams), choose system breaks by musical phrase, import it, tidy staff spacing and lyrics in the editor, export a PDF and check it against the source scan. Orchestrates the audit, repair and layout skills in order. Use when asked to clean up, polish, prepare, typeset or get a scanned score ready to share, print or send to a choir, after omr-halbestunde or omr-musescore-convert, or when a score imported from MusicXML looks unfinished.
 globs: *
 alwaysApply: false
 ---
@@ -238,7 +238,7 @@ Use `render`/`score-snapshot` and a PDF after each group of changes.
 2. Export MusicXML and run the audit again. Nothing should get worse: beams,
    chords, lyrics and breaks must not drop.
 3. If the pitches or rhythms could have changed, compare the notes with the
-   original (`compare_musicxml.py` in the `musescore-pdf-convert` skill: `uv run python -I ${CLAUDE_SKILL_DIR}/../musescore-pdf-convert/scripts/compare_musicxml.py original.xml new.xml`).
+   original (`compare_musicxml.py` in the `omr-musescore-convert` skill: `uv run python -I ${CLAUDE_SKILL_DIR}/../omr-musescore-convert/scripts/compare_musicxml.py original.xml new.xml`).
 
 ### 8. Deliver and clean up
 
