@@ -263,6 +263,17 @@ def choose_preset(staves: int, verses: int, systems_per_page: int) -> Preset:
                                            "spacesBetweenSystems": 6, **gap}, measured and verses == 6)
 
 
+#: The copyright/rights footer (the text MusicXML <rights> becomes) is anchored
+#: just above the bottom margin line, and a full page is stretched down to the
+#: same place, so with the 22-25 mm margin the presets leave (or the ~0 mm an
+#: import brings) the last staff prints over the footer or off the page.
+#: A small margin plus a large belowBottomStaveGap puts the footer below the
+#: last staff with about 4 pt to spare and keeps one page one page. Measured
+#: on The Holly and the Ivy (2 staves, 5 verses, 6 / 22 / 8): margin 22 or
+#: 24 overflowed to 0.3 in from the edge; 12 + 35 gave footer 0.46 in and
+#: staff end 0.62 in from the bottom.
+FOOTER_ROOM: dict[str, float] = {"bottomMargin": 12, "belowBottomStaveGap": 35}
+
 #: When staves are hidden, a page that overlaps is overfull: the recipe's
 #: first fix is a smaller staff, not bigger gaps.
 HIDDEN_STAFF_MAX_SIZE = 5.5
@@ -285,7 +296,7 @@ def plan(
     score_pages = to_score_bars(pages, offset)
     notes: list[str] = []
     preset = choose_preset(staves, verses, max(len(p) for p in score_pages))
-    settings: dict[str, Any] = dict(preset.settings)
+    settings: dict[str, Any] = {**FOOTER_ROOM, **preset.settings}
     if hide and settings.get("staffSize", 0) > HIDDEN_STAFF_MAX_SIZE:
         settings["staffSize"] = HIDDEN_STAFF_MAX_SIZE
         notes.append(f"staffSize capped at {HIDDEN_STAFF_MAX_SIZE} because staves are hidden "

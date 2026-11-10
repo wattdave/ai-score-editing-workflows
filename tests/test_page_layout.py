@@ -78,6 +78,15 @@ def test_hidden_staves_cap_staff_size_and_overrides_win() -> None:
     assert plan.batch[-1]["pageSize"] == "a4"
 
 
+def test_footer_room_is_in_every_layout_unless_the_row_sets_it() -> None:
+    two = pl.plan([[1, 5]], verses=5, staves=2).batch[-1]
+    assert (two["bottomMargin"], two["belowBottomStaveGap"]) == (12, 35)
+    three = pl.plan([[1, 5]], verses=4, staves=3).batch[-1]
+    assert (three["bottomMargin"], three["belowBottomStaveGap"]) == (24, 22)
+    over = pl.plan([[1, 5]], verses=5, staves=2, overrides={"bottomMargin": 20}).batch[-1]
+    assert over["bottomMargin"] == 20
+
+
 @pytest.mark.parametrize("item", ["staffSize", "nope=3", "staffSize=big", "pageSize=huge"])
 def test_parse_overrides_refuses_bad_items(item: str) -> None:
     with pytest.raises(BatchError):

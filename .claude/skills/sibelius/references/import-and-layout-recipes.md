@@ -92,8 +92,14 @@ on 4-staff pages and overflowed pages; 4 to 8 worked.
 | 128 bars on one page | 5 / 6 / 7 |
 | long piece, tight system 1 | 5 with `leftMargin` and `rightMargin` 12 (6 broke system 1 after bar 3) |
 
-Sibelius stretches the last system to the bottom margin, so check the copyright footer in the PDF.
-Raising `bottomMargin` does not help; make the page less full.
+The copyright footer (MusicXML `<rights>`) is anchored just above the bottom margin line, and Sibelius
+stretches a full page's last system down to that line, so a 22-25 mm margin (or the ~0 mm an import
+brings) prints the last staff over the footer or off the page. Raising `bottomMargin` makes it worse,
+because the footer rises with it. Use a small margin and a large gap below the last staff:
+`bottomMargin` 12 and `belowBottomStaveGap` 35 (auto-layout does this by default). Then the footer
+sits below the last staff, 0.46 in from the page edge. If the page is still overfull, the last staff
+runs past the footer anyway: shrink `spacesBetweenStaves` / `spacesBetweenSystems` or `staffSize`.
+Check every page-1 PDF for ink in the footer band.
 
 ## Things the import gets wrong, and the fix
 
