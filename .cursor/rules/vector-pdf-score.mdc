@@ -14,6 +14,8 @@ bars moved between parts); reading the glyphs was exact for pitches.
 
 ## 1. Check the PDF is a vector PDF from Sibelius
 
+Quick triage of any PDF (scan or vector, and which program made it): `uv run --with pymupdf python -I "${CLAUDE_SKILL_DIR}/scripts/pdf_source_check.py" file.pdf [more.pdf] [-v]`. It reports page images, vector drawings, staff lines and the music font, and names the skill that can read it.
+
 ```bash
 pdfinfo score.pdf | grep Creator            # "Sibelius version ..." is what this skill has been tested on
 uv run --with pymupdf python -I -c "import pymupdf,sys; p=pymupdf.open(sys.argv[1])[0]; print({s['font'] for b in p.get_text('rawdict')['blocks'] for l in b.get('lines',[]) for s in l['spans']})" score.pdf

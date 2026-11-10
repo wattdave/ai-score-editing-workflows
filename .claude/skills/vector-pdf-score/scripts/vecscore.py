@@ -60,7 +60,7 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F'), split_voices='aut
     for pi,pg in enumerate(d):
         st=staves_of(pg)
         draws=pg.get_drawings()
-        petrucci=any(s['font'].startswith('Petrucci') for b in pg.get_text('rawdict')['blocks'] for l in b.get('lines',[]) for s in l['spans'])   # Finale's legacy font: same glyph codes as Opus, stems and barlines drawn at one width
+        petrucci=any(s['font'].startswith(('Petrucci','Maestro')) for b in pg.get_text('rawdict')['blocks'] for l in b.get('lines',[]) for s in l['spans'])   # Finale's legacy font: same glyph codes as Opus, stems and barlines drawn at one width
         helsinki=any(s['font'].startswith('Helsinki') for b in pg.get_text('rawdict')['blocks'] for l in b.get('lines',[]) for s in l['spans'])
         vlines=[]; curves=[]; beams=[]
         for dr in draws:
