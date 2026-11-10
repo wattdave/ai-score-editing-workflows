@@ -71,6 +71,7 @@ and 2.12.2) and font size (every metric scales with the notation size).
   "L" is an editorial bracket, not a sharp. A ficta is written as `<accidental-mark
   placement="above">` and never as an in-staff `<accidental>`; Sibelius and Dorico do not show that mark on import,
   so each ficta must be set in the editor afterwards (Sibelius: `sibelius-cli ficta`; Dorico: the `ficta` op; MuseScore: the `ficta` op). `scripts/list_ficta.py` lists them and builds the batch from the editor's `query` output.
+  `mxl.py` ends with a ficta count: marks written, and every small accidental glyph on a staff that became no ficta (`CHECK page P staff S x X glyph NAME`). Any CHECK line is a ficta missing from the output, usually a glyph name the reader does not know (older Emmentaler names count quarter tones: `accidentals.2` is the sharp, `accidentals.M2` the flat).
 - **Key, time, pickup.** Read from the first system: the run of accidentals before the first note,
   `timesig.*` or two stacked digits. A half-bar start gives an implicit first measure. Every
   time-signature change in the piece is found and written (4/2 to 2/2 to 6/2 worked).

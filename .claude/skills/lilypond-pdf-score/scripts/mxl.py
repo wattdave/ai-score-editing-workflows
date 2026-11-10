@@ -206,6 +206,11 @@ def build(pdf,out,title,composer,names=None,nvoices=4,pages=None,clefs=None,fift
     X.append('</score-partwise>')
     open(out,'w').write("\n".join(X))
     print("wrote",out,"bars",nbars)
+    nf=sum(x.count('<accidental-mark') for x in X)
+    from build import FICTA_UNREAD
+    print("ficta marks written:",nf,"; small accidental glyphs not read as ficta:",len(FICTA_UNREAD))
+    for pn,st,x,y,name in FICTA_UNREAD:
+        print(f"  CHECK page {pn} staff {st} x {x} y {y} glyph {name}: ficta in the print, none in the output?")
 
 if __name__=="__main__":
     import argparse

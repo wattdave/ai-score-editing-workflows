@@ -7,7 +7,7 @@ from reader import *
 HEAD = {"noteheads.sM1": "B", "noteheads.s0": "w", "noteheads.s1": "h", "noteheads.s2": "b"}
 REST = {"rests.M1": 8.0, "rests.0": 4.0, "rests.1": 2.0, "rests.2": 1.0, "rests.3": 0.5, "rests.4": 0.25}
 FLAT = {"accidentals.flat", "accidentals.M1", "accidentals.M2"}
-SHARP = {"accidentals.sharp", "accidentals.1"}
+SHARP = {"accidentals.sharp", "accidentals.1", "accidentals.2"}   # old Emmentaler counts quarter tones: 2 is the sharp (Brumel ficta)
 NAT = {"accidentals.natural", "accidentals.0"}
 
 
