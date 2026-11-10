@@ -60,15 +60,18 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F'), split_voices='aut
     for pi,pg in enumerate(d):
         st=staves_of(pg)
         draws=pg.get_drawings()
+        petrucci=any(s['font'].startswith(('Petrucci','Maestro')) for b in pg.get_text('rawdict')['blocks'] for l in b.get('lines',[]) for s in l['spans'])   # Finale's legacy font: same glyph codes as Opus, stems and barlines drawn at one width
         helsinki=any(s['font'].startswith('Helsinki') for b in pg.get_text('rawdict')['blocks'] for l in b.get('lines',[]) for s in l['spans'])
         vlines=[]; curves=[]; beams=[]
         for dr in draws:
             for it in dr['items']:
                 if it[0]=='l' and abs(it[1].x-it[2].x)<0.01:
                     vlines.append((it[1].x,min(it[1].y,it[2].y),max(it[1].y,it[2].y),round(dr.get('width') or 0,2)))
-            if dr['type'] in('f','fs') and len(dr['items'])==4 and dr['rect'].width>3 and dr['rect'].height<8: beams.append(dr['rect'])
+            if dr['type'] in('f','fs') and len(dr['items']) in ((3,4) if petrucci else (4,)) and dr['rect'].width>3 and dr['rect'].height<8: beams.append(dr['rect'])
             elif dr['type']=='f' and len(dr['items'])==1 and dr['items'][0][0]=='re' and dr['rect'].width>3 and 1<dr['rect'].height<3.2: beams.append(dr['rect'])   # flat beam drawn as a rectangle (some drivers); a stem must end on it, so multi-bar rests never match
             if dr['type'] in('fs','f','s') and any(it[0]=='c' for it in dr['items']): curves.append(dr)
+        # 8vb lines: one long dashed horizontal path below a staff; its heads sound an octave lower than written
+        octdown=[(dr['rect'].x0,dr['rect'].x1,dr['rect'].y0) for dr in draws if dr.get('dashes') and dr['dashes'].replace(' ','').replace('0','')!='[]' and dr['rect'].width>30 and dr['rect'].height<1.5]
         mrests=[dr['rect'] for dr in draws if dr['type']=='f' and dr['rect'].width>30 and dr['rect'].height<8 and len(dr['items'])==1]
         glyphs=[]
         for b in pg.get_text("rawdict")['blocks']:
@@ -94,13 +97,22 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F'), split_voices='aut
             hs=sp/2
             # stem/barline width threshold. Helsinki stems are 0.60 wide and barlines 0.75. Opus line widths scale with the
             # staff size (stems 0.09-0.10 sp, barlines 0.155 sp: 0.42/0.66 at sp 4.25, 0.36/0.60 at sp 3.75), so cut at 0.125 sp.
-            BARW=stem_barline_cut(sp,helsinki)
+            BARW=0.37 if petrucci else stem_barline_cut(sp,helsinki)
             def pitch(y):
                 n=round((bot-y)/hs)
                 base=(4*7+2) if clef in('G','G8') else (2*7+4)
                 return base+n    # diatonic index: C0=0
             # barlines: full-height thin verticals through this staff
-            bl=sorted({(round(x,1),round(w,2)) for x,y0,y1,w in vlines if w>BARW and y0<=top+1.5 and y1>=bot-1.5 and y1-y0<sp*4+3 and s['x0']-1<=x<=s['x1']+1})
+            if petrucci:
+                # stems and barlines share one width: a barline starts exactly on a staff's top line and ends exactly on a staff's
+                # bottom line (this staff's, or the other staff of a grand staff)
+                hd=[(hx,hy) for hx,hy,hc,hf in glyphs if hc in H_GLYPH]
+                # a stem as long as the staff must not count: it ends on a notehead (at the head's left or right edge)
+                on_head=lambda x,y0,y1: any((abs(hx-x)<1.5 or abs(hx+sp*1.18-x)<1.5) and (abs(hy-y0)<1.2 or abs(hy-y1)<1.2) for hx,hy in hd)
+                is_bar=lambda y0,y1: y0<=top+0.6 and y1>=bot-0.6 and any(abs(y0-o['top'])<0.6 for o in st) and any(abs(y1-o['bottom'])<0.6 for o in st)
+                bl=sorted({(round(x,1),round(w,2)) for x,y0,y1,w in vlines if w>0.3 and is_bar(y0,y1) and not on_head(x,y0,y1) and s['x0']-1<=x<=s['x1']+1})
+            else:
+                bl=sorted({(round(x,1),round(w,2)) for x,y0,y1,w in vlines if w>BARW and y0<=top+1.5 and y1>=bot-1.5 and y1-y0<sp*4+3 and s['x0']-1<=x<=s['x1']+1})
             bl=[(x,w) for x,w in bl if x>s['x0']+30]       # drop the system-start line
             # a repeat sign or final barline prints a thick and a thin line (and dots) close together: one bar edge, kind noted
             bars=[]; marks={}
@@ -140,11 +152,12 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F'), split_voices='aut
             # fermatas: 'U' above (upright) and 'u' below (inverted), nearest this staff
             fermatas=[(x,'upright' if c=='U' else 'inverted') for x,y,c,f in glyphs if c in 'Uu' and band_dist(top,bot,y)<=6*sp
                       and all(band_dist(top,bot,y)<=band_dist(o['top'],o['bottom'],y) for o in st)]
-            flags=[(x,y,c) for x,y,c,f in glyphs if c in 'jJ' and mine(y)]
+            flags=[(x,y,c) for x,y,c,f in glyphs if c in 'jJ' and (mine(y) or (petrucci and band_dist(top,bot,y)<=7*sp and all(band_dist(top,bot,y)<=band_dist(o['top'],o['bottom'],y) for o in st)))]   # Finale's down-stem flag glyph sits further from the staff
             stems=[(x,y0,y1) for x,y0,y1,w in vlines if 0.3<w<=BARW and y1-y0>sp*2 and y1>top-3.2*sp and y0<bot+3.2*sp and s['x0']<x<s['x1']]
             ev=[]; raw=[]
+            low8=[(ox0,ox1) for ox0,ox1,oy in octdown if 3<oy-bot<35]
             for x,y,c in heads:
-                p=pitch(y)
+                p=pitch(y)-(7 if any(ox0-2<=x<=ox1+2 for ox0,ox1 in low8) else 0)
                 base=16 if c=='w' else 8 if c=='˙' else 4
                 # stem for this head: a stem line with x near head left/right edge and spanning y
                 st_=[(sx,y0,y1) for sx,y0,y1 in stems if (abs(sx-x)<1.3 or abs(sx-(x+sp*1.18))<1.3) and y0-1<=y<=y1+1]
@@ -162,7 +175,7 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F'), split_voices='aut
                     if lv==1: dur=2
                     elif lv>=2: dur=1
                 dot=any(0<dx-x<sp*2.6 and abs(dy-y)<sp*0.9 for dx,dy in dots)
-                ev.append(dict(x=x,p=[p],dur=dur*3//2 if dot else dur,y=y,beam=beam,flag=flag,stem=bool(st_),dot=dot,rest=False))
+                ev.append(dict(x=x,p=[p],dur=dur*3//2 if dot else dur,y=y,beam=beam,flag=flag,stem=bool(st_),dot=dot,rest=False,sx=st_[0][0] if st_ else None))
                 raw.append(dict(x=x,y=y,c=c,p=p,dot=dot))
             for x,y,c in rests:
                 rdot=any(0<dx-x<sp*2.4 and abs(dy-y)<sp*1.6 for dx,dy in dots)
@@ -171,8 +184,11 @@ def parse(pdf, nstaves_per_system=4, clefs=('G','G','G8','F'), split_voices='aut
             # merge chords: same x
             merged=[]
             for e in ev:
-                if merged and not e['rest'] and not merged[-1]['rest'] and abs(e['x']-merged[-1]['x'])<1.0:
+                # same x, or a second displaced to the other side of a shared stem (adjacent notes of one chord)
+                if merged and not e['rest'] and not merged[-1]['rest'] and (abs(e['x']-merged[-1]['x'])<1.0 or
+                        (e.get('sx') is not None and merged[-1].get('sx') is not None and abs(e['sx']-merged[-1]['sx'])<0.3 and abs(e['x']-merged[-1]['x'])<sp*1.5)):
                     merged[-1]['p']=sorted(set(merged[-1]['p']+e['p']))
+                    merged[-1]['dur']=max(merged[-1]['dur'],e['dur']); merged[-1]['dot']=merged[-1]['dot'] or e['dot']   # the dot sits beside only one head of a chord with a displaced second
                 else: merged.append(e)
             # accidentals printed in the bar: '#', 'b', 'n' glyph left of a notehead at about the same height; they hold
             # for the same pitch for the rest of the bar. e['alt'] = {pitch index: -1|0|1} for pitches that carry one.

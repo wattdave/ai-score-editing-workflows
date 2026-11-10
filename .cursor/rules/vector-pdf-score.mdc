@@ -12,7 +12,22 @@ A PDF exported by Sibelius keeps every note as a glyph at an exact position, so 
 recognised. Halbestunde (OMR) was wrong on these files (staves swapped, clefs read wrongly,
 bars moved between parts); reading the glyphs was exact for pitches.
 
+## Choosing the route: read the PDF or scan it (OMR)
+
+Run `pdf_source_check.py` (below) first, then:
+
+1. **Scan** (page images, no vector staves): OMR (`omr-halbestunde`, `omr-musescore-convert`). A poor scan (speckled photocopy, scrambled parts) goes to `hand-transcribe-poor-scan`, or ask for a clean copy.
+2. **Vector, supported font** (Sibelius Opus or Helsinki, Finale Petrucci): read the glyphs, this skill. It is exact for pitch and rhythm where OMR guesses, so it comes first whenever it applies.
+3. **Vector from a tool with its own route:** LilyPond (`lilypond-pdf-score`, or `lilypond-to-score` when the `.ly` exists); MusiXTeX (the recipe at the end of this skill, for a short piece).
+4. **Vector, unsupported font** (Finale Maestro, Bravura, Leland, or a print driver that re-encodes glyphs): OMR the PDF. A clean vector PDF OMRs far better than a scan. Decode the font only if about five or more PDFs share the same producer and font, so the work pays back (the glyph codes depend on the print driver as well as the font: two Maestro PDFs from IMSLP used different codes).
+5. **Time box:** run the dump once or twice. If fewer than about 70% of bars sum after the first round of fixes, stop and switch to OMR (a Finale Maestro carol with grace notes, 8va lines and clef changes reached about 40%).
+6. **OMR can win on a supported font too:** a piece full of grace notes, mid-staff clef changes, 8va lines and trills, which the reader does not handle, when a rehearsal-quality score is enough.
+
+After either route: check the bar sums, run `score-engraving-audit`, compare the render with the print, and use `omr-score-repair`'s `voice_vs_piano.py` when a piano reduction doubles the voices.
+
 ## 1. Check the PDF is a vector PDF from Sibelius
+
+Quick triage of any PDF (scan or vector, and which program made it): `uv run --with pymupdf python -I "${CLAUDE_SKILL_DIR}/scripts/pdf_source_check.py" file.pdf [more.pdf] [-v]`. It reports page images, vector drawings, staff lines and the music font, and names the skill that can read it.
 
 ```bash
 pdfinfo score.pdf | grep Creator            # "Sibelius version ..." is what this skill has been tested on
@@ -225,3 +240,15 @@ Typeset-by-TeX scores (many IMSLP and hymnal PDFs) use `TeXMUSIX20-Regular` and 
 3. Pitch from y: `steps = round((bottom_line_y - head_y) / (line_spacing / 2))` above the bottom line (treble: E4, bass: G2). Rhythm from head type, dots, flags (codes 40/41/45) and beams; check every bar sums.
 4. Lyrics are ordinary text in a text font; assign to notes by x.
 5. Verify the result against the PDF page image before importing, and run the audit/beaming skills as for any other source.
+
+## Finale PDFs (Petrucci music font)
+
+Finale's legacy `Petrucci` font uses the same glyph codes as Opus (notehead `œ`, half `˙`, whole `w`, `&` and `?` clefs), so the reader accepts it, with these differences (checked on one 4-page SSA + piano score, Belliston *O Holy Night*, 12/8):
+
+- Stems and barlines are drawn at the same width. A barline is a vertical that starts exactly on a staff's top line and ends exactly on a staff's bottom line (the other staff's, on a grand staff) and does not end on a notehead.
+- Beams are filled three-line shapes, and the down-stem flag glyph `J` sits further from the staff than Sibelius's.
+- Two noteheads on opposite sides of one stem (a second) are one chord; a dot beside only one of them dots the chord.
+- A lone whole rest fills the bar whatever the meter (12/8: 24 sixteenths), so a first bar of rests is not a pickup.
+- An 8vb line (one long dashed path below the bass staff) lowers the heads over it by an octave, so the MusicXML sounds right; the 8vb bracket is not redrawn.
+- Piano staves may both be bass clef (`--clefs G,F,F`): read the clef off the print.
+- Still read by hand: a bar with a second voice the reader splits wrongly (use `--override`, as for any unsummable bar), the volta brackets, and verse labels such as "SSA" or "Soloist I" (`--skip-word`).

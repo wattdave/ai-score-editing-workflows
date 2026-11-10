@@ -34,6 +34,7 @@ def test_barline_cut_scales_with_staff_size_for_opus() -> None:
 def test_music_font_by_name_or_by_symbol_codes() -> None:
     assert vecglyph.is_music_font("Opus", "x")
     assert vecglyph.is_music_font("HelsinkiStd", "x")
+    assert vecglyph.is_music_font("Petrucci", "x")   # Finale's legacy music font, same glyph codes as Opus
     # Ghostscript renames the font (TT1F7t00) but keeps the U+F0xx codes
     assert vecglyph.is_music_font("TT1F7t00", " ")
     assert not vecglyph.is_music_font("Times-Roman", "Glo-ry")
