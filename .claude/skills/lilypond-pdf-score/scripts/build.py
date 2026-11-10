@@ -292,8 +292,13 @@ def collect(D, res, nvoices, clefs, beats_per_bar, fifths, pickup_shift=None):
                 elide = (ti > 0 and last >= 0 and any(
                     g["name"] == "ties.lyric.default" and sy[ti - 1]["x1"] - 2 <= g["x"] <= t["x0"] + 2 and abs(g["y"] - t["y"]) < 6
                     for g in pgo.glyphs) and abs(xc - (notes[last]["x"] + 2.6 * pgo.k)) < 22)
+                # LilyPond left-aligns a syllable that starts a melisma: its left edge sits exactly on the notehead,
+                # and its centre can be nearer the next note (Brumel: "n'es", "mais", "trou" over eighths)
+                flush = [k for k, ev in enumerate(notes) if k > last and abs(t["x0"] - ev["x"]) < 0.3]
                 if elide:
                     best = (abs(xc - (notes[last]["x"] + 2.6 * pgo.k)), last)
+                elif flush:
+                    best = (0.0, flush[0])
                 else:
                     for k, ev in enumerate(notes):
                         if k <= last:
