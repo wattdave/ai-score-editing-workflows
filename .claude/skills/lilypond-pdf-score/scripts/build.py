@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from collections import Counter
 from onset2 import *
 from lyr import page_lyrics
+FICTA_UNREAD = []   # small accidental glyphs (any name) that became no ficta: (page, staff, x, y, glyph name)
 DROPPED = []   # lyric words that found no note (page, staff, text, x, y, distance): check these after a run
 
 DIGITS = {n: i for i, n in enumerate("zero one two three four five six seven eight nine".split())}
@@ -214,6 +215,7 @@ def collect(D, res, nvoices, clefs, beats_per_bar, fifths, pickup_shift=None):
         pgo = D.pages[pg["pn"]]
         ons = timeline(pg, s)
         small = [g for g in pgo.glyphs if g["name"] in (FLAT | SHARP | NAT) and g["size"] < pgo.main * 0.85]
+        used = set()
         if D.off == 1:
             # a PDF re-saved by Preview loses the name of the last glyph of each font subset;
             # in the Brumel PDF that glyph is the small ficta flat
@@ -259,6 +261,7 @@ def collect(D, res, nvoices, clefs, beats_per_bar, fifths, pickup_shift=None):
                         if pgo.staff_of(g["y"]) == st and 0 <= g["x"] - e["x"] <= 3.2 * pgo.k:
                             alt = -1 if g["name"] in FLAT else 1 if g["name"] in SHARP else 0
                             ev["ficta"] = True
+                            used.add(id(g))
                     if alt is None and "acc" in e:
                         alt = e["acc"]
                         ev["acc"] = True
@@ -278,6 +281,13 @@ def collect(D, res, nvoices, clefs, beats_per_bar, fifths, pickup_shift=None):
                             prev[-1]["chain_sys"] = n     # a tie that goes on from the stub at the start of this system
                         continue
                 voices[vi].append(ev)
+            # ficta count check: every small accidental-like glyph on this staff must have become a ficta
+            # (an unknown glyph name dropped Brumel's sharp ficta, bar 39)
+            for g in pgo.glyphs:
+                if pgo.staff_of(g["y"]) == st and g["size"] < pgo.main * 0.85 and id(g) not in used \
+                        and (g["name"] is None or g["name"].startswith("accidentals.")) \
+                        and not any(abs(g["x"] - u[2]) < 0.1 and abs(g["y"] - u[3]) < 0.1 for u in FICTA_UNREAD):
+                    FICTA_UNREAD.append((pg["pn"] + 1, st, round(g["x"], 1), round(g["y"], 1), g["name"]))
             sb = pgo.staves[st]["bot"]
             nxt = pgo.staves[st + 1]["top"] if st + 1 < len(pgo.staves) else sb + 60
             row = [t for t in ptoks[pg["pn"]] if sb < t["y"] - 5 < nxt and t["x0"] >= pgo.staves[st]["x0"]]
