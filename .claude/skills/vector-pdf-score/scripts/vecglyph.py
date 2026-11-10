@@ -26,10 +26,10 @@ def stem_barline_cut(sp: float, helsinki: bool) -> float:
     return 0.68 if helsinki else 0.125 * sp
   
 def is_music_font(font: str, text: str) -> bool:
-    """True if a text span is set in a music font. Sibelius names the fonts Opus* and Helsinki*; Ghostscript
+    """True if a text span is set in a music font. Sibelius names the fonts Opus* and Helsinki*, Finale's legacy font is Petrucci*; Ghostscript
     renames them (TT1F7t00, TT204t00, TT206t00) and drops the name, so also accept a span whose non-space
     characters are all symbol-font codes (U+F000-U+F0FF, never present in a text font's lyrics or title)."""
-    if font.startswith(("Opus", "Helsinki")):
+    if font.startswith(("Opus", "Helsinki", "Petrucci")):
         return True
     chars = [ch for ch in text if not ch.isspace()]
     return bool(chars) and all(0xF000 <= ord(ch) <= 0xF0FF for ch in chars)

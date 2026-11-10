@@ -225,3 +225,15 @@ Typeset-by-TeX scores (many IMSLP and hymnal PDFs) use `TeXMUSIX20-Regular` and 
 3. Pitch from y: `steps = round((bottom_line_y - head_y) / (line_spacing / 2))` above the bottom line (treble: E4, bass: G2). Rhythm from head type, dots, flags (codes 40/41/45) and beams; check every bar sums.
 4. Lyrics are ordinary text in a text font; assign to notes by x.
 5. Verify the result against the PDF page image before importing, and run the audit/beaming skills as for any other source.
+
+## Finale PDFs (Petrucci music font)
+
+Finale's legacy `Petrucci` font uses the same glyph codes as Opus (notehead `œ`, half `˙`, whole `w`, `&` and `?` clefs), so the reader accepts it, with these differences (checked on one 4-page SSA + piano score, Belliston *O Holy Night*, 12/8):
+
+- Stems and barlines are drawn at the same width. A barline is a vertical that starts exactly on a staff's top line and ends exactly on a staff's bottom line (the other staff's, on a grand staff) and does not end on a notehead.
+- Beams are filled three-line shapes, and the down-stem flag glyph `J` sits further from the staff than Sibelius's.
+- Two noteheads on opposite sides of one stem (a second) are one chord; a dot beside only one of them dots the chord.
+- A lone whole rest fills the bar whatever the meter (12/8: 24 sixteenths), so a first bar of rests is not a pickup.
+- An 8vb line (one long dashed path below the bass staff) lowers the heads over it by an octave, so the MusicXML sounds right; the 8vb bracket is not redrawn.
+- Piano staves may both be bass clef (`--clefs G,F,F`): read the clef off the print.
+- Still read by hand: a bar with a second voice the reader splits wrongly (use `--override`, as for any unsummable bar), the volta brackets, and verse labels such as "SSA" or "Soloist I" (`--skip-word`).

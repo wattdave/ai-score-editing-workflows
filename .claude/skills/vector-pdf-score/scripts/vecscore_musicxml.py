@@ -113,6 +113,9 @@ def _fix(sts):
                     else: k_ += 1
     return sts
 sts = _fix(sts)
+for s_ in sts:   # a lone whole-bar rest fills the bar whatever the meter (the reader counts it as 16)
+    for b_ in s_['bars']:
+        if len(b_) == 1 and b_[0].get('rest') and b_[0]['dur'] == 16 and BAR != 16: b_[0]['dur'] = BAR
 def nidx(name): return STEPN.index(name[0]) + 7 * int(name[1:])
 overrides = {}
 if a.override:
