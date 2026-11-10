@@ -309,6 +309,8 @@ def collect(D, res, nvoices, clefs, beats_per_bar, fifths, pickup_shift=None):
                 next_x0 = sy[ti + 1]["x0"] if ti + 1 < len(sy) else 1e9
                 after = [h for h in row if h["text"] == "-" and t["x1"] - 1 <= h["x0"] <= next_x0]
                 before = [h for h in row if h["text"] == "-" and prev_x1 - 1 <= h["x0"] <= t["x0"] + 1]
+                after = after or t.get("glue_after")
+                before = before or t.get("glue_before")
                 syl = "middle" if (after and before) else "begin" if after else "end" if before else "single"
                 if best[1] == last_before:       # elision: "re" and "e" share one note
                     prev_tx, prev_syl = notes[best[1]]["lyric"]

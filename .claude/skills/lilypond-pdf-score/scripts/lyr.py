@@ -54,13 +54,21 @@ def page_lyrics(doc, pn, scrambled=None, pages=None):
                 if cur:
                     toks.append(cur)
                 cur = None
-            elif cur and c["x0"] - cur["x1"] < 1.6 and c["u"] != "-" and (scrambled or c["sp"] == cur["sp"]):   # LilyPond writes each word as its own text span
+            elif cur and c["x0"] - cur["x1"] < 1.6 and c["u"] != "-" and (scrambled or c["sp"] == cur["sp"]) \
+                    and not (scrambled and c["x0"] - cur["x1"] > 0.3):   # LilyPond writes each word as its own text span
                 cur["text"] += c["u"]
                 cur["x1"] = c["x1"]
             else:
+                # in a scrambled file the spans are lost; letters of one syllable sit at most 0.25 pt apart, while two
+                # syllables set tight with the hyphen left out ("plon" "giet", Brumel) are 0.35-0.5 pt apart
+                glued = bool(cur and scrambled and 0.3 < c["x0"] - cur["x1"] < 1.6 and c["u"] != "-")
                 if cur:
+                    if glued:
+                        cur["glue_after"] = True
                     toks.append(cur)
                 cur = dict(text=c["u"], x0=c["x0"], x1=c["x1"], y=y, sp=c["sp"])
+                if glued:
+                    cur["glue_before"] = True
                 if c["u"] == "-":
                     toks.append(cur)
                     cur = None
