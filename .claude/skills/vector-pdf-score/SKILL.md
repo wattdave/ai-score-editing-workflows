@@ -16,6 +16,19 @@ A PDF exported by Sibelius keeps every note as a glyph at an exact position, so 
 recognised. Halbestunde (OMR) was wrong on these files (staves swapped, clefs read wrongly,
 bars moved between parts); reading the glyphs was exact for pitches.
 
+## Choosing the route: read the PDF or scan it (OMR)
+
+Run `pdf_source_check.py` (below) first, then:
+
+1. **Scan** (page images, no vector staves): OMR (`omr-halbestunde`, `omr-musescore-convert`). A poor scan (speckled photocopy, scrambled parts) goes to `hand-transcribe-poor-scan`, or ask for a clean copy.
+2. **Vector, supported font** (Sibelius Opus or Helsinki, Finale Petrucci): read the glyphs, this skill. It is exact for pitch and rhythm where OMR guesses, so it comes first whenever it applies.
+3. **Vector from a tool with its own route:** LilyPond (`lilypond-pdf-score`, or `lilypond-to-score` when the `.ly` exists); MusiXTeX (the recipe at the end of this skill, for a short piece).
+4. **Vector, unsupported font** (Finale Maestro, Bravura, Leland, or a print driver that re-encodes glyphs): OMR the PDF. A clean vector PDF OMRs far better than a scan. Decode the font only if about five or more PDFs share the same producer and font, so the work pays back (the glyph codes depend on the print driver as well as the font: two Maestro PDFs from IMSLP used different codes).
+5. **Time box:** run the dump once or twice. If fewer than about 70% of bars sum after the first round of fixes, stop and switch to OMR (a Finale Maestro carol with grace notes, 8va lines and clef changes reached about 40%).
+6. **OMR can win on a supported font too:** a piece full of grace notes, mid-staff clef changes, 8va lines and trills, which the reader does not handle, when a rehearsal-quality score is enough.
+
+After either route: check the bar sums, run `score-engraving-audit`, compare the render with the print, and use `omr-score-repair`'s `voice_vs_piano.py` when a piano reduction doubles the voices.
+
 ## 1. Check the PDF is a vector PDF from Sibelius
 
 Quick triage of any PDF (scan or vector, and which program made it): `uv run --with pymupdf python -I "${CLAUDE_SKILL_DIR}/scripts/pdf_source_check.py" file.pdf [more.pdf] [-v]`. It reports page images, vector drawings, staff lines and the music font, and names the skill that can read it.
