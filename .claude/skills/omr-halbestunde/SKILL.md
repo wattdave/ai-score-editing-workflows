@@ -11,6 +11,8 @@ description: >
 
 # Halbestunde OMR
 
+**Before scanning a vector PDF:** a clean vector PDF from Sibelius, or from Finale with the Petrucci font, can be read exactly without OMR. Run `vector-pdf-score`'s `pdf_source_check.py` and see its "Choosing the route" section first.
+
 (Formerly `halbestunde-omr`.) **Which OMR runtime?** Use this skill for the Halbestunde Mac app,
 which uploads the PDF to an online service and is driven through its GUI. Use
 `omr-musescore-convert` instead for MuseScore 4.7.6+ Convert (a cloud score that you open and

@@ -6,6 +6,8 @@ alwaysApply: false
 
 # Score editing: which tool for which score
 
+**Starting from a PDF?** Run `vector-pdf-score`'s `pdf_source_check.py` and follow its "Choosing the route" section: it says when to read the glyphs directly and when to use OMR (`omr-halbestunde`, `omr-musescore-convert`).
+
 This repository drives three score editors through the same kind of tools
 (`score_overview`, `query_score`, `apply_batch` with `dry_run`, `undo`,
 `save_score`, `export_score`) and the same units (1/256 of a quarter note,
