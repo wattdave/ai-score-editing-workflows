@@ -161,7 +161,7 @@ def build(pdf,out,title,composer,names=None,nvoices=4,pages=None,clefs=None,fift
                 else:
                     X.append(f'<attributes><time{tsym}><beats>{bb}</beats><beat-type>{bt}</beat-type></time>')
                 X.append('</attributes>')
-            state={}
+            state={}; fcarry=set()   # fcarry: steps whose alteration comes from a ficta earlier in the bar
             if b in left: X.append(barline('left',left[b]))
             for o,d,e in bars.get(b,[]):
                 parts=[d] if e.get('tup') else pieces(d)
@@ -174,10 +174,13 @@ def build(pdf,out,title,composer,names=None,nvoices=4,pages=None,clefs=None,fift
                         continue
                     n=e["step"]; letter=LETTER[n%7]; octv=n//7
                     key=KEY.get(n%7,0)
+                    carried=False
                     if e.get("alt") is not None:
                         alt=e["alt"]
-                        if e.get("acc"): state[n]=alt
-                    else: alt=state.get(n,key)
+                        if e.get("acc"): state[n]=alt; fcarry.discard(n)
+                        elif e.get("ficta"): state[n]=alt; fcarry.add(n)   # a ficta holds to the end of the bar, like an accidental
+                    else:
+                        alt=state.get(n,key); carried=n in fcarry
                     k=seen.get(id(e),0); seen[id(e)]=k+1
                     tot=count[id(e)]*0+sum(1 if ee.get('tup') else len(pieces(dd)) for oo,dd,ee,_ in segs if ee is e)
                     idx=k; 
@@ -191,7 +194,7 @@ def build(pdf,out,title,composer,names=None,nvoices=4,pages=None,clefs=None,fift
                     ficta=bool(e.get("ficta")) and not tie_prev and not e.get("acc")
                     if alt==0 and (e.get("ficta") or key!=0) or alt!=0 and (e.get("acc") or e.get("ficta")):
                         # ficta is editorial: a mark above the note, not an accidental in the staff
-                        if not tie_prev and not ficta: nx+='<accidental>'+aname+'</accidental>'
+                        if not tie_prev and not ficta and not carried: nx+='<accidental>'+aname+'</accidental>'
                     nx+=tm
                     if tie_prev or tie_next or ficta:
                         nx+='<notations>'+('<tied type="stop"/>' if tie_prev else '')+('<tied type="start"/>' if tie_next else '')+(f'<accidental-mark placement="above">{aname}</accidental-mark>' if ficta else '')+'</notations>'
