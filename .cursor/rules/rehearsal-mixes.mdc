@@ -111,3 +111,31 @@ before restarting.
 
 Still listen to the start of at least one "only" file to confirm no other
 voice bleeds in, and report the files written to the user.
+
+## Drive: voice folders from shortcuts
+
+When asked to put mixes on Google Drive, keep one folder per song with the
+files as written. If the user also wants a folder per voice, make it from
+Drive shortcuts, not copies: a shortcut takes no storage and follows the
+source if a mix is replaced.
+
+- Layout: `By voice/<Soprano|Alto|Tenor|Bass>/`, each shortcut named as its
+  source file (the file names already carry the song title, so they stay
+  unique).
+- Map each voice label to the nearest of the four parts: "Soprano 1/2",
+  "Soprano I/II" and "Treble" go to Soprano; "Counter" to Alto; "Baritone" to
+  Bass. Ask about any label that does not fit, such as "Soloist", and leave
+  out soloist-only mixes unless told otherwise.
+- "All voices" mixes go into each voice folder the score has a part for. The
+  Tenor folder takes them for every score with a bass or tenor part, because
+  men sing there.
+- Create a shortcut with rclone, passing the folder ID with
+  `--drive-root-folder-id`:
+  `rclone backend shortcut gdrive: "<song folder>/<file>" "By voice/<Voice>/<file>"`.
+  Check that the name is not already there first.
+- To remove a shortcut, trash it through the Drive connector by its own ID.
+  Do not use `rclone delete`: rclone follows shortcuts and can delete the
+  target file.
+- Verify: `rclone lsjson` on each voice folder shows `target<TAB>shortcut` IDs.
+  Each target ID must match its source file, and the count per folder must
+  match the plan.
