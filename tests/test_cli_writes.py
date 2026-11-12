@@ -424,3 +424,26 @@ async def test_patch_layout_rejects_an_unbatchable_value_before_backup(
         assert await _run_patch_layout(args) == EXIT_COMMAND_FAILED
     client.assert_not_called()
     assert "numerator must be" in capsys.readouterr().err
+
+
+async def test_run_write_save_without_path_argument(cli_session: CliSession) -> None:
+    """set-staff-name has --save but no path; saving must not need args.path."""
+    from ai_score_editing.sibelius.commands.score import _run_set_staff_name
+
+    args = build_parser().parse_args(["set-staff-name", "--staff", "1", "--full", "Voice", "--save"])
+
+    async def bridge_side_effect(unused_client: Any, method: str, call_args: list[Any] | None = None) -> Any:
+        del unused_client, call_args
+        if method == "Save":
+            return {"fileName": "/scores/a.sib"}
+        return {"staffNum": 1}
+
+    with (
+        patch("ai_score_editing.sibelius.runner.backup", new=AsyncMock(return_value={"copy": "/scores/a.backup.sib"})),
+        patch("ai_score_editing.sibelius.bridge.check_bridge_version", new=AsyncMock()),
+        patch("ai_score_editing.sibelius.bridge.require_bridge", new=AsyncMock()),
+        bridge_call(side_effect=bridge_side_effect) as bridge,
+    ):
+        assert await _run_set_staff_name(args) == EXIT_OK
+
+    assert [call.args[1] for call in bridge.call_args_list] == ["SetStaffName", "Save"]
