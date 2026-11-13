@@ -303,6 +303,10 @@ What the checks taught (Sibelius 2026.6):
   layout values cannot be read back; `topMargin` moves music and title together.
 - Systems are justified down to `belowBottomStaveGap`: a *bigger* gap (35, then 45 mm) lifts a last staff off the
   footer; a smaller `spacesBetweenSystems` does not. A page that is already full may then spill to a second page.
+- A score with no title item (empty Score Info title, nothing printed): `set-score-info --title`, then `add-text` on staff 0
+  bar 1 with style `text.system.page_aligned.title` and text `\\$Title\\`. The new item starts at `Dy` 496 and `Dy` cannot be
+  changed, so it is off the page until `aboveTopStaveGap` is about 50 mm; `beautify_fix.py` finds the gap. A la Claire
+  Fontaine looked unfixable until the gap was raised.
 - `Dy` on dynamics (`text.staff.expression`) stored but did not move them in the render (Pat-a-pan): fix such
   collisions by hand.
 - A close answered "No" is not proof the score was not saved: check the file's modification time after a discard
