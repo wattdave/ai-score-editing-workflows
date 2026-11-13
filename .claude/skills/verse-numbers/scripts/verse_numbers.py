@@ -10,6 +10,7 @@ It then calibrates itself: it renders the score to PDF (needs poppler's pdftotex
 its verse's first word land, and solves Dy per verse so each numeral shares its word's baseline, and one Dx for all so the numerals form a
 column, with the tightest row (the widest first word) kept --gap-pt away from its word. --dx and --dy-adjust are only the starting guess (or the final values with --no-auto)."""
 import argparse
+import html
 import json
 import re
 import subprocess
@@ -36,12 +37,11 @@ def query(staff, bars, types):
 
 
 def first_syllables(staff, last_bar, from_bar=1):
-    """Earliest lyric item per verse (a pickup or a late start may put a verse's first syllable after bar 1)."""
+    """Earliest lyric item of every verse from from_bar on (a pickup or a late start may put a verse's first
+    syllable well after bar 1, e.g. verses 2 and 3 first sung at bar 33)."""
     first = {}
-    start = from_bar
-    while start <= last_bar:
-        end = min(start + 7, last_bar)
-        for o in query(staff, f"{start}-{end}", "LyricItem"):
+    for start in range(from_bar, last_bar + 1, 8):
+        for o in query(staff, f"{start}-{min(start + 7, last_bar)}", "LyricItem"):
             m = VERSE.search(o["styleId"])
             if not m:
                 continue
@@ -49,10 +49,12 @@ def first_syllables(staff, last_bar, from_bar=1):
             key = (o["bar"], o["position"])
             if v not in first or key < (first[v]["bar"], first[v]["position"]):
                 first[v] = o
-        if first and start > from_bar:
-            break
-        start = end + 1
     return first
+
+
+def norm(text):
+    """Compare words ignoring case, quotes and punctuation (the PDF may use curly quotes)."""
+    return re.sub(r"[^\w]", "", text.lower())
 
 
 def measure(first_words, expect=None):
@@ -65,7 +67,7 @@ def measure(first_words, expect=None):
     out = {}
     for page in bbox.split("<page ")[1:]:
         words = [
-            (float(x0), float(y0), float(x1), float(y1), t)
+            (float(x0), float(y0), float(x1), float(y1), html.unescape(t))
             for x0, y0, x1, y1, t in re.findall(
                 r'xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">([^<]*)<', page)
         ]
@@ -83,7 +85,7 @@ def measure(first_words, expect=None):
                 continue
             for n in [w for w in words if w[4] == f"{v}."]:
                 right = [w for w in words if w[0] > n[0] and abs(w[3] - n[3]) < 25
-                         and w[4].rstrip("-") and first_words[v].startswith(w[4].rstrip("-"))
+                         and w[3] - w[1] < 20 and norm(w[4]) and norm(first_words[v]).startswith(norm(w[4]))
                          and (prev is None or w[3] > prev + 3)]
                 if right:
                     # several verses may start with the same word ("The"): take the topmost row still free
@@ -105,6 +107,8 @@ def main():
                     help="only look for first syllables from this score bar on: use it when the numbered verse rows "
                          "start in a later system than the first words (Ther is no rose: verse 1 is also sung "
                          "unnumbered in bars 1-6, the numerals start at bar 7)")
+    ap.add_argument("--verses", help="comma-separated verse numbers to number (default: all), e.g. 2,3 when the "
+                                     "print leaves verse 1 unnumbered")
     ap.add_argument("--dx", type=int, default=-120, help="Dx of each numeral, 1/32 space (default -120)")
     ap.add_argument("--dy-adjust", type=int, default=0,
                     help="added to each lyric line's Dy for the numeral (1/32 space); the plain-text baseline differs "
@@ -120,6 +124,9 @@ def main():
 
     info = json.loads(cli("score-info"))
     first = first_syllables(a.staff, info["barCount"], a.from_bar)
+    if a.verses:
+        keep = {int(x) for x in a.verses.split(",")}
+        first = {v: o for v, o in first.items() if v in keep}
     if not first:
         sys.exit("no lyric items found on that staff")
 
@@ -179,25 +186,34 @@ def main():
     if not a.no_auto:
         # Solve Dx/Dy per verse from the rendered PDF: baseline of the numeral = baseline of the verse's first
         # word, and a fixed gap (a.gap_pt points) between the numeral and the word.
-        words = {v: o["text"] for v, o in first.items()}
+        words = {v: PREFIX.sub("", o["text"]) for v, o in first.items()}  # the PDF shows the word without "N. "
         probe = 40  # units moved up to measure how many points one unit is
-        m0 = measure(words, expect=a.expect_file)
-        up = {v: (dx, dy + probe) for v, (dx, dy) in start.items()}
-        place(up)
-        m1 = measure(words, expect=a.expect_file)
-        solved = {}
-        ks = {}
-        for v in first:
-            err0, err1 = m0[v][0], m1[v][0]  # lyric baseline minus numeral baseline, pt (grows as the numeral rises)
-            k = (err1 - err0) / probe        # points per unit
-            if k <= 0.01:
-                sys.exit(f"verse {v}: moving the numeral did not move it in the PDF ({err0:.2f} -> {err1:.2f} pt)")
-            dx1, dy1 = up[v]
-            ks[v] = k
-            solved[v] = (dx1 - (a.gap_pt - m1[v][1]) / k, dy1 - err1 / k)
-            if abs(solved[v][1] - first[v]["dy"]) > 90:
-                sys.exit(f"verse {v}: the numeral landed {solved[v][1] - first[v]['dy']:+.0f} units from its lyric line, "
-                         "so it probably locked onto a neighbouring row: pass a closer --dy-adjust and rerun")
+        for attempt in range(2):
+            m0 = measure(words, expect=a.expect_file)
+            up = {v: (dx, dy + probe) for v, (dx, dy) in start.items()}
+            place(up)
+            m1 = measure(words, expect=a.expect_file)
+            solved = {}
+            ks = {}
+            for v in first:
+                err0, err1 = m0[v][0], m1[v][0]  # lyric baseline minus numeral baseline, pt (grows as the numeral rises)
+                k = (err1 - err0) / probe        # points per unit
+                if k <= 0.01:
+                    sys.exit(f"verse {v}: moving the numeral did not move it in the PDF ({err0:.2f} -> {err1:.2f} pt)")
+                dx1, dy1 = up[v]
+                ks[v] = k
+                solved[v] = (dx1 - (a.gap_pt - m1[v][1]) / k, dy1 - err1 / k)
+            # A numeral more than about half a row (40 units) from where it started may have been matched to a
+            # neighbouring row. Start again from the solved spot: if that is a genuine one-row offset the second
+            # attempt agrees with itself; if it was a mismatch it does not.
+            far = [v for v in first if abs(solved[v][1] - start[v][1]) > 45]
+            if not far:
+                break
+            if attempt == 1:
+                sys.exit(f"verses {far}: the solved Dy keeps moving ({[round(solved[v][1] - start[v][1]) for v in far]} "
+                         "units from the start): pass --dy-adjust close to the right row and rerun")
+            start = solved
+            place(start)
         # one shared Dx so the numerals form a column (as in the print); the widest first word sets how far left
         col = min(dx for dx, _ in solved.values())
         solved = {v: (col, dy) for v, (_, dy) in solved.items()}

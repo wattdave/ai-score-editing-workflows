@@ -60,8 +60,22 @@ Options:
 - `--no-auto`: skip the calibration and use `--dx` / `--dy-adjust` as given.
 - `--gap-pt`: numeral-to-word gap of the tightest row.
 
+- `--verses 2,3`: number only these verses (Sankt Nikolaus prints only "2." and "3.";
+  Gloucester Wassail has a prose verse 3).
+
 Verses that start with the same word (Boar's Head: "The", "The", "Our") are told apart by
-row order: verse N is the Nth row from the top.
+row order: verse N is the Nth row from the top. The matcher ignores case, quotes and
+punctuation, unescapes `&apos;` in `pdftotext -bbox` output, joins a split "1" + ".", and
+skips words taller than 20 pt (Opus music-font glyphs such as "j" would otherwise match
+"Joy").
+
+In a batch, answer the close dialog "No" when the script failed (non-zero exit). Answering
+Yes saved half-edited scores (lyrics stripped, numerals at default positions).
+
+Numerals that the print sets inline in a last ending ("2. Here's a gain." under a volta)
+are not found as a verse start: strip the "N. " with `patch-lyrics` (use the item
+`index` from `query --type LyricItem`, not the verse number) and add the text by hand.
+Sibelius may snap such text by a point or two; check the render.
 
 Worked on: Boar's Head (3 verses, one staff), We Three Kings (5 verses, two staves),
 Ther is no rose (4 verse rows from bar 7).
