@@ -81,8 +81,11 @@ def check_pdf(pdf, title=None, composer=None, lyricist=None, footer_gap=10.0, ti
     # the title is set larger than lyrics (about 23 pt); music-font glyph words are about 34 pt
     head_words = [w for w in pages[0][2] if w[4].strip() and (w[3] - w[1] < 30 or re.fullmatch(r"[A-Za-z\u00c0-\u00ff']{3,}", w[4]))]
     page1 = " ".join(norm(w[4]) for w in head_words)
-    if title and norm(title) not in page1.replace(" ", ""):
-        first = [norm(w[4]) for w in head_words if w[1] < pages[0][1] * 0.3]
+    if title is not None and not title.strip():
+        add("error", "title-missing", "the Score Info title is empty, so no title is printed")
+    elif title:
+        # title-sized words only (lyrics are about 9 pt, the title 18 pt or more), near the top of the page
+        first = [norm(w[4]) for w in head_words if w[3] - w[1] >= 15 and w[1] < pages[0][1] * 0.3]
         if not all(norm(t) in first for t in title.split() if norm(t)):
             add("error", "title-missing", f"title {title!r} is not printed on page 1")
     for what, name in (("composer", composer), ("lyricist", lyricist)):
