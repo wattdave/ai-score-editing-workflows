@@ -47,6 +47,29 @@ async def test_expected_score_failure_prevents_backup_and_write(cli_session: Cli
     bridge.assert_not_awaited()
 
 
+async def test_run_write_save_works_for_commands_without_a_path_option(
+    cli_session: CliSession,
+) -> None:
+    """set-score-info --save crashed on args.path, an option only `save` has."""
+    args = build_parser().parse_args(["set-score-info", "--title", "T", "--save"])
+    assert not hasattr(args, "path")
+    with (
+        patch("ai_score_editing.sibelius.runner.assert_expected_score", new=AsyncMock()),
+        patch(
+            "ai_score_editing.sibelius.runner.backup",
+            new=AsyncMock(return_value={"copy": "/tmp/b.sib"}),
+        ),
+        bridge_call(new=AsyncMock(return_value={"ok": True})),
+        patch(
+            "ai_score_editing.sibelius.runner.service.save",
+            new=AsyncMock(return_value={"fileName": "/scores/a.sib"}),
+        ) as save,
+    ):
+        assert await runner.run_write(args, "SetScoreInfo", ["T", "", ""]) == EXIT_OK
+
+    assert save.await_args.args[1] is None
+
+
 async def test_raw_lyric_requires_style_reset_acknowledgement(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

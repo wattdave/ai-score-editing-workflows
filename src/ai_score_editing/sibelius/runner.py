@@ -87,7 +87,7 @@ async def run_write(
         print(f"backed up: {made['copy']}", file=sys.stderr)
         result = await bridge.call(c, method, call_args)
         if getattr(args, "save", False):
-            saved = await service.save(bridge.for_client(c), args.path)
+            saved = await service.save(bridge.for_client(c), getattr(args, "path", None))
             print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
     print(json.dumps(result, indent=2))
     return EXIT_OK
