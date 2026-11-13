@@ -289,3 +289,31 @@ flip stems through this repository's back end.
 When the user critiques a result, add it to `phrase-breaks/references/
 layout-taste.md` (layout) or note it here (other steps), with the date and
 the piece, so the next run starts from the user's taste.
+
+## Beautifier checks on a finished Sibelius score
+
+`scripts/beautify_check.py` renders the open score and lists what still looks unfinished (read-only);
+`scripts/beautify_fix.py` repairs the two defects a script can fix safely and refuses to save if the page count changes.
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/beautify_check.py" --expect-file /abs/score.sib          # report
+python3 "${CLAUDE_SKILL_DIR}/scripts/beautify_fix.py" --expect-file /abs/score.sib --save    # fix + save
+```
+
+Checks: title and composer printed on page 1, title clear of the paper edge (`title-too-high`), footer not crowded
+by the last system (`footer-tight`), overprinting words, words past the margins, verse numbers still inside the
+lyrics, sparse last page, generic staff names, `check-lyrics` issues. The Nelson Carol Book run (79 scores) found
+7 titles too high, 5 tight footers, a few collisions; the fixes below cleared 12 of them.
+
+What the checks taught (Sibelius 2026.6):
+- The page-aligned title (`\$Title\`) follows the first system: `Dy` on it is ignored on most scores. Raise
+  `aboveTopStaveGap` instead (about 2.8 pt per mm). The script measures the slope with two probe values, because
+  layout values cannot be read back; `topMargin` moves music and title together.
+- Systems are justified down to `belowBottomStaveGap`: a *bigger* gap (35, then 45 mm) lifts a last staff off the
+  footer; a smaller `spacesBetweenSystems` does not. A page that is already full may then spill to a second page.
+- `Dy` on dynamics (`text.staff.expression`) stored but did not move them in the render (Pat-a-pan): fix such
+  collisions by hand.
+- A close answered "No" is not proof the score was not saved: check the file's modification time after a discard
+  (Tourdion and Pat-a-pan were saved by mistake and restored from a backup's layout values).
+- Not checked by a script: the print's rights line (`footer-missing`, needs the source facts), page breaks by
+  phrase, beams and stems.
