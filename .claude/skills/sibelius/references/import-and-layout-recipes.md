@@ -150,11 +150,9 @@ Check every page-1 PDF for ink in the footer band.
   system ("I I"), bold beside the staff; running it again on v64 clears that duplicate. Do not
   rename parts in the MusicXML instead: re-importing with new part names lost the group bracket
   and repeated the tempo above the last staff.
-- **Verse numbers** ("1." "2.") are lost on every import. Add them as text at the start of the
-  first syllable of each verse line with `patch-lyrics` (`--font-size` is tenths of a point, 74,
-  not points). With a pickup the first syllable of each line is not always in bar 1 (Bleak
-  Midwinter: only verse 2 starts in the pickup): `read-lyrics` per bar and take the earliest item
-  per verse; a piece may print its first line as verse 2. No helper exists yet.
+- **Verse numbers** ("1." "2.") are lost on every import. Draw them as plain staff text beside each
+  verse's first syllable with the `verse-numbers` skill (`scripts/verse_numbers.py`), never inside the
+  lyric text: a lyric "1. The" is sung by Cantai and read by every lyric tool.
 - **Not imported at all:** verse numbers ("1." "2."), brace, boxed text, slurs and extender lines
   from some readers, and fermatas on lower staves (no fermata op exists). Draw them by hand or list
   them as open items for the user.
