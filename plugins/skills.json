@@ -29,5 +29,6 @@
   "swing-playback-copy": "sibelius",
   "tenor-playback-repair": "sibelius",
   "transpose-score": "score-editing-core",
-  "vector-pdf-score": "score-editing-core"
+  "vector-pdf-score": "score-editing-core",
+  "verse-numbers": "sibelius"
 }
