@@ -61,13 +61,19 @@ def main():
         # The page-aligned title follows the first system: Dy on it is ignored, and the title baseline is a fixed
         # distance above the top staff (topMargin + aboveTopStaveGap). Raise aboveTopStaveGap. Layout values cannot
         # be read back, so measure: two gaps give pt per mm, then solve for --title-base.
-        g1, g2 = 20.0, 25.0
-        apply_ops([{"op": "set-layout", "aboveTopStaveGap": g1}])
-        run("verify-render", "--format", "pdf", "--out", pdf)
-        b1 = title_base(pdf)
-        apply_ops([{"op": "set-layout", "aboveTopStaveGap": g2}])
-        run("verify-render", "--format", "pdf", "--out", pdf)
-        b2 = title_base(pdf)
+        # A title added with add-text starts at Dy 496 (above the page) and Dy cannot be changed: it only shows
+        # once the first system is low enough (about 50 mm), so try a second probe pair before giving up.
+        for g1, g2 in ((20.0, 25.0), (60.0, 65.0)):
+            apply_ops([{"op": "set-layout", "aboveTopStaveGap": g1}])
+            run("verify-render", "--format", "pdf", "--out", pdf)
+            b1 = title_base(pdf)
+            apply_ops([{"op": "set-layout", "aboveTopStaveGap": g2}])
+            run("verify-render", "--format", "pdf", "--out", pdf)
+            b2 = title_base(pdf)
+            if b1 is not None and b2 is not None:
+                break
+        else:
+            sys.exit("the title is not drawn at any probe gap: look at the score")
         slope = (b2 - b1) / (g2 - g1)
         if slope <= 0.5:
             sys.exit(f"the title does not follow aboveTopStaveGap (moved {b2 - b1:.1f} pt for 5 mm): fix it by hand")
