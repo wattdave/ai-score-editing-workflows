@@ -57,7 +57,7 @@ def norm(text):
     return re.sub(r"[^\w]", "", text.lower())
 
 
-def measure(first_words, expect=None):
+def measure(first_words, expect=None, labels=None):
     """Render the open score to PDF and return {verse: (baseline_error_pt, gap_pt)}: the verse's first word's
     bottom minus the numeral's bottom (positive = numeral too high), and the space between numeral and word."""
     pdf = "/tmp/verse_numbers_render.pdf"
@@ -83,7 +83,7 @@ def measure(first_words, expect=None):
         for v in sorted(verses):
             if v in out:
                 continue
-            for n in [w for w in words if w[4] == f"{v}."]:
+            for n in [w for w in words if w[4] == f"{(labels or {}).get(v, v)}."]:
                 right = [w for w in words if w[0] > n[0] and abs(w[3] - n[3]) < 25
                          and w[3] - w[1] < 20 and norm(w[4]) and norm(first_words[v]).startswith(norm(w[4]))
                          and (prev is None or w[3] > prev + 3)]
@@ -103,6 +103,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--expect-file", required=True, help="absolute .sib path the open score must be")
     ap.add_argument("--staff", type=int, default=1)
+    ap.add_argument("--staffs", help="comma-separated staves that carry the verse rows, e.g. 1,2 when verse 1 sits on a "
+                    "different staff from verses 2-4. Only lyrics that start with 'N. ' count and N is the label "
+                    "(so pass --strip-lyric-prefix); the numeral goes on the staff of its row")
     ap.add_argument("--from-bar", type=int, default=1,
                     help="only look for first syllables from this score bar on: use it when the numbered verse rows "
                          "start in a later system than the first words (Ther is no rose: verse 1 is also sung "
@@ -123,7 +126,23 @@ def main():
     a = ap.parse_args()
 
     info = json.loads(cli("score-info"))
-    first = first_syllables(a.staff, info["barCount"], a.from_bar)
+    first = {}
+    for staff in ([int(x) for x in a.staffs.split(",")] if a.staffs else [a.staff]):
+        if a.staffs:  # every lyric item that starts with "N. " (a later item of verse 1 may carry "2. ")
+            found = [(int(PREFIX.match(o["text"]).group(1)), o) for start in range(a.from_bar, info["barCount"] + 1, 8)
+                     for o in query(staff, f"{start}-{min(start + 7, info['barCount'])}", "LyricItem")
+                     if PREFIX.match(o["text"])]
+        else:
+            found = list(first_syllables(staff, info["barCount"], a.from_bar).items())
+        for label, o in found:
+            if a.staffs:  # the same label may head two rows (Spanish and English "1." "2." "3."): key by row
+                first[len(first) + 1] = dict(o, staff=staff, label=label)
+            elif label not in first or (o["bar"], o["position"]) < (first[label]["bar"], first[label]["position"]):
+                first[label] = dict(o, staff=staff)
+    if a.staffs:  # number the rows top to bottom: by bar, position, then lyric line (item index)
+        rows = sorted(first.values(), key=lambda o: (o["staff"], o["bar"], o["position"], o["index"]))
+        first = {i + 1: o for i, o in enumerate(rows)}
+    labels = {v: o.get("label", v) for v, o in first.items()}
     if a.verses:
         keep = {int(x) for x in a.verses.split(",")}
         first = {v: o for v, o in first.items() if v in keep}
@@ -131,20 +150,20 @@ def main():
         sys.exit("no lyric items found on that staff")
 
     strips = [
-        {"staff": a.staff, "bar": o["bar"], "index": o["index"], "text": PREFIX.sub("", o["text"])}
+        {"staff": o["staff"], "bar": o["bar"], "index": o["index"], "text": PREFIX.sub("", o["text"])}
         for o in first.values()
         if PREFIX.match(o["text"])
     ]
     existing = {
         (t["bar"], t["position"], t["text"])
-        for bar in {o["bar"] for o in first.values()}
-        for t in query(a.staff, f"{bar}-{bar}", "Text")
+        for st, bar in {(o["staff"], o["bar"]) for o in first.values()}
+        for t in query(st, f"{bar}-{bar}", "Text")
     }
     adds = [
-        {"op": "add-text", "staff": a.staff, "bar": o["bar"], "position": o["position"], "text": f"{v}.",
+        {"op": "add-text", "staff": o["staff"], "bar": o["bar"], "position": o["position"], "text": f"{labels[v]}.",
          "styleId": "text.staff.plain"}
         for v, o in sorted(first.items())
-        if (o["bar"], o["position"], f"{v}.") not in existing
+        if (o["bar"], o["position"], f"{labels[v]}.") not in existing
     ]
     print(f"verses {sorted(first)}: strip {len(strips)} lyric prefixes, add {len(adds)} numerals")
     if a.dry_run:
@@ -162,9 +181,11 @@ def main():
         cli("apply", "--file", path, expect=a.expect_file)
     objs = {}  # verse -> (bar, index) of its numeral text object
     for v, o in sorted(first.items()):
-        for t in query(a.staff, f"{o['bar']}-{o['bar']}", "Text"):
-            if t["position"] == o["position"] and t["text"] == f"{v}.":
+        for t in query(o["staff"], f"{o['bar']}-{o['bar']}", "Text"):
+            if t["position"] == o["position"] and t["text"] == f"{labels[v]}." \
+                    and (t["bar"], t["index"]) not in objs.values():  # equal labels on two rows: next free object
                 objs[v] = (t["bar"], t["index"])
+                break
     if len(objs) != len(first):
         sys.exit(f"numerals found for verses {sorted(objs)} but lyrics for {sorted(first)}")
 
@@ -173,9 +194,10 @@ def main():
         sets = []
         for v, (dx, dy) in values.items():
             bar, idx = objs[v]
+            st = first[v]["staff"]
             sets += [
-                {"op": "set", "staff": a.staff, "bar": bar, "index": idx, "prop": "Dx", "value": int(round(dx))},
-                {"op": "set", "staff": a.staff, "bar": bar, "index": idx, "prop": "Dy", "value": int(round(dy))},
+                {"op": "set", "staff": st, "bar": bar, "index": idx, "prop": "Dx", "value": int(round(dx))},
+                {"op": "set", "staff": st, "bar": bar, "index": idx, "prop": "Dy", "value": int(round(dy))},
             ]
         path = "/tmp/verse_numbers_set.json"
         json.dump(sets, open(path, "w"))
@@ -189,10 +211,10 @@ def main():
         words = {v: PREFIX.sub("", o["text"]) for v, o in first.items()}  # the PDF shows the word without "N. "
         probe = 40  # units moved up to measure how many points one unit is
         for attempt in range(2):
-            m0 = measure(words, expect=a.expect_file)
+            m0 = measure(words, expect=a.expect_file, labels=labels)
             up = {v: (dx, dy + probe) for v, (dx, dy) in start.items()}
             place(up)
-            m1 = measure(words, expect=a.expect_file)
+            m1 = measure(words, expect=a.expect_file, labels=labels)
             solved = {}
             ks = {}
             for v in first:
@@ -218,7 +240,7 @@ def main():
         col = min(dx for dx, _ in solved.values())
         solved = {v: (col, dy) for v, (_, dy) in solved.items()}
         place(solved)
-        final = measure(words, expect=a.expect_file)
+        final = measure(words, expect=a.expect_file, labels=labels)
         for _ in range(2):  # refine: baselines to 0, the tightest gap to the target
             tight = min(g for _, g in final.values())
             if all(abs(final[v][0]) <= 0.3 for v in first) and abs(tight - a.gap_pt) <= 0.3:
@@ -227,7 +249,7 @@ def main():
             col -= (a.gap_pt - tight) / kmean
             solved = {v: (col, solved[v][1] - final[v][0] / ks[v]) for v in first}
             place(solved)
-            final = measure(words, expect=a.expect_file)
+            final = measure(words, expect=a.expect_file, labels=labels)
         print(f"column Dx {col:.0f}")
         for v in sorted(first):
             print(f"verse {v}: Dy {solved[v][1]:.0f}; baseline off {final[v][0]:+.2f} pt, gap to the word {final[v][1]:.2f} pt")

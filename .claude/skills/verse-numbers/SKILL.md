@@ -12,7 +12,9 @@ description: >
 
 # Verse numbers as text, not lyrics
 
-Verse numbers are lost on every MusicXML import. Do **not** put them in the lyric
+Verse numbers are lost on every MusicXML import. The print's own convention decides what to draw: stacked
+rows with a column of numerals, a numeral glued to one row's first word at each verse start (Pat-a-pan,
+Sussex Mummers), or none at all. Do **not** put them in the lyric
 text (`patch-lyrics` with "1. The"): Sibelius's lyric items are what Cantai and any
 other vocal playback sings, and what `read-lyrics`, `check-lyrics`, the
 `lyric-sheet` skill and the MusicXML export read, so "1." would be sung and would
@@ -66,6 +68,12 @@ Options:
 - `--no-auto`: skip the calibration and use `--dx` / `--dy-adjust` as given.
 - `--gap-pt`: numeral-to-word gap of the tightest row.
 
+- `--staffs 1,2`: verse rows spread over several staves, or rows whose numerals an earlier pass put
+  inside the lyric ("1. In" on staff 2, "2. God," on staff 1; Riu Riu Chiu with a Spanish and an
+  English "1." "2." "3." and a second block "4." to "7." at bar 45). Every lyric item that starts with
+  "N. " becomes a row (top to bottom by bar, position and lyric line) and its numeral "N." goes on that
+  item's staff. Use with `--strip-lyric-prefix`; if the lyric prefix is already gone but the numeral
+  text exists, restore the prefix with `patch-lyrics` and rerun (the existing numeral is reused).
 - `--verses 2,3`: number only these verses (Sankt Nikolaus prints only "2." and "3.";
   Gloucester Wassail has a prose verse 3).
 
