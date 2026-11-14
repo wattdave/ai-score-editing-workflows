@@ -35,7 +35,7 @@ release)
   ;;
 status)
   [ -d "$L" ] || { echo "free"; exit 1; }
-  mtime=$(stat -f %m "$L/owner" 2>/dev/null || stat -c %Y "$L/owner" 2>/dev/null || echo 0)
+  mtime=$(stat -c %Y "$L/owner" 2>/dev/null || stat -f %m "$L/owner" 2>/dev/null || echo 0)
   echo "$(cat "$L/owner" 2>/dev/null) ($(( ( $(date +%s) - mtime ) / 60 )) min old)"
   ;;
 *)
