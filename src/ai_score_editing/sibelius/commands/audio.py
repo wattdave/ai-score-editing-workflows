@@ -1,4 +1,4 @@
-"""Audio commands: rehearsal-mixes, proof-mixes, playback-sounds, verify-render."""
+"""Audio commands: rehearsal-mixes, export-stem, proof-mixes, playback-sounds, verify-render."""
 
 from __future__ import annotations
 
@@ -56,6 +56,31 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
         help="refuse to export unless every voice plays a sound set containing this, e.g. Cantai",
     )
     mixes.add_argument("--no-proof", action="store_true", help="skip the proof-listening checks after mixing")
+    stem = sub.add_parser(
+        "export-stem",
+        help="export the audio of single staves (lossless AIFF) and report each one's length, loudness and silences",
+        description=(
+            "Export one audio stem per requested staff, without mixing, so one staff can be checked or "
+            "re-exported on its own (for example a voice that rehearsal-mixes found silent). Prints each "
+            "stem's length, loudness, peak and silent stretches. Needs ffmpeg for the report."
+        ),
+    )
+    stem.add_argument("--out", required=True, help="directory for the AIFF stems")
+    stem.add_argument(
+        "--staff", type=int, action="append", default=[], metavar="N",
+        help="staff number to export (repeatable; default: every staff)",
+    )
+    stem.add_argument("--file", dest="sib_file", help=".sib file to open first (default: active score)")
+    stem.add_argument(
+        "--name", action="append", default=[], metavar="STAFF=NAME",
+        help="name a staff in the file names, e.g. --name 2=Soprano-div (repeatable)",
+    )
+    stem.add_argument(
+        "--no-warm-up", action="store_true",
+        help="skip the throwaway first export (an export's opening can carry the previous staff's voice)",
+    )
+    stem.add_argument("--min-silence", type=int, default=2, metavar="SECONDS",
+                      help="report silent stretches at least this long (default: %(default)s)")
     proof = sub.add_parser(
         "proof-mixes",
         help="check a folder of rehearsal mixes for shared audio, repeats, level jumps and mismatched files",
@@ -87,6 +112,7 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
     verify_render.add_argument("--sha256", action="store_true", help="include SHA-256 hashes in the report")
     return {
         "rehearsal-mixes": _run_rehearsal_mixes,
+        "export-stem": _run_export_stem,
         "proof-mixes": _run_proof_mixes,
         "playback-sounds": _run_playback_sounds,
         "verify-render": _run_verify_render,
@@ -126,6 +152,66 @@ def _parse_staff_names(pairs: list[str]) -> dict[int, str]:
             raise ValueError(f"--name must look like 1=Soprano, got {pair!r}")
         names[int(staff)] = name.strip()
     return names
+
+
+async def _export_staff(client: Any, path: Path, staff: int, work: Path, warm_up: bool = True) -> None:
+    """Export one staff's audio to `path`. The first seconds of an export still
+    sound the previous export's voice (Cantai switches voices late), so a
+    throwaway export of the same staff comes first; the second is clean."""
+    if warm_up:
+        await bridge.call(client, "ExportAudio", [str(work / "warm-up.aiff"), staff])
+    await bridge.call(client, "ExportAudio", [str(path), staff])
+    if not path.exists():
+        raise BridgeError(f"Sibelius reported exporting {path}, but it does not exist")
+
+
+async def _run_export_stem(args: argparse.Namespace) -> int:
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        print("error: export-stem needs ffmpeg on PATH (brew install ffmpeg)", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    try:
+        overrides = _parse_staff_names(args.name)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    out_dir = Path(args.out).expanduser().resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix="export-stem-"))
+    reports: list[dict[str, Any]] = []
+    try:
+        async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            await bridge.require_bridge(client, AUDIO_EXPORT_BRIDGE_VERSION, "export-stem")
+            if args.sib_file:
+                await bridge.call(client, "OpenScore", [str(Path(args.sib_file).expanduser().resolve())])
+            await runner.assert_expected_score(client, args)
+            staves = await bridge.call(client, "GetStaves")
+            known = {s["staffNum"] for s in staves}
+            wanted = args.staff or sorted(known)
+            if unknown := sorted((set(wanted) | set(overrides)) - known):
+                print(f"error: staves not in the score: {unknown}", file=sys.stderr)
+                return EXIT_COMMAND_FAILED
+            taken: set[str] = set()
+            for staff in staves:
+                num = staff["staffNum"]
+                name = rehearsal_mix.staff_name(
+                    {**staff, "fullInstrumentName": overrides.get(num, staff.get("fullInstrumentName"))}, taken
+                )
+                if num not in wanted:
+                    continue
+                path = out_dir / f"{num:02d} {name}.aiff"
+                print(f"exporting staff {num} ({name})...", file=sys.stderr)
+                await _export_staff(client, path, num, work, warm_up=not args.no_warm_up)
+                report = {"staff": num, "name": name, **rehearsal_mix.stem_report(path, args.min_silence)}
+                reports.append(report)
+                silent = ", ".join(f"{a}-{b} s" for a, b in report["silentSeconds"]) or "none"
+                print(f"  {report['seconds']} s, {report['loudnessLufs']} LUFS, peak {report['peakDb']} dB, "
+                      f"silent: {silent}", file=sys.stderr)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    print(json.dumps({"stems": reports}, indent=2))
+    return EXIT_OK
 
 
 async def _run_rehearsal_mixes(args: argparse.Namespace) -> int:
@@ -178,13 +264,7 @@ async def _run_rehearsal_mixes(args: argparse.Namespace) -> int:
                 )
                 path = stem_dir / f"{num:02d} {name}.aiff"
                 print(f"exporting staff {num} ({name})...", file=sys.stderr)
-                # The first seconds of an export still sound the previous
-                # export's voice (Cantai switches voices late), so a throwaway
-                # export of the same staff comes first; the second is clean.
-                await bridge.call(client, "ExportAudio", [str(work / "warm-up.aiff"), num])
-                await bridge.call(client, "ExportAudio", [str(path), num])
-                if not path.exists():
-                    raise BridgeError(f"Sibelius reported exporting {path}, but it does not exist")
+                await _export_staff(client, path, num, work)
                 stems.append(rehearsal_mix.Stem(num, name, path, vocal=num in vocal))
         voices = [s for s in stems if s.vocal]
         if not voices:

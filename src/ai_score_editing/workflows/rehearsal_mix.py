@@ -162,6 +162,22 @@ def parse_peak(astats_output: str) -> float:
     return -math.inf if match.group(1) == "-inf" else float(match.group(1))
 
 
+def stem_report(path: Path, minimum_silence: int = 2) -> dict:
+    """What a single stem holds: length, loudness, peak, and the second ranges
+    where it is silent (a voice that stops sounding part-way through shows up
+    here, which is how a dropped Cantai render is found)."""
+    from ai_score_editing.workflows import mix_proof
+
+    signal = mix_proof.load_mono(path)
+    return {
+        "file": str(path),
+        "seconds": round(len(signal) / mix_proof.SAMPLE_RATE, 2),
+        "loudnessLufs": round(integrated_loudness(path), 1),
+        "peakDb": round(peak_db(path), 1),
+        "silentSeconds": [list(r) for r in mix_proof.quiet_stretches(signal, minimum_silence)],
+    }
+
+
 def mix_to_wav(mix: Mix, stems: dict[int, Stem], wav: Path) -> dict:
     """Mix the stems at the mix's gains to float WAV; measure loudness and peak."""
     staves = sorted(mix.gains)
