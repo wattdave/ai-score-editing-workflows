@@ -156,3 +156,31 @@ def test_text_report_names_the_files_of_each_finding() -> None:
     line = Finding("error", "level", "13 dB louder", ("Song - Alto only.mp3",), 1.0, 4.0).line()
     assert line.endswith("(Song - Alto only.mp3)")
     assert "[1.0-4.0 s]" in line
+
+
+def test_quiet_stretches_find_a_voice_that_stops_sounding():
+    x = voice(3, seconds=30)
+    x[7 * SR:] = 0.0
+    assert mp.quiet_stretches(x) == [(7, 30)]
+    assert mp.quiet_stretches(voice(3, seconds=30)) == []
+
+
+def test_quiet_stretches_ignore_short_gaps():
+    x = voice(3, seconds=30)
+    x[10 * SR:11 * SR] = 0.0
+    assert mp.quiet_stretches(x, minimum_seconds=2) == []
+    assert mp.quiet_stretches(x, minimum_seconds=1) == [(10, 11)]
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
+def test_stem_report_end_to_end(tmp_path):
+    from ai_score_editing.workflows.rehearsal_mix import stem_report
+
+    x = voice(5, seconds=20)
+    x[8 * SR:] = 0.0
+    path = tmp_path / "02 Soprano div.wav"
+    write_wav(path, x)
+    report = stem_report(path)
+    assert report["seconds"] == pytest.approx(20.0, abs=0.1)
+    assert report["silentSeconds"] == [[8, 20]]
+    assert report["loudnessLufs"] < -10

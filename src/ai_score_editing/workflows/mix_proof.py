@@ -300,6 +300,12 @@ def check_arithmetic(name: str, mix: np.ndarray, stems: dict[str, np.ndarray]) -
     return findings
 
 
+def quiet_stretches(x: np.ndarray, minimum_seconds: int = 2, threshold_db: float = SILENT_DB) -> list[tuple[int, int]]:
+    """Half-open second ranges, anywhere in the signal (edges included), where
+    every one-second window is quieter than `threshold_db`."""
+    return _runs(window_db(x) < threshold_db, minimum_seconds)
+
+
 def check_silence(name: str, x: np.ndarray) -> list[Finding]:
     """Long silences away from the start and end."""
     db = window_db(x)

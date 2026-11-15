@@ -274,6 +274,12 @@ Single-object writes:
 - Persistence: `save` and `backup`. Prefer `--save` on the final write over a
   separate `save`.
 - Export: `export --format musicxml|mxl|pdf|midi|png [--path PATH] [--file SCORE]` (`--out` and `mid` still work). `save --path COPY` is refused: SaveAs to .sib would switch the open score to the copy. `query --limit` defaults to 200.
+- Single-staff audio: `export-stem --out DIR [--staff N ...] [--file SCORE] [--name 2=Soprano-div]
+  [--no-warm-up] [--min-silence 2]` (bridge v54, needs ffmpeg). Exports the named staves (default:
+  all) as lossless AIFF stems `NN <name>.aiff`, without mixing, and prints each one's length,
+  loudness, peak and silent stretches in seconds. Use it to test one staff on its own, for example a
+  voice whose stem is silent or far quieter than the rest (a shared Cantai channel), before a
+  full `rehearsal-mixes` run. The same two-pass export as `rehearsal-mixes`.
 - Rehearsal audio: `rehearsal-mixes --out DIR [--file SCORE] [--name 1=Soprano]
   [--bitrate 192k] [--keep-stems]` (bridge v54, needs ffmpeg). Exports one
   audio stem per staff and writes `<score> - All voices.mp3`, then

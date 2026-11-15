@@ -78,6 +78,16 @@ stale render cache (see Afterwards). Read
 contain spaces (`--name "2=Contra I"`). Importing MusicXML shows an options
 dialog every time; the user must click OK before the import continues.
 
+## Checking one staff
+
+`sibelius-cli --expect-file SCORE export-stem --out DIR --staff N [--staff M]` exports only those
+staves as AIFF stems and prints length, loudness, peak and silent stretches for each. Run it
+before a long export when a voice looks wrong. A stem near -60 LUFS or with minutes of silence is
+a staff Cantai did not sound: staves with the same Cantai voice share a channel, so give each
+staff (including every "div" staff) its own voice. A "div" staff that duplicates its part still
+needs a different voice, or the pair shares one channel and only one of them sings. The
+proof-listen's "silence" warning on one voice's mix is the same fault seen late.
+
 ## Single-staff melody line
 
 A one-staff score (a melody with lyrics) still makes the three files, and

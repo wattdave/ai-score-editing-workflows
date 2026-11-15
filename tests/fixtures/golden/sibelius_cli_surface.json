@@ -2018,6 +2018,94 @@
     }
    ]
   },
+  "export-stem": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "out",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--out"
+     ],
+     "required": true,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": [],
+     "dest": "staff",
+     "kind": "_AppendAction",
+     "metavar": "N",
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "sib_file",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--file"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": [],
+     "dest": "name",
+     "kind": "_AppendAction",
+     "metavar": "STAFF=NAME",
+     "nargs": null,
+     "options": [
+      "--name"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "no_warm_up",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--no-warm-up"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": 2,
+     "dest": "min_silence",
+     "kind": "_StoreAction",
+     "metavar": "SECONDS",
+     "nargs": null,
+     "options": [
+      "--min-silence"
+     ],
+     "required": false,
+     "type": "int"
+    }
+   ]
+  },
   "ficta": {
    "arguments": [
     {
