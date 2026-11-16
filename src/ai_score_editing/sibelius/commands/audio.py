@@ -52,6 +52,16 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
         help="treat every staff as a part to mix, not only staves with lyrics (for instrumental scores)",
     )
     mixes.add_argument(
+        "--voice-staff", type=int, action="append", default=[], metavar="N",
+        help="name the voice staves explicitly instead of detecting them by lyrics "
+             "(repeatable; when instruments carry lyrics too)",
+    )
+    mixes.add_argument(
+        "--skip-staff", type=int, action="append", default=[], metavar="N",
+        help="leave this staff out entirely: not exported, not a voice, not in any mix "
+             "(repeatable; for a melody staff that doubles the parts)",
+    )
+    mixes.add_argument(
         "--require-sound", metavar="SOUND_SET",
         help="refuse to export unless every voice plays a sound set containing this, e.g. Cantai",
     )
@@ -242,7 +252,17 @@ async def _run_rehearsal_mixes(args: argparse.Namespace) -> int:
                 print(f"error: --name for staves not in the score: {unknown}", file=sys.stderr)
                 return EXIT_COMMAND_FAILED
             vocal = set()
+            skip = set(args.skip_staff)
+            if unknown := sorted(skip - {s["staffNum"] for s in staves}):
+                print(f"error: --skip-staff for staves not in the score: {unknown}", file=sys.stderr)
+                return EXIT_COMMAND_FAILED
             for staff in staves:
+                if staff["staffNum"] in skip:
+                    continue
+                if args.voice_staff:
+                    if staff["staffNum"] in args.voice_staff:
+                        vocal.add(staff["staffNum"])
+                    continue
                 if args.all_parts or await bridge.call(client, "ReadLyrics", [staff["staffNum"], 1, info["barCount"]]):
                     vocal.add(staff["staffNum"])
             await bridge.require_bridge(client, PLAYBACK_SOUNDS_BRIDGE_VERSION, "rehearsal-mixes sound check")
@@ -259,6 +279,8 @@ async def _run_rehearsal_mixes(args: argparse.Namespace) -> int:
             stems: list[rehearsal_mix.Stem] = []
             for staff in staves:
                 num = staff["staffNum"]
+                if num in skip:
+                    continue
                 name = rehearsal_mix.staff_name(
                     {**staff, "fullInstrumentName": overrides.get(num, staff.get("fullInstrumentName"))}, taken
                 )

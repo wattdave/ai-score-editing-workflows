@@ -3455,6 +3455,34 @@
     {
      "choices": null,
      "const": null,
+     "default": [],
+     "dest": "voice_staff",
+     "kind": "_AppendAction",
+     "metavar": "N",
+     "nargs": null,
+     "options": [
+      "--voice-staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": [],
+     "dest": "skip_staff",
+     "kind": "_AppendAction",
+     "metavar": "N",
+     "nargs": null,
+     "options": [
+      "--skip-staff"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
      "default": null,
      "dest": "require_sound",
      "kind": "_StoreAction",

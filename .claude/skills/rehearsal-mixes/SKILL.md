@@ -68,8 +68,16 @@ Cantai is set up by the user in Sibelius, not by the CLI:
 uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli playback-sounds
 uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli --expect-file SCORE rehearsal-mixes --out DIR \
   [--file SCORE] [--name 1=Soprano] [--all-parts] [--require-sound Cantai] \
-  [--bitrate 192k] [--loudness -16] [--keep-stems]
+  [--voice-staff N ...] [--skip-staff N ...] [--bitrate 192k] [--loudness -16] [--keep-stems]
 ```
+
+Voices are detected as the staves with lyrics. When instrument staves carry
+stray lyrics too (an empty lyric item is enough), the export refuses because
+they are not Cantai: name the voices with `--voice-staff N` (repeatable; the
+other staves become accompaniment), or delete the stray lyrics. `--skip-staff N`
+leaves a staff out entirely (not exported, not a voice, not in any mix), for a
+melody staff that doubles the parts and would otherwise share a Cantai channel
+and come out silent.
 
 Pass `--expect-file` an **absolute** path: a bare file name is resolved
 against the working directory and the export stops with "active score
