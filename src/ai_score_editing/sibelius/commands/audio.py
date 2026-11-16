@@ -205,8 +205,6 @@ async def _run_export_stem(args: argparse.Namespace) -> int:
             taken: set[str] = set()
             for staff in staves:
                 num = staff["staffNum"]
-                if num in skip:
-                    continue
                 name = rehearsal_mix.staff_name(
                     {**staff, "fullInstrumentName": overrides.get(num, staff.get("fullInstrumentName"))}, taken
                 )
@@ -281,6 +279,8 @@ async def _run_rehearsal_mixes(args: argparse.Namespace) -> int:
             stems: list[rehearsal_mix.Stem] = []
             for staff in staves:
                 num = staff["staffNum"]
+                if num in skip:
+                    continue
                 name = rehearsal_mix.staff_name(
                     {**staff, "fullInstrumentName": overrides.get(num, staff.get("fullInstrumentName"))}, taken
                 )
