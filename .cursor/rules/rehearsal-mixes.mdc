@@ -86,6 +86,22 @@ stale render cache (see Afterwards). Read
 contain spaces (`--name "2=Contra I"`). Importing MusicXML shows an options
 dialog every time; the user must click OK before the import continues.
 
+## The warm-up export is still needed
+
+Tested 2026-11-17 (Sibelius 26.9.0, Cantai, De Colores verse 2 playback, 8 staves): the throwaway first
+export per staff (`export-stem --no-warm-up` skips it; `rehearsal-mixes` has no such flag) is not
+superstition. Three full `export-stem` runs were compared sample by sample:
+
+- With the warm-up, stems are bit-exact between runs (-150 dB difference against a run made earlier
+  that day).
+- Without it, two runs of the same score differ by about -17 to -23 dB over a whole stem, and the first
+  5 seconds are unrelated to the warm-up stems (about 0 dB difference on 7 of 8 staves). It is not simply
+  the previous staff's voice, and one staff lost its first 2-3 s to silence.
+
+Keep the warm-up. To retest after a Sibelius or Cantai update, export the staves with and without it
+twice each and compare the first 5 s and the whole stem as above, with the no-warm-up pair as the noise
+floor.
+
 ## Checking one staff
 
 `sibelius-cli --expect-file SCORE export-stem --out DIR --staff N [--staff M]` exports only those
