@@ -43,6 +43,7 @@ roughly how long it takes:
 | uv | Runs this project's Python code and installs its packages. |
 | Python 3.13 | The language the tool is written in; uv installs a private copy. |
 | ffmpeg | Builds the MP3 rehearsal mixes. |
+| xmllint | Checks MusicXML files against the official schema (`scripts/validate_musicxml.py`). Built into macOS; nothing to install. |
 | Project packages | This project's own Python libraries (`uv sync`). |
 | Bridge plug-in | A small Sibelius plug-in that lets the tool read the score. |
 | poppler (optional) | `pdfinfo` and `pdftoppm`: page counts and page images for PDF scores in the OMR and melody-search workflows. |
@@ -84,7 +85,8 @@ continue past something the later steps depend on.
    Your own shell may not see `brew` until that line runs; prefix later
    commands with `eval "$($brew_bin shellenv)" &&` if `brew` is not found.
 2. **git, uv, ffmpeg:** `brew install git uv ffmpeg` (only the missing ones).
-   ffmpeg takes a few minutes.
+   ffmpeg takes a few minutes. `xmllint` ships with macOS (check
+   `xmllint --version`; on Linux install `libxml2-utils`).
    If the user will work from PDF scores (OMR, melody search), also
    `brew install poppler` for `pdfinfo` and `pdftoppm`.
    If the user will make lyric sheets or other Word documents from Markdown,
