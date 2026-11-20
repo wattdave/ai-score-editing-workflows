@@ -32,8 +32,8 @@ Then run `inspect` and confirm `fileName` before reading or changing the score.
 
 Shared GUI: `sibelius-shared-gui`.
 
-Writes refuse a never-saved MusicXML import; import and save it through the
-bridge, not dialogs ([commands](references/commands.md#importing-musicxml)).
+Writes refuse a never-saved MusicXML import; save it via the
+bridge; Return answers its dialog ([commands](references/commands.md#importing-musicxml)).
 
 ## Batch first: minimize calls and output
 

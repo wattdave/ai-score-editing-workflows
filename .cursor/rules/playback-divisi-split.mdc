@@ -97,8 +97,8 @@ It refuses multiple voices on one staff (`<backup>`) and parts with different
 
 ## Import and save
 
-Import silently and save through the bridge (see the `sibelius` skill), rather
-than asking the user to click through the import dialog:
+Import and save through the bridge (see the `sibelius` skill). The import shows
+an "Open MusicXML File" dialog; press Return with Sibelius frontmost to answer it:
 
 ```bash
 uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli plugin ScoreBridge OpenScore --args '["/abs/Score (playback).xml"]'
