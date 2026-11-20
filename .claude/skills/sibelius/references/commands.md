@@ -328,8 +328,11 @@ reject a frontmost-score mismatch before backup or mutation.
 ## Importing MusicXML
 
 Writes refuse an imported, never-saved MusicXML score. Import and save it
-through the bridge instead of asking the user to click through the import
-dialog and Save As:
+through the bridge instead of Save As. The import still shows an "Open
+MusicXML File" dialog (seen on Sibelius 26.11); until it is answered the CLI
+call times out and the bridge reports busy. Its OK button is not in
+Accessibility: with Sibelius frontmost press Return
+([dialog table](../../sibelius-shared-gui/SKILL.md#3-dialogs-answer-every-one-yourself)).
 
 ```bash
 uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli plugin ScoreBridge OpenScore --args '["/abs/score.xml"]'
@@ -337,7 +340,7 @@ uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli plugin ScoreBridge ExportSco
 uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli plugin ScoreBridge OpenScore --args '["/abs/score.sib"]'
 ```
 
-`OpenScore` imports MusicXML silently. `ExportScore` with `SIBL` writes a
+After the dialog is answered, `ExportScore` with `SIBL` writes a
 `.sib` but leaves the untitled import as the active window, so reopen the
 saved file before editing. Back up any existing `.sib` at that path first.
 

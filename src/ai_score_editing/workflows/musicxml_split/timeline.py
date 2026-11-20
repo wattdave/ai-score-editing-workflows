@@ -26,11 +26,14 @@ def timeline_for_measure(
 
     A chord note is deliberately joined only to the immediately preceding event
     with the same staff, XML voice, onset, and duration.  This preserves separate
-    XML voices even when they happen to sound at the same time.
+    XML voices even when they happen to sound at the same time.  A chord note
+    that omits ``<staff>`` or ``<voice>`` (Sibelius does) belongs to the note
+    before it, as MusicXML defines, so it takes that note's staff and voice.
     """
     cursor = high_water = 0
     events: list[NoteEvent] = []
     last_event: dict[tuple[str, str], int] = {}
+    previous_staff, previous_voice = "1", "1"
     number = measure.attrib.get("number", "?")
     for order, child in enumerate(measure):
         if child.tag == "backup":
@@ -45,8 +48,10 @@ def timeline_for_measure(
             continue
         if child.tag != "note":
             continue
-        staff = child.findtext("staff") or "1"
-        voice = child.findtext("voice") or "1"
+        is_chord = child.find("chord") is not None
+        staff = child.findtext("staff") or (previous_staff if is_chord else "1")
+        voice = child.findtext("voice") or (previous_voice if is_chord else "1")
+        previous_staff, previous_voice = staff, voice
         duration = 0 if child.find("grace") is not None else _duration(child)
         key = (staff, voice)
         if child.find("chord") is not None:

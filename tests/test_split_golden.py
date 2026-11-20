@@ -80,3 +80,30 @@ def test_demix_16voices(tmp_path: Path) -> None:
     _check("poly16.musicxml", out.read_bytes())
     _check("poly16.json", summary.encode())
     _check("poly16_validate.json", json.dumps(validate_16voices(out), indent=2).encode())
+
+
+def test_split_chord_notes_without_voice_or_staff(tmp_path: Path) -> None:
+    """Sibelius omits <voice> and <staff> on chord notes; they join the note before."""
+    from xml.etree import ElementTree as ET
+
+    tree = ET.parse(SATB_FIXTURE)
+    stripped = 0
+    for note in tree.iter("note"):
+        if note.find("chord") is not None:
+            for tag in ("voice", "staff"):
+                element = note.find(tag)
+                if element is not None:
+                    note.remove(element)
+                    stripped += 1
+    assert stripped, "fixture has no chord notes to strip"
+    source = tmp_path / "sibelius_style.musicxml"
+    tree.write(source, encoding="utf-8", xml_declaration=True)
+
+    expected = tmp_path / "expected.musicxml"
+    actual = tmp_path / "actual.musicxml"
+    args = ("--copy-lyrics-to-tb",)
+    assert _run(tmp_path, "split", str(SATB_FIXTURE), "-o", str(expected), *args)[0] == 0
+    rc, log = _run(tmp_path, "split", str(source), "-o", str(actual), *args)
+    assert rc == 0
+    assert b"orphan-chord" not in log
+    assert actual.read_bytes() == expected.read_bytes()
