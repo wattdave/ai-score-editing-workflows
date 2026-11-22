@@ -81,6 +81,7 @@ CLI: `dorico-cli lyrics --staff 1`, `edit-lyrics --staff 1 --text "..."`, `save 
   set-layout changes one layout (the full score unless `layout` names a
   part); it has no extra gap below vocal staves, and hides empty staves only
   for a whole layout (`hideEmptyStaves`), not over a range of bars.
+  set-layout's autoRespace / autoOptimize are Sibelius only.
 - Not reachable: bar numbers (set-bar-number), Sibelius line styles beyond
   the seven add-line kinds. Say so rather than approximating.
 

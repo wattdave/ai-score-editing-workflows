@@ -125,6 +125,9 @@ Probed on Sibelius 26.8 against a scratch score:
   Letter page size, portrait orientation and zero margins were all dropped
   until it named its settings explicitly; verified 2026-09-24, bridge v50).
   Test presence by name, never by comparing a numeric value with null.
+  Boolean switches (set-layout's `autoRespace`/`autoOptimize`, bridge v65)
+  are written through explicit `True`/`False` branches, so a JSON false that
+  arrives as 0 or null still turns the switch off.
 - **Bar-object indices shift after edits; held references do not.** After
   `AddText` at position 0, every existing object's index rose by one, but a
   reference taken before the insert still read the right position and pitch.

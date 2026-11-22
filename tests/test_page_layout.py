@@ -87,10 +87,24 @@ def test_footer_room_is_in_every_layout_unless_the_row_sets_it() -> None:
     assert over["bottomMargin"] == 20
 
 
-@pytest.mark.parametrize("item", ["staffSize", "nope=3", "staffSize=big", "pageSize=huge"])
+@pytest.mark.parametrize("item", ["staffSize", "nope=3", "staffSize=big", "pageSize=huge", "autoOptimize=maybe"])
 def test_parse_overrides_refuses_bad_items(item: str) -> None:
     with pytest.raises(BatchError):
         pl.parse_overrides([item])
+
+
+def test_parse_overrides_reads_the_layout_switches() -> None:
+    assert pl.parse_overrides(["autoOptimize=off", "autoRespace=ON"]) == {"autoOptimize": False, "autoRespace": True}
+    assert pl.parse_overrides(["autoOptimize=yes", "autoRespace=0"]) == {"autoOptimize": True, "autoRespace": False}
+    with pytest.raises(BatchError, match="on or off"):
+        pl.parse_overrides(["autoRespace=maybe"])
+
+
+def test_a_switch_override_stays_in_the_last_set_layout() -> None:
+    plan = pl.plan([[1, 5]], verses=2, staves=2, overrides={"autoOptimize": False})
+    assert plan.batch[-1]["op"] == "set-layout" and plan.batch[-1]["autoOptimize"] is False
+    validated = batch_ops.validate_batch(plan.batch)
+    assert "autoOptimize" in validated[-1]["settings"]
 
 
 def test_parse_range() -> None:

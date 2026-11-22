@@ -80,7 +80,13 @@ Sibelius restart.
    `auto-layout` can report and set them. S plus bridge bump. Documented
    well enough to implement; a check on a scratch score that the menu
    options follow is still wise because `set-layout` already has ordering
-   quirks.
+   quirks. **Done in bridge v65** (`autoRespace`, `autoOptimize`; also
+   `auto-layout --layout autoOptimize=off`). Scratch check 2026-11-22,
+   Sibelius 26.11: both read back as JSON booleans; off/on matched the
+   Layout > Optimize Auto and Appearance > Auto-Respace buttons; one undo
+   reverted the set-layout including the switches; with the switches written
+   first, explicit staff and system gaps in the same op rendered identically
+   with Auto-Optimize on and off. Shipped alone, not with 2 and 3.
 5. **Click track for rehearsal mixes**: command ID `toggle_metronome_on_off`
    (2026.11). Its state cannot be read (the Keypad State list may or may not
    include it), and whether `SaveAsAudio` records the click is not

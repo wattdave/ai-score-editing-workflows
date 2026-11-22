@@ -200,7 +200,8 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
     - {"op":"delete-bars","fromBar":A,"toBar":B}: removes the bars from
       every staff and moves the rest up; not the whole score
     - {"op":"set-layout",...}: pageSize, orientation, staffSize, margins,
-      stave gaps (mm), spacesBetweenStaves, spacesBetweenSystems
+      stave gaps (mm), spacesBetweenStaves, spacesBetweenSystems (not
+      autoRespace/autoOptimize: Sibelius only)
     - {"op":"hide-empty-staves","fromBar":1,"toBar":LAST}: whole score only
     - {"op":"delete-voice","staff":S,"voice":V,"fromBar":A,"toBar":B}:
       voice 1 notes become rests; voices 2-4 are emptied

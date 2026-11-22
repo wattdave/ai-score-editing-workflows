@@ -51,7 +51,7 @@ Accessibility permission for the terminal.
 | Dorico's note ops (`add-dynamic`, `set-articulation`, `add-slur`, `add-tempo`, `add-rehearsal-mark`) | ✅ | |
 | `transpose`, `copy-passage`, `set-key`, `set-time` | ✅ | copy-passage goes through the clipboard, one per batch |
 | `set-break`, `set-barline`, `set-bar-number`, `add-bars` | ✅ | no between-staves, tick, short or triple barlines in MuseScore |
-| `set-layout` | ⚠️ | no octavo/hymn/quarto/folio/us-band sizes, no extra gap below vocal staves |
+| `set-layout` | ⚠️ | no octavo/hymn/quarto/folio/us-band sizes, no extra gap below vocal staves, no autoRespace/autoOptimize (Sibelius only) |
 | `hide-empty-staves` | ⚠️ | whole score only |
 | `delete-voice` | ✅ | |
 | `undo` | ✅ | by steps |

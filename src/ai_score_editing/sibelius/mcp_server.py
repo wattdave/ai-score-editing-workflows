@@ -108,9 +108,9 @@ async def score_structure(bars: str | None = None) -> dict[str, Any]:
     stored at the end of the bar before; storedBar says which). Barline and
     break types use the names apply_batch's set-barline and set-break take;
     a barline or break at bar B sits at the end of bar B. layout (page size,
-    orientation, staff size, margins and stave gaps in mm, page count) and
-    engraving (spaces between staves and systems) use the names set-layout
-    takes.
+    orientation, staff size, margins and stave gaps in mm, page count, and
+    the autoRespace/autoOptimize switches) and engraving (spaces between
+    staves and systems) use the names set-layout takes.
     """
     from_bar, to_bar = parse_bars(bars)
     return await _run(lambda b: service.structure(b, from_bar, to_bar), retry=True)
@@ -241,7 +241,9 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
       "portrait"|"landscape", "staffSize", "topMargin", "bottomMargin",
       "leftMargin", "rightMargin", "aboveTopStaveGap", "belowBottomStaveGap"
       (mm), "spacesBetweenStaves", "extraSpacesBelowVocalStaves",
-      "spacesBetweenSystems" (staff spaces)}: only the given settings change
+      "spacesBetweenSystems" (staff spaces), "autoRespace", "autoOptimize"
+      (true/false: Auto-Respace note spacing and Auto-Optimize staff
+      spacing, bridge v65)}: only the given settings change
     - {"op":"delete-voice","fromBar":A,"toBar":B,"staff":S,"voice":V}
     - {"op":"clear-bars","fromBar":A,"toBar":B,"staff":S[,"voice":V]}: replace the bars with a bar
       rest, tuplets and slurs included, in every voice unless one is given. Bridge v60

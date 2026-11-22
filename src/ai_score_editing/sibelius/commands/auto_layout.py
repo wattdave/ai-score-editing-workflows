@@ -68,7 +68,7 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
     )
     parser.add_argument(
         "--layout", action="append", default=[], metavar="NAME=VALUE",
-        help="override a set-layout value, e.g. staffSize=5.5 (repeatable)",
+        help="override a set-layout value, e.g. staffSize=5.5 or autoOptimize=off (repeatable)",
     )
     parser.add_argument(
         "--unlock-format", action=argparse.BooleanOptionalAction, default=True,
@@ -210,6 +210,7 @@ async def _run_auto_layout(args: argparse.Namespace) -> int:
                 print(f"error: {exc.result.get('error')}; {undo}, or restore {made.get('copy')}", file=sys.stderr)
                 return EXIT_COMMAND_FAILED
             summary["applied"] = result.get("applied")
+            summary.update(_switches(result))
             ok = True
             if args.verify:
                 ok = await _verify(sb, plan, summary)
@@ -223,6 +224,23 @@ async def _run_auto_layout(args: argparse.Namespace) -> int:
         return EXIT_COMMAND_FAILED
     print(json.dumps(summary, separators=(",", ":")))
     return EXIT_OK if ok else EXIT_COMMAND_FAILED
+
+
+def _switches(result: dict[str, Any]) -> dict[str, bool]:
+    """Auto-Respace / Auto-Optimize as set-layout read them back (bridge v65+)."""
+    results = result.get("results")
+    if not isinstance(results, list):
+        return {}
+    for entry in reversed(results):
+        after = entry.get("after") if isinstance(entry, dict) else None
+        layout = after.get("layout") if isinstance(after, dict) else None
+        if isinstance(layout, dict):
+            return {
+                field: bool(layout[field])
+                for field in page_layout.LAYOUT_SWITCHES
+                if layout.get(field) is not None
+            }
+    return {}
 
 
 async def _verify(sb: bridge.SibeliusBridge, plan: page_layout.Plan, summary: dict[str, Any]) -> bool:

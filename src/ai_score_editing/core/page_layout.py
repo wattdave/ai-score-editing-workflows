@@ -21,7 +21,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from ai_score_editing.core.batch_schema import LAYOUT_NUMBERS, ORIENTATIONS, PAGE_SIZES
+from ai_score_editing.core.batch_schema import LAYOUT_NUMBERS, LAYOUT_SWITCHES, ORIENTATIONS, PAGE_SIZES
 from ai_score_editing.core.errors import BatchError
 
 #: Pages per spec are separated by "/" or "|"; systems by commas or spaces.
@@ -105,8 +105,12 @@ def parse_range(text: str) -> tuple[int, int]:
     return first, last
 
 
+SWITCH_ON = {"on", "true", "yes", "1"}
+SWITCH_OFF = {"off", "false", "no", "0"}
+
+
 def parse_overrides(items: list[str]) -> dict[str, Any]:
-    """Parse ["staffSize=5.5", "pageSize=a4"] into set-layout fields."""
+    """Parse ["staffSize=5.5", "pageSize=a4", "autoOptimize=off"] into set-layout fields."""
     out: dict[str, Any] = {}
     for item in items:
         key, sep, value = item.partition("=")
@@ -124,8 +128,16 @@ def parse_overrides(items: list[str]) -> dict[str, Any]:
             if value not in choices:
                 raise BatchError(f"--layout {key} must be one of: {', '.join(choices)}")
             out[key] = value
+        elif key in LAYOUT_SWITCHES:
+            word = value.lower()
+            if word in SWITCH_ON:
+                out[key] = True
+            elif word in SWITCH_OFF:
+                out[key] = False
+            else:
+                raise BatchError(f"--layout {key} must be on or off")
         else:
-            names = sorted([*LAYOUT_NUMBERS, "pageSize", "orientation"])
+            names = sorted([*LAYOUT_NUMBERS, *LAYOUT_SWITCHES, "pageSize", "orientation"])
             raise BatchError(f"--layout {key!r} is not a set-layout field; one of: {', '.join(names)}")
     return out
 

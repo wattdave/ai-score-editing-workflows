@@ -387,6 +387,7 @@ def test_set_layout_in_inches(objects) -> None:
     assert p["values"]["pagePrintableWidth"] == pytest.approx(8.5 - 1 - (8.5 - 0.59 - 7.32))
     for op, message in [({"op": "set-layout", "pageSize": "octavo"}, "not available"),
                         ({"op": "set-layout", "extraSpacesBelowVocalStaves": 2}, "vocal"),
+                        ({"op": "set-layout", "autoRespace": True}, "Sibelius only"),
                         ({"op": "set-layout", "leftMargin": 150, "rightMargin": 150}, "no room")]:
         with pytest.raises(MuseScoreBatchError, match=message):
             prepare_copy(objects, [op], current)

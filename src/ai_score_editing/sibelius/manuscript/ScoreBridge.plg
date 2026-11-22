@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 64);
+		return CreateDictionary('version', 65);
 	}"
 
 	Echo "(value) {
@@ -1938,7 +1938,23 @@
 	BatchSetLayout "(score, op) {
 		// Page size before orientation, which swaps the margins, and both
 		// before the margins themselves. A 0 reads as null in ManuScript, so
-		// op['settings'] names the settings to change.
+		// op['settings'] names the settings to change. Auto-Respace and
+		// Auto-Optimize first, so the writes below are laid out under the
+		// mode asked for; explicit True/False because a false may read as null.
+		if (BatchHasSetting(op, 'autoRespace')) {
+			if (op['autoRespace'] = True) {
+				score.AutoRespaceEnabled = True;
+			} else {
+				score.AutoRespaceEnabled = False;
+			}
+		}
+		if (BatchHasSetting(op, 'autoOptimize')) {
+			if (op['autoOptimize'] = True) {
+				score.AutoOptimizeEnabled = True;
+			} else {
+				score.AutoOptimizeEnabled = False;
+			}
+		}
 		setup = score.DocumentSetup;
 		if (BatchHasSetting(op, 'pageSize')) {
 			setup.PageSize = op['pageSize'];
@@ -2005,7 +2021,9 @@
 			'leftMargin', setup.PageLeftMargin,
 			'rightMargin', setup.PageRightMargin,
 			'aboveTopStaveGap', setup.AboveTopStaveGap,
-			'belowBottomStaveGap', setup.BelowBottomStaveGap);
+			'belowBottomStaveGap', setup.BelowBottomStaveGap,
+			'autoRespace', score.AutoRespaceEnabled,
+			'autoOptimize', score.AutoOptimizeEnabled);
 	}"
 
 	EngravingRead "(score) {
