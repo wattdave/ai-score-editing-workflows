@@ -54,6 +54,7 @@ Accessibility permission for the terminal.
 | `set-layout` | ⚠️ | no octavo/hymn/quarto/folio/us-band sizes, no extra gap below vocal staves, no autoRespace/autoOptimize (Sibelius only) |
 | `hide-empty-staves` | ⚠️ | whole score only |
 | `reset-staff-space` | ❌ | staff gaps come from the style; use `set-layout` |
+| `set-staff-mixer` (Sibelius) | ❌ | use `set_staff_playback` |
 | `delete-voice` | ✅ | |
 | `undo` | ✅ | by steps |
 | `save_score` | ⚠️ | saves in place (File > Save) and copies the file; a never-saved score is refused |
@@ -61,7 +62,7 @@ Accessibility permission for the terminal.
 | `project_info`, `set_project_info` (Dorico) | ⚠️ | not undoable in MuseScore; the old values are returned |
 | `read_lyrics`, `edit_lyrics` (Dorico) | ✅ | edit is one undo step, same syllable count |
 | `add_instrument` (MuseScore) | ✅ | by id, MusicXML sound id or name; unknown ids refused |
-| `set_staff_playback` (MuseScore) | ⚠️ | silences the notes there now (each note's `play`); the mixer is out of reach |
+| `set_staff_playback` (MuseScore, Sibelius) | ⚠️ | silences the notes there now (each note's `play`); the mixer is out of reach. Sibelius mutes the staff's Mixer strip instead |
 
 ## Our back end
 

@@ -38,7 +38,7 @@ from ai_score_editing.sibelius.bridge import (
 
 __all__ = [
     "BatchError", "BatchFailed", "BridgeBusy", "BridgeError", "QueryError", "apply", "backup",
-    "backup_folder", "check", "commit", "export", "overview", "query", "query_selector", "save",
+    "backup_folder", "check", "commit", "export", "overview", "query", "query_selector", "save", "set_staff_playback",
     "structure", "undo",
 ]
 
@@ -191,9 +191,39 @@ async def apply(
     result = await check(b, batch)
     if not dry_run:
         result = await commit(b, batch, backup_name=backup_name, backup_dir=backup_dir, backup_fn=backup_fn)
-    if warning:
-        result["warnings"] = [*result.get("warnings", []), warning]
+    warnings = [warning] if warning else []
+    warnings += batch_ops.mixer_warnings(batch)
+    if warnings:
+        result["warnings"] = [*result.get("warnings", []), *warnings]
     return result
+
+
+async def set_staff_playback(
+    b: SibeliusBridge,
+    staves: list[Any],
+    play: bool,
+    voices: list[int] | None = None,
+    *,
+    backup_fn: BackupFn | None = None,
+    backup_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    """Mute or unmute whole staves in the Mixer (set-staff-mixer, bridge v68).
+
+    Sibelius mutes whole staves, so `voices` must be omitted or be all of 1-4.
+    `play` sets the mute state only; Solo is left as it is.
+    """
+    if voices is not None and set(voices) != {1, 2, 3, 4}:
+        raise BatchError("Sibelius mutes whole staves in the Mixer; omit voices (or pass all of 1-4)")
+    if not staves:
+        raise BatchError("staves is empty")
+    numbers = list(dict.fromkeys(resolve_staves([str(s) for s in staves], await b.call("GetStaves"))))
+    if 0 in numbers:
+        raise BatchError("the system staff has no Mixer strip")
+    ops = [{"op": "set-staff-mixer", "staff": n, "mute": "not-muted" if play else "muted"} for n in numbers]
+    return await apply(
+        b, ops, backup_name="before set_staff_playback", feature="set_staff_playback",
+        backup_fn=backup_fn, backup_dir=backup_dir,
+    )
 
 
 async def undo(b: SibeliusBridge, steps: int = 1) -> dict[str, Any]:

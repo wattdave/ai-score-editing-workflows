@@ -1,4 +1,4 @@
-"""Audio commands: rehearsal-mixes, export-stem, proof-mixes, playback-sounds, verify-render."""
+"""Audio commands: rehearsal-mixes, export-stem, proof-mixes, playback-sounds, mixer, verify-render."""
 
 from __future__ import annotations
 
@@ -22,7 +22,9 @@ from ai_score_editing.sibelius.bridge import (
     QUERY_CONTAINERS_BRIDGE_VERSION,
     BridgeError,
 )
-from ai_score_editing.sibelius import bridge, runner
+from ai_score_editing.core.errors import BatchError, QueryError
+from ai_score_editing.sibelius import batch_ops, bridge, runner, service
+from ai_score_editing.sibelius.query_props import resolve_staves
 from ai_score_editing.sibelius.commands._common import EXIT_COMMAND_FAILED, EXIT_OK
 
 
@@ -112,6 +114,25 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
     )
     sounds.add_argument("--require", metavar="SOUND_SET",
                         help="exit non-zero unless every staff's sound set contains this")
+    mixer = sub.add_parser(
+        "mixer",
+        help="read or set each staff's Mixer mute, solo, volume, pan and distance",
+        description=(
+            "With no setting, print each staff's Mixer state (bridge v62). With settings, write them "
+            "to the named staves (default: every staff) as one checked, backed-up batch of "
+            "set-staff-mixer ops (bridge v68), then print every staff's state again."
+        ),
+    )
+    mixer.add_argument("--staff", action="append", default=[], metavar="N|NAME",
+                       help="staff number or instrument name (repeatable; default: every staff)")
+    mixer.add_argument("--mute", choices=list(batch_ops.MIXER_MUTE_MODES), help="Mixer mute state")
+    mixer.add_argument("--solo", choices=["on", "off"], help="Mixer solo")
+    mixer.add_argument("--volume", type=int, metavar="0-127", help="Mixer fader")
+    mixer.add_argument("--pan", type=int, metavar="-100..100", help="pan (positive is right)")
+    mixer.add_argument("--distance", type=int, metavar="0-100", help="reverb distance (percent)")
+    mixer.add_argument("--reset", action="store_true", help="same as --mute not-muted --solo off")
+    mixer.add_argument("--dry-run", action="store_true", help="check and show the current values; change nothing")
+    mixer.add_argument("--save", action="store_true", help="save after the change")
     verify_render = sub.add_parser(
         "verify-render",
         help="export a score and verify that the rendered files are present and non-empty",
@@ -127,16 +148,17 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
         "export-stem": _run_export_stem,
         "proof-mixes": _run_proof_mixes,
         "playback-sounds": _run_playback_sounds,
+        "mixer": _run_mixer,
         "verify-render": _run_verify_render,
     }
 
 
-MIXER_FIELDS = ["MuteMode", "Solo", "Volume", "Pan"]
+MIXER_FIELDS = ["MuteMode", "Solo", "Volume", "Pan", "Distance"]
 
 
 async def _read_mixer(client: Any) -> dict[int, dict]:
-    """Each staff's Mixer mute, solo, volume and pan (Staff.MuteMode, Solo,
-    Volume, Pan), read with a Staff query (bridge v62). Empty, with a note,
+    """Each staff's Mixer mute, solo, volume, pan and distance (Staff.MuteMode,
+    Solo, Volume, Pan, Distance), read with a Staff query (bridge v62). Empty, with a note,
     on an older bridge: the check is advisory and must not block an export."""
     from ai_score_editing.sibelius.query_props import build_selector
 
@@ -157,20 +179,31 @@ async def _read_mixer(client: Any) -> dict[int, dict]:
 def _print_mixer_problems(mixer: dict[int, dict], staves: set[int]) -> None:
     problems = rehearsal_mix.mixer_problems(mixer, staves)
     if problems:
-        print("warning: Mixer settings that can silence or quieten exported audio:", file=sys.stderr)
+        print("warning: Mixer settings that silence or quieten exported audio:", file=sys.stderr)
         for problem in problems:
             print(f"  {problem}", file=sys.stderr)
+    notes = rehearsal_mix.mixer_notes(mixer, staves)
+    if notes:
+        print("note: Mixer mute/solo (single-staff stems ignore them; a whole-score audio export and "
+              "playback honour them; 'mixer --reset' clears them):", file=sys.stderr)
+        for note in notes:
+            print(f"  {note}", file=sys.stderr)
+
+
+def _format_mixer(fields: dict) -> str:
+    mute = rehearsal_mix.MUTE_MODES.get(fields.get("MuteMode"), "mute ?")
+    solo = ", solo" if fields.get("Solo") in (True, 1) else ""
+    text = f"{mute}{solo}, volume {fields.get('Volume', '?')}, pan {fields.get('Pan', '?')}"
+    if "Distance" in fields:
+        text += f", distance {fields['Distance']}"
+    return text
 
 
 def _print_playback_sounds(staves: list[dict], mixer: dict[int, dict] | None = None) -> None:
     for staff in staves:
         override = f"  [Mixer override {staff['override']}]" if staff.get("override") else ""
         fields = (mixer or {}).get(staff["staffNum"])
-        state = ""
-        if fields:
-            mute = rehearsal_mix.MUTE_MODES.get(fields.get("MuteMode"), "mute ?")
-            solo = ", solo" if fields.get("Solo") in (True, 1) else ""
-            state = f"  [{mute}{solo}, volume {fields.get('Volume', '?')}, pan {fields.get('Pan', '?')}]"
+        state = f"  [{_format_mixer(fields)}]" if fields else ""
         for i, change in enumerate(staff.get("sounds", [])):
             where = f"staff {staff['staffNum']}" if i == 0 else f"  from bar {change['bar']}"
             print(f"{where}: {change['soundSet']} / {change['patch']} ({change['actualSoundId']})"
@@ -195,6 +228,114 @@ async def _run_playback_sounds(args: argparse.Namespace) -> int:
             for problem in problems:
                 print(f"  {problem}", file=sys.stderr)
             return EXIT_COMMAND_FAILED
+    return EXIT_OK
+
+
+def _mixer_settings(args: argparse.Namespace) -> dict[str, Any]:
+    """The set-staff-mixer settings the mixer arguments ask for; ValueError if invalid."""
+    if args.reset and (args.mute is not None or args.solo is not None):
+        raise ValueError("--reset cannot be combined with --mute or --solo")
+    settings: dict[str, Any] = {}
+    if args.reset:
+        settings.update(mute="not-muted", solo=False)
+    if args.mute is not None:
+        settings["mute"] = args.mute
+    if args.solo is not None:
+        settings["solo"] = args.solo == "on"
+    for key, (low, high) in batch_ops.MIXER_RANGES.items():
+        value = getattr(args, key)
+        if value is None:
+            continue
+        if not low <= value <= high:
+            raise ValueError(f"--{key} must be from {low} to {high}")
+        settings[key] = value
+    return settings
+
+
+def _print_mixer(mixer: dict[int, dict]) -> None:
+    for num in sorted(mixer):
+        print(f"staff {num}: {_format_mixer(mixer[num])}", file=sys.stderr)
+
+
+def _mixer_json(mixer: dict[int, dict]) -> dict[str, dict]:
+    return {str(num): fields for num, fields in sorted(mixer.items())}
+
+
+async def _run_mixer(args: argparse.Namespace) -> int:
+    try:
+        settings = _mixer_settings(args)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    try:
+        async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
+            wanted: list[int] | None = None
+            if args.staff:
+                try:
+                    wanted = list(dict.fromkeys(resolve_staves(args.staff, await bridge.call(client, "GetStaves"))))
+                except QueryError as exc:
+                    print(f"error: {exc}", file=sys.stderr)
+                    return EXIT_COMMAND_FAILED
+                if 0 in wanted:
+                    print("error: the system staff has no Mixer strip", file=sys.stderr)
+                    return EXIT_COMMAND_FAILED
+            if not settings:
+                await bridge.require_bridge(client, QUERY_CONTAINERS_BRIDGE_VERSION, "mixer")
+                mixer = await _read_mixer(client)
+                shown = {n: f for n, f in mixer.items() if wanted is None or n in wanted}
+                _print_mixer(shown)
+                print(json.dumps({"mixer": _mixer_json(shown)}, indent=2))
+                _print_mixer_problems(mixer, set(shown))
+                return EXIT_OK
+            if wanted is None:
+                wanted = [s["staffNum"] for s in await bridge.call(client, "GetStaves")]
+            try:
+                batch = batch_ops.validate_batch(
+                    [{"op": "set-staff-mixer", "staff": n, **settings} for n in wanted]
+                )
+            except BatchError as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return EXIT_COMMAND_FAILED
+            await bridge.require_bridge(client, bridge.batch_bridge_version(batch), "mixer")
+            await runner.assert_expected_score(client, args)
+            sb = bridge.for_client(client)
+            try:
+                checked = await service.check(sb, batch)
+            except service.BatchFailed as exc:
+                print(f"error: {exc.result.get('error')} (nothing was changed)", file=sys.stderr)
+                return EXIT_COMMAND_FAILED
+            if args.dry_run:
+                print(json.dumps({"dryRun": True, "results": checked.get("results", [])}, indent=2))
+                return EXIT_OK
+            prior = await _read_mixer(client)
+            try:
+                result = await service.commit(
+                    sb, batch, backup_name="before mixer", backup_fn=runner.backup_and_report
+                )
+            except service.BatchFailed as exc:
+                undo = "run 'invoke undo' once" if exc.applied else "nothing was applied"
+                print(f"error: {exc.result.get('error')}; {undo}, or restore {exc.backup}", file=sys.stderr)
+                return EXIT_COMMAND_FAILED
+            if args.save:
+                saved = await service.save(sb)
+                print(f"saved: {saved.get('fileName', '')}", file=sys.stderr)
+            mixer = await _read_mixer(client)
+    except BridgeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_COMMAND_FAILED
+    _print_mixer(mixer)
+    notes = [
+        f"staff {num} changed too (it was not named; probably the same instrument)"
+        for num in sorted(set(prior) & set(mixer) - set(wanted))
+        if prior[num] != mixer[num]
+    ]
+    notes += batch_ops.mixer_warnings(batch)
+    for note in notes:
+        print(f"note: {note}", file=sys.stderr)
+    print(json.dumps({
+        "applied": result.get("applied"), "backup": result.get("backup"),
+        "results": result.get("results", []), "mixer": _mixer_json(mixer), "notes": notes,
+    }, indent=2))
     return EXIT_OK
 
 

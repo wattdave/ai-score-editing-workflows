@@ -505,7 +505,7 @@ def test_layout_report_in_set_layout_terms() -> None:
     assert report["hideEmptyStaves"] == "never"
 
 
-@pytest.mark.parametrize("op", ["set-bar-number", "hide-empty-staves", "reset-staff-space"])
+@pytest.mark.parametrize("op", ["set-bar-number", "hide-empty-staves", "reset-staff-space", "set-staff-mixer"])
 def test_sibelius_ops_without_a_dorico_route_say_why(op: str) -> None:
     with pytest.raises(DoricoBatchError, match=f"{op} is not available on Dorico"):
         prepare_batch([{"op": op, "bar": 2, "number": 5}], locate_events(EVENTS, BARS), STAVES, BARS)

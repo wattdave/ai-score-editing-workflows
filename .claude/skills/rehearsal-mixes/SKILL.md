@@ -21,8 +21,13 @@ score is not changed.
    set, patch and any Mixer override. If the user wants a specific library
    (for example Cantai), pass `--require-sound <name>` to the export so it
    refuses to run if any voice plays something else. It also warns about a
-   muted or half-muted staff, a Mixer fader at 0, or Solo left on (bridge
-   v62+); ask the user to reset those in the Mixer before exporting.
+   Mixer fader at 0 and notes a muted or half-muted staff or Solo left on
+   (bridge v62+). A fader at 0 silences that staff's stem: set it with
+   `sibelius-cli --expect-file SCORE mixer --staff N --volume 100` (bridge
+   v68). Mute and Solo do not change the stems (each stem is a single-staff
+   export, which ignores them; probed on Sibelius 2026.11), so they need no
+   fix for the mixes; `mixer --reset` clears them if the user wants normal
+   playback back.
 3. **One note per staff.** If a voice staff has chords or divisi, the
    rendered sound may drop notes. Offer the `playback-divisi-split` skill
    first to build a playback copy. If every note must sound, use its

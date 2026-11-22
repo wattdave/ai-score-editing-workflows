@@ -97,7 +97,9 @@ such as the writable property table that mirrors `BatchWritableTable` in
 operation in each editor: the ScoreBridge plug-in (`.plg`) for Sibelius,
 `dorico/score.py` plus `bridge.lua`, `musescore/score.py` plus the QML bridge.
 An editor that cannot do it refuses it by name (Dorico's `NOT_ON_DORICO` table, for example) and
-the editor's page in `docs/` gets a row.
+the editor's page in `docs/` gets a row. An operation only one editor has goes
+through that editor's `ExtraOps` table instead of `OPERATIONS` (MuseScore
+`EXTRA_OPS`, Sibelius `batch_ops.SIBELIUS_EXTRA_OPS` with `set-staff-mixer`).
 
 **A query property.** Sibelius: `query_props.json`, regenerated with
 `scripts/dev/gen_query_props.py`. The selector engine is `core/query.py`.

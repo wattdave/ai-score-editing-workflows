@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 67);
+		return CreateDictionary('version', 68);
 	}"
 
 	Echo "(value) {
@@ -2039,6 +2039,39 @@
 		return CreateDictionary('layout', LayoutRead(score), 'engraving', EngravingRead(score));
 	}"
 
+	MixerRead "(staff) {
+		return CreateDictionary('muteMode', staff.MuteMode, 'solo', staff.Solo, 'volume', staff.Volume,
+			'pan', staff.Pan, 'distance', staff.Distance);
+	}"
+
+	BatchRunMixer "(score, op) {
+		// Mixer writes for one staff. A 0 or false may read as null in
+		// ManuScript, so op['settings'] names the settings to change and Solo
+		// is compared with True explicitly.
+		staff = score.NthStaff(op['staff']);
+		before = MixerRead(staff);
+		if (BatchHasSetting(op, 'muteMode')) {
+			staff.MuteMode = op['muteMode'];
+		}
+		if (BatchHasSetting(op, 'solo')) {
+			if (op['solo'] = True) {
+				staff.Solo = True;
+			} else {
+				staff.Solo = False;
+			}
+		}
+		if (BatchHasSetting(op, 'volume')) {
+			staff.Volume = op['volume'];
+		}
+		if (BatchHasSetting(op, 'pan')) {
+			staff.Pan = op['pan'];
+		}
+		if (BatchHasSetting(op, 'distance')) {
+			staff.Distance = op['distance'];
+		}
+		return CreateDictionary('staff', op['staff'], 'before', before, 'after', MixerRead(staff));
+	}"
+
 	BatchHasSetting "(op, name) {
 		settings = op['settings'];
 		for i = 0 to settings.Length {
@@ -2141,6 +2174,12 @@
 		}
 		if (opName = 'set-lyric-verse') {
 			return BatchCheckLyricVerse(score, op);
+		}
+		if (opName = 'set-staff-mixer') {
+			if (op['staff'] < 1 or op['staff'] > score.StaffCount) {
+				return 'no staff ' & op['staff'];
+			}
+			return '';
 		}
 		if (opName = 'beam') {
 			noteRests = 0;
@@ -2259,6 +2298,9 @@
 		}
 		if (opName = 'set-lyric-verse') {
 			return BatchRunLyricVerse(score, op);
+		}
+		if (opName = 'set-staff-mixer') {
+			return BatchRunMixer(score, op);
 		}
 		bar = BatchBar(score, op);
 		voice = 1;
@@ -2402,6 +2444,10 @@
 			before = null;
 			if (target != null and BatchAddressed(op['op'])) {
 				before = DescribeObject(target, op['index']);
+			}
+			if (op['op'] = 'set-staff-mixer') {
+				mixerStaff = score.NthStaff(op['staff']);
+				before = MixerRead(mixerStaff);
 			}
 			results.Push(CreateDictionary('i', i, 'op', op['op'], 'before', before));
 		}

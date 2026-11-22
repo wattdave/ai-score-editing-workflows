@@ -66,7 +66,16 @@ Sibelius restart.
    `SaveAsAudio` honours Mute/Solo (export one staff muted and compare).
    A Sibelius MCP tool should reuse the MuseScore `set_staff_playback`
    parameter names (`staves`, `play`, `voices`) or `test_mcp_parity.py` needs an
-   entry.
+   entry. **Done in bridge v68**: the `set-staff-mixer` batch op, the `mixer`
+   command and the MCP `set_staff_playback` tool. Scratch probe (2026-11-22,
+   Sibelius 2026.11, soprano plus two-staff piano): every value, including
+   0, false, the range ends and distance 100, read back as written; one undo
+   reverted a Mixer-only batch and also a mixed Mixer plus add-text batch; a
+   whole-score `SaveAsAudio` honoured Mute, half-mute, Solo and Volume, but a
+   single-staff export (every stem) ignored Mute and Solo and honoured Volume
+   only; each staff of the piano kept its own values. Details in
+   [sibelius-protocol.md](sibelius-protocol.md) 1.3.3. Candidate 1's warnings
+   now treat Mute and Solo as notes for stems.
 3. **Set a staff's playback sound** (Cantai assignment): `Staff.SetSoundID(soundID)`
    and `Staff.SetSound(styleID[, set SoundStage])` (Staff, Methods). Would
    remove the manual Cantai set-up before each rehearsal-mix batch, copying
@@ -128,6 +137,6 @@ engraving rules (piano accompaniments only), the tablature fret methods,
 
 ## Order
 
-Probe 2 and 3 together on one scratch score (one Sibelius restart covers
-both), then implement 2, 3 and 4 in one bridge bump (v65). 7 and 8 can ride
-along. 5 and 6 stay probes until someone needs them.
+Done: 1, 4 (v65), 7 (v66), 8 (v67) and 2 (v68), each in its own bridge
+bump. Next: probe and implement 3 (playback sound). 5 and 6 stay probes until
+someone needs them.
