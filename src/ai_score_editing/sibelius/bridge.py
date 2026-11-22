@@ -50,7 +50,7 @@ def raise_if_busy(response: dict[str, Any]) -> None:
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 64
+CURRENT_BRIDGE_VERSION = 65
 QUERY_BRIDGE_VERSION = 38
 BATCH_BRIDGE_VERSION = 39
 NUDGE_BRIDGE_VERSION = 41
@@ -71,11 +71,17 @@ TEXT_FONTS_BRIDGE_VERSION = 61
 QUERY_CONTAINERS_BRIDGE_VERSION = 62
 FICTA_BRIDGE_VERSION = 63
 STAFF_NAME_BRIDGE_VERSION = 64
+LAYOUT_SWITCHES_BRIDGE_VERSION = 65
 
 
 def batch_bridge_version(operations: list[dict[str, Any]]) -> int:
     """The oldest bridge that runs every operation in a validated batch."""
     names = {operation["op"] for operation in operations}
+    if any(
+        operation["op"] == "set-layout" and batch_schema.LAYOUT_SWITCHES.keys() & set(operation.get("settings", ()))
+        for operation in operations
+    ):
+        return LAYOUT_SWITCHES_BRIDGE_VERSION
     if "ficta" in names:
         return FICTA_BRIDGE_VERSION
     if names & {"add-tuplet-notes", "clear-bars"}:

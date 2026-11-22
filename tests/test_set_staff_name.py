@@ -36,7 +36,7 @@ def test_plugin_sets_instrument_names_and_never_writes_a_staff_name() -> None:
 def test_plugin_version_matches_the_staff_name_gate() -> None:
     source = PLUGIN.read_text()
     assert f"CreateDictionary('version', {sibelius_bridge.CURRENT_BRIDGE_VERSION})" in source
-    assert sibelius_bridge.STAFF_NAME_BRIDGE_VERSION == sibelius_bridge.CURRENT_BRIDGE_VERSION == 64
+    assert sibelius_bridge.STAFF_NAME_BRIDGE_VERSION == 64 <= sibelius_bridge.CURRENT_BRIDGE_VERSION
 
 
 async def test_set_staff_name_needs_bridge_v64_before_the_backup(cli_session: CliSession) -> None:

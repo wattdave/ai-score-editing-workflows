@@ -108,6 +108,8 @@ LAYOUT_NUMBERS: dict[str, tuple[str, float, float]] = {
     "extraSpacesBelowVocalStaves": ("EngravingRules", 0, 50),
     "spacesBetweenSystems": ("EngravingRules", 1, 50),
 }
+#: set-layout's on/off switches: Score properties in Sibelius (Sibelius only).
+LAYOUT_SWITCHES: dict[str, str] = {"autoRespace": "AutoRespaceEnabled", "autoOptimize": "AutoOptimizeEnabled"}
 
 
 def validate_batch(
@@ -396,7 +398,7 @@ def _validate_structural(operation: dict[str, Any], op: str, label: str) -> dict
 
 def _layout(operation: dict[str, Any], label: str) -> dict[str, Any]:
     """Validate set-layout: any of its settings, and at least one."""
-    known = {"op", "pageSize", "orientation", *LAYOUT_NUMBERS}
+    known = {"op", "pageSize", "orientation", *LAYOUT_NUMBERS, *LAYOUT_SWITCHES}
     if unknown := sorted(operation.keys() - known):
         raise BatchError(f"{label}: unknown set-layout fields {unknown}; allowed: {', '.join(sorted(known - {'op'}))}")
     out: dict[str, Any] = {}
@@ -411,6 +413,12 @@ def _layout(operation: dict[str, Any], label: str) -> dict[str, Any]:
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
             raise BatchError(f"{label}.{field} must be a number from {low} to {high}")
         out[field] = value
+    for field in LAYOUT_SWITCHES:
+        if field not in operation:
+            continue
+        if not isinstance(operation[field], bool):
+            raise BatchError(f"{label}.{field} must be true or false")
+        out[field] = operation[field]
     if not out:
         raise BatchError(f"{label}: set-layout needs at least one setting")
     # ManuScript reads a 0 as null, so the plug-in cannot tell "letter",
@@ -568,6 +576,9 @@ def name_structure(structure: dict[str, Any]) -> dict[str, Any]:
             "pageSize": _indexed_name(PAGE_SIZES, layout.get("pageSize"), "custom"),
             "orientation": _indexed_name(ORIENTATIONS, layout.get("orientation"), None),
         }
+        for field in LAYOUT_SWITCHES:
+            if layout.get(field) is not None:
+                named["layout"][field] = bool(layout[field])
     return named
 
 

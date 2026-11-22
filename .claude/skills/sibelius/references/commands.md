@@ -196,9 +196,12 @@ and verify once for the whole set.
     `tabloid`, `concert`, ...), `orientation` (`portrait`/`landscape`),
     `staffSize`, `topMargin`, `bottomMargin`, `leftMargin`, `rightMargin`,
     `aboveTopStaveGap`, `belowBottomStaveGap` (mm), `spacesBetweenStaves`,
-    `extraSpacesBelowVocalStaves`, `spacesBetweenSystems` (staff spaces).
+    `extraSpacesBelowVocalStaves`, `spacesBetweenSystems` (staff spaces),
+    `autoRespace`, `autoOptimize` (true/false: Appearance > Auto-Respace note
+    spacing and Layout > Staff Spacing > Optimize Auto; bridge v65).
     Only the given settings change; `score_structure` reports the current
-    values as `layout` and `engraving` (bridge v50).
+    values as `layout` (with the two switches from v65) and `engraving`
+    (bridge v50).
   - `{"op":"clear-bars","fromBar":A,"toBar":B,"staff":S[,"voice":V]}` (bridge v60):
     `Bar.ClearNotesAndModifiers`, leaving a bar rest and removing tuplets
     and slurs, in every voice unless `voice` is given. It needs no
@@ -234,6 +237,9 @@ and verify once for the whole set.
   [--no-unlock-format] [--out FILE | --dry-run] [--verify] [--pdf PATH] [--save]`:
   lays out an imported score like its print in one step
   ([recipe](import-and-layout-recipes.md#one-command-auto-layout)).
+  `--layout autoOptimize=off` (or `autoRespace=off`; on/off, true/false,
+  yes/no) turns a switch off in the same set-layout; the summary then reports
+  `autoRespace` and `autoOptimize` as read back (bridge v65).
 - `hide-time-signatures (--bars "2-54,60" | --musicxml FILE) [--dry-run] [--save]`: hides the
   time signatures the print does not show (Sibelius ignores `print-object="no"` on `<time>`):
   `set Hidden true` on the system staff's TimeSignature objects in those bars, one checked batch.

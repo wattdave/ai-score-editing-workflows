@@ -642,6 +642,10 @@ def layout_style(operation: dict[str, Any], label: str, current: dict[str, Any])
     """
     if "extraSpacesBelowVocalStaves" in operation:
         raise MuseScoreBatchError(f"{label}: MuseScore has no extra gap below vocal staves")
+    if switches := sorted(batch_schema.LAYOUT_SWITCHES.keys() & operation.keys()):
+        raise MuseScoreBatchError(
+            f"{label}: {', '.join(switches)} are Sibelius only (MuseScore has no Auto-Respace/Auto-Optimize switch)"
+        )
     inch = lambda mm: mm / MM_PER_INCH  # noqa: E731
     values: dict[str, Any] = {}
     width, height = current.get("pageWidth"), current.get("pageHeight")

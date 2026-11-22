@@ -52,7 +52,13 @@ Read the current Document Setup and staff spacing from `score_structure`
 it names, e.g. `{"op":"set-layout","belowBottomStaveGap":5}` or
 `{"op":"set-layout","spacesBetweenSystems":10,"extraSpacesBelowVocalStaves":2}`.
 Setting `orientation` swaps the margins, so set margins in the same op
-(they are applied after it) or re-read afterwards. The first-page stave
+(they are applied after it) or re-read afterwards. From bridge v65 `layout`
+also reports `autoRespace` and `autoOptimize` (true/false), and set-layout
+sets them, e.g. `{"op":"set-layout","autoOptimize":false}`. The plug-in
+writes the switches first, before the page and spacing settings; explicit
+`spacesBetweenStaves`/`spacesBetweenSystems` in the same op were honoured
+with Auto-Optimize on or off (scratch check, 2026-11-22). One undo reverts
+the switches with the rest of the batch. The first-page stave
 margin is not settable yet.
 
 To reset a freshly imported score whose systems overlap, reset positions and

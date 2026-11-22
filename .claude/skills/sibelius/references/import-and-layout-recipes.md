@@ -45,6 +45,10 @@ sibelius-cli --expect-file /abs/x.sib auto-layout --systems "1,5,9/13,17" --vers
 - `--unlock-format` is on by default and **clears manual formatting** (all breaks,
   locked layout) before the batch, as its own undo step; `--no-unlock-format` keeps it.
 - `--hide-empty` caps `staffSize` at 5.5; `--layout staffSize=5` overrides any value.
+- `--layout autoOptimize=off` (bridge v65) stops Sibelius re-optimizing staff spacing
+  after later edits, for a score whose hand-set gaps keep moving; auto-layout leaves
+  both switches as they are unless asked and reports them after a real run.
+  `hide-empty-staves` runs Optimize Staff Spacing itself whatever the switch says.
 - `--out FILE` writes the plain `apply` batch (needs `--staves`) to merge with other
   ops; run `invoke select_all unlock_format select_none` first yourself.
 - `--verify` reads each bar's `OnNthPage`/`OnNthSystem` and fails on a page or system

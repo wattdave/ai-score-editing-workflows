@@ -15,7 +15,7 @@ from typing import Any
 from ai_score_editing.cli_common import DEFAULT_LIMIT
 from ai_score_editing.core import lyrics
 from ai_score_editing.core import query as core_query
-from ai_score_editing.core.batch_schema import LAYOUT_NUMBERS, ORIENTATIONS, PAGE_SIZES
+from ai_score_editing.core.batch_schema import LAYOUT_NUMBERS, LAYOUT_SWITCHES, ORIENTATIONS, PAGE_SIZES
 from ai_score_editing.core.errors import BatchError
 from ai_score_editing.core.query import Vocabulary
 from ai_score_editing.core.intervals import interval_of, spelling_letter, transpose_spelled
@@ -1114,6 +1114,8 @@ def _set_layout(operation: dict[str, Any], label: str) -> dict[str, Any]:
     right margins depend on the layout's current settings."""
     known = {"op", "pageSize", "orientation", "pageWidth", "pageHeight", "hideEmptyStaves", "layout",
              *LAYOUT_NUMBERS}
+    if switches := sorted(LAYOUT_SWITCHES.keys() & operation.keys()):
+        raise DoricoBatchError(f"{label}: {', '.join(switches)} are Sibelius only (no Dorico Layout Option)")
     if unknown := sorted(operation.keys() - known):
         raise DoricoBatchError(f"{label}: unknown set-layout fields {unknown}; allowed: {', '.join(sorted(known - {'op'}))}")
     if "extraSpacesBelowVocalStaves" in operation:

@@ -465,6 +465,7 @@ def test_set_layout_converts_to_dorico_units() -> None:
         ({"hideEmptyStaves": "sometimes"}, "hideEmptyStaves must be one of"),
         ({}, "at least one setting"),
         ({"margin": 3}, "unknown set-layout fields"),
+        ({"autoOptimize": False}, "Sibelius only"),
     ],
 )
 def test_set_layout_refusals(batch: dict[str, Any], message: str) -> None:

@@ -67,7 +67,8 @@ description lists every op's fields.
 - `set` Beam takes MuseScore beam modes (0 auto, 1 none, 2 begin,
   5 middle); a lyric melisma is `Duration`, not `NumNotes`.
 - hide-empty-staves is whole-score only. set-layout has no octavo, hymn,
-  quarto, folio or us-band page sizes.
+  quarto, folio or us-band page sizes; its autoRespace / autoOptimize are
+  Sibelius only.
 - `save_score` saves in place (as Cmd-S) and can copy the saved `.mscz` to a
   path. A score never saved is refused: ask the user to save it once.
 - `export_score`: pdf, png, svg (one file per page when there are several),
