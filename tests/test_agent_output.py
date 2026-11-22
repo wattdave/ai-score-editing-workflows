@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from ai_score_editing.sibelius.agent_output import (
     project_inspect,
     project_score_snapshot,
@@ -167,3 +169,28 @@ def test_compact_formats_stay_within_representative_character_budgets() -> None:
     ]
     verbose_lyrics = json.dumps(syllables, indent=2, ensure_ascii=False)
     assert len(render_compact_lyrics(syllables)) <= len(verbose_lyrics) * 0.25
+
+
+@pytest.mark.parametrize(("view_type", "expected"), [(0, "page"), (1, "panorama"), (7, "unknown")])
+def test_project_inspect_reports_view_type(view_type: int, expected: str) -> None:
+    result = project_inspect({"title": "A", "barCount": 3, "viewType": view_type}, [], {})
+
+    assert result["view"] == expected
+    assert list(result).index("view") == list(result).index("barCount") + 1
+
+
+def test_project_inspect_omits_view_on_old_bridge() -> None:
+    assert "view" not in project_inspect({"title": "A"}, [], {})
+
+
+def test_render_compact_inspect_includes_view() -> None:
+    output = render_compact_inspect({"title": "A", "viewType": 1}, [], {})
+
+    assert '"view":"panorama"' in output
+    assert "\n" not in output
+
+
+def test_score_snapshot_carries_view() -> None:
+    snapshot = project_score_snapshot({"title": "A", "viewType": 0}, [], {})
+
+    assert snapshot["view"] == "page"

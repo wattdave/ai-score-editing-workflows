@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 66);
+		return CreateDictionary('version', 67);
 	}"
 
 	Echo "(value) {
@@ -49,6 +49,7 @@
 			'copyright', score.Copyright,
 			'staffCount', score.StaffCount,
 			'barCount', systemStaff.BarCount,
+			'viewType', Sibelius.GetCurrentScoreViewType(),
 			'keySignatures', keySignatures,
 			'timeSignatures', timeSignatures,
 			'mainTextFontName', score.MainTextFontName & '',
