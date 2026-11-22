@@ -203,6 +203,7 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
       stave gaps (mm), spacesBetweenStaves, spacesBetweenSystems (not
       autoRespace/autoOptimize: Sibelius only)
     - {"op":"hide-empty-staves","fromBar":1,"toBar":LAST}: whole score only
+    - reset-staff-space is Sibelius only (MuseScore spaces staves from the style)
     - {"op":"delete-voice","staff":S,"voice":V,"fromBar":A,"toBar":B}:
       voice 1 notes become rests; voices 2-4 are emptied
 

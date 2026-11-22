@@ -66,13 +66,17 @@ spacing across the whole score, then hide empty staves:
 
 ```bash
 uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli invoke select_all reset_position \
-  reset_space_above_staff reset_space_below_staff reset_note_spacing \
-  reset_stems_and_beam_positions
+  reset_note_spacing reset_stems_and_beam_positions
 uv run --project "${CLAUDE_SKILL_DIR}" sibelius-cli command escape
 ```
 
-then run `apply` with `[{"op":"hide-empty-staves","fromBar":1,"toBar":LAST_BAR}]`
-(bridge v52). It also optimizes staff spacing. If systems still collide,
+then run `apply` with
+`[{"op":"reset-staff-space","fromBar":1,"toBar":LAST_BAR},{"op":"hide-empty-staves","fromBar":1,"toBar":LAST_BAR}]`
+(bridge v66; `hide-empty-staves` alone needs v52). Unlike the
+`reset_space_above_staff reset_space_below_staff` commands through `invoke`,
+which always report success, the op checks its bars and staves, is backed up
+first and is one undo step with the batch. `hide-empty-staves` then optimizes
+staff spacing again. If systems still collide,
 check for system and page breaks carried over from MusicXML `<print>`
 elements: breaks copied from a printed page can force more systems onto a page
 than fit once staves are added. Clear them with `set-break` `"type": "none"`

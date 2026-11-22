@@ -63,6 +63,8 @@ async def test_busy_response_raises_bridge_busy() -> None:
         ([{"op": "add-lyric", "verse": 2}], bridge.LYRIC_VERSE_BRIDGE_VERSION),
         ([{"op": "clear-bars"}], bridge.TUPLET_NOTES_BRIDGE_VERSION),
         ([{"op": "nudge"}, {"op": "clear-bars"}], bridge.TUPLET_NOTES_BRIDGE_VERSION),
+        ([{"op": "reset-staff-space"}], bridge.RESET_STAFF_SPACE_BRIDGE_VERSION),
+        ([{"op": "ficta"}, {"op": "reset-staff-space"}], bridge.RESET_STAFF_SPACE_BRIDGE_VERSION),
     ],
 )
 def test_batch_bridge_version_table(operations: list[dict[str, Any]], expected: int) -> None:

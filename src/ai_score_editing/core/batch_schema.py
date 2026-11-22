@@ -10,7 +10,7 @@ whole batch as one undo step. Operations run in file order.
 
 Structural operations (transpose, copy-passage, key and time signatures,
 breaks, barlines, bar numbers, add-bars, delete-voice, hide-empty-staves,
-set-layout) work on bar ranges or the whole score. They can replace or renumber the objects an address points at, so they
+reset-staff-space, set-layout) work on bar ranges or the whole score. They can replace or renumber the objects an address points at, so they
 must come after every object operation. Their bars are checked against the
 score before the batch; a set-time re-bars what follows it, and an add-bars
 with a bar inserts before it, so no later operation may name a bar that either
@@ -42,7 +42,7 @@ ADDING = {"add-note", "add-tuplet-notes", "add-text", "add-line", "add-lyric"}
 STRUCTURAL = {
     "transpose", "copy-passage", "set-key", "set-time", "set-break",
     "set-barline", "set-bar-number", "add-bars", "delete-voice", "set-layout",
-    "hide-empty-staves", "delete-bars", "clear-bars",
+    "hide-empty-staves", "delete-bars", "clear-bars", "reset-staff-space",
 }
 # A range operation on one staff's lyrics. It edits objects in place (the
 # indices addressed ops hold stay valid), so it is not structural.
@@ -328,7 +328,10 @@ def _validate_lyric_verse(operation: dict[str, Any], label: str) -> dict[str, An
 
 def _validate_structural(operation: dict[str, Any], op: str, label: str) -> dict[str, Any]:
     out: dict[str, Any] = {"op": op}
-    if op in {"transpose", "copy-passage", "delete-voice", "hide-empty-staves", "delete-bars", "clear-bars"}:
+    if op in {
+        "transpose", "copy-passage", "delete-voice", "hide-empty-staves", "delete-bars", "clear-bars",
+        "reset-staff-space",
+    }:
         out["fromBar"] = _int(operation, "fromBar", label, minimum=1)
         out["toBar"] = _int(operation, "toBar", label, minimum=out["fromBar"])
     if op in {"transpose", "copy-passage"}:
@@ -393,6 +396,32 @@ def _validate_structural(operation: dict[str, Any], op: str, label: str) -> dict
             out["length"] = _int(operation, "length", label, minimum=1, maximum=MAX_BAR_LENGTH)
     elif op == "set-layout":
         out.update(_layout(operation, label))
+    elif op == "reset-staff-space":
+        out.update(_reset_staff_space(operation, label))
+    return out
+
+
+def _reset_staff_space(operation: dict[str, Any], label: str) -> dict[str, Any]:
+    """Validate reset-staff-space's optional staff range and sides (fromBar/toBar done by the caller)."""
+    known = {"op", "fromBar", "toBar", "topStaff", "bottomStaff", "above", "below"}
+    if unknown := sorted(operation.keys() - known):
+        raise BatchError(
+            f"{label}: unknown reset-staff-space fields {unknown}; allowed: {', '.join(sorted(known - {'op'}))}"
+        )
+    out: dict[str, Any] = {}
+    if ("topStaff" in operation) != ("bottomStaff" in operation):
+        raise BatchError(f"{label}: reset-staff-space needs both topStaff and bottomStaff, or neither")
+    if "topStaff" in operation:
+        # Staff 0, the system staff, has no space around it.
+        out["topStaff"] = _int(operation, "topStaff", label, minimum=1)
+        out["bottomStaff"] = _int(operation, "bottomStaff", label, minimum=out["topStaff"])
+    for side in ("above", "below"):
+        value = operation.get(side, True)
+        if not isinstance(value, bool):
+            raise BatchError(f"{label}.{side} must be boolean")
+        out[side] = value
+    if not (out["above"] or out["below"]):
+        raise BatchError(f"{label}: reset-staff-space needs above or below")
     return out
 
 

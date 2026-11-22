@@ -163,6 +163,7 @@ ScriptHost:convertFolderOfScores(in, out, fmt)  -- throws "Not implemented"
 | `delete-bars` | ✅ | plans a selection that covers exactly the bars (see "Selecting bars"): one `EventEdit.Select`, some `EventEdit.NavigateRightExtendBar`, one `Edit.DeleteBars`; falls back to one bar at a time when no staff has such a selection. A note after the range must move up by the length removed. `undo` takes at most 20 steps per call |
 | `set-layout` | ⚠️ | `Project.Layout.SetOptions`, one undo step, read back; the full score layout unless `layout` names another; no `extraSpacesBelowVocalStaves`; page sizes with ambiguous dimensions need `pageWidth`/`pageHeight` (mm); left/right margins need identical margins; no autoRespace/autoOptimize (Sibelius only). `score_structure` reports the settings as `layout` |
 | `hide-empty-staves` | ⚠️ | not over a range of bars: Dorico hides empty staves per layout, set by `set-layout`'s `hideEmptyStaves` (`never`, `after-first-system`, `all-systems`) |
+| `reset-staff-space` | ❌ | Sibelius only: no scripted staff-spacing reset in Dorico yet |
 | `set-bar-number` | ❌ | the number only exists inside a dialog: no command carries it and nothing reads it back (see gaps) |
 | `undo` | ✅ | stops when Dorico has nothing to undo |
 | (Dorico only) `project_info`, `set_project_info` | ✅ | project-level Project Info fields through the Project Info dialog (typed); not per-flow |

@@ -119,6 +119,7 @@ def test_prepare_refusals(objects) -> None:
         ({"op": "flip-stem", "staff": 1, "bar": 1, "index": 2, "pitch": 61}, "no note of pitch 61"),
         ({"op": "delete", "staff": 1, "bar": 2, "index": 3, "ticks": 0}, "tick 160"),
         ({"op": "frobnicate"}, "must be one of"),
+        ({"op": "reset-staff-space", "fromBar": 1, "toBar": 2}, "not available on MuseScore"),
     ]
     for op, message in cases:
         with pytest.raises(MuseScoreBatchError, match=message):

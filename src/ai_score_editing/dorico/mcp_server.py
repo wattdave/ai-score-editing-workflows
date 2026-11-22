@@ -239,8 +239,8 @@ async def apply_batch(
       compares a MusicXML export with the text.
       Command ops (set-break, set-time, set-key, set-barline, add-bars, delete-bars,
       set-layout, add-lyrics, the notation ops above) cannot share a batch
-      with the others. set-bar-number and a ranged hide-empty-staves are
-      not available on Dorico.
+      with the others. set-bar-number, reset-staff-space and a ranged
+      hide-empty-staves are not available on Dorico.
 
     No operation may target an event another operation already changes.
     Returns each operation's before/after events and the number applied.
