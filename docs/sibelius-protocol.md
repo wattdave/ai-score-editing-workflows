@@ -183,6 +183,15 @@ Probed on Sibelius 26.8 against a scratch score:
   undo history shows "There are no actions to undo". Only undo after a read-back
   shows a change.
 
+### 1.3.2 Keypad state (documented, not verified)
+
+The 2026.11 guide adds four read-only messages: `{"message":"getKeypadState"}`
+(all 79 supported Keypad buttons), the same with `"command":"staccato"` for
+one, and `subscribeKeypadState` / `unsubscribeKeypadState` for live updates
+(an acknowledgment, the initial state, then updates). The reply shapes and
+property names are not documented and have not been probed; nothing in this
+repository sends these messages yet. See `docs/sibelius-2026-api-plan.md`.
+
 ### 1.4 Errors
 
 Unknown message types return:

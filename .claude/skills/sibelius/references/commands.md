@@ -298,7 +298,12 @@ Single-object writes:
 - Playback sounds: `playback-sounds [--require SOUND_SET]` (bridge v55) lists
   each staff's sound set, patch and sound ID at the start and at every later
   sound change, plus any Mixer override. `--require` exits non-zero if any
-  staff's sound set does not contain the name.
+  staff's sound set does not contain the name. With bridge v62+ it also reads
+  each staff's Mixer state (`Staff.MuteMode`, `Solo`, `Volume`, `Pan`; JSON key
+  `mixer`) and warns about a muted or half-muted staff, a fader at 0, or Solo
+  on any staff. `export-stem` and `rehearsal-mixes` print the same warnings
+  before exporting; they only warn, since how the Mixer state affects
+  `SaveAsAudio` has not been checked live.
 - Playback roadmap (bridge v57): `play-order ["1-12, 1-12, 1-12"|auto]
   [--save]` reads or sets Play > Interpretation > Repeats. A list of bars sets
   Manual repeats playback (ranges expand to the bar numbers in playback

@@ -16,7 +16,9 @@ score is not changed.
 2. **Check the sounds.** Run `playback-sounds` to see each staff's sound
    set, patch and any Mixer override. If the user wants a specific library
    (for example Cantai), pass `--require-sound <name>` to the export so it
-   refuses to run if any voice plays something else.
+   refuses to run if any voice plays something else. It also warns about a
+   muted or half-muted staff, a Mixer fader at 0, or Solo left on (bridge
+   v62+); ask the user to reset those in the Mixer before exporting.
 3. **One note per staff.** If a voice staff has chords or divisi, the
    rendered sound may drop notes. Offer the `playback-divisi-split` skill
    first to build a playback copy. If every note must sound, use its

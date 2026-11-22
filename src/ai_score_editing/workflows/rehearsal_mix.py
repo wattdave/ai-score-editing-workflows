@@ -127,6 +127,31 @@ def sound_problems(sounds: list[dict], voices: set[int], required: str) -> list[
     return problems
 
 
+#: Sibelius's MuteMode constants (ManuScript Language Guide, Global Constants).
+MUTE_MODES = {0: "muted", 1: "half-muted", 2: "not muted"}
+
+
+def mixer_problems(mixer: dict[int, dict], staves: set[int]) -> list[str]:
+    """Mixer settings that can leave a stem silent or quiet, for the given
+    staves: Mute on or half on, the fader at 0, or Solo on any staff of the
+    score (Solo plays only the soloed staves in Sibelius's own playback).
+    `mixer` maps staff number to the Staff fields MuteMode, Solo and Volume."""
+    problems = []
+    for num in sorted(staves):
+        fields = mixer.get(num)
+        if fields is None:
+            continue
+        mute = fields.get("MuteMode")
+        if mute in (0, 1):
+            problems.append(f"staff {num}: Mixer mute is {MUTE_MODES[mute]}")
+        if fields.get("Volume") == 0:
+            problems.append(f"staff {num}: Mixer volume is 0")
+    soloed = sorted(num for num, fields in mixer.items() if fields.get("Solo") in (True, 1))
+    if soloed:
+        problems.append(f"Solo is on in the Mixer for staff {', '.join(map(str, soloed))}")
+    return problems
+
+
 def _ffmpeg(args: list[str]) -> str:
     result = subprocess.run(
         ["ffmpeg", "-hide_banner", "-nostdin", *args], capture_output=True, text=True

@@ -95,3 +95,28 @@ def test_sound_problems_flag_non_matching_voices_only() -> None:
         "staff 2 from bar 12: Sibelius 7 Sounds / Female Choir aah",
         "staff 4: sound changes not fully read",
     ]
+
+
+def test_mixer_problems_flag_mute_zero_volume_and_solo() -> None:
+    from ai_score_editing.workflows.rehearsal_mix import mixer_problems
+
+    mixer = {
+        1: {"MuteMode": 2, "Solo": False, "Volume": 100, "Pan": 0},
+        2: {"MuteMode": 0, "Solo": False, "Volume": 100, "Pan": 0},
+        3: {"MuteMode": 1, "Solo": False, "Volume": 0, "Pan": 0},
+        4: {"MuteMode": 2, "Solo": True, "Volume": 90, "Pan": 0},
+    }
+    assert mixer_problems(mixer, {1, 2, 3}) == [
+        "staff 2: Mixer mute is muted",
+        "staff 3: Mixer mute is half-muted",
+        "staff 3: Mixer volume is 0",
+        "Solo is on in the Mixer for staff 4",
+    ]
+
+
+def test_mixer_problems_quiet_for_default_mixer_or_unread_state() -> None:
+    from ai_score_editing.workflows.rehearsal_mix import mixer_problems
+
+    assert mixer_problems({1: {"MuteMode": 2, "Solo": False, "Volume": 100}}, {1}) == []
+    assert mixer_problems({}, {1, 2}) == []
+    assert mixer_problems({1: {}}, {1}) == []
