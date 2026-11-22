@@ -228,6 +228,53 @@ and 3, about 21 seconds) with `sibelius-cli mixer`, which applies
   staff 2 left staff 3 (the piano's left hand) sounding in the whole-score
   export (-28.2), and soloing staff 2 did not solo staff 3.
 
+### 1.3.4 Playback sound writes (probed 2026-11-22, Sibelius 2026.11, not shipped)
+
+Probed with a throwaway plug-in on scratch copies of an eight-staff Cantai
+score (`override.sib`, voices set in the Mixer) and of its MusicXML re-import
+(`fresh.sib`, default sounds, the playback configuration's default set
+"Sibelius 7 Sounds (Jazz)"). Nothing in the bridge uses these calls.
+
+- **The guide misspells the method.** `staff.SetSoundID(id)` raises "Method
+  SetSoundID not found" (a modal error, then the method editor opens);
+  `staff.SetSoundId(id)` works. The guide also lists `SoundIDAtPosition`
+  where the working name is `SoundInfoAtPosition`. Neither `SetSoundId` nor
+  `SetSound` returns a value.
+- **IDs are copyable strings.** Cantai voices report distinct
+  `actualSoundId`s, and the Mixer override equals them: Soprano
+  `voice.female.soprano.ah`, Alto `voice.female.alto.ah`, Tenor
+  `voice.male.tenor.ah`, Baritone `voice.male.baritone.ah`, Bass
+  `voice.male.bass.ah`, Ottetto: Women's Voices
+  `voice.ensemble.ah.womens_voices`, Ottetto: Altos
+  `voice.ensemble.ah.alto_duet`, Ottetto: Tenors `voice.ensemble.ah.tenor_duet`.
+- **`SetSoundId` writes the Mixer override.** After the call,
+  `SoundIdOverrideIfAny`, `RequestedSoundId` and `ActualSoundId` all equal the
+  new ID (when it resolves). It replaces an existing Mixer override; `SetSound`
+  (style ID) does the same with the style's default sound ID.
+- **Which sound set plays is resolved per ID.** On a fresh staff, an ID that
+  the default sound set also has (every Cantai solo voice above) resolves to
+  that set: `voice.female.soprano.ah` gave "Sibelius 7 Sounds (Jazz) / Female
+  Choir aah", not Cantai. An ID only Cantai has (the Ottetto ensembles)
+  resolves to Cantai and rendered (-22.9 LUFS stem). Setting an Ottetto ID
+  first and a solo ID after it did not keep the staff on Cantai. On a staff
+  the Mixer had put on Cantai, any Cantai ID stays on Cantai: Soprano to
+  Ottetto: Altos and back both read Cantai.
+- **Renders without a wait.** On the Mixer-set Cantai staff, Soprano to
+  Ottetto: Altos and back to Soprano by `SetSoundId`, exported at once and
+  again 30 s later, was sample-identical to the untouched score's export
+  (`export-stem`, which does its warm-up export). The Ottetto: Altos stem
+  differed (correlation 0.78), so the change is heard.
+- **Unknown IDs are safe.** `SetSoundId('voice.zz-no-such-sound')` returned
+  at once, no dialog; the override and requested ID kept the string, and the
+  actual sound fell back to the nearest (`voice.female.soprano.ah`).
+- **Undoable and saved.** One `do undo` reverted the last `SetSoundId` and left
+  the earlier ones; after `save`, close and reopen the IDs were still there.
+
+So copying voices by ID works only for staves already on Cantai or for
+Cantai-only IDs; a fresh import still needs the Mixer. A Playback
+Configuration that ranks Cantai above the default set for voices might change
+the resolution; that was not tried.
+
 ### 1.4 Errors
 
 Unknown message types return:

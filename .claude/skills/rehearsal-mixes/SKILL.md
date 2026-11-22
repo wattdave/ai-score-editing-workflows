@@ -49,7 +49,12 @@ Cantai is set up by the user in Sibelius, not by the CLI:
 - **Assign voices in the Mixer.** The playback configuration alone leaves
   singers on the default sounds; the user picks a Cantai voice on each
   staff's Mixer strip. `playback-sounds` then shows `Cantai / ...` with
-  `[Mixer override ...]`. Save the score so the choice is kept.
+  `[Mixer override ...]`. Save the score so the choice is kept. There is
+  no CLI command for this: a scripted sound ID (ManuScript
+  `Staff.SetSoundId`) cannot move a fresh staff onto Cantai's solo voices,
+  because Sibelius resolves `voice.female.soprano.ah` and the like to the
+  default sound set's "Female Choir aah" unless the Mixer has already put
+  that staff on Cantai (probed 2026-11-22, `docs/sibelius-protocol.md` 1.3.4).
 - **One language at a time.** Cantai sings one language (English, Latin or
   Spanish) and re-renders every voice when it changes. Group pieces by
   language and let the user switch between groups; export nothing while it

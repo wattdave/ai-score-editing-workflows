@@ -83,6 +83,21 @@ Sibelius restart.
    already right. M plus bridge bump. **Live probe first:** which sound ID
    strings Cantai accepts, whether `SetSoundID` beats a Mixer override
    (`SoundIdOverrideIfAny`), and whether the change is undoable.
+   **Probed 2026-11-22, not implemented.** The method is `SetSoundId` (the
+   guide's `SetSoundID` raises "method not found" in a modal dialog). It
+   writes the Mixer override, beats an existing one, is one undo step, is kept
+   on save and reopen, and an unknown ID falls back without a dialog. On a
+   staff the Mixer already put on Cantai it switches voices, and the stem was
+   sample-identical to the Mixer-set voice with no wait. But it fails the core
+   test: on a fresh import, Cantai's solo IDs (`voice.female.soprano.ah` and
+   the like) resolve to the default set's "Female Choir aah", because which
+   sound set plays is resolved per ID; only Cantai-only IDs (the Ottetto
+   ensembles) land on Cantai. So `set-staff-sound` could not replace the
+   Mixer step for new playback copies, and the Mixer stays the route. Details
+   in [sibelius-protocol.md](sibelius-protocol.md) 1.3.4. Possible later: a
+   narrower command for re-voicing staves already on Cantai, or a check
+   whether a Playback Configuration that ranks Cantai first changes the
+   resolution.
 4. **Auto-Respace / Auto-Optimize switches in `set-layout`**:
    `Score.AutoRespaceEnabled` (2026.2) and `Score.AutoOptimizeEnabled`
    (Score, Variables, read/write); add to `LayoutRead` and `set-layout`, so
@@ -138,5 +153,6 @@ engraving rules (piano accompaniments only), the tablature fret methods,
 ## Order
 
 Done: 1, 4 (v65), 7 (v66), 8 (v67) and 2 (v68), each in its own bridge
-bump. Next: probe and implement 3 (playback sound). 5 and 6 stay probes until
+bump. 3 (playback sound) was probed and not implemented: a scripted sound ID
+cannot put a fresh staff on Cantai's solo voices. 5 and 6 stay probes until
 someone needs them.
