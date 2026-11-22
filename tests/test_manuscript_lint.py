@@ -180,3 +180,22 @@ def test_lint_double_quote_in_method_body() -> None:
     issues = lint_manuscript(code)
     assert any("double quote" in i.message and i.line == 4 for i in issues)
     assert not lint_manuscript(code.replace('"include all staves"', "'include all staves'"))
+
+
+def test_lint_staff_mixer_members() -> None:
+    """Staff Mixer variables (bridge v68 set-staff-mixer) are known to the linter."""
+    code = """
+{
+    TestMixer "(score) {
+        for each Staff s in score {
+            m = s.MuteMode;
+            so = s.Solo;
+            v = s.Volume;
+            p = s.Pan;
+            d = s.Distance;
+            c = s.Channel;
+        }
+    }"
+}
+"""
+    assert not lint_manuscript(code)

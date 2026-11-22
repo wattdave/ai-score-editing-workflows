@@ -195,6 +195,39 @@ one, and `subscribeKeypadState` / `unsubscribeKeypadState` for live updates
 property names are not documented and have not been probed; nothing in this
 repository sends these messages yet. See `docs/sibelius-2026-api-plan.md`.
 
+### 1.3.3 Mixer writes (verified 2026-11-22, Sibelius 2026.11, bridge v68)
+
+Probed on a scratch score (soprano on staff 1, a two-staff piano on staves 2
+and 3, about 21 seconds) with `sibelius-cli mixer`, which applies
+`set-staff-mixer` batch ops.
+
+- **Writes land, zeros included.** `MuteMode` 0/1/2, `Solo` true/false,
+  `Volume` 0/127/100, `Pan` 0/-100/100 and `Distance` 0/100/50 all read back as
+  written. The op lists the settings it carries (`settings`) because a 0 or
+  false may read as null; the plug-in writes only those. A new staff's
+  Distance is 50 (the guide gives no range; 0-100 is accepted).
+- **Undoable.** One `do undo` after a Mixer-only batch restored the old values
+  and left the edit before it alone. A batch of `set-staff-mixer` plus
+  `add-text` was one undo step: both reverted together.
+- **Audio export** (integrated loudness, LUFS):
+
+  | Mixer state | whole-score export | single-staff export of staff 1 |
+  | --- | --- | --- |
+  | all at baseline | -25.9 | -29.2 |
+  | staff 1 muted | -28.5 (the piano alone) | -29.2 |
+  | staff 1 half-muted | -27.9 | -29.2 |
+  | staff 2 soloed | -29.4 (staff 2 alone) | -29.2 |
+  | staff 1 volume 0 | -28.5 | silent |
+  | staff 1 volume 50 | -28.4 | -41.3 |
+
+  So `SaveAsAudio` of the whole score honours Mute, half-mute, Solo and
+  Volume; a single-staff export (`ExportAudio` with a staff, which
+  `export-stem` and `rehearsal-mixes` use) ignores Mute and Solo and honours
+  Volume.
+- **Multi-staff instruments.** Each staff has its own Mixer values: muting
+  staff 2 left staff 3 (the piano's left hand) sounding in the whole-score
+  export (-28.2), and soloing staff 2 did not solo staff 3.
+
 ### 1.4 Errors
 
 Unknown message types return:

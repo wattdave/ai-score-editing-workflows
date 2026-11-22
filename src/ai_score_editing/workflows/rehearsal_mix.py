@@ -132,24 +132,27 @@ MUTE_MODES = {0: "muted", 1: "half-muted", 2: "not muted"}
 
 
 def mixer_problems(mixer: dict[int, dict], staves: set[int]) -> list[str]:
-    """Mixer settings that can leave a stem silent or quiet, for the given
-    staves: Mute on or half on, the fader at 0, or Solo on any staff of the
-    score (Solo plays only the soloed staves in Sibelius's own playback).
-    `mixer` maps staff number to the Staff fields MuteMode, Solo and Volume."""
-    problems = []
+    """Mixer settings that silence or quieten a stem, for the given staves:
+    the fader at 0. Probed on Sibelius 2026.11 (bridge v68): a single-staff
+    audio export honours Volume but ignores Mute and Solo, so those are
+    mixer_notes, not problems. `mixer` maps staff number to Staff fields."""
+    return [f"staff {num}: Mixer volume is 0" for num in sorted(staves) if mixer.get(num, {}).get("Volume") == 0]
+
+
+def mixer_notes(mixer: dict[int, dict], staves: set[int]) -> list[str]:
+    """Mute (for the given staves) and Solo (on any staff) in the Mixer. They
+    do not change single-staff stems (export-stem, rehearsal-mixes), but a
+    whole-score audio export and Sibelius's playback honour them (probed on
+    Sibelius 2026.11, bridge v68)."""
+    notes = []
     for num in sorted(staves):
-        fields = mixer.get(num)
-        if fields is None:
-            continue
-        mute = fields.get("MuteMode")
+        mute = mixer.get(num, {}).get("MuteMode")
         if mute in (0, 1):
-            problems.append(f"staff {num}: Mixer mute is {MUTE_MODES[mute]}")
-        if fields.get("Volume") == 0:
-            problems.append(f"staff {num}: Mixer volume is 0")
+            notes.append(f"staff {num}: Mixer mute is {MUTE_MODES[mute]}")
     soloed = sorted(num for num, fields in mixer.items() if fields.get("Solo") in (True, 1))
     if soloed:
-        problems.append(f"Solo is on in the Mixer for staff {', '.join(map(str, soloed))}")
-    return problems
+        notes.append(f"Solo is on in the Mixer for staff {', '.join(map(str, soloed))}")
+    return notes
 
 
 def _ffmpeg(args: list[str]) -> str:

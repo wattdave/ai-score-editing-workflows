@@ -131,6 +131,7 @@ NOT_ON_DORICO = {
     "reset-staff-space": (
         "Dorico sets staff spacing per frame in Engrave mode; no scripted reset over a range of bars yet"
     ),
+    "set-staff-mixer": "Sibelius only: Dorico's Mixer is not reachable from the Remote Control API",
 }
 #: add-bars refuses more than this, as the Sibelius back end does.
 MAX_ADD_BARS = 1000

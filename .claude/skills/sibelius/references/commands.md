@@ -222,6 +222,13 @@ and verify once for the whole set.
     "above" on staff N is the gap between staves N-1 and N. Structural: put it
     after breaks and before `hide-empty-staves` (which optimizes again), with
     `set-layout` last. Checked bars and staves, one undo step with the batch.
+  - `{"op":"set-staff-mixer","staff":S, any of "mute":"muted"|"half-muted"|"not-muted",
+    "solo":bool, "volume":0-127, "pan":-100..100, "distance":0-100}` (bridge
+    v68): the staff's Mixer strip. Not structural (put it before structural
+    ops), at most one per staff in a batch, only the given settings change, and
+    the result has each staff's `before` and `after` values. Undoable with the
+    batch. Mute and Solo change playback and a whole-score audio export but not
+    single-staff stems; Volume changes both. The `mixer` command wraps it.
 
   Typical flow: `query` to find targets, write the operations with the
   returned addresses plus `type`/`position` guards, `apply --dry-run`, then
@@ -318,11 +325,22 @@ Single-object writes:
   each staff's sound set, patch and sound ID at the start and at every later
   sound change, plus any Mixer override. `--require` exits non-zero if any
   staff's sound set does not contain the name. With bridge v62+ it also reads
-  each staff's Mixer state (`Staff.MuteMode`, `Solo`, `Volume`, `Pan`; JSON key
-  `mixer`) and warns about a muted or half-muted staff, a fader at 0, or Solo
-  on any staff. `export-stem` and `rehearsal-mixes` print the same warnings
-  before exporting; they only warn, since how the Mixer state affects
-  `SaveAsAudio` has not been checked live.
+  each staff's Mixer state (`Staff.MuteMode`, `Solo`, `Volume`, `Pan`,
+  `Distance`; JSON key `mixer`), warns about a fader at 0 and notes a muted or
+  half-muted staff or Solo on any staff. `export-stem` and `rehearsal-mixes`
+  print the same before exporting. Probed live (Sibelius 2026.11, bridge v68):
+  a single-staff export (every stem) honours Volume but ignores Mute and Solo;
+  a whole-score audio export honours all three.
+- Mixer: `mixer [--staff N|NAME ...] [--mute muted|half-muted|not-muted]
+  [--solo on|off] [--volume 0-127] [--pan -100..100] [--distance 0-100]
+  [--reset] [--dry-run] [--save]`. With no setting it prints each staff's
+  Mixer state (bridge v62, no backup). With settings it writes them to the
+  named staves (default every staff) as one checked, backed-up batch of
+  `set-staff-mixer` ops (bridge v68), then re-reads every staff; `--reset` is
+  `--mute not-muted --solo off`. `--dry-run` prints the current values and
+  changes nothing. One `undo` reverts the change. Each staff of a two-staff
+  piano has its own values (muting staff 2 leaves staff 3 sounding); if an
+  unnamed staff changes too, the command says so. Distance defaults to 50.
 - Playback roadmap (bridge v57): `play-order ["1-12, 1-12, 1-12"|auto]
   [--save]` reads or sets Play > Interpretation > Repeats. A list of bars sets
   Manual repeats playback (ranges expand to the bar numbers in playback

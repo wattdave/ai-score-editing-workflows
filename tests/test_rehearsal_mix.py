@@ -97,8 +97,8 @@ def test_sound_problems_flag_non_matching_voices_only() -> None:
     ]
 
 
-def test_mixer_problems_flag_mute_zero_volume_and_solo() -> None:
-    from ai_score_editing.workflows.rehearsal_mix import mixer_problems
+def test_mixer_problems_flag_zero_volume_and_notes_flag_mute_and_solo() -> None:
+    from ai_score_editing.workflows.rehearsal_mix import mixer_notes, mixer_problems
 
     mixer = {
         1: {"MuteMode": 2, "Solo": False, "Volume": 100, "Pan": 0},
@@ -106,10 +106,11 @@ def test_mixer_problems_flag_mute_zero_volume_and_solo() -> None:
         3: {"MuteMode": 1, "Solo": False, "Volume": 0, "Pan": 0},
         4: {"MuteMode": 2, "Solo": True, "Volume": 90, "Pan": 0},
     }
-    assert mixer_problems(mixer, {1, 2, 3}) == [
+    # Single-staff stems honour Volume but ignore Mute and Solo (probed, bridge v68).
+    assert mixer_problems(mixer, {1, 2, 3}) == ["staff 3: Mixer volume is 0"]
+    assert mixer_notes(mixer, {1, 2, 3}) == [
         "staff 2: Mixer mute is muted",
         "staff 3: Mixer mute is half-muted",
-        "staff 3: Mixer volume is 0",
         "Solo is on in the Mixer for staff 4",
     ]
 
