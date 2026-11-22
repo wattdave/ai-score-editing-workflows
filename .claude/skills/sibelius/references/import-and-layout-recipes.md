@@ -75,8 +75,10 @@ imported system and page breaks are forcing the layout. Order:
 1. `invoke select_all unlock_format` (removes imported breaks).
 2. `set-break` system / page on bar **N-1** for each system or page start in the print
    (bar must be >= 1; the first bar needs no break).
-3. `hide-empty-staves` for each range where a voice rests or is silent (for example bars 4-15).
-4. `set-layout` **last** in the batch.
+3. `reset-staff-space` over the whole score (bridge v66) when imported or dragged staff gaps
+   keep `set-layout` from evening out the systems.
+4. `hide-empty-staves` for each range where a voice rests or is silent (for example bars 4-15).
+5. `set-layout` **last** in the batch.
 
 Overlap on a hidden-staff page means the page is overfull: shrink `staffSize` (5.5 instead of 6.5)
 before raising gaps. Raising `spacesBetweenSystems` above about 9 made gaps smaller or overlapped

@@ -249,6 +249,10 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
       rest, tuplets and slurs included, in every voice unless one is given. Bridge v60
     - {"op":"hide-empty-staves","fromBar":A,"toBar":B}: hide staves with
       nothing in bars A-B, then optimize staff spacing there
+    - {"op":"reset-staff-space","fromBar":A,"toBar":B[,"topStaff":T,"bottomStaff":U,"above":bool,"below":bool]}:
+      Layout > Reset Space Above/Below Staff over bars A-B (all staves and
+      both sides by default), so set-layout's staff spacing applies. Put it
+      before hide-empty-staves. Bridge v66
 
     Returns each operation's before/after description and the number applied.
     """
