@@ -128,6 +128,9 @@ NOT_ON_DORICO = {
         "Dorico hides empty staves per layout, not over a range of bars; use set-layout's "
         "hideEmptyStaves (\"never\", \"after-first-system\" or \"all-systems\") for the whole layout"
     ),
+    "reset-staff-space": (
+        "Dorico sets staff spacing per frame in Engrave mode; no scripted reset over a range of bars yet"
+    ),
 }
 #: add-bars refuses more than this, as the Sibelius back end does.
 MAX_ADD_BARS = 1000

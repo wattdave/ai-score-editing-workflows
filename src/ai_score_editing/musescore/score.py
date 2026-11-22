@@ -67,6 +67,13 @@ ADDING_OPS = batch_schema.ADDING | DORICO_OPS
 #: Valid batch operations the MuseScore back end does not do yet, with the
 #: milestone of docs/musescore-backend-plan.md that adds them.
 NOT_YET: dict[str, int] = {}
+#: Valid batch operations MuseScore has no counterpart for, with the reason.
+NOT_ON_MUSESCORE: dict[str, str] = {
+    "reset-staff-space": (
+        "MuseScore spaces staves from the style (set-layout spacesBetweenStaves); "
+        "there are no per-system staff gaps to reset"
+    ),
+}
 #: Ops that change bars or the whole score; batch_ops puts them last.
 STRUCTURAL_OPS = batch_schema.STRUCTURAL
 #: Structural ops that move or re-bar what follows; ops that name objects by
@@ -388,6 +395,8 @@ def prepare_batch(
                 f"op {i}: {op} is not available on MuseScore yet "
                 f"(milestone {NOT_YET[op]} of docs/musescore-backend-plan.md)"
             )
+        if op in NOT_ON_MUSESCORE:
+            raise MuseScoreBatchError(f"op {i}: {op} is not available on MuseScore: {NOT_ON_MUSESCORE[op]}")
         if op in ADDING_OPS and first_adding is None:
             first_adding = i
         elif op in OBJECT_OPS and first_adding is not None:

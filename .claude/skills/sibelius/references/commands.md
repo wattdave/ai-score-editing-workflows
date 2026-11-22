@@ -209,6 +209,16 @@ and verify once for the whole set.
   - `{"op":"delete-voice","fromBar":A,"toBar":B,"staff":S,"voice":V}`
   - `{"op":"hide-empty-staves","fromBar":A,"toBar":B}`: hides every staff
     with nothing in bars A-B, then optimizes staff spacing there (bridge v52)
+  - `{"op":"reset-staff-space","fromBar":A,"toBar":B[,"topStaff":T,"bottomStaff":U][,"above":false|"below":false]}`
+    (bridge v66): Layout > Reset Space Above/Below Staff over bars A-B, on
+    every staff unless `topStaff`/`bottomStaff` are given, both sides unless
+    one is turned off. Removes dragged, imported or optimized staff gaps so the
+    `set-layout` spacing applies again. Staff gaps belong to a system, so a
+    range that touches any bar of a system resets that whole system (bar 2
+    alone reset bars 1-4); systems outside the range keep their gaps.
+    "above" on staff N is the gap between staves N-1 and N. Structural: put it
+    after breaks and before `hide-empty-staves` (which optimizes again), with
+    `set-layout` last. Checked bars and staves, one undo step with the batch.
 
   Typical flow: `query` to find targets, write the operations with the
   returned addresses plus `type`/`position` guards, `apply --dry-run`, then

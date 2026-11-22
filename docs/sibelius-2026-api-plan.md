@@ -98,10 +98,20 @@ Sibelius restart.
    probe** with `sibelius-cli raw '{"message":"getKeypadState"}'` on a
    scratch session, then decide. S after the probe; value is low for choir
    work.
-7. **Reset space around staves**: `Staff.ResetSpaceAroundStaff(above, below[, from bar[, to bar]])`
-   (older API, not in the bridge). A batch operation for the lyric-spacing
-   step of score polishing, next to `hide-empty-staves`. S plus bridge bump;
-   documented well, check on a scratch score.
+7. **Reset space around staves** (done, bridge v66): the `reset-staff-space`
+   batch op wraps `Staff.ResetSpaceAroundStaff(above, below, fromBar, toBar)`
+   for the lyric-spacing step of score polishing, next to
+   `hide-empty-staves`. Scratch check (2026-11-22, Sibelius 2026.11, four
+   staves, one system per page so vertical justification did not hide the
+   gaps): a hand-dragged bass staff (tenor-bass gap 83.3 pt against 56.7)
+   was reset by `above` on staff 4 and left by `below` on staff 4, so the
+   arguments are in the documented order; a range of bar 2 alone reset the
+   whole system (bars 1-4); a range over bars 5-16 left system 1 alone; one
+   `do undo` restored the drag; a batch of reset, `hide-empty-staves` and
+   `set-layout` applied 3 ops with no warning. Imported MusicXML
+   `<staff-distance>` made no override in Sibelius, and on a justified page
+   (staves spread to fill it) the gaps look equal whether or not an override
+   exists.
 8. **Page or Panorama view in `inspect`**: `Sibelius.GetCurrentScoreViewType()`.
    Low value (exports do not depend on it). S plus bridge bump; do it with
    another bump, not on its own.

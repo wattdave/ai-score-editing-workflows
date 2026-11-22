@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 65);
+		return CreateDictionary('version', 66);
 	}"
 
 	Echo "(value) {
@@ -1536,6 +1536,9 @@
 		if (opName = 'clear-bars') {
 			return True;
 		}
+		if (opName = 'reset-staff-space') {
+			return True;
+		}
 		if (opName = 'set-key' or opName = 'set-time' or opName = 'set-break') {
 			return True;
 		}
@@ -1706,6 +1709,19 @@
 			}
 			if (op['voice'] < 1 or op['voice'] > 4) {
 				return 'voice must be 1-4';
+			}
+		}
+		if (opName = 'reset-staff-space') {
+			// A false may read as null, so look for an explicit True.
+			sides = 0;
+			if (op['above'] = True) {
+				sides = sides + 1;
+			}
+			if (op['below'] = True) {
+				sides = sides + 1;
+			}
+			if (sides = 0) {
+				return 'reset-staff-space needs above or below';
 			}
 		}
 		if (opName = 'clear-bars') {
@@ -1883,6 +1899,31 @@
 			score.OptimizeStaffSpacing(1, score.StaffCount, op['fromBar'], op['toBar']);
 			score.Redraw = True;
 			return CreateDictionary('fromBar', op['fromBar'], 'toBar', op['toBar'], 'pageCount', score.PageCount);
+		}
+		if (opName = 'reset-staff-space') {
+			// Layout > Reset Space Above/Below Staff over a range of bars.
+			// ManuScript reads 0/false as null, so compare with True explicitly.
+			above = False;
+			if (op['above'] = True) {
+				above = True;
+			}
+			below = False;
+			if (op['below'] = True) {
+				below = True;
+			}
+			top = 1;
+			bottom = score.StaffCount;
+			if (op['topStaff'] != null) {
+				top = op['topStaff'];
+				bottom = op['bottomStaff'];
+			}
+			for s = top to bottom + 1 {
+				score.NthStaff(s).ResetSpaceAroundStaff(above, below, op['fromBar'], op['toBar']);
+			}
+			score.Redraw = True;
+			return CreateDictionary('fromBar', op['fromBar'], 'toBar', op['toBar'],
+				'topStaff', top, 'bottomStaff', bottom, 'above', above, 'below', below,
+				'pageCount', score.PageCount);
 		}
 		bar = systemStaff.NthBar(op['bar']);
 		if (opName = 'set-bar-number') {

@@ -53,6 +53,7 @@ Accessibility permission for the terminal.
 | `set-break`, `set-barline`, `set-bar-number`, `add-bars` | ✅ | no between-staves, tick, short or triple barlines in MuseScore |
 | `set-layout` | ⚠️ | no octavo/hymn/quarto/folio/us-band sizes, no extra gap below vocal staves, no autoRespace/autoOptimize (Sibelius only) |
 | `hide-empty-staves` | ⚠️ | whole score only |
+| `reset-staff-space` | ❌ | staff gaps come from the style; use `set-layout` |
 | `delete-voice` | ✅ | |
 | `undo` | ✅ | by steps |
 | `save_score` | ⚠️ | saves in place (File > Save) and copies the file; a never-saved score is refused |
@@ -638,7 +639,7 @@ Its tool notes are kept in the musescore skill's
 | `set-time` | ⚠️ | `set_time_signature` at the cursor; no common/cut symbol |
 | `set-break`, `set-barline`, `set-bar-number` | ❌ | |
 | `add-bars` | ⚠️ | `append_measure`, `insert_measure` at the cursor; no irregular bars |
-| `set-layout`, `hide-empty-staves` | ❌ | |
+| `set-layout`, `hide-empty-staves`, `reset-staff-space` | ❌ | |
 | `delete-voice` | ❌ | |
 | (MuseScore only) `add_instrument` | ✅ | by MuseScore instrument id |
 | (MuseScore only) `set_staff_mute`, `set_instrument_sound` | ❌ | the first hides the staff instead of muting it; the second only opens the Instruments panel |

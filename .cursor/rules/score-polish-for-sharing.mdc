@@ -164,8 +164,11 @@ Use `render`/`score-snapshot` and a PDF after each group of changes.
 - **Staff spacing and page** (`set-layout`): writes need a saved score, so
   first save the import (`ExportScore` with `SIBL` to a new path, close the
   untitled import with **No**, `OpenScore` the saved file). Then one batch:
-  `add-line` and other content ops first, `set-layout` last (structural ops
-  must come last). Each `apply --save` leaves a `.backup-...sib` next to the
+  `add-line` and other content ops first, then breaks, `reset-staff-space`
+  over the whole score (bridge v66), `hide-empty-staves`, and `set-layout`
+  last (structural ops must come last). The lyric room comes from
+  `extraSpacesBelowVocalStaves`; the reset is what makes it apply on every
+  system, by clearing staff gaps carried over from the import or dragged. Each `apply --save` leaves a `.backup-...sib` next to the
   file, so batch the edits and move the backups away when done.
   Recipe that worked for a two-staff choral reduction with three stacked
   verses on a Letter page (Deck the Halls): `staffSize` 6.5,
@@ -189,8 +192,8 @@ Use `render`/`score-snapshot` and a PDF after each group of changes.
   `sibelius-shared-gui` before any GUI step.
 - **Layout that ignores `set-layout` or overlaps systems:** run
   `invoke select_all unlock_format`, then `set-break` on bar N-1 for each
-  system/page start of the print, `hide-empty-staves` for resting ranges, and
-  `set-layout` last. Layout numbers by verse count (2, 4 and 5 verses; 3 and 4
+  system/page start of the print, `reset-staff-space` over the whole score,
+  `hide-empty-staves` for resting ranges, and `set-layout` last. Layout numbers by verse count (2, 4 and 5 verses; 3 and 4
   staves; one-page 128 bars), page-aligned credit text that `set Dy` cannot
   move (use leading newlines), multi-line credits, hidden time signatures,
   verse 6 overprinting verse 5, melisma extenders (`NumNotes`), and
