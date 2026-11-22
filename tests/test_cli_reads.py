@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -75,7 +76,9 @@ async def test_inspect_combines_three_reads_in_one_context(cli_session: CliSessi
     ) -> Any:
         del unused_client, call_args
         return {
-            "GetScoreInfo": {"fileName": "/scores/a.sib", "title": "A", "staffCount": 1, "barCount": 8},
+            "GetScoreInfo": {
+                "fileName": "/scores/a.sib", "title": "A", "staffCount": 1, "barCount": 8, "viewType": 1,
+            },
             "GetStaves": [{"staffNum": 1, "fullInstrumentName": "Soprano"}],
             "GetSelectionInfo": {"isPassage": False},
         }[method]
@@ -91,7 +94,9 @@ async def test_inspect_combines_three_reads_in_one_context(cli_session: CliSessi
         "GetStaves",
         "GetSelectionInfo",
     ]
-    assert capsys.readouterr().out.strip().startswith('{"fileName":"/scores/a.sib"')
+    out = capsys.readouterr().out.strip()
+    assert out.startswith('{"fileName":"/scores/a.sib"')
+    assert json.loads(out)["view"] == "panorama"
 
 
 async def test_score_snapshot_combines_structural_reads_in_one_context(cli_session: CliSession, 

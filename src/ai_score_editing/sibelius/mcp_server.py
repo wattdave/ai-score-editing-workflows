@@ -92,7 +92,9 @@ async def _run(action: Callable[[bridge.SibeliusBridge], Awaitable[T]], *, retry
 @server.tool(annotations=READ_ONLY)
 async def score_overview() -> dict[str, Any]:
     """Describe the open score: title, file, bar count, staves (number and
-    instrument names) and the current selection. Call this first; call
+    instrument names), the current selection, and whether the score is in
+    Page or Panorama view (score.viewType: 0 page, 1 panorama). Call this
+    first; call
     score_structure for key and time signatures, barlines and breaks."""
 
     return await _run(service.overview, retry=True)

@@ -12,6 +12,9 @@ Batch reads (one session, compact output):
 
 - `inspect`: compact score identity, staff names, and current selection. The
   default initial safety check; replaces `score-info` + `staves` + `selection`.
+  `view` is `page` or `panorama` (bridge v67+; missing on older bridges).
+  Panorama does not change exports or edits; mention it only if the user is
+  looking at the screen.
 - `score-snapshot [--bars A-B] [--staff N] [--lyrics] [--no-barlines]`:
   identity, staves, selection, key/time signatures, and special barlines in
   one call; lyrics are opt-in. Use instead of several structural reads.
