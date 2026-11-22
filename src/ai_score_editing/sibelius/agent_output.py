@@ -10,6 +10,10 @@ from typing import Any
 _SELECTION_FIELDS = ("isPassage", "topStaff", "bottomStaff", "firstBar", "lastBar")
 
 
+# Sibelius.GetCurrentScoreViewType(): ViewTypePage 0, ViewTypePanorama 1 (bridge v67+).
+_VIEW_NAMES = {0: "page", 1: "panorama"}
+
+
 def project_inspect(
     score_info: Mapping[str, Any],
     staves: Sequence[Mapping[str, Any]],
@@ -32,14 +36,17 @@ def project_inspect(
         field: selection[field] for field in _SELECTION_FIELDS if field in selection
     }
 
-    return {
+    projected: dict[str, Any] = {
         "fileName": score_info.get("fileName", ""),
         "title": score_info.get("title", ""),
         "staffCount": score_info.get("staffCount", len(projected_staves)),
         "barCount": score_info.get("barCount", 0),
-        "selection": projected_selection,
-        "staves": projected_staves,
     }
+    if "viewType" in score_info:
+        projected["view"] = _VIEW_NAMES.get(score_info["viewType"], "unknown")
+    projected["selection"] = projected_selection
+    projected["staves"] = projected_staves
+    return projected
 
 
 def render_compact_inspect(

@@ -112,9 +112,14 @@ Sibelius restart.
    `<staff-distance>` made no override in Sibelius, and on a justified page
    (staves spread to fill it) the gaps look equal whether or not an override
    exists.
-8. **Page or Panorama view in `inspect`**: `Sibelius.GetCurrentScoreViewType()`.
-   Low value (exports do not depend on it). S plus bridge bump; do it with
-   another bump, not on its own.
+8. **Page or Panorama view in `inspect`** (done, bridge v67):
+   `GetScoreInfo` returns `viewType` from `Sibelius.GetCurrentScoreViewType()`
+   (0 Page, 1 Panorama), and `inspect` and `score-snapshot` show it as
+   `view: page|panorama`. Older bridges leave it out, so there is no version
+   gate. Low value (exports do not depend on it). Scratch check (2026-11-22,
+   Sibelius 2026.11): Page 0, Panorama 1, Page 0 again, switched with the
+   Panorama button at the right of the status bar (Shift+Cmd+P did not
+   switch it here, and the guessed command ID `view_panorama` did nothing).
 
 Not worth doing for choir work: `Score.CustomParts`, the cross-staff
 engraving rules (piano accompaniments only), the tablature fret methods,

@@ -217,7 +217,7 @@ OBJECT_MODEL: dict[str, dict[str, set[str]]] = {
         "methods": {
             "findcommandid", "execute", "messagebox", "open", "new",
             "createdictionary", "createsparsearray", "nthscore",
-            "isfontfamilyinstalled",
+            "isfontfamilyinstalled", "getcurrentscoreviewtype",
         },
         "bases": set(),
     },

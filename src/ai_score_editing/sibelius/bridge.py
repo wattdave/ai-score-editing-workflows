@@ -50,7 +50,7 @@ def raise_if_busy(response: dict[str, Any]) -> None:
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 66
+CURRENT_BRIDGE_VERSION = 67
 QUERY_BRIDGE_VERSION = 38
 BATCH_BRIDGE_VERSION = 39
 NUDGE_BRIDGE_VERSION = 41
@@ -73,6 +73,7 @@ FICTA_BRIDGE_VERSION = 63
 STAFF_NAME_BRIDGE_VERSION = 64
 LAYOUT_SWITCHES_BRIDGE_VERSION = 65
 RESET_STAFF_SPACE_BRIDGE_VERSION = 66
+VIEW_TYPE_BRIDGE_VERSION = 67  # GetScoreInfo reports viewType; inspect needs no gate
 
 
 def batch_bridge_version(operations: list[dict[str, Any]]) -> int:
