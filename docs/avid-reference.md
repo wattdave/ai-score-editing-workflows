@@ -4,6 +4,9 @@ The ManuScript and Sibelius Connect reference is Avid's *ManuScript
 Language Guide*. Avid owns that text, so this repository links to it rather
 than copying it:
 
+- [ManuScript Language Guide, Sibelius 2026.11](https://resources.avid.com/SupportFiles/Sibelius/2026.11/ManuScript_Language_Guide.pdf)
+  (newest; what changed since 2024.8 is in
+  [sibelius-2026-api-plan.md](sibelius-2026-api-plan.md))
 - [ManuScript Language Guide, Sibelius 2026.6](https://resources.avid.com/SupportFiles/Sibelius/2026.6/ManuScript_Language_Guide.pdf)
   (current minimum version)
 - [ManuScript Language Guide, Sibelius 2024.8](https://resources.avid.com/SupportFiles/Sibelius/2024.8/ManuScript_Language_Guide.pdf)

@@ -19,6 +19,7 @@ from ai_score_editing.sibelius.bridge import (
     BRIDGE_PLUGIN,
     EXPORT_FORMATS,
     PLAYBACK_SOUNDS_BRIDGE_VERSION,
+    QUERY_CONTAINERS_BRIDGE_VERSION,
     BridgeError,
 )
 from ai_score_editing.sibelius import bridge, runner
@@ -106,7 +107,8 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
     proof.add_argument("--json", action="store_true", help="print the report as JSON")
     sounds = sub.add_parser(
         "playback-sounds",
-        help="list each staff's playback sound set, patch and sound ID, and any Mixer override",
+        help="list each staff's playback sound set, patch and sound ID, any Mixer override, "
+             "and its Mixer mute, solo, volume and pan",
     )
     sounds.add_argument("--require", metavar="SOUND_SET",
                         help="exit non-zero unless every staff's sound set contains this")
@@ -129,20 +131,62 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
     }
 
 
-def _print_playback_sounds(staves: list[dict]) -> None:
+MIXER_FIELDS = ["MuteMode", "Solo", "Volume", "Pan"]
+
+
+async def _read_mixer(client: Any) -> dict[int, dict]:
+    """Each staff's Mixer mute, solo, volume and pan (Staff.MuteMode, Solo,
+    Volume, Pan), read with a Staff query (bridge v62). Empty, with a note,
+    on an older bridge: the check is advisory and must not block an export."""
+    from ai_score_editing.sibelius.query_props import build_selector
+
+    try:
+        await bridge.require_bridge(client, QUERY_CONTAINERS_BRIDGE_VERSION, "Mixer check")
+    except BridgeError as exc:
+        print(f"note: Mixer state not read: {exc}", file=sys.stderr)
+        return {}
+    selector = build_selector(
+        staves=[], from_bar=None, to_bar=None, types=["Staff"], voice=None, where=[],
+        fields=MIXER_FIELDS, limit=1000,
+    )
+    result = await bridge.call(client, "Query", [selector])
+    rows = result.get("objects", []) if isinstance(result, dict) else []
+    return {row["staff"]: row.get("fields", {}) for row in rows if row.get("type") == "Staff"}
+
+
+def _print_mixer_problems(mixer: dict[int, dict], staves: set[int]) -> None:
+    problems = rehearsal_mix.mixer_problems(mixer, staves)
+    if problems:
+        print("warning: Mixer settings that can silence or quieten exported audio:", file=sys.stderr)
+        for problem in problems:
+            print(f"  {problem}", file=sys.stderr)
+
+
+def _print_playback_sounds(staves: list[dict], mixer: dict[int, dict] | None = None) -> None:
     for staff in staves:
         override = f"  [Mixer override {staff['override']}]" if staff.get("override") else ""
+        fields = (mixer or {}).get(staff["staffNum"])
+        state = ""
+        if fields:
+            mute = rehearsal_mix.MUTE_MODES.get(fields.get("MuteMode"), "mute ?")
+            solo = ", solo" if fields.get("Solo") in (True, 1) else ""
+            state = f"  [{mute}{solo}, volume {fields.get('Volume', '?')}, pan {fields.get('Pan', '?')}]"
         for i, change in enumerate(staff.get("sounds", [])):
             where = f"staff {staff['staffNum']}" if i == 0 else f"  from bar {change['bar']}"
             print(f"{where}: {change['soundSet']} / {change['patch']} ({change['actualSoundId']})"
-                  f"{override if i == 0 else ''}", file=sys.stderr)
+                  f"{override + state if i == 0 else ''}", file=sys.stderr)
 
 
 async def _run_playback_sounds(args: argparse.Namespace) -> int:
     async with runner.client(args, plugins=[BRIDGE_PLUGIN]) as client:
         await bridge.require_bridge(client, PLAYBACK_SOUNDS_BRIDGE_VERSION, "playback-sounds")
+        mixer = await _read_mixer(client)
         staves = await bridge.call(client, "GetPlaybackSounds")
-    _print_playback_sounds(staves)
+    for staff in staves:
+        if staff.get("staffNum") in mixer:
+            staff["mixer"] = mixer[staff["staffNum"]]
+    _print_playback_sounds(staves, mixer)
+    _print_mixer_problems(mixer, {s["staffNum"] for s in staves})
     print(json.dumps(staves, indent=2))
     if args.require:
         problems = rehearsal_mix.sound_problems(staves, {s["staffNum"] for s in staves}, args.require)
@@ -202,6 +246,7 @@ async def _run_export_stem(args: argparse.Namespace) -> int:
             if unknown := sorted((set(wanted) | set(overrides)) - known):
                 print(f"error: staves not in the score: {unknown}", file=sys.stderr)
                 return EXIT_COMMAND_FAILED
+            _print_mixer_problems(await _read_mixer(client), set(wanted))
             taken: set[str] = set()
             for staff in staves:
                 num = staff["staffNum"]
@@ -266,8 +311,10 @@ async def _run_rehearsal_mixes(args: argparse.Namespace) -> int:
                 if args.all_parts or await bridge.call(client, "ReadLyrics", [staff["staffNum"], 1, info["barCount"]]):
                     vocal.add(staff["staffNum"])
             await bridge.require_bridge(client, PLAYBACK_SOUNDS_BRIDGE_VERSION, "rehearsal-mixes sound check")
+            mixer = await _read_mixer(client)
             playback = await bridge.call(client, "GetPlaybackSounds")
-            _print_playback_sounds(playback)
+            _print_playback_sounds(playback, mixer)
+            _print_mixer_problems(mixer, {s["staffNum"] for s in staves} - skip)
             if args.require_sound:
                 problems = rehearsal_mix.sound_problems(playback, vocal, args.require_sound)
                 if problems:
