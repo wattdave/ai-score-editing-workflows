@@ -116,15 +116,20 @@ def register(sub: Any) -> dict[str, Callable[..., Any]]:
                         help="exit non-zero unless every staff's sound set contains this")
     mixer = sub.add_parser(
         "mixer",
-        help="read or set each staff's Mixer mute, solo, volume, pan and distance",
+        help="read or set each staff's Mixer sound, mute, solo, volume, pan and distance",
         description=(
             "With no setting, print each staff's Mixer state (bridge v62). With settings, write them "
             "to the named staves (default: every staff) as one checked, backed-up batch of "
-            "set-staff-mixer ops (bridge v68), then print every staff's state again."
+            "set-staff-mixer ops (bridge v68; --sound needs v69), then print every staff's state again. "
+            "--sound sets the playback sound ID (the Mixer override), e.g. voice.female.alto.ah for "
+            "Cantai's Alto; a Cantai solo voice lands on Cantai only when the playback configuration "
+            "prefers Cantai for that ID (docs/sibelius-protocol.md 1.3.4)."
         ),
     )
     mixer.add_argument("--staff", action="append", default=[], metavar="N|NAME",
                        help="staff number or instrument name (repeatable; default: every staff)")
+    mixer.add_argument("--sound", metavar="SOUND_ID",
+                       help="playback sound ID, e.g. voice.female.soprano.ah (Staff.SetSoundId)")
     mixer.add_argument("--mute", choices=list(batch_ops.MIXER_MUTE_MODES), help="Mixer mute state")
     mixer.add_argument("--solo", choices=["on", "off"], help="Mixer solo")
     mixer.add_argument("--volume", type=int, metavar="0-127", help="Mixer fader")
@@ -236,6 +241,10 @@ def _mixer_settings(args: argparse.Namespace) -> dict[str, Any]:
     if args.reset and (args.mute is not None or args.solo is not None):
         raise ValueError("--reset cannot be combined with --mute or --solo")
     settings: dict[str, Any] = {}
+    if args.sound is not None:
+        if not batch_ops.SOUND_ID_PATTERN.fullmatch(args.sound):
+            raise ValueError("--sound must be a sound ID such as voice.female.soprano.ah")
+        settings["sound"] = args.sound
     if args.reset:
         settings.update(mute="not-muted", solo=False)
     if args.mute is not None:
@@ -330,6 +339,7 @@ async def _run_mixer(args: argparse.Namespace) -> int:
         if prior[num] != mixer[num]
     ]
     notes += batch_ops.mixer_warnings(batch)
+    notes += batch_ops.sound_warnings(batch, result.get("results", []))
     for note in notes:
         print(f"note: {note}", file=sys.stderr)
     print(json.dumps({

@@ -8,7 +8,7 @@
 	}"
 
 	GetBridgeVersion "() {
-		return CreateDictionary('version', 68);
+		return CreateDictionary('version', 69);
 	}"
 
 	Echo "(value) {
@@ -2040,16 +2040,23 @@
 	}"
 
 	MixerRead "(staff) {
+		info = staff.SoundInfoAtPosition(1, 0, 1);
 		return CreateDictionary('muteMode', staff.MuteMode, 'solo', staff.Solo, 'volume', staff.Volume,
-			'pan', staff.Pan, 'distance', staff.Distance);
+			'pan', staff.Pan, 'distance', staff.Distance, 'soundId', staff.SoundIdOverrideIfAny & '',
+			'actualSoundId', info.ActualSoundId & '', 'soundSet', info.SoundSetName & '',
+			'patch', info.PatchName & '');
 	}"
 
 	BatchRunMixer "(score, op) {
 		// Mixer writes for one staff. A 0 or false may read as null in
 		// ManuScript, so op['settings'] names the settings to change and Solo
-		// is compared with True explicitly.
+		// is compared with True explicitly. The sound goes first so that the
+		// volume, pan and distance written after it are kept.
 		staff = score.NthStaff(op['staff']);
 		before = MixerRead(staff);
+		if (BatchHasSetting(op, 'soundId')) {
+			staff.SetSoundId('' & op['soundId']);
+		}
 		if (BatchHasSetting(op, 'muteMode')) {
 			staff.MuteMode = op['muteMode'];
 		}

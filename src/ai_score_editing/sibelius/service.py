@@ -193,6 +193,8 @@ async def apply(
         result = await commit(b, batch, backup_name=backup_name, backup_dir=backup_dir, backup_fn=backup_fn)
     warnings = [warning] if warning else []
     warnings += batch_ops.mixer_warnings(batch)
+    if not dry_run:
+        warnings += batch_ops.sound_warnings(batch, result.get("results", []))
     if warnings:
         result["warnings"] = [*result.get("warnings", []), *warnings]
     return result

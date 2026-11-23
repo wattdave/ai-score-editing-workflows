@@ -83,6 +83,13 @@ Sibelius restart.
    already right. M plus bridge bump. **Live probe first:** which sound ID
    strings Cantai accepts, whether `SetSoundID` beats a Mixer override
    (`SoundIdOverrideIfAny`), and whether the change is undoable.
+   **Done (v69)** as `set-staff-mixer` `"sound"` and `mixer --sound`, with
+   `Staff.SetSoundId` (the guide's `SetSoundID` is "method not found"). Cantai
+   solo voices land on Cantai only when the Cantai playback configuration's
+   Preferred Sounds name Cantai for those five IDs, because ManuScript cannot
+   set a strip's device; with that one-time setting, scripted voices were
+   sample-identical to Mixer picks. Details in
+   [sibelius-protocol.md](sibelius-protocol.md) 1.3.5.
 4. **Auto-Respace / Auto-Optimize switches in `set-layout`**:
    `Score.AutoRespaceEnabled` (2026.2) and `Score.AutoOptimizeEnabled`
    (Score, Variables, read/write); add to `LayoutRead` and `set-layout`, so
@@ -137,6 +144,6 @@ engraving rules (piano accompaniments only), the tablature fret methods,
 
 ## Order
 
-Done: 1, 4 (v65), 7 (v66), 8 (v67) and 2 (v68), each in its own bridge
-bump. Next: probe and implement 3 (playback sound). 5 and 6 stay probes until
+Done: 1, 4 (v65), 7 (v66), 8 (v67), 2 (v68) and 3 (v69), each in its own
+bridge bump. 5 and 6 stay probes until
 someone needs them.

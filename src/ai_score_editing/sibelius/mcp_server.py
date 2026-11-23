@@ -264,7 +264,12 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
       (reverb, default 50)}: the staff's Mixer strip; only the given settings change, and at most
       one per staff in a batch. Each staff of a multi-staff instrument has its own values. Undo
       reverts it with the rest of the batch. Mute and Solo change playback and a whole-score
-      audio export but not single-staff stems; Volume changes both. Bridge v68
+      audio export but not single-staff stems; Volume changes both. Bridge v68.
+      Also "sound": a playback sound ID such as "voice.female.alto.ah" (Staff.SetSoundId,
+      the Mixer override; written before the other settings). Bridge v69. A Cantai solo voice
+      (voice.female.soprano.ah, .alto, voice.male.tenor/baritone/bass.ah) lands on Cantai
+      only when the Cantai playback configuration prefers Cantai for that ID (Preferred
+      Sounds); otherwise Sibelius 7 Sounds plays it. Ottetto IDs always land on Cantai.
 
     Returns each operation's before/after description and the number applied.
     """

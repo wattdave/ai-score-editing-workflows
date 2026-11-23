@@ -46,6 +46,18 @@ Cantai is set up by the user in Sibelius, not by the CLI:
   singers on the default sounds; the user picks a Cantai voice on each
   staff's Mixer strip. `playback-sounds` then shows `Cantai / ...` with
   `[Mixer override ...]`. Save the score so the choice is kept.
+- **Or set them from the CLI** (bridge v69), once the user's Cantai playback
+  configuration prefers Cantai for the solo IDs (Play > Playback Devices >
+  Preferred Sounds: `voice.female.soprano.ah`, `voice.female.alto.ah`,
+  `voice.male.tenor.ah`, `voice.male.baritone.ah`, `voice.male.bass.ah`, each
+  to device Cantai; a one-time change the user makes or approves):
+  `sibelius-cli --expect-file SCORE mixer --staff N --sound voice.female.alto.ah`
+  per staff (Ottetto IDs such as `voice.ensemble.ah.alto_duet` need no
+  preference), or one `apply` batch of `set-staff-mixer` ops with `"sound"`.
+  A warning means the voice landed on Sibelius 7 Sounds (preference missing).
+  With the preference `playback-sounds` shows `Cantai / Soprano` for these
+  staves whatever the voice; the audio follows the override (checked
+  sample-identical to Mixer picks). Details: `docs/sibelius-protocol.md` 1.3.5.
 - **One language at a time.** Cantai sings one language (English, Latin or
   Spanish) and re-renders every voice when it changes. Group pieces by
   language and let the user switch between groups; export nothing while it
