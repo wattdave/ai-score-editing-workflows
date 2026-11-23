@@ -2375,6 +2375,20 @@
      "type": null
     },
     {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "sound",
+     "kind": "_StoreAction",
+     "metavar": "SOUND_ID",
+     "nargs": null,
+     "options": [
+      "--sound"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
      "choices": [
       "muted",
       "half-muted",

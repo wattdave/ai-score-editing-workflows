@@ -228,6 +228,64 @@ and 3, about 21 seconds) with `sibelius-cli mixer`, which applies
   staff 2 left staff 3 (the piano's left hand) sounding in the whole-score
   export (-28.2), and soloing staff 2 did not solo staff 3.
 
+### 1.3.5 Cantai voices by script (verified 2026-11-22, Sibelius 2026.11, bridge v69)
+
+`set-staff-mixer` takes `"sound": ID` (CLI `mixer --sound ID`), written with
+`Staff.SetSoundId(id)` before the other settings (the guide's `SetSoundID` is
+"method not found"; `SetSoundId` writes the Mixer override, is one undo step
+with the batch and is kept on save). Probed on scratch copies of an
+eight-staff De Colores playback score (a MusicXML re-import, so every voice
+starts on Sibelius 7 Sounds "Female/Male Choir aah").
+
+- **Why a scripted solo voice did not reach Cantai.** A Mixer strip has two
+  choices: the *device* ("(Auto)", "Cantai", "Cantai (2)" ... "Sibelius
+  Player") and the *sound*. When the user picks a Cantai voice in the Mixer,
+  the strip's device becomes Cantai. ManuScript can set only the sound
+  (`SetSoundId`, `SetSound`); no Staff or Score property reaches the device or
+  the playback configuration, so a scripted staff keeps "(Auto)". In Auto,
+  Sibelius picks the device per sound ID, and the user's Cantai configuration
+  also holds Sibelius Player (Sibelius 7 Sounds (Jazz)), which has
+  `voice.female.soprano.ah`, `voice.female.alto.ah`, `voice.male.tenor.ah`
+  and `voice.male.bass.ah` too and wins the tie. IDs only Cantai has
+  (`voice.male.baritone.ah`, the Ottetto ensembles) always landed on Cantai.
+- **The fix is the playback configuration's Preferred Sounds** (Play >
+  Playback Devices > Preferred Sounds, saved in the configuration's XML as
+  `<PrefSoundIDToDeviceMap>` entries of `<SoundID>` and `<DeviceName>`). With
+  one entry per solo ID, device Cantai:
+  `voice.female.soprano.ah`, `voice.female.alto.ah`, `voice.male.tenor.ah`,
+  `voice.male.baritone.ah`, `voice.male.bass.ah` (the dialog shows them as
+  `voice.female.alto.ah.*`), a fresh import still played the Sibelius 7 choir
+  (it requests `voice.*.ensemble.ah`, which the entries do not match), and
+  after `set-staff-mixer` sound writes every staff played Cantai:
+  - every stem was audible (-23.9 to -30.6 LUFS) and uncorrelated with the
+    default sound's stem of the same staff (correlation about 0.01);
+  - the Alto staff set by script and then set by hand in the Mixer (device
+    Cantai, Voice > Female > Alto), and likewise Bass div (Male > Bass),
+    exported **sample-identical** stems;
+  - after save, close and reopen the scripted Bass staff's stem was
+    sample-identical again.
+- **A broad entry breaks things.** One entry `voice` (the dialog's "Voice"
+  node, shown as `voice.*`) moved every voice staff, even a fresh import's
+  choir sounds, to Cantai's first patch (Soprano). Use the five exact IDs.
+- **Readouts lie with the preference.** `SoundInfo` (and so
+  `playback-sounds`, and the Mixer strip until a sound is picked there) then
+  reports `Cantai / Soprano` for every preferred staff, while the stem
+  follows the override; trust `[Mixer override ...]` and listen.
+- **The preference is needed at export time.** A score whose voices were set
+  by script plays them on Cantai only while the configuration has the
+  entries; without them the soprano, alto, tenor and bass staves fall back to
+  Sibelius 7 Sounds (the override stays). Staves whose device was picked in
+  the Mixer do not depend on it. `mixer --sound` and `apply` warn when a
+  `voice.*` sound lands outside Cantai.
+- **Typing an ID into Preferred Sounds does not work**: Add ignores typed
+  text; pick the node in the Sound IDs tree (Voice > Female > ...) or edit the
+  XML while Sibelius is quit.
+- **Cantai is not always deterministic.** Two exports of the user's own
+  Mixer-set score gave sample-identical stems for some staves and different
+  ones (correlation 0.1) for others; after hours of use two staves exported
+  silent until Sibelius was restarted. Compare stems only on staves that are
+  stable between two exports.
+
 ### 1.4 Errors
 
 Unknown message types return:

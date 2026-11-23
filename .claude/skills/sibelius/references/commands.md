@@ -229,6 +229,11 @@ and verify once for the whole set.
     the result has each staff's `before` and `after` values. Undoable with the
     batch. Mute and Solo change playback and a whole-score audio export but not
     single-staff stems; Volume changes both. The `mixer` command wraps it.
+    Bridge v69 adds `"sound": ID` (a playback sound ID such as
+    `voice.female.alto.ah`, written first with `Staff.SetSoundId`; the
+    result's `after` has `soundId`, `soundSet`, `patch`). Cantai solo IDs land
+    on Cantai only with a Preferred Sounds entry (see `docs/sibelius-protocol.md`
+    1.3.5); otherwise the result has a "not Cantai" warning.
 
   Typical flow: `query` to find targets, write the operations with the
   returned addresses plus `type`/`position` guards, `apply --dry-run`, then
@@ -331,7 +336,7 @@ Single-object writes:
   print the same before exporting. Probed live (Sibelius 2026.11, bridge v68):
   a single-staff export (every stem) honours Volume but ignores Mute and Solo;
   a whole-score audio export honours all three.
-- Mixer: `mixer [--staff N|NAME ...] [--mute muted|half-muted|not-muted]
+- Mixer: `mixer [--staff N|NAME ...] [--sound SOUND_ID] [--mute muted|half-muted|not-muted]
   [--solo on|off] [--volume 0-127] [--pan -100..100] [--distance 0-100]
   [--reset] [--dry-run] [--save]`. With no setting it prints each staff's
   Mixer state (bridge v62, no backup). With settings it writes them to the
@@ -341,6 +346,11 @@ Single-object writes:
   changes nothing. One `undo` reverts the change. Each staff of a two-staff
   piano has its own values (muting staff 2 leaves staff 3 sounding); if an
   unnamed staff changes too, the command says so. Distance defaults to 50.
+  `--sound` (bridge v69) sets the playback sound ID, e.g. Cantai voices
+  `voice.female.soprano.ah`, `voice.female.alto.ah`, `voice.male.tenor.ah`,
+  `voice.male.baritone.ah`, `voice.male.bass.ah`,
+  `voice.ensemble.ah.womens_voices|alto_duet|tenor_duet|...`; it notes a
+  `voice.*` sound that lands outside Cantai (missing Preferred Sounds entry).
 - Playback roadmap (bridge v57): `play-order ["1-12, 1-12, 1-12"|auto]
   [--save]` reads or sets Play > Interpretation > Repeats. A list of bars sets
   Manual repeats playback (ranges expand to the bar numbers in playback

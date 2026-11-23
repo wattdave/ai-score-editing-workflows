@@ -297,3 +297,84 @@ async def test_service_apply_on_an_old_bridge_fails_before_the_backup() -> None:
     with pytest.raises(BridgeError, match=f"v{bridge.MIXER_BRIDGE_VERSION}"):
         await service.apply(b, [_mixer({"mute": "muted"})])
     assert not {"AddVersion", "ApplyBatch", "Save"} & set(client.methods())
+
+
+# ------------------------------------------------------------------ sound (bridge v69)
+
+def test_sound_goes_first_and_needs_v69() -> None:
+    [op] = batch_ops.validate_batch([_mixer({"volume": 90, "sound": "voice.female.alto.ah"})])
+    assert op["soundId"] == "voice.female.alto.ah"
+    assert op["settings"] == ["soundId", "volume"]
+    assert bridge.batch_bridge_version([op]) == bridge.MIXER_SOUND_BRIDGE_VERSION
+    plain = batch_ops.validate_batch([_mixer({"volume": 90})])
+    assert bridge.batch_bridge_version(plain) == bridge.MIXER_BRIDGE_VERSION
+    assert bridge.MIXER_BRIDGE_VERSION < bridge.MIXER_SOUND_BRIDGE_VERSION <= bridge.CURRENT_BRIDGE_VERSION
+
+
+@pytest.mark.parametrize("sound", ["", "Voice.Female", "voice female", "voice..ah", 3, None, "voice.ah'"])
+def test_bad_sound_ids_are_refused(sound: Any) -> None:
+    with pytest.raises(BatchError, match="sound"):
+        batch_ops.validate_batch([_mixer({"sound": sound})])
+
+
+def test_ottetto_ids_are_accepted() -> None:
+    [op] = batch_ops.validate_batch([_mixer({"sound": "voice.ensemble.ah.womens_voices"})])
+    assert op["settings"] == ["soundId"]
+
+
+def test_plugin_writes_the_sound_with_set_sound_id_before_the_rest() -> None:
+    source = PLUGIN.read_text()
+    body = _function(source, "BatchRunMixer")
+    # The guide's SetSoundID is "method not found"; SetSoundId is the working name.
+    assert "staff.SetSoundId('' & op['soundId']);" in body and "SetSoundID" not in body
+    assert body.index("'soundId'") < body.index("'muteMode'") < body.index("'volume'")
+    mixer_read = _function(source, "MixerRead")
+    for key in ("soundId", "actualSoundId", "soundSet", "patch"):
+        assert f"'{key}'" in mixer_read
+    assert "SoundIdOverrideIfAny" in mixer_read
+
+
+def _sound_result(staff: int, sound_set: str) -> dict[str, Any]:
+    return {"i": 0, "op": "set-staff-mixer", "after": {"staff": staff, "after": {"soundSet": sound_set}}}
+
+
+def test_sound_warnings_flag_a_voice_outside_cantai() -> None:
+    batch = batch_ops.validate_batch([_mixer({"sound": "voice.female.alto.ah"}),
+                                      {"op": "set-staff-mixer", "staff": 3, "sound": "voice.male.bass.ah"},
+                                      {"op": "set-staff-mixer", "staff": 1, "volume": 3}])
+    results = [_sound_result(2, "Sibelius 7 Sounds (Jazz)"), _sound_result(3, "Cantai"), {"i": 2}]
+    [note] = batch_ops.sound_warnings(batch, results)
+    assert note.startswith("staff 2: voice.female.alto.ah plays on Sibelius 7 Sounds (Jazz), not Cantai")
+    assert "Preferred Sounds" in note
+    assert batch_ops.sound_warnings(batch, []) == []
+
+
+async def test_mixer_sound_option_writes_the_sound(
+    cli_session: CliSession, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cli_session.client.replies.update(
+        GetStaves=STAVES, Query=_query({2: DEFAULT}),
+        ApplyBatch={"applied": 1, "results": [_sound_result(2, "Sibelius 7 Sounds (Jazz)")]},
+    )
+    args = build_parser().parse_args(["mixer", "--staff", "Alto", "--sound", "voice.female.alto.ah"])
+    with patch("ai_score_editing.sibelius.runner.backup", new=AsyncMock(return_value={"copy": "/b.sib"})):
+        assert await audio._run_mixer(args) == 0
+    bridge.require_bridge.assert_any_await(cli_session.client, bridge.MIXER_SOUND_BRIDGE_VERSION, "mixer")
+    applies = [a for m, a in cli_session.client.calls if m == "ApplyBatch"]
+    assert applies[1][0] == [{"op": "set-staff-mixer", "staff": 2, "soundId": "voice.female.alto.ah",
+                              "settings": ["soundId"]}]
+    assert any("not Cantai" in note for note in json.loads(capsys.readouterr().out)["notes"])
+
+
+async def test_bad_sound_option_exits_before_connecting(cli_session: CliSession) -> None:
+    args = build_parser().parse_args(["mixer", "--staff", "1", "--sound", "Female Choir"])
+    assert await audio._run_mixer(args) == 1
+    cli_session.context.__aenter__.assert_not_awaited()
+
+
+async def test_apply_batch_reports_a_sound_outside_cantai() -> None:
+    client = _mcp_client(bridge.MIXER_SOUND_BRIDGE_VERSION)
+    client.replies["ApplyBatch"] = {"applied": 1, "results": [_sound_result(2, "Sibelius 7 Sounds (Jazz)")]}
+    with _use(client), patch.object(mcp_server, "_backup", new=AsyncMock(return_value={"copy": "/b.sib"})):
+        result = await mcp_server.apply_batch([_mixer({"sound": "voice.female.alto.ah"})])
+    assert any("not Cantai" in w for w in result["warnings"])

@@ -3,12 +3,13 @@
 The rest of batch validation is editor-neutral and lives in
 ``ai_score_editing.core.batch_schema``; this module adds the writable-property
 table that mirrors BatchWritableTable in ScoreBridge.plg, and the
-``set-staff-mixer`` operation (bridge v68) through the ``ExtraOps`` hook.
+``set-staff-mixer`` operation (bridge v68; its sound setting v69) through the ``ExtraOps`` hook.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -44,11 +45,13 @@ WRITABLE: dict[str, type] = {
 MIXER_MUTE_MODES = {"muted": 0, "half-muted": 1, "not-muted": 2}
 #: set-staff-mixer's integer settings with their ranges.
 MIXER_RANGES = {"volume": (0, 127), "pan": (-100, 100), "distance": (0, 100)}
-MIXER_SETTINGS = ("mute", "solo", "volume", "pan", "distance")
+MIXER_SETTINGS = ("sound", "mute", "solo", "volume", "pan", "distance")
+#: A playback sound ID (Staff.SetSoundId, bridge v69): dot-separated lower-case words.
+SOUND_ID_PATTERN = re.compile(r"[a-z0-9_]+(\.[a-z0-9_+-]+)*")
 
 
 def _validate_staff_mixer(operation: dict[str, Any], label: str) -> dict[str, Any]:
-    """Validate a set-staff-mixer op: one staff's Mixer mute, solo, volume, pan and distance."""
+    """Validate a set-staff-mixer op: one staff's Mixer sound, mute, solo, volume, pan and distance."""
     known = {"op", "staff", *MIXER_SETTINGS}
     if unknown := sorted(operation.keys() - known):
         raise BatchError(
@@ -85,6 +88,15 @@ def _validate_staff_mixer(operation: dict[str, Any], label: str) -> dict[str, An
             raise BatchError(f"{label}.{key} must be an integer from {low} to {high}")
         out[key] = value
         settings.append(key)
+    if "sound" in operation:
+        sound = operation["sound"]
+        if not isinstance(sound, str) or not SOUND_ID_PATTERN.fullmatch(sound):
+            raise BatchError(
+                f"{label}.sound must be a sound ID such as voice.female.soprano.ah "
+                "(lower-case words joined by dots)"
+            )
+        out["soundId"] = sound
+        settings.insert(0, "soundId")
     if not settings:
         raise BatchError(f"{label}: set-staff-mixer needs at least one of {', '.join(MIXER_SETTINGS)}")
     # ManuScript reads a 0 or false as null, so the plug-in writes only the settings named here.
@@ -160,3 +172,28 @@ def mixer_warnings(batch: list[dict[str, Any]]) -> list[str]:
             "single-staff stems (export-stem, rehearsal-mixes); volume changes both"
         ]
     return []
+
+
+def sound_warnings(batch: list[dict[str, Any]], results: list[dict[str, Any]]) -> list[str]:
+    """Notes about set-staff-mixer sound writes, from the plug-in's after values (bridge v69).
+
+    Sibelius picks the playback device per sound ID. Cantai's solo voices
+    (voice.female.soprano.ah and the like) are also in Sibelius 7 Sounds, which
+    wins unless the playback configuration's Preferred Sounds name Cantai for
+    that ID, so a voice.* write that lands outside Cantai is reported. With the
+    preference, Sibelius may still report Cantai's first patch (Soprano) for
+    such staves; the audio follows the ID (probed 2026-11-22).
+    """
+    notes: list[str] = []
+    for operation, result in zip(batch, results):
+        if operation.get("op") != "set-staff-mixer" or "soundId" not in operation.get("settings", ()):
+            continue
+        after = ((result or {}).get("after") or {}).get("after") or {}
+        sound_set = str(after.get("soundSet", ""))
+        if operation["soundId"].startswith("voice.") and sound_set and "Cantai" not in sound_set:
+            notes.append(
+                f"staff {operation['staff']}: {operation['soundId']} plays on {sound_set}, not Cantai; "
+                "add a Preferred Sounds entry for it (Play > Playback Devices > Preferred Sounds, "
+                "device Cantai) or pick the device in the Mixer"
+            )
+    return notes
