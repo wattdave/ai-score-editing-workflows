@@ -62,10 +62,14 @@ Cantai is set up by the user in Sibelius, not by the CLI:
   With the preference `playback-sounds` shows `Cantai / Soprano` for these
   staves whatever the voice; the audio follows the override (checked
   sample-identical to Mixer picks). Details: `docs/sibelius-protocol.md` 1.3.5.
-- **One language at a time.** Cantai sings one language (English, Latin or
-  Spanish) and re-renders every voice when it changes. Group pieces by
-  language and let the user switch between groups; export nothing while it
-  re-renders.
+- **One language per score.** Cantai sings every part of a score in one
+  language (`en`, `la`, `es`; no per-staff language) and re-renders every
+  part when it changes. Set it from the CLI: with the score open,
+  `sibelius-cli cantai-language` prints its id and language; quit Sibelius,
+  run `sibelius-cli cantai-language la --score-id ID`, reopen. The first
+  export after that still has the old language: export once, wait until the
+  status bar's "Rendering N items" clears (about 90 s for 8 parts of 2
+  minutes), then export for real. Details: `docs/cantai-language.md`.
 - **Give every staff a different sound.** Two staves with the same sound
   share one playback channel, and Cantai then sings only one of them live,
   for example Soprano I and II. Use a different Cantai voice for each

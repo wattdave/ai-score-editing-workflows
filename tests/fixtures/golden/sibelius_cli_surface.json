@@ -1098,6 +1098,92 @@
   "bridge-version": {
    "arguments": []
   },
+  "cantai-language": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "language",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": "?",
+     "options": [],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "score_id",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--score-id"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "default",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--default"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "dry_run",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--dry-run"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "settings",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--settings"
+     ],
+     "required": false,
+     "type": "Path"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "export_config",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--export-config"
+     ],
+     "required": false,
+     "type": "Path"
+    }
+   ]
+  },
   "check-lyrics": {
    "arguments": [
     {
