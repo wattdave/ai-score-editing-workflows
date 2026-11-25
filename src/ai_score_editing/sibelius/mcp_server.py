@@ -92,7 +92,9 @@ async def _run(action: Callable[[bridge.SibeliusBridge], Awaitable[T]], *, retry
 @server.tool(annotations=READ_ONLY)
 async def score_overview() -> dict[str, Any]:
     """Describe the open score: title, file, bar count, staves (number and
-    instrument names) and the current selection. Call this first; call
+    instrument names), the current selection, and whether the score is in
+    Page or Panorama view (score.viewType: 0 page, 1 panorama). Call this
+    first; call
     score_structure for key and time signatures, barlines and breaks."""
 
     return await _run(service.overview, retry=True)
@@ -254,17 +256,54 @@ async def apply_batch(operations: list[dict[str, Any]], dry_run: bool = False) -
       both sides by default), so set-layout's staff spacing applies. Put it
       before hide-empty-staves. Bridge v66
 
+    One staff-level operation, which (like the object operations) must come
+    before every structural one:
+
+    - {"op":"set-staff-mixer","staff":S, any of "mute":"muted"|"half-muted"|"not-muted",
+      "solo":bool, "volume":0-127, "pan":-100..100 (positive is right), "distance":0-100
+      (reverb, default 50)}: the staff's Mixer strip; only the given settings change, and at most
+      one per staff in a batch. Each staff of a multi-staff instrument has its own values. Undo
+      reverts it with the rest of the batch. Mute and Solo change playback and a whole-score
+      audio export but not single-staff stems; Volume changes both. Bridge v68.
+      Also "sound": a playback sound ID such as "voice.female.alto.ah" (Staff.SetSoundId,
+      the Mixer override; written before the other settings). Bridge v69. A Cantai solo voice
+      (voice.female.soprano.ah, .alto, voice.male.tenor/baritone/bass.ah) lands on Cantai
+      only when the Cantai playback configuration prefers Cantai for that ID (Preferred
+      Sounds); otherwise Sibelius 7 Sounds plays it. Ottetto IDs always land on Cantai.
+
     Returns each operation's before/after description and the number applied.
     """
     try:
-        batch = batch_ops.validate_batch(operations)  # reject a bad batch before connecting
+        batch_ops.validate_batch(operations)  # reject a bad batch before connecting
     except batch_ops.BatchError as exc:
         raise ToolError(str(exc)) from exc
 
+    # service.apply validates again, so it gets the operations as given: a
+    # normalized set-layout or set-staff-mixer (with "settings") does not re-validate.
     return await _run(
         lambda b: service.apply(
-            b, batch, dry_run=dry_run, backup_name="before apply_batch",
+            b, operations, dry_run=dry_run, backup_name="before apply_batch",
             backup_fn=lambda bb, name: _backup(bb.client, name),
+        ),
+        retry=False,
+    )
+
+
+@server.tool(annotations=WRITE)
+async def set_staff_playback(staves: list[str], play: bool, voices: list[int] | None = None) -> dict[str, Any]:
+    """Mute (play=false) or unmute (play=true) whole staves in the Sibelius
+    Mixer. staves are numbers or instrument names. Sibelius mutes whole
+    staves, so omit voices (anything but all of 1-4 is refused). play=true
+    does not turn Solo off; use apply_batch set-staff-mixer for solo, volume,
+    pan and distance. Each staff of a multi-staff instrument (piano) is
+    muted on its own. Mute changes Sibelius playback and a whole-score audio
+    export, but not single-staff stems (rehearsal mixes). Backed up first;
+    one undo reverts it. Bridge v68."""
+    if voices is not None and set(voices) != {1, 2, 3, 4}:
+        raise ToolError("Sibelius mutes whole staves in the Mixer; omit voices (or pass all of 1-4)")
+    return await _run(
+        lambda b: service.set_staff_playback(
+            b, staves, play, voices, backup_fn=lambda bb, name: _backup(bb.client, name),
         ),
         retry=False,
     )

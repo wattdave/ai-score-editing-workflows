@@ -50,7 +50,7 @@ def raise_if_busy(response: dict[str, Any]) -> None:
 
 
 MIN_BRIDGE_VERSION = 7
-CURRENT_BRIDGE_VERSION = 66
+CURRENT_BRIDGE_VERSION = 69
 QUERY_BRIDGE_VERSION = 38
 BATCH_BRIDGE_VERSION = 39
 NUDGE_BRIDGE_VERSION = 41
@@ -73,11 +73,18 @@ FICTA_BRIDGE_VERSION = 63
 STAFF_NAME_BRIDGE_VERSION = 64
 LAYOUT_SWITCHES_BRIDGE_VERSION = 65
 RESET_STAFF_SPACE_BRIDGE_VERSION = 66
+VIEW_TYPE_BRIDGE_VERSION = 67  # GetScoreInfo reports viewType; inspect needs no gate
+MIXER_BRIDGE_VERSION = 68
+MIXER_SOUND_BRIDGE_VERSION = 69  # set-staff-mixer sound (Staff.SetSoundId)
 
 
 def batch_bridge_version(operations: list[dict[str, Any]]) -> int:
     """The oldest bridge that runs every operation in a validated batch."""
     names = {operation["op"] for operation in operations}
+    if any(operation["op"] == "set-staff-mixer" and "soundId" in operation["settings"] for operation in operations):
+        return MIXER_SOUND_BRIDGE_VERSION
+    if "set-staff-mixer" in names:
+        return MIXER_BRIDGE_VERSION
     if "reset-staff-space" in names:
         return RESET_STAFF_SPACE_BRIDGE_VERSION
     if any(

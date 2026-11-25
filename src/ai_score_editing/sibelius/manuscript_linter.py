@@ -177,7 +177,8 @@ OBJECT_MODEL: dict[str, dict[str, set[str]]] = {
             "initialclefstyleid", "initialinstrumenttype", "initialkeysignature",
             "initialstyleid", "instrumentname", "issystemstaff", "isvocalstaff",
             "parentscore", "shortinstrumentname", "shortstaffname", "staffnum",
-            "soundidoverrideifany",
+            "soundidoverrideifany", "mutemode", "solo", "volume", "pan", "distance",
+            "channel",
         },
         "methods": {"nthbar", "soundinfoatposition"},
         "bases": set(),
@@ -217,7 +218,7 @@ OBJECT_MODEL: dict[str, dict[str, set[str]]] = {
         "methods": {
             "findcommandid", "execute", "messagebox", "open", "new",
             "createdictionary", "createsparsearray", "nthscore",
-            "isfontfamilyinstalled",
+            "isfontfamilyinstalled", "getcurrentscoreviewtype",
         },
         "bases": set(),
     },

@@ -17,8 +17,13 @@ score is not changed.
    set, patch and any Mixer override. If the user wants a specific library
    (for example Cantai), pass `--require-sound <name>` to the export so it
    refuses to run if any voice plays something else. It also warns about a
-   muted or half-muted staff, a Mixer fader at 0, or Solo left on (bridge
-   v62+); ask the user to reset those in the Mixer before exporting.
+   Mixer fader at 0 and notes a muted or half-muted staff or Solo left on
+   (bridge v62+). A fader at 0 silences that staff's stem: set it with
+   `sibelius-cli --expect-file SCORE mixer --staff N --volume 100` (bridge
+   v68). Mute and Solo do not change the stems (each stem is a single-staff
+   export, which ignores them; probed on Sibelius 2026.11), so they need no
+   fix for the mixes; `mixer --reset` clears them if the user wants normal
+   playback back.
 3. **One note per staff.** If a voice staff has chords or divisi, the
    rendered sound may drop notes. Offer the `playback-divisi-split` skill
    first to build a playback copy. If every note must sound, use its
@@ -41,6 +46,18 @@ Cantai is set up by the user in Sibelius, not by the CLI:
   singers on the default sounds; the user picks a Cantai voice on each
   staff's Mixer strip. `playback-sounds` then shows `Cantai / ...` with
   `[Mixer override ...]`. Save the score so the choice is kept.
+- **Or set them from the CLI** (bridge v69), once the user's Cantai playback
+  configuration prefers Cantai for the solo IDs (Play > Playback Devices >
+  Preferred Sounds: `voice.female.soprano.ah`, `voice.female.alto.ah`,
+  `voice.male.tenor.ah`, `voice.male.baritone.ah`, `voice.male.bass.ah`, each
+  to device Cantai; a one-time change the user makes or approves):
+  `sibelius-cli --expect-file SCORE mixer --staff N --sound voice.female.alto.ah`
+  per staff (Ottetto IDs such as `voice.ensemble.ah.alto_duet` need no
+  preference), or one `apply` batch of `set-staff-mixer` ops with `"sound"`.
+  A warning means the voice landed on Sibelius 7 Sounds (preference missing).
+  With the preference `playback-sounds` shows `Cantai / Soprano` for these
+  staves whatever the voice; the audio follows the override (checked
+  sample-identical to Mixer picks). Details: `docs/sibelius-protocol.md` 1.3.5.
 - **One language at a time.** Cantai sings one language (English, Latin or
   Spanish) and re-renders every voice when it changes. Group pieces by
   language and let the user switch between groups; export nothing while it

@@ -2358,6 +2358,157 @@
     }
    ]
   },
+  "mixer": {
+   "arguments": [
+    {
+     "choices": null,
+     "const": null,
+     "default": [],
+     "dest": "staff",
+     "kind": "_AppendAction",
+     "metavar": "N|NAME",
+     "nargs": null,
+     "options": [
+      "--staff"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "sound",
+     "kind": "_StoreAction",
+     "metavar": "SOUND_ID",
+     "nargs": null,
+     "options": [
+      "--sound"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": [
+      "muted",
+      "half-muted",
+      "not-muted"
+     ],
+     "const": null,
+     "default": null,
+     "dest": "mute",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--mute"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": [
+      "on",
+      "off"
+     ],
+     "const": null,
+     "default": null,
+     "dest": "solo",
+     "kind": "_StoreAction",
+     "metavar": null,
+     "nargs": null,
+     "options": [
+      "--solo"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "volume",
+     "kind": "_StoreAction",
+     "metavar": "0-127",
+     "nargs": null,
+     "options": [
+      "--volume"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "pan",
+     "kind": "_StoreAction",
+     "metavar": "-100..100",
+     "nargs": null,
+     "options": [
+      "--pan"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": null,
+     "default": null,
+     "dest": "distance",
+     "kind": "_StoreAction",
+     "metavar": "0-100",
+     "nargs": null,
+     "options": [
+      "--distance"
+     ],
+     "required": false,
+     "type": "int"
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "reset",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--reset"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "dry_run",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--dry-run"
+     ],
+     "required": false,
+     "type": null
+    },
+    {
+     "choices": null,
+     "const": true,
+     "default": false,
+     "dest": "save",
+     "kind": "_StoreTrueAction",
+     "metavar": null,
+     "nargs": 0,
+     "options": [
+      "--save"
+     ],
+     "required": false,
+     "type": null
+    }
+   ]
+  },
   "nudge": {
    "arguments": [
     {
